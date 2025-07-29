@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",           
+    "lib": ["ES2020"],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "composite": true,
+    "baseUrl": "."
+  }
+}
+

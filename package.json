@@ -1,0 +1,20 @@
+{
+  "name": "vestlang",
+  "private": true,
+  "packageManager": "npm@10.5.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "turbo": "^2.5.5",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
