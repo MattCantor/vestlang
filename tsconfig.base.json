@@ -16,7 +16,11 @@
     "strict": true,
     "skipLibCheck": true,
     "composite": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@vestlang/core": ["packages/core/src"],
+      "@vestlang/playground": ["apps/playground/src"]
+    }
   }
 }
 

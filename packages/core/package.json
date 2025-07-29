@@ -1,12 +1,23 @@
 {
   "name": "@vestlang/core",
   "version": "0.1.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "type": "module",
-    "scripts": {
-    "build": "tsc -p .",
+    "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build:parser": "peggy --format es -o src/generated/parser.js grammar/vesting.pegjs",
+    "build": "npm run build:parser && tsc -p tsconfig.json",
     "dev": "tsc -p . --watch",
     "test": "vitest"
+  },
+  "devDependencies": {
+    "peggy": "^5.0.5",
+    "typescript": "^5.8.3"
   }
 }

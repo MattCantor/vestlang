@@ -1,3 +1,7 @@
-export const parse = (input: string) => {
-  return { message: "Parser not implemented yet", input };
-};
+import {parse } from "./generated/parser.js";
+
+export function parseVestingDSL(input: string) {
+  return parse(input);
+}
+
+

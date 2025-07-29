@@ -1,15 +1,15 @@
 {
   "name": "@vestlang/playground",
   "version": "0.1.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p .",
-    "dev": "ts-node src/index.ts",
-    "test": "vitest"
+    "dev": "tsx src/index.ts"
   },
   "dependencies": {
     "@vestlang/core": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.3"
   }
 }

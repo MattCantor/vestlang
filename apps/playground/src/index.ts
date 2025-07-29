@@ -1,9 +1,8 @@
-import { parse } from "@vestlang/core";
+import { parseVestingDSL } from "@vestlang/core";
 
-const input = `
-define schedule time_based:
-  monthly for 4 years with 1 year cliff
-`;
+const input = `schedule time_based {
+  cliff 12months: 25%
+}`;
 
-const result = parse(input);
-console.log("Parsed result:", result);
+const parsed = parseVestingDSL(input);
+console.dir(parsed, { depth: null });
