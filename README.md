@@ -2,20 +2,20 @@
 
 > **A domain-specific language (DSL) for modeling vesting schedules**
 
-**Vestlang** is a work-in-progress DSL designed to describe complex equity vesting schedules in a human-readable, composable format. It aims to be both expressive for lawyers and interpretable by software.
-
-Uses [Peggy](https://peggyjs.org/) to define a robust PEG grammar that compiles to a typed, structured abstract syntax tree (AST).
+Vestlang is a work-in-progress DSL designed to describe complex equity vesting schedules in a human-readable, composable format. It aims to be both expressive for lawyers and stock plan administrators and interpretable by software.
 
 ---
 
-## 🚀 Features
+## 🚀 Features (Planned)
 
-- ✅ Human-friendly DSL syntax for vesting logic  
-- ✅ TypeScript-compatible PEG parser using Peggy  
-- ✅ Parser generates structured AST  
-- 🛠 Compiler logic and schedule calculation coming soon  
-- 🔧 Prettier plugin for formatting (planned)  
-- ⌨️ CLI playground for rapid testing  
+- ✅ Human-friendly DSL for defining vesting logic  
+- ✅ TypeScript parser and compiler
+- ✅ Grant and schedule constructs
+- ✅ Composite schedules with `and` logic (e.g. "later of")
+- 🛠 Compiler transforms DSL to structured AST
+- 🛠 Schedule calculation engine (installments)
+- 🔧 Prettier plugin for formatting
+- ⌨️ CLI playground for rapid testing
 
 ---
 
@@ -24,20 +24,88 @@ Uses [Peggy](https://peggyjs.org/) to define a robust PEG grammar that compiles 
 | Package                  | Description                                |
 |--------------------------|--------------------------------------------|
 | `@vestlang/core`         | PEG grammar, parser, and AST definitions   |
-| `@vestlang/playground`   | CLI runner for testing DSL examples        |
-| *(coming soon)*          | `@vestlang/prettier-plugin` — DSL formatting |
-| *(coming soon)*          | `@vestlang/cli` — end-user CLI tool        |
+| `@vestlang/playground`   | CLI for running and testing DSL examples   |
+| *(coming soon)*          | `@vestlang/prettier-plugin` — format support |
+| *(coming soon)*          | `@vestlang/cli` — user-friendly CLI tool    |
 
 ---
 
-## ✨ Example (Future DSL syntax)
+## 🧠 How Vestlang Works
+
+At its core, Vestlang parses structured English into an abstract syntax tree (AST) representing **how and when equity grants vest**.
+
+### 🔹 Core Concepts
+
+| Concept       | Description |
+|---------------|-------------|
+| `schedule`    | A set of vesting rules (e.g. cliff, monthly). Can be defined inline or named for reuse. |
+| `grant`       | A declaration that an equity award (e.g. 1000 RSUs) is governed by a schedule. |
+| `define`      | Allows creating a named, reusable schedule block. |
+| `and`         | Combines schedules with logical conjunction (e.g. vest on the *later of* two schedules). |
+
+### 🔹 Schedule Types
+
+Vesting schedules can include different primitives. So far:
+
+```vest
+cliff 12 months: 25%
+monthly 36 months: 75%
+```
+
+Each line describes:
+- a **mechanism** (`cliff`, `monthly`)
+- a **duration** (in months)
+- a **percent** of the total grant that vests
+
+### 🔹 Reusability
+
+You can define a schedule once and reuse it:
 
 ```vest
 define schedule time_based:
-  monthly for 4 years with 1 year cliff
+  cliff 12 months: 25%
+  monthly 36 months: 75%
 
 grant 1000 RSUs under schedule time_based
 ```
+
+### 🔹 Composability
+
+Schedules can be composed using logical conjunction:
+
+```vest
+schedule:
+  schedule time_based
+  and
+  schedule milestone_achieved
+```
+
+This produces a "composite schedule" that vests only after **both components** occur — a natural way to describe “later of” conditions.
+
+### 🔹 AST Shape (Example)
+
+```ts
+{
+  type: "Grant",
+  amount: 1000,
+  unit: "RSU",
+  schedule: {
+    type: "Composite",
+    operator: "and",
+    schedules: [
+      { type: "ScheduleRef", name: "time_based" },
+      { type: "ScheduleRef", name: "milestone_achieved" }
+    ]
+  }
+}
+```
+
+### 🔹 Future Plans
+
+- Add support for milestones, performance triggers, and date-based offsets
+- Enforce validation rules (e.g. 100% total, known schedule references)
+- Compile ASTs into vesting timelines with installment outputs
+- Add a Prettier plugin and VSCode extension
 
 ---
 
@@ -46,10 +114,9 @@ grant 1000 RSUs under schedule time_based
 ```
 vestlang/
 ├── packages/
-│   └── core/         → parser and grammar
+│   └── core/         → parser and compiler
 ├── apps/
 │   └── playground/   → CLI runner for DSL
-├── grammar/          → DSL PEG source (compiled to parser)
 ├── tsconfig.base.json
 ├── turbo.json
 └── README.md
@@ -63,48 +130,14 @@ vestlang/
 git clone https://github.com/YOUR_ORG/vestlang.git
 cd vestlang
 npm install
-npm run build --workspace=@vestlang/core
 npm run dev --workspace=@vestlang/playground
 ```
 
 ---
 
-## 🧪 Example Playground Output
-
-```ts
-{
-  type: 'Schedule',
-  name: 'time_based',
-  items: [
-    { type: 'Cliff', duration: 12, percent: 25 }
-  ]
-}
-```
-
-This output is produced by `apps/playground` when parsing the following DSL:
-
-```
-schedule time_based:
-  cliff 12 months: 25%
-```
-
----
-
-## 🗺 Roadmap
-
-- [x] Define PEG grammar
-- [x] Generate typed AST
-- [ ] Transform AST into structured vesting schedule
-- [ ] Format DSL with Prettier plugin
-- [ ] Publish CLI tool
-- [ ] Add REPL and/or web playground
-- [ ] Add VSCode extension (stretch goal)
-
----
-
 ## 🧑‍💻 Contributing
 
-This project is in early stages. If you're interested in vesting logic, compilers, or legal-tech DSLs — feel free to reach out, fork the repo, or open an issue!
+Early stage! If you're interested in vesting logic, compilers, or legal-tech DSLs — reach out or open an issue!
 
 ---
 

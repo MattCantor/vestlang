@@ -11,10 +11,11 @@
     }
   },
   "scripts": {
+    "clean": "rm -rf dist src/generated/parser.js",
     "build:parser": "peggy --format es -o src/generated/parser.js grammar/vesting.pegjs",
-    "build": "npm run build:parser && tsc -p tsconfig.json",
+    "build": "npm run clean && npm run build:parser && tsc -p tsconfig.json",
     "dev": "tsc -p . --watch",
-    "test": "vitest"
+    "test": "npm run build && vitest"
   },
   "devDependencies": {
     "peggy": "^5.0.5",
