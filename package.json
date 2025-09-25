@@ -1,20 +1,24 @@
 {
   "name": "vestlang",
   "private": true,
-  "packageManager": "npm@10.5.0",
+  "packageManager": "pnpm@10.17.1",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "test": "turbo run test"
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "clean": "turbo run clean && rimraf node_modules"
   },
   "devDependencies": {
-    "@types/node": "^24.1.0",
-    "turbo": "^2.5.5",
-    "typescript": "^5.8.3",
+    "@types/node": "^24.5.2",
+    "peggy": "^5.0.6",
+    "rimraf": "^6.0.1",
+    "turbo": "^2.5.8",
+    "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }
 }

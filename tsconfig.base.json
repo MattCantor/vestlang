@@ -1,26 +1,16 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "esnext",
-    "moduleResolution": "bundler",           
-    "lib": ["ES2020"],
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": false,
-    "declaration": true,
-    "declarationMap": false,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
+    "declaration": true,
+    "sourceMap": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
-    "composite": true,
-    "baseUrl": ".",
-    "paths": {
-      "@vestlang/core": ["packages/core/src"],
-      "@vestlang/playground": ["apps/playground/src"]
-    }
+    "resolveJsonModule": true,
+    "types": ["vitest/globals"]
   }
 }
+
 

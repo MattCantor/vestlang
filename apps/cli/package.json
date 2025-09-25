@@ -1,0 +1,25 @@
+{
+  "name": "@vestlang/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "vest": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/engine": "workspace:*",
+    "@vestlang/linter": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "commander": "^14.0.1",
+    "tsx": "^4.20.5"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2"
+  }
+}
