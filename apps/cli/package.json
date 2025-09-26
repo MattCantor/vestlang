@@ -6,13 +6,12 @@
     "vest": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist"
   },
   "dependencies": {
     "@vestlang/dsl": "workspace:*",
-    "@vestlang/engine": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "commander": "^14.0.1",

@@ -32,9 +32,6 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
-      '@vestlang/engine':
-        specifier: workspace:*
-        version: link:../../packages/engine
       '@vestlang/linter':
         specifier: workspace:*
         version: link:../../packages/linter
@@ -60,31 +57,12 @@ importers:
       peggy:
         specifier: ^5.0.6
         version: 5.0.6
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.2
-
-  packages/engine:
-    dependencies:
-      '@vestlang/dsl':
-        specifier: workspace:*
-        version: link:../dsl
-      '@vestlang/normalizer':
-        specifier: workspace:*
-        version: link:../normalizer
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.1.0
-    devDependencies:
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/node@24.5.2)(tsx@4.20.5)
 
   packages/linter:
     dependencies:
@@ -659,9 +637,6 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
-
-  date-fns@4.1.0:
-    resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -1470,8 +1445,6 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
-
-  date-fns@4.1.0: {}
 
   debug@4.4.3:
     dependencies:

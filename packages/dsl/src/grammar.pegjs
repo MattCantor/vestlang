@@ -6,16 +6,52 @@
 }
 
 Start
-  = _ amt:Number _ "VEST"i _ s:ScheduleBlock? _ i:IfBlock? _ {
-      return { amount: { kind: "Amount", value: amt }, schedule: s ?? null, if: i ?? null };
+  = _ amt:Number _ "VEST"i _ ts:TopStmt _ {
+      // NOTE: top-level now returns a composable TopStmt, not just {schedule, if}
+      return { amount: { kind: "Amount", value: amt }, top: ts };
     }
+
+/* ------------------------------
+   Top-level composition (Programs)
+   ------------------------------ */
+
+TopStmt
+  = p:Program { return p; }
+  / "EARLIER"i _ "OF"i _ "(" _ xs:TopStmtList _ ")" {
+      return { kind: "EarlierOfPrograms", items: xs };
+    }
+  / "LATER"i _ "OF"i _ "(" _ xs:TopStmtList _ ")" {
+      return { kind: "LaterOfPrograms", items: xs };
+    }
+
+TopStmtList
+  = head:TopStmt tail:(_ "," _ TopStmt)* {
+      return [head, ...tail.map(t => t[3])];
+    }
+
+/* ------------------------------
+   Program (single schedule + optional IF)
+   ------------------------------ */
+
+Program
+  = s:ScheduleBlock _ i:IfBlock? {
+      return { kind: "Program", schedule: s, if: i ?? null };
+    }
+  / i:IfBlock {
+      // one-shot sugar: CNF layer will inject SCHEDULE OVER 0 EVERY 0 FROM grantDate
+      return { kind: "Program", schedule: null, if: i };
+    }
+
+/* ------------------------------
+   Schedule block (time-based)
+   ------------------------------ */
 
 ScheduleBlock
   = "SCHEDULE"i _ f:From _ o:Over _ e:Every _ c:Cliff? {
       return { from: f, over: o, every: e, cliff: c ?? { kind: "Zero" } };
     }
   / "SCHEDULE"i _ o:Over _ e:Every _ c:Cliff? {
-      return { over: o, every: e, cliff: c ?? { kind: "Zero" } };
+      return { from: null, over: o, every: e, cliff: c ?? { kind: "Zero" } };
     }
 
 From
@@ -34,6 +70,10 @@ Cliff
     / d:DateAtom    { return d; }
     ) { return v; }
 
+/* ------------------------------
+   IF block (event/date conditions)
+   ------------------------------ */
+
 IfBlock
   = "IF"i _ c:Condition { return c; }
 
@@ -49,6 +89,10 @@ CondList
       return [head, ...tail.map(t => t[3])];
     }
 
+/* ------------------------------
+   Lexical helpers
+   ------------------------------ */
+
 Duration
   = n:Number _ u:Unit {
       return mkDuration(n, u);
@@ -56,9 +100,7 @@ Duration
 
 Unit
   = "day"i "s"? { return "days"; }
-  / "week"i "s"? { return "weeks"; }
   / "month"i "s"? { return "months"; }
-  / "year"i "s"? { return "years"; }
 
 DateAtom
   = iso:$([0-9][0-9][0-9][0-9] "-" [0-1][0-9] "-" [0-3][0-9]) {

@@ -1,36 +1,22 @@
-export type Unit = "days" | "weeks" | "months" | "years";
+// New top-level statement algebra
+export type TopStmt = Program | EarlierOfPrograms | LaterOfPrograms;
 
-export interface Duration {
-  kind: "Duration";
-  value: number;
-  unit: Unit;
+export interface EarlierOfPrograms {
+  kind: "EarlierOfPrograms";
+  items: TopStmt[]; // flattened by normalizer
 }
 
-export interface DateAtom {
-  kind: "Date";
-  iso: string; // YYYY-MM-DD
+export interface LaterOfPrograms {
+  kind: "LaterOfPrograms";
+  items: TopStmt[]; // flattened by normalizer
 }
 
-export interface EventAtom {
-  kind: "Event";
-  name: string;
+// Existing Program (unchanged conceptually)
+export interface Program {
+  kind: "Program";
+  schedule?: Schedule; // will be injected by CNF if absent
+  if?: Condition;
 }
-
-export type Anchor = DateAtom | EventAtom;
-
-export interface Amount {
-  kind: "Amount";
-  value: number; // percent by default
-}
-
-export type TimeGate = Duration | DateAtom | { kind: "Zero" };
-
-export type Condition =
-  | EventAtom
-  | { kind: "At"; date: DateAtom }
-  | { kind: "After"; duration: Duration }
-  | { kind: "EarlierOf"; items: Condition[] }
-  | { kind: "LaterOf"; items: Condition[] };
 
 export interface Schedule {
   from?: Anchor; // default grantDate
@@ -39,10 +25,58 @@ export interface Schedule {
   cliff?: TimeGate; // default 0
 }
 
+export type TimeGate = ZeroGate | DateGate | Duration; // your current union
+export interface ZeroGate {
+  kind: "Zero";
+}
+export interface DateGate {
+  kind: "Date";
+  iso: string;
+}
+
+export type Anchor = DateGate | EventAtom;
+
+export interface Amount {
+  kind: "Amount";
+  value: number; // first token in the DSL line
+}
+
+export type Condition = EventAtom | AtDate | After | EarlierOf | LaterOf;
+
+export interface EventAtom {
+  kind: "Event";
+  name: string;
+}
+
+export interface AtDate {
+  kind: "At";
+  date: DateGate;
+}
+export interface After {
+  kind: "After";
+  duration: Duration;
+  from?: never;
+} // duration relative to SCHEDULE.from
+export interface EarlierOf {
+  kind: "EarlierOf";
+  items: Condition[];
+}
+export interface LaterOf {
+  kind: "LaterOf";
+  items: Condition[];
+}
+
+export interface Duration {
+  kind: "Duration";
+  value: number;
+  unit: Unit;
+}
+
+export type Unit = "days" | "months";
+
+// The full statement line produced by parser
 export interface Statement {
+  kind: "Statement";
   amount: Amount;
-  schedule?: Schedule; // if absent, one-shot is implied
-  if?: Condition; // eligibility gate
-  // parser metadata optional
-  _meta?: Record<string, unknown>;
+  top: TopStmt;
 }

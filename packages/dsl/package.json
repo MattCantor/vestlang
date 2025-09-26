@@ -1,21 +1,22 @@
 {
   "name": "@vestlang/dsl",
   "version": "0.1.0",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "src/grammer.pegjs"
-  ],
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "types": "./dist/grammar.d.ts",
   "scripts": {
-    "build": "rimraf dist && peggy --format es -o dist/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
-    "dev": "peggy --format es -w -o dist/grammar.js src/grammar.pegjs",
-    "test": "vitest",
-    "clean": "rimraf dist"
+    "build": "rimraf dist && peggy --format es --dts -o dist/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
+    "dev": "peggy --format es --dts -w -o dist/grammar.js src/grammar.pegjs",
+    "test": "vitest"
   },
   "devDependencies": {
     "peggy": "^5.0.6",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "rimraf": "^6.0.1"
   }
 }
