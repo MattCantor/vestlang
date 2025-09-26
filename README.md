@@ -191,3 +191,100 @@ node apps/cli/dist/index.js --help
 ## 🧑‍💻 Contributing
 
 Early stage! If you're interested in vesting logic, compilers, or legal-tech DSLs — reach out or open an issue!
+
+---
+
+## Appendix: OCF Integration & Design Rationale
+
+Vestlang is designed with the \*\*Open Cap Table Coalition (OCF) in mind, where vesting schedules need to be represented both simply and flexibly (for advanced use cases).
+
+### Two Producer Paths
+
+#### Imperative
+
+Emit a **VestingInstallmentSeries**: a time-ordered array of vesting installments.
+Each installment specifies:
+
+- `amount` - how much vests at this step.
+- `trigger` - the condition that resolves to a timestamp (usually just `At(date)`)
+
+Example: A simple 4-year monthly schedule with a 1-year cliff, emitted directly as installments:
+
+```json
+{
+  "events": [
+    {
+      "amount": 25,
+      "trigger": { "kind": "At", "date": "2026-01-01T00:00:00Z" }
+    },
+    {
+      "amount": 2.083333,
+      "trigger": { "kind": "At", "date": "2026-02-01T00:00:00Z" }
+    },
+    {
+      "amount": 2.083333,
+      "trigger": { "kind": "At", "date": "2026-03-01T00:00:00Z" }
+    }
+    // … continues monthly until 2029-01-01
+  ]
+}
+```
+
+This path is easy for producers who only need to express standard "schedule over .. every ... cliff .." type vesting schedules.
+
+#### Declarative
+
+Emit a **VestingProgram**: a structured "program" of schedules, cliffs, and conditional gates (`EARLIER OF` / `LATER OF`).
+The program is compiled into a VestingInstallmentSeries.
+This path supports complex scenarios without changing the canonical output.
+
+Example: The same vesting schedule as above, expressed declaratively:
+
+```json
+{
+  "statement": {
+    "kind": "Program",
+    "schedule": {
+      "from": { "kind": "OnEvent", "eventRef": "Grant" },
+      "over": { "value": 4, "unit": "years" },
+      "every": { "value": 1, "unit": "months" },
+      "cliff": { "value": 12, "unit": "months" }
+  }
+}
+```
+
+### Why We Encode the DAG in Each Installment
+
+In the existing OCF schema, vesting schedules are represented by a DAG of nodes, with edges describing dependencies.
+While expressive, this approach has not gain meaningful adoption.
+
+Potential drawbacks of this approach may include:
+
+- Consumers need to traverse and evaluate the whole DAG to answer simple questions ("what vests when?")
+- Producers struggled with boilerplate.
+
+Vestlang avoids this by embedding the DAG semantics directly in each installment's trigger.
+
+- A trigger is a small expression (`At`, `After`, `OnEvent`, `EarlierOf`, `LaterOf`) that evaluates to a timestamp.
+- Partial orderings emerge naturally:
+  - `After(6m, Grant)` precedes `After(12m, Grant)`.
+  - `EarlierOf(X, Y)` always resolves before or at `LaterOf(X, Y)` _(unless X and Y occur on the same date)_
+- There is no need for a global DAG. EAch installment is self-contained, yet fully compoosable.
+
+This design favors consumer simplicity:
+
+- Adopters can ignore composition entirely and just read `At(date) triggers`.
+- Advanced consumers can evaluate composite triggers when they care about events or two-tier vesting structures.
+
+### DSL Alignment
+
+The DSL is an authoring layer that can produce both forms:
+
+- Parse text into a **VestingProgram** (declarative).
+- Compile that program into a **VestingInstallmentSeries** (imperative).
+
+This gives producers and consumers a shared path:
+
+- Start with imperative arrays today.
+- Migrate to declarative programs when more expressiveness is needed.
+- Always end up with the same canonical installment series downstream.
