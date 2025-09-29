@@ -87,6 +87,9 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
+      '@vestlang/normalizer':
+        specifier: workspace:*
+        version: link:../normalizer
     devDependencies:
       rimraf:
         specifier: ^6.0.1
