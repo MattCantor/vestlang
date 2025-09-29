@@ -65,40 +65,17 @@ export interface EventAtom {
   name: string; // Ident
 }
 
-// ==== Temporal qualifiers & qualified atoms ====
-// mkQualified(base, qualifier) returns either the base OR a Qualified wrapper
-// so downstream should accept both Anchor and Qualified<Anchor>.
+// ==== Predicates ====
 
-export type TemporalQualifier =
-  | ByQualifier
-  | BeforeQualifier
-  | AfterQualifier
-  | BetweenQualifier;
-
-export interface ByQualifier {
-  type: "By";
-  target: Anchor; // on or before target
-}
-export interface BeforeQualifier {
-  type: "Before";
-  target: Anchor; // strictly before target
-}
-
-export interface AfterQualifier {
-  type: "After";
-  target: Anchor; // strictly after target
-}
-
-export interface BetweenQualifier {
-  type: "Between";
-  start: Anchor;
-  end: Anchor;
-}
+export type TemporalPredNode =
+  | { type: "After"; i: Anchor; strict: boolean }
+  | { type: "Before"; i: Anchor; strict: boolean }
+  | { type: "Between"; a: Anchor; b: Anchor; strict: boolean };
 
 export interface QualifiedAnchor {
   type: "Qualified";
-  base: Anchor; // Date or Event
-  qualifier: TemporalQualifier;
+  base: Anchor;
+  predicates: TemporalPredNode[];
 }
 
 // ==== FROM (recursive) ====
@@ -142,3 +119,30 @@ export interface LaterOfCliff {
   type: "LaterOf";
   items: CliffTerm[];
 }
+
+// ==== Canonical window used everywhere downstream ====
+export interface TimeWindow {
+  start?: Anchor; // undefined = negative infinite
+  end?: Anchor; // undefined = positive infinity
+  includeStart: boolean; // defaults to true
+  includeEnd: boolean; // defaults to true
+}
+
+// A base that can be evaluated: either a bare anchor OR a combinator node from FromTerm
+export type FromBase = Anchor | EarlierOfFrom | LaterOfFrom;
+
+// Schedule after normalization: same data + resolved window for FROM
+export interface NormalizedSchedule {
+  type: "Schedule";
+  fromBase: FromBase | null; // The structural FROM (no predicates)
+  fromWindow: TimeWindow; // the lowered window (include* flags explicit)
+  over: Duration | ZeroGate;
+  every: Duration | ZeroGate;
+  cliff?: CliffTerm;
+}
+
+// Expr after normalization: recurse and normalize every Schedule
+export type NormalizedExpr =
+  | NormalizedSchedule
+  | { type: "EarlierOfSchedules"; items: NormalizedExpr[] }
+  | { type: "LaterOfSchedules"; items: NormalizedExpr[] };

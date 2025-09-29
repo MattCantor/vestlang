@@ -15,6 +15,7 @@ import type {
   EarlierOfSchedules,
   LaterOfSchedules,
   ZeroGate,
+  TemporalPredNode,
 } from "../src/types";
 
 // Helpers
@@ -26,38 +27,42 @@ const d = (value: number, unit: "days" | "months"): Duration => ({
 const zero: ZeroGate = { type: "Zero" };
 const date = (iso: string): DateGate => ({ type: "Date", iso });
 const event = (name: string): EventAtom => ({ type: "Event", name });
-const qBy = (
-  base: DateGate | EventAtom,
-  target: DateGate | EventAtom,
-): QualifiedAnchor => ({
-  type: "Qualified",
-  base,
-  qualifier: { type: "By", target },
-});
+
 const qBefore = (
   base: DateGate | EventAtom,
   target: DateGate | EventAtom,
+  strict = false,
 ): QualifiedAnchor => ({
   type: "Qualified",
   base,
-  qualifier: { type: "Before", target },
+  predicates: [
+    { type: "Before", i: target, strict },
+  ] satisfies TemporalPredNode[],
 });
+
 const qAfter = (
   base: DateGate | EventAtom,
   target: DateGate | EventAtom,
+  strict = false,
 ): QualifiedAnchor => ({
   type: "Qualified",
   base,
-  qualifier: { type: "After", target },
+  predicates: [
+    { type: "After", i: target, strict },
+  ] satisfies TemporalPredNode[],
 });
+
 const qBetween = (
   base: DateGate | EventAtom,
   start: DateGate | EventAtom,
   end: DateGate | EventAtom,
+  strict = false,
 ): QualifiedAnchor => ({
   type: "Qualified",
   base,
-  qualifier: { type: "Between", start, end },
+  predicates: [
+    { type: "Between", a: start, b: end, strict },
+  ] satisfies TemporalPredNode[],
 });
 
 describe("vestlang PEG grammar", () => {
@@ -143,7 +148,7 @@ describe("vestlang PEG grammar", () => {
     });
   });
 
-  describe("FROM term (Date/Event, Earlier/Later, qualifiers)", () => {
+  describe("FROM term (Date/Event, Earlier/Later, predicates)", () => {
     it("supports FROM DATE and FROM EVENT", () => {
       const a = parse("VEST SCHEDULE FROM DATE 2027-01-01") as Statement;
       const b = parse("VEST SCHEDULE FROM EVENT ipo") as Statement;
@@ -169,19 +174,19 @@ describe("vestlang PEG grammar", () => {
       expect(from.items).toEqual([event("ipo"), date("2026-01-01")]);
     });
 
-    it("supports QualifiedAtom with BY / BEFORE / AFTER / BETWEEN", () => {
-      const by = parse(
-        "VEST SCHEDULE FROM EVENT grant BY DATE 2025-12-31",
-      ) as Statement;
-      expect((by.expr as Schedule).from).toEqual(
-        qBy(event("grant"), date("2025-12-31")),
-      );
-
+    it("supports QualifiedAtom with BEFORE / AFTER / BETWEEN (no BY)", () => {
       const before = parse(
         "VEST SCHEDULE FROM DATE 2025-01-01 BEFORE EVENT cic",
       ) as Statement;
       expect((before.expr as Schedule).from).toEqual(
         qBefore(date("2025-01-01"), event("cic")),
+      );
+
+      const strictlyBefore = parse(
+        "VEST SCHEDULE FROM DATE 2025-01-01 STRICTLY BEFORE EVENT cic",
+      ) as Statement;
+      expect((strictlyBefore.expr as Schedule).from).toEqual(
+        qBefore(date("2025-01-01"), event("cic"), true),
       );
 
       const after = parse(
@@ -196,6 +201,13 @@ describe("vestlang PEG grammar", () => {
       ) as Statement;
       expect((between.expr as Schedule).from).toEqual(
         qBetween(event("board"), date("2025-01-01"), date("2025-12-31")),
+      );
+
+      const strictlyBetween = parse(
+        "VEST SCHEDULE FROM EVENT board STRICTLY BETWEEN DATE 2025-01-01 AND DATE 2025-12-31",
+      ) as Statement;
+      expect((strictlyBetween.expr as Schedule).from).toEqual(
+        qBetween(event("board"), date("2025-01-01"), date("2025-12-31"), true),
       );
     });
   });
@@ -218,6 +230,7 @@ describe("vestlang PEG grammar", () => {
       const b = parse(
         "VEST SCHEDULE CLIFF EVENT hire BEFORE EVENT cic",
       ) as Statement;
+      // NB: cliff stays in parser AST as QualifiedAnchor; normalization happens later
       expect((b.expr as Schedule).cliff).toEqual(
         qBefore(event("hire"), event("cic")),
       );

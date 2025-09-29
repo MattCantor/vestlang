@@ -15,8 +15,13 @@
   function mkAmountPercent(x) {
     return { type: "AmountPercent", value: x };
   }
-  function mkQualified(base, qualifier) {
-    return qualifier ? { type: "Qualified", base, qualifier } : base;
+  function mkQualified(base, preds) {
+    return preds && preds.length
+      ? { type: "Qualified", base, predicates: preds }
+      : base;
+  }
+  function collect(head, tail) {
+    return [head, ...tail.map((t) => t[1])];
   }
 }
 
@@ -64,8 +69,7 @@ Expr
       return { type: "LaterOfSchedules", items: xs };
     }
 
-ExprList
-  = head:Expr tail:(_ "," _ Expr)* { return [head, ...tail.map((t) => t[3])]; }
+ExprList = head:Expr tail:(CommaSep Expr)* { return collect(head, tail); }
 
 /* ------------------------------
    Schedule block (time-based)
@@ -105,9 +109,7 @@ FromTerm
     }
 
 FromTermList
-  = head:FromTerm tail:(_ "," _ FromTerm)* {
-      return [head, ...tail.map((t) => t[3])];
-    }
+  = head:FromTerm tail:(CommaSep FromTerm)* { return collect(head, tail); }
 
 /* ----------------------------------
    OVER / EVERY (durations)
@@ -135,27 +137,42 @@ CliffTerm
     }
 
 CliffTermList
-  = head:CliffTerm tail:(_ "," _ CliffTerm)* {
-      return [head, ...tail.map((t) => t[3])];
-    }
+  = head:CliffTerm tail:(CommaSep CliffTerm)* { return collect(head, tail); }
 
 /* -----------------------------
    Temporal qualifiers
    ----------------------------- */
 
 QualifiedAtom
-  = base:(DateAtom / EventAtom) _ q:TemporalQualifier? {
+  = base:(DateAtom / EventAtom) _ q:TemporalPredicateList? {
       return mkQualified(base, q ?? null);
     }
 
-TemporalQualifier
-  = "BY"i _ t:(DateAtom / EventAtom) { return { type: "By", target: t }; }
-  / "BEFORE"i _ t:(DateAtom / EventAtom) {
-      return { type: "Before", target: t };
+/* ------------------------------
+   Temporal predicates (with STRICTLY + AND)
+   ------------------------------ */
+
+TemporalPredicateList
+  = head:TemporalPred tail:(AndSep TemporalPred)* {
+      return collect(head, tail);
     }
-  / "AFTER"i _ t:(DateAtom / EventAtom) { return { type: "After", target: t }; }
-  / "BETWEEN"i _ a:(DateAtom / EventAtom) _ "AND" _ b:(DateAtom / EventAtom) {
-      return { type: "Between", start: a, end: b };
+
+/* A single predicate term (unary or BETWEEN) */
+TemporalPred
+  = s:Strict?
+    _
+    "BETWEEN"i
+    _
+    a:(DateAtom / EventAtom)
+    _
+    "AND"i
+    _
+    b:(DateAtom / EventAtom) { return { type: "Between", a, b, strict: !!s }; }
+  / s:Strict? _ "BEFORE"i _ t:(DateAtom / EventAtom) {
+      return { type: "Before", i: t, strict: !!s };
+    }
+  / s:Strict? _ "AFTER"i _ t:(DateAtom / EventAtom) {
+      return { type: "After", i: t, strict: !!s };
     }
 
 /* ------------------------------
@@ -181,6 +198,12 @@ DateAtom
     }
 
 EventAtom = "EVENT"i _ name:Ident { return mkEvent(name); }
+
+AndSep = _ "AND"i _
+
+Strict = "STRICTLY"i
+
+CommaSep = _ "," _
 
 Ident = $([A-Za-z_] [A-Za-z0-9_]*)
 
