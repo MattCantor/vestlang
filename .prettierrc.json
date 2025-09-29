@@ -4,5 +4,16 @@
   "trailingComma": "all",
   "printWidth": 80,
   "tabWidth": 2,
-  "plugins": ["prettier-plugin-pegjs"]
+  "plugins": [
+    "prettier-plugin-pegjs",
+    "./packages/prettier-plugin-vestlang/dist/index.js"
+  ],
+  "overrides": [
+    {
+      "files": ".vest",
+      "options": {
+        "parser": "vestlang-parser"
+      }
+    }
+  ]
 }

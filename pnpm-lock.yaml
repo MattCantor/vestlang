@@ -117,6 +117,22 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.5.2)(tsx@4.20.5)
 
+  packages/prettier-plugin-vestlang:
+    dependencies:
+      '@vestlang/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/node@24.5.2)(tsx@4.20.5)
+
 packages:
 
   '@babel/runtime@7.28.4':
