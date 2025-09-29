@@ -1,82 +1,144 @@
-// New top-level statement algebra
-export type TopStmt = Program | EarlierOfPrograms | LaterOfPrograms;
+// ==== Core statement ====
 
-export interface EarlierOfPrograms {
-  kind: "EarlierOfPrograms";
-  items: TopStmt[]; // flattened by normalizer
+export interface Statement {
+  amount: Amount; // { type: "AmountInteger" } | { type: "AmountPercent" }
+  expr: Expr; // Schedule | EarlierOfSchedules | LaterOfSchedules
 }
 
-export interface LaterOfPrograms {
-  kind: "LaterOfPrograms";
-  items: TopStmt[]; // flattened by normalizer
+// ==== Amounts ====
+
+export type Amount = AmountInteger | AmountPercent;
+
+export interface AmountInteger {
+  type: "AmountInteger";
+  value: number; // whole shares
 }
 
-// Existing Program (unchanged conceptually)
-export interface Program {
-  kind: "Program";
-  schedule?: Schedule; // will be injected by CNF if absent
-  if?: Condition;
+export interface AmountPercent {
+  type: "AmountPercent";
+  value: number; // faction in [0, 1]
+}
+
+// ==== Expressions ====
+
+export type Expr = Schedule | EarlierOfSchedules | LaterOfSchedules;
+
+export interface EarlierOfSchedules {
+  type: "EarlierOfSchedules";
+  items: Expr[];
+}
+
+export interface LaterOfSchedules {
+  type: "LaterOfSchedules";
+  items: Expr[];
 }
 
 export interface Schedule {
-  from?: Anchor; // default grantDate
-  over: Duration; // 0 allowed
-  every: Duration; // 0 iff over=0
-  cliff?: TimeGate; // default 0
+  type: "Schedule";
+  from?: FromTerm | null; // TODO: make this default to the grant date in the normalizer
+  over: Duration | ZeroGate;
+  every: Duration | ZeroGate;
+  cliff?: CliffTerm; // default: { type: "Zero" }
 }
 
-export type TimeGate = ZeroGate | DateGate | Duration; // your current union
-export interface ZeroGate {
-  kind: "Zero";
-}
-export interface DateGate {
-  kind: "Date";
-  iso: string;
-}
-
-export type Anchor = DateGate | EventAtom;
-
-export interface Amount {
-  kind: "Amount";
-  value: number; // first token in the DSL line
-}
-
-export type Condition = EventAtom | AtDate | After | EarlierOf | LaterOf;
-
-export interface EventAtom {
-  kind: "Event";
-  name: string;
-}
-
-export interface AtDate {
-  kind: "At";
-  date: DateGate;
-}
-export interface After {
-  kind: "After";
-  duration: Duration;
-  from?: never;
-} // duration relative to SCHEDULE.from
-export interface EarlierOf {
-  kind: "EarlierOf";
-  items: Condition[];
-}
-export interface LaterOf {
-  kind: "LaterOf";
-  items: Condition[];
-}
+// ==== Durations (normalized by grammar) ====
 
 export interface Duration {
-  kind: "Duration";
+  type: "Duration";
   value: number;
-  unit: Unit;
+  unit: Unit; // grammar converts weeks->days, years->months
 }
 
 export type Unit = "days" | "months";
 
-// The full statement line produced by parser
-export interface Statement {
-  kind: "Statement";
-  amount: Amount;
-  top: TopStmt;
+// ==== Anchors (atoms) ====
+
+export type Anchor = DateGate | EventAtom;
+
+export interface DateGate {
+  type: "Date";
+  iso: string; // YYYY-MM-DD
+}
+
+export interface EventAtom {
+  type: "Event";
+  name: string; // Ident
+}
+
+// ==== Temporal qualifiers & qualified atoms ====
+// mkQualified(base, qualifier) returns either the base OR a Qualified wrapper
+// so downstream should accept both Anchor and Qualified<Anchor>.
+
+export type TemporalQualifier =
+  | ByQualifier
+  | BeforeQualifier
+  | AfterQualifier
+  | BetweenQualifier;
+
+export interface ByQualifier {
+  type: "By";
+  target: Anchor; // on or before target
+}
+export interface BeforeQualifier {
+  type: "Before";
+  target: Anchor; // strictly before target
+}
+
+export interface AfterQualifier {
+  type: "After";
+  target: Anchor; // strictly after target
+}
+
+export interface BetweenQualifier {
+  type: "Between";
+  start: Anchor;
+  end: Anchor;
+}
+
+export interface QualifiedAnchor {
+  type: "Qualified";
+  base: Anchor; // Date or Event
+  qualifier: TemporalQualifier;
+}
+
+// ==== FROM (recursive) ====
+
+export type FromTerm =
+  | Anchor // bare Date / Event
+  | QualifiedAnchor // Date/Event with BY/BEFORE/AFTER/BETWEEN
+  | EarlierOfFrom
+  | LaterOfFrom;
+
+export interface EarlierOfFrom {
+  type: "EarlierOf";
+  items: FromTerm[];
+}
+
+export interface LaterOfFrom {
+  type: "LaterOf";
+  items: FromTerm[];
+}
+
+// ==== CLIFF (recursive) ====
+
+export type CliffTerm =
+  | ZeroGate
+  | Duration // time-based cliff (e.g., ClIFF 12 months)
+  | Anchor // date/event cliff
+  | QualifiedAnchor // date/event with qualifier
+  | EarlierOfCliff
+  | LaterOfCliff;
+
+export interface ZeroGate {
+  type: "Zero";
+}
+
+export interface EarlierOfCliff {
+  type: "EarlierOf";
+  items: CliffTerm[];
+}
+
+export interface LaterOfCliff {
+  type: "LaterOf";
+  items: CliffTerm[];
 }

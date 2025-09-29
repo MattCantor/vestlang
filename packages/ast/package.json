@@ -1,0 +1,23 @@
+{
+  "name": "@vestlang/ast",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node dist/scripts/build-schemas.js",
+    "dev": "tsc -w -p tsconfig.json",
+    "test": "vitest",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "json-schema-to-ts": "^3.1.1"
+  }
+}
