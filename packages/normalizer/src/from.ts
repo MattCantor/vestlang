@@ -11,7 +11,7 @@ import type {
   EarlierOfFrom,
   LaterOfFrom,
 } from "@vestlang/dsl";
-import * as temporal from "./temporal";
+import * as temporal from "./temporal.js";
 import {
   isSchedule,
   isEarlierOfSchedules,
@@ -21,8 +21,8 @@ import {
   isLaterOfFrom,
   isAnchor,
   assertNever,
-} from "./guards";
-import { invariant, unexpectedAst } from "./errors";
+} from "./guards.js";
+import { invariant, unexpectedAst } from "./errors.js";
 
 // A base that can be evaluated: either a bare anchor OR a combinator node from FromTerm
 export type FromBase = Anchor | EarlierOfFrom | LaterOfFrom;

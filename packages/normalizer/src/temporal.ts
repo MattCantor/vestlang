@@ -1,6 +1,6 @@
 import type { TemporalPredNode, Anchor } from "@vestlang/dsl";
-import { isDate } from "./guards";
-import { assertNever } from "./guards";
+import { isDate } from "./guards.js";
+import { assertNever } from "./guards.js";
 
 // ==== Canonical window used everywhere downstream ====
 export interface TimeWindow {
