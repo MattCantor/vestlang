@@ -1,40 +1,30 @@
 import type { TemporalPredNode, Anchor } from "@vestlang/dsl";
 import { isDate } from "./guards.js";
 import { assertNever } from "./guards.js";
-
-// ==== Canonical window used everywhere downstream ====
-export interface TimeWindow {
-  start?: Anchor; // undefined = negative infinite
-  end?: Anchor; // undefined = positive infinity
-  includeStart: boolean; // defaults to true
-  includeEnd: boolean; // defaults to true
-}
-
-// ==== Lower a list of temporal predicates into a single TimeWindow ====
+import { Window } from "./types/normalized.js"
+// ==== Lower a list of temporal predicates into a single Window ====
 
 export function lowerTemporalPredicates(
   nodes?: TemporalPredNode[],
-): TimeWindow {
-  // Default = unbounded inclusive
-  const base: TimeWindow = { includeStart: true, includeEnd: true };
+): Window {
 
-  if (!nodes || nodes.length === 0) return base;
+  if (!nodes || nodes.length === 0) return {};
 
   const windows = nodes.map(lowerOne);
-  return windows.reduce(intersectTW, base);
+  return windows.reduce(intersectTW, {});
 
-  function lowerOne(n: TemporalPredNode): TimeWindow {
+  function lowerOne(n: TemporalPredNode): Window {
     switch (n.type) {
       case "After":
-        return { start: n.i, includeStart: !n.strict, includeEnd: true };
+        return { start: n.i, inclusiveStart: !n.strict};
       case "Before":
-        return { end: n.i, includeStart: true, includeEnd: !n.strict };
+        return { end: n.i, inclusiveStart: true, inclusiveEnd: !n.strict };
       case "Between":
         return {
           start: n.a,
           end: n.b,
-          includeStart: !n.strict,
-          includeEnd: !n.strict,
+          inclusiveStart: !n.strict,
+          inclusiveEnd: !n.strict,
         };
       default:
         return assertNever(
@@ -44,39 +34,39 @@ export function lowerTemporalPredicates(
     }
   }
 
-  function intersectTW(a: TimeWindow, b: TimeWindow): TimeWindow {
+  function intersectTW(a: Window, b: Window): Window {
     // later start wins; if equal, inclusivity ANDs
     let start = a.start ?? b.start;
-    let includeStart = a.start
-      ? a.includeStart
+    let inclusiveStart = a.start
+      ? a.inclusiveStart
       : b.start
-        ? b.includeStart
+        ? b.inclusiveStart
         : true;
     if (a.start && b.start) {
       const later = laterOfSymbolic(a.start, b.start); // structural “max” (no real time compare yet)
       start = later.pick;
-      includeStart = later.tie
-        ? a.includeStart && b.includeStart
+      inclusiveStart = later.tie
+        ? a.inclusiveStart && b.inclusiveStart
         : later.pick === a.start
-          ? a.includeStart
-          : b.includeStart;
+          ? a.inclusiveStart
+          : b.inclusiveStart;
     }
 
     // earlier end wins; if equal, inclusivity ANDs
     let end = a.end ?? b.end;
-    let includeEnd = a.end ? a.includeEnd : b.end ? b.includeEnd : true;
+    let inclusiveEnd = a.end ? a.inclusiveEnd : b.end ? b.inclusiveEnd : true;
     if (a.end && b.end) {
       const earlier = earlierOfSymbolic(a.end, b.end); // structural “min”
       end = earlier.pick;
-      includeEnd = earlier.tie
-        ? a.includeEnd && b.includeEnd
+      inclusiveEnd = earlier.tie
+        ? a.inclusiveEnd && b.inclusiveEnd
         : earlier.pick === a.end
-          ? a.includeEnd
-          : b.includeEnd;
+          ? a.inclusiveEnd
+          : b.inclusiveEnd;
     }
 
     // NOTE: we do NOT validate emptiness here; that requires real-time ordering downstream.
-    return { start, end, includeStart, includeEnd };
+    return { start, end, inclusiveStart, inclusiveEnd };
   }
 
   // Symbolic min/max:
