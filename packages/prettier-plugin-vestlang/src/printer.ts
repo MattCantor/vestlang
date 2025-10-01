@@ -2,22 +2,22 @@
 import type { Printer } from "prettier";
 import type { Doc, AstNode } from "./types";
 import type {
-  Statement as VestStatement,
-  Expr,
-  Schedule,
-  EarlierOfSchedules,
-  LaterOfSchedules,
+  ASTStatement,
+  ASTExpr,
+  ASTSchedule,
+  EarlierOfASTSchedules,
+  LaterOfASTSchedules,
   Duration,
-  ZeroGate,
   QualifiedAnchor,
   FromTerm,
-  DateGate,
-  EventAtom,
+  DateAnchor,
+  EventAnchor,
   TemporalPredNode,
   CliffTerm,
 } from "@vestlang/dsl";
-import { doc as PrettierDoc } from "prettier"
-const { group, indent, line, softline, hardline, join, breakParent } = PrettierDoc.builders;
+import { doc as PrettierDoc } from "prettier";
+const { group, indent, line, softline, hardline, join, breakParent } =
+  PrettierDoc.builders;
 
 const lit = (s: string): Doc => s;
 
@@ -26,10 +26,10 @@ const UNITS_UPPERCASE = false; // set true for MONTH(S) / DAY(S) in caps
 
 /* ---------- Leaf printers ---------- */
 
-function printAmount(stmt: VestStatement): Doc {
+function printAmount(stmt: ASTStatement): Doc {
   const a = stmt.amount;
   if (!a) return "";
-  if (a.type === "AmountInteger") return String(a.value) + " ";
+  if (a.type === "AmountAbsolute") return String(a.value) + " ";
   if (a.type === "AmountPercent") {
     const pct = (a.value * 100).toFixed(3).replace(/\.?0+$/, "");
     // 100% should be implied by omitting amount, so we return "" when pct === "100"
@@ -38,9 +38,9 @@ function printAmount(stmt: VestStatement): Doc {
   return "";
 }
 
-function printAnchor(a: DateGate | EventAtom): Doc {
-  if (a.type === "Date") return `DATE ${a.iso}`;
-  if (a.type === "Event") return `EVENT ${a.name}`;
+function printAnchor(a: DateAnchor | EventAnchor): Doc {
+  if (a.type === "Date") return `DATE ${a.value}`;
+  if (a.type === "Event") return `EVENT ${a.value}`;
   return "";
 }
 
@@ -91,11 +91,10 @@ function printFromComb(
   ]);
 }
 
-function printDuration(d: Duration | ZeroGate): Doc {
-  if (d.type === "Zero") return "0";
+function printDuration(d: Duration): Doc {
   // Normalize pluralization
   const base = d.unit; // "months" | "days"
-  const singular = base === "months" ? "month" : "day";
+  const singular = base === "MONTHS" ? "month" : "day";
   let unit = d.value === 1 ? singular : base;
   if (UNITS_UPPERCASE) unit = unit.toUpperCase();
   return `${d.value} ${unit}`;
@@ -103,7 +102,7 @@ function printDuration(d: Duration | ZeroGate): Doc {
 
 /* ---------- Expr printers ---------- */
 
-function printSchedule(n: Schedule): Doc {
+function printSchedule(n: ASTSchedule): Doc {
   // Force structured, multi-line layout using hardline + breakParent
   const fromDoc = n.from ? printFromTerm(n.from) : ("EVENT grant" as Doc); // conventional default
 
@@ -131,7 +130,6 @@ function printSchedule(n: Schedule): Doc {
 
 function printCliff(c: CliffTerm): Doc {
   if (!c) return "";
-  if (c.type === "Zero") return ""; // suppress "CLIFF 0"
   if (c.type === "Duration") return printDuration(c);
   if (c.type === "Date" || c.type === "Event") return printAnchor(c);
   if (c.type === "Qualified") return printQualified(c);
@@ -158,7 +156,7 @@ function printCliffComb(
   ]);
 }
 
-function printExpr(e: Expr): Doc {
+function printExpr(e: ASTExpr): Doc {
   switch (e.type) {
     case "Schedule":
       return printSchedule(e);
@@ -171,7 +169,7 @@ function printExpr(e: Expr): Doc {
   }
 }
 
-function printExprComb(name: "EARLIER OF" | "LATER OF", items: Expr[]): Doc {
+function printExprComb(name: "EARLIER OF" | "LATER OF", items: ASTExpr[]): Doc {
   return group([
     name,
     " (",
@@ -192,7 +190,7 @@ const docPrint = (node: AstNode): Doc => {
       return group([
         join(
           hardline,
-          (node.body as VestStatement[]).map((s) =>
+          (node.body as ASTStatement[]).map((s) =>
             group([printAmount(s), "VEST ", printExpr(s.expr)]),
           ),
         ),
@@ -201,11 +199,11 @@ const docPrint = (node: AstNode): Doc => {
 
     // If Prettier ever prints subnodes directly (shouldn’t for us):
     case "Schedule":
-      return printSchedule(node as Schedule);
+      return printSchedule(node as ASTSchedule);
     case "EarlierOfSchedules":
-      return printExprComb("EARLIER OF", (node as EarlierOfSchedules).items);
+      return printExprComb("EARLIER OF", (node as EarlierOfASTSchedules).items);
     case "LaterOfSchedules":
-      return printExprComb("LATER OF", (node as LaterOfSchedules).items);
+      return printExprComb("LATER OF", (node as LaterOfASTSchedules).items);
 
     default:
       return ""; // unreachable in normal flow

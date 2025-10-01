@@ -631,21 +631,17 @@ function normalizePeriodicity(
     path,
   );
 
-  const span = asInt(over.value, [...path, "span"]);
-  const step = asInt(every.value, [...path, "step"]);
+  const span = over.value as Integer;
+  const step = every.value as Integer;
+
   invariant(
-    step > 0 && span > 0,
-    "OVER and EVERY must be positive",
-    { over, every },
-    path,
-  );
-  invariant(
-    span % step === 0,
+    (span === 0 && step === 0) || span % step === 0,
     "OVER must be a multiple of EVERY",
     { over, every },
     path,
   );
-  const count = asInt(span / step, [...path, "count"]);
+  const count =
+    span === 0 && step === 0 ? (1 as Integer) : ((span / step) as Integer);
 
   if (over.unit === "DAYS") {
     const p: PeriodicityInDays = {
@@ -672,9 +668,4 @@ function normalizePeriodicity(
 
 function unitOfPeriodicity(p: Periodicity) {
   return p.periodType === "DAYS" ? "DAYS" : "MONTHS";
-}
-
-function asInt(n: number, path: string[]): Integer {
-  invariant(Number.isInteger(n), "Expected integer", { n }, path);
-  return n as Integer;
 }

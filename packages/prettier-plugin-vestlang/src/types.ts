@@ -1,15 +1,14 @@
 // src/types.ts
 import type {
-  Statement as VestStatement,
-  Expr,
-  Schedule,
-  EarlierOfSchedules,
-  LaterOfSchedules,
+  ASTStatement,
+  ASTExpr,
+  ASTSchedule,
+  EarlierOfASTSchedules,
+  LaterOfASTSchedules,
   Duration,
-  ZeroGate,
   QualifiedAnchor,
-  DateGate,
-  EventAtom,
+  DateAnchor,
+  EventAnchor,
   FromTerm,
   CliffTerm,
 } from "@vestlang/dsl";
@@ -17,20 +16,19 @@ import type {
 // Our root node so Prettier has a typed entry point
 export interface Program {
   type: "Program";
-  body: VestStatement[]; // your original shape; no extra `type` required here
+  body: ASTStatement[]; // your original shape; no extra `type` required here
 }
 
 export type AstNode =
   | Program
-  | Expr
-  | Schedule
-  | EarlierOfSchedules
-  | LaterOfSchedules
+  | ASTExpr
+  | ASTSchedule
+  | EarlierOfASTSchedules
+  | LaterOfASTSchedules
   | Duration
-  | ZeroGate
   | QualifiedAnchor
-  | DateGate
-  | EventAtom
+  | DateAnchor
+  | EventAnchor
   | FromTerm
   | CliffTerm
   | { type: string; [k: string]: any };

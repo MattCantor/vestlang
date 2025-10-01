@@ -1,14 +1,11 @@
 // packages/linter/src/index.ts
 import type {
-  Statement,
-  Expr,
-  Schedule,
+  ASTStatement,
+  ASTExpr,
   FromTerm,
   QualifiedAnchor,
   TemporalPredNode,
-  Anchor,
   Duration,
-  ZeroGate,
 } from "@vestlang/dsl";
 import { normalizeExpr } from "@vestlang/normalizer";
 
@@ -21,7 +18,7 @@ export interface LintIssue {
 }
 
 /** Entry point: lint a parsed Statement (parser AST). */
-export function lint(stmt: Statement): LintIssue[] {
+export function lint(stmt: ASTStatement): LintIssue[] {
   const out: LintIssue[] = [];
 
   // 1) Raw AST checks (predicates & lists)
@@ -38,7 +35,7 @@ export function lint(stmt: Statement): LintIssue[] {
  * Raw AST checks (no mutation)
  * =======================================================*/
 
-function lintExpr(node: Expr, path: string, out: LintIssue[]) {
+function lintExpr(node: ASTExpr, path: string, out: LintIssue[]) {
   switch (node.type) {
     case "Schedule":
       if (node.from) lintFromTerm(node.from, `${path}.from`, out);
@@ -174,15 +171,15 @@ function lintPredicates(
   // Date-only validations for BETWEEN (parser allows; evaluator would fail later)
   for (const p of preds) {
     if (p.type === "Between" && p.a.type === "Date" && p.b.type === "Date") {
-      if (p.a.iso > p.b.iso) {
+      if (p.a.value > p.b.value) {
         out.push({
           code: "LINT-PRED-DATE-ORDER",
-          message: `BETWEEN has start > end (${p.a.iso} > ${p.b.iso}).`,
+          message: `BETWEEN has start > end (${p.a.value} > ${p.b.value}).`,
           fix: "Swap the endpoints or correct the dates.",
           path,
         });
       }
-      if (p.a.iso === p.b.iso && p.strict) {
+      if (p.a.value === p.b.value && p.strict) {
         out.push({
           code: "LINT-PRED-EQUAL-STRICT",
           message: "STRICTLY BETWEEN identical endpoints is an empty set.",
@@ -201,8 +198,8 @@ function lintPredicates(
 function lintNormalizedExpr(node: any, path: string, out: LintIssue[]) {
   if (node.type === "Schedule") {
     const s = node as {
-      over: Duration | ZeroGate;
-      every: Duration | ZeroGate;
+      over: Duration;
+      every: Duration;
       cliff?: { type: string } | undefined;
       // fromWindow is available but we don't validate emptiness here
     };
