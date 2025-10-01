@@ -2,23 +2,32 @@
 type TwoOrMore<T> = [T, T, ...T[]];
 
 export interface ASTStatement {
-  amount: Amount; // { type: "AmountInteger" } | { type: "AmountPercent" }
+  amount: AstAmount; // { type: "AmountInteger" } | { type: "AmountPercent" }
   expr: ASTExpr; // Schedule | EarlierOfSchedules | LaterOfSchedules
 }
 
-// ==== Amounts ====
+/* ------------------------
+ * Amounts
+ * ------------------------ */
 
-export type Amount = AmountInteger | AmountPercent;
+// enums/vestlang/AmountType
+export type AmountType = "AmountPercent" | "AmountAbsolute";
 
-export interface AmountInteger {
-  type: "AmountInteger";
+export type BaseAmount = {
+  type: AmountType;
+};
+
+export interface ASTAmountAbsolute extends BaseAmount {
+  type: "AmountAbsolute";
   value: number; // whole shares
 }
 
-export interface AmountPercent {
+export interface ASTAmountPercent extends BaseAmount {
   type: "AmountPercent";
   value: number; // fraction in [0, 1]
 }
+
+export type AstAmount = ASTAmountAbsolute | ASTAmountPercent;
 
 // ==== Expressions ====
 
@@ -39,7 +48,7 @@ export interface ASTSchedule {
   from?: FromTerm;
   over: Duration;
   every: Duration;
-  cliff?: CliffTerm; 
+  cliff?: CliffTerm;
 }
 
 // ==== Durations (normalized by grammar) ====
@@ -94,7 +103,7 @@ export interface EarlierOfFrom {
 
 export interface LaterOfFrom {
   type: "LaterOf";
-  items: TwoOrMore<FromTerm>
+  items: TwoOrMore<FromTerm>;
 }
 
 // ==== CLIFF (recursive) ====
@@ -108,12 +117,12 @@ export type CliffTerm =
 
 export interface EarlierOfCliff {
   type: "EarlierOf";
-  items: TwoOrMore<CliffTerm>
+  items: TwoOrMore<CliffTerm>;
 }
 
 export interface LaterOfCliff {
   type: "LaterOf";
-  items: TwoOrMore<CliffTerm>
+  items: TwoOrMore<CliffTerm>;
 }
 
 // A base that can be evaluated: either a bare anchor OR a combinator node from FromTerm

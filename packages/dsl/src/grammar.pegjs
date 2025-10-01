@@ -9,8 +9,8 @@
   function mkEvent(name) {
     return { type: "Event", value: name };
   }
-  function mkAmountInteger(n) {
-    return { type: "AmountInteger", value: n };
+  function mkAmountAbsolute(n) {
+    return { type: "AmountAbsolute", value: n };
   }
   function mkAmountPercent(x) {
     return { type: "AmountPercent", value: x };
@@ -48,7 +48,7 @@ Amount
       }
       return mkAmountPercent(x);
     }
-  / n:Integer { return mkAmountInteger(n); }
+  / n:Integer { return mkAmountAbsolute(n); }
 
 // Strict integer: one or more digits, no dot
 Integer = s:$[0-9]+ !"." { return parseInt(s, 10); }

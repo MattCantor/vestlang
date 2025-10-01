@@ -1,3 +1,4 @@
+import { BaseAmount } from "@vestlang/dsl";
 import { Numeric } from "./oct-types.js";
 
 /* ------------------------
@@ -6,51 +7,36 @@ import { Numeric } from "./oct-types.js";
 
 // Brand to mark integers at the type level
 declare const __int: unique symbol;
-export type Integer = number & { [__int]: "Integer"}
+export type Integer = number & { [__int]: "Integer" };
 
 // Require at least two items for combinators.
-export type TwoOrMore<T> = [T, T, ...T[]]
+export type TwoOrMore<T> = [T, T, ...T[]];
 
 // Exhaustiveness helper
 export function assertNever(x: never): never {
-  throw new Error("Unexpected value: " + String(x))
+  throw new Error("Unexpected value: " + String(x));
 }
 
-
 /* ------------------------
-  * Amount
-  * ----------------------- */
-
-// enums/vestlang/AmountType
-type AmountType =
-| "Amount_Percent"
-| "Amount_Absolute"
-
-// primitives/types/vestlang/Amount
-interface BaseAmount { 
-  type: AmountType
-} 
+ * Amount
+ * ----------------------- */
 
 // types/vestlang/Amount
 interface AmountPercent extends BaseAmount {
-  type: "Amount_Percent",
+  type: "AmountPercent";
   numerator: Numeric;
   denominator: Numeric; // must not be "0" at runtime
   quantity?: never;
 }
 
 interface AmountAbsolute extends BaseAmount {
-  type: "Amount_Absolute";
+  type: "AmountAbsolute";
   value: number;
   numerator?: never;
   denominator?: never;
-};
+}
 
-export type Amount = AmountPercent | AmountAbsolute
+export type Amount = AmountPercent | AmountAbsolute;
 
 // enums/vestlang/ExpressionType
-export type ExprType =
-| "Schedule"
-| "LaterOfSchedules"
-| "EarlierOfSchedules"
-
+export type ExprType = "Schedule" | "LaterOfSchedules" | "EarlierOfSchedules";

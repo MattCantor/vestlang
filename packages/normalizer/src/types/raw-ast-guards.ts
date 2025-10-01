@@ -10,6 +10,8 @@ import type {
   QualifiedAnchor,
   DateAnchor,
   EventAnchor,
+  EarlierOfASTSchedules,
+  LaterOfASTSchedules,
 } from "@vestlang/dsl";
 import { TwoOrMore } from "./shared.js";
 
@@ -63,14 +65,14 @@ export function isSchedule(e: ASTExpr | unknown): e is ASTSchedule {
 }
 export function isEarlierOfSchedules(
   e: ASTExpr | unknown,
-): e is { type: "EarlierOfSchedules"; items: ASTExpr[] } {
+): e is EarlierOfASTSchedules {
   return (
     !!e && typeof e === "object" && (e as any).type === "EarlierOfSchedules"
   );
 }
 export function isLaterOfSchedules(
   e: ASTExpr | unknown,
-): e is { type: "LaterOfSchedules"; items: ASTExpr[] } {
+): e is LaterOfASTSchedules {
   return !!e && typeof e === "object" && (e as any).type === "LaterOfSchedules";
 }
 
@@ -80,5 +82,11 @@ export function assertNever(x: never, msg = "Unexpected object"): never {
 }
 
 export function isTwoOrMore<T>(arr: T[]): arr is TwoOrMore<T> {
-  return arr.length >= 2
+  return arr.length >= 2;
+}
+
+type OneOrMore<T> = [T, ...T[]];
+
+export function toTwoOrMore<T>(xs: OneOrMore<T>): [T, T, ...T[]] {
+  return (xs.length === 1 ? [xs[0], xs[0]] : xs) as [T, T, ...T[]];
 }

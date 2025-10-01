@@ -10,7 +10,7 @@ type VestingTriggerType =
 | "VESTING_EVENT"
 
 // enums/PeriodType
-export type PeriodType = "DAYS" | "MONTHS" | "YEARS"
+export type PeriodType = "DAYS" | "MONTHS" | "YEARS" 
 
 // enums/VestingDayOfMonth
 export type VestingDayOfMonth =

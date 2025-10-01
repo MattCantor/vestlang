@@ -241,7 +241,7 @@ function peg$parse(input, options) {
     }
     return mkAmountPercent(x);
   }
-  function peg$f2(n) {    return mkAmountInteger(n);  }
+  function peg$f2(n) {    return mkAmountAbsolute(n);  }
   function peg$f3(s) {    return parseInt(s, 10);  }
   function peg$f4(s) {    return parseFloat(s);  }
   function peg$f5(s) {    return s;  }
@@ -2173,8 +2173,8 @@ function peg$parse(input, options) {
   function mkEvent(name) {
     return { type: "Event", value: name };
   }
-  function mkAmountInteger(n) {
-    return { type: "AmountInteger", value: n };
+  function mkAmountAbsolute(n) {
+    return { type: "AmountAbsolute", value: n };
   }
   function mkAmountPercent(x) {
     return { type: "AmountPercent", value: x };

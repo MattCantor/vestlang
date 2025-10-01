@@ -1,40 +1,52 @@
 import { Anchor, DateAnchor, EventAnchor } from "@vestlang/dsl";
-import { PeriodType, VestingDayOfMonth } from "./oct-types.js"
 import { Amount, ExprType, Integer, TwoOrMore } from "./shared.js";
+import { VestingDayOfMonth } from "./oct-types.js";
 
-/* ------------------------
+/* -------------
  * Window
- * ------------------------ */
+ * ------------- */
 
-export type Bound<A = Anchor> = {
-  at: A;
-  inclusive: boolean
-}
+export type BoundCandidate<A = Anchor> = {
+  at: A; // Date | Event (still unresolved here)
+  inclusive: boolean; // per-candicate inclusivity
+};
 
-// primitives/vestlang/Window
+export type StartWindow<A = Anchor> = {
+  combine: "LaterOf"; // semantic: pick the latest start
+  candidates: TwoOrMore<BoundCandidate<A>>;
+};
+
+export type EndWindow<A = Anchor> = {
+  combine: "EarlierOf"; // semantic: pick the earlierst end
+  candidates: TwoOrMore<BoundCandidate<A>>;
+};
 
 export type Window<A = Anchor> = {
-  start?: Bound<A>;
-  end?: Bound<A>
-}
+  start?: StartWindow<A>;
+  end?: EndWindow<A>;
+};
+
+/* ------------------------
+ * Vesting Start
+ * ------------------------ */
 
 // primitives/vestlang/VestingStart
 interface BaseVestingStart {
   id: string;
-  type: "Qualified" | "Unqualified"
-  anchor: Anchor
+  type: "Qualified" | "Unqualified";
+  anchor: Anchor;
 }
 
 export interface VestingStartDate extends BaseVestingStart {
-  type: "Unqualified"
-  anchor: DateAnchor
-  window?: never
+  type: "Unqualified";
+  anchor: DateAnchor;
+  window?: never;
 }
 
 export interface VestingStartEvent extends BaseVestingStart {
-  type: "Unqualified"
-  anchor: EventAnchor
-  window?: never
+  type: "Unqualified";
+  anchor: EventAnchor;
+  window?: never;
 }
 
 export interface VestingStartQualified extends BaseVestingStart {
@@ -44,9 +56,27 @@ export interface VestingStartQualified extends BaseVestingStart {
 }
 
 export type VestingStart =
-| VestingStartDate
-| VestingStartEvent
-| VestingStartQualified
+  | VestingStartDate
+  | VestingStartEvent
+  | VestingStartQualified;
+
+// combinators over vesting starts
+export interface EarlierOfVestingStart {
+  id: string;
+  type: "EarlierOf";
+  items: TwoOrMore<VestingStartExpr>;
+}
+
+export interface LaterOfVestingStart {
+  id: string;
+  type: "LaterOf";
+  items: TwoOrMore<VestingStartExpr>;
+}
+
+export type VestingStartExpr =
+  | VestingStart
+  | EarlierOfVestingStart
+  | LaterOfVestingStart;
 
 /* -------------------------
  * Periodicity
@@ -55,23 +85,23 @@ export type VestingStart =
 // types/vestlang/Periodicity
 interface BasePeriodicity {
   id: string;
-  periodType: PeriodType;
   span: Integer;
   count: Integer;
   step: Integer;
   cliff?: Integer;
 }
 
-interface PeriodicityInDays extends BasePeriodicity {
-  periodType: "DAYS"
+export interface PeriodicityInDays extends BasePeriodicity {
+  periodType: "DAYS";
+  vesting_day_of_month?: never;
 }
 
-interface PeriodicityInMonths extends BasePeriodicity {
-  periodType: "MONTHS"
+export interface PeriodicityInMonths extends BasePeriodicity {
+  periodType: "MONTHS";
   vesting_day_of_month: VestingDayOfMonth;
 }
 
-type Periodicity = PeriodicityInDays | PeriodicityInMonths;
+export type Periodicity = PeriodicityInDays | PeriodicityInMonths;
 
 /* -----------------------
  * Expr
@@ -80,7 +110,7 @@ type Periodicity = PeriodicityInDays | PeriodicityInMonths;
 // primitives/vestlang/Expression
 interface BaseExpr {
   id: string;
-  type: ExprType
+  type: ExprType;
 }
 
 /* -------------------------
@@ -88,9 +118,9 @@ interface BaseExpr {
  * ------------------------- */
 
 // types/vestlang/Schedule
-interface Schedule extends BaseExpr {
+export interface Schedule extends BaseExpr {
   type: "Schedule";
-  vesting_start: VestingStart;
+  vesting_start: VestingStartExpr;
   periodicity: Periodicity;
 }
 
@@ -99,26 +129,24 @@ interface Schedule extends BaseExpr {
  * ----------------------- */
 
 interface BaseScheduleCombinator extends BaseExpr {
-  items: TwoOrMore<Schedule>;
+  items: TwoOrMore<Expr>;
 }
 
-interface LaterOfSchedules extends BaseScheduleCombinator {
+export interface LaterOfSchedules extends BaseScheduleCombinator {
   type: "LaterOfSchedules";
 }
 
-interface EarlierOfSchedules extends BaseScheduleCombinator {
+export interface EarlierOfSchedules extends BaseScheduleCombinator {
   type: "EarlierOfSchedules";
 }
 
-type ScheduleCombinator =
-| LaterOfSchedules
-| EarlierOfSchedules
+type ScheduleCombinator = LaterOfSchedules | EarlierOfSchedules;
 
-export type Expr = Schedule | ScheduleCombinator
+export type Expr = Schedule | ScheduleCombinator;
 
 /* ------------------------
  * Statement
-  * ----------------------- */
+ * ----------------------- */
 
 export interface Statement {
   id: string;

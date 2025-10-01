@@ -3,8 +3,8 @@ import { parse } from "../src/index";
 
 import type {
   Statement,
-  AmountInteger,
-  AmountPercent,
+  ASTAmountAbsolute,
+  ASTAmountPercent,
   Schedule,
   Duration,
   DateGate,
@@ -71,7 +71,7 @@ describe("vestlang PEG grammar", () => {
       const ast = parse(
         "123 VEST SCHEDULE OVER 12 months EVERY 1 month",
       ) as Statement;
-      const amt = ast.amount as AmountInteger;
+      const amt = ast.amount as ASTAmountAbsolute;
       expect(amt).toEqual({ type: "AmountInteger", value: 123 });
     });
 
@@ -79,7 +79,7 @@ describe("vestlang PEG grammar", () => {
       const ast = parse(
         "0.25 VEST SCHEDULE OVER 12 months EVERY 1 month",
       ) as Statement;
-      const amt = ast.amount as AmountPercent;
+      const amt = ast.amount as ASTAmountPercent;
       expect(amt).toEqual({ type: "AmountPercent", value: 0.25 });
     });
 

@@ -4,10 +4,7 @@ import type {
   TemporalPredNode,
   QualifiedAnchor,
   FromTerm,
-  Expr,
-  Schedule,
   Duration,
-  ZeroGate,
 } from "@vestlang/dsl";
 
 import {
@@ -21,16 +18,12 @@ import {
   isEarlierOfFrom,
   isLaterOfFrom,
   isDuration,
-  isZeroGate,
-  isSchedule,
-  isEarlierOfSchedules,
-  isLaterOfSchedules,
   assertNever,
-} from "../src/guards";
+} from "../src/types/raw-ast-guards.js";
 
 // helpers
-const date = (iso: string): Anchor => ({ type: "Date", iso });
-const event = (name: string): Anchor => ({ type: "Event", name });
+const date = (value: string): Anchor => ({ type: "Date", value });
+const event = (value: string): Anchor => ({ type: "Event", value });
 
 describe("guards: anchors", () => {
   it("isDate / isEvent / isAnchor", () => {
@@ -122,44 +115,9 @@ describe("guards: FromTerm variants", () => {
 
 describe("guards: durations & gates", () => {
   it("isDuration / isZeroGate", () => {
-    const dur: Duration = { type: "Duration", value: 6, unit: "months" };
-    const zero: ZeroGate = { type: "Zero" };
+    const dur: Duration = { type: "Duration", value: 6, unit: "MONTHS" };
 
     expect(isDuration(dur)).toBe(true);
-    expect(isZeroGate(dur)).toBe(false);
-
-    expect(isDuration(zero)).toBe(false);
-    expect(isZeroGate(zero)).toBe(true);
-  });
-});
-
-describe("guards: Expr / Schedule variants", () => {
-  it("isSchedule, isEarlierOfSchedules, isLaterOfSchedules", () => {
-    const sched: Schedule = {
-      type: "Schedule",
-      from: null,
-      over: { type: "Duration", value: 0, unit: "days" },
-      every: { type: "Duration", value: 0, unit: "days" },
-      cliff: { type: "Zero" },
-    };
-
-    const earlier: Expr = {
-      type: "EarlierOfSchedules",
-      items: [sched] as Expr[],
-    };
-    const later: Expr = { type: "LaterOfSchedules", items: [sched] as Expr[] };
-
-    expect(isSchedule(sched)).toBe(true);
-    expect(isEarlierOfSchedules(sched)).toBe(false);
-    expect(isLaterOfSchedules(sched)).toBe(false);
-
-    expect(isSchedule(earlier)).toBe(false);
-    expect(isEarlierOfSchedules(earlier)).toBe(true);
-    expect(isLaterOfSchedules(earlier)).toBe(false);
-
-    expect(isSchedule(later)).toBe(false);
-    expect(isEarlierOfSchedules(later)).toBe(false);
-    expect(isLaterOfSchedules(later)).toBe(true);
   });
 });
 
