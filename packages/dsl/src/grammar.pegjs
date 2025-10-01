@@ -4,10 +4,10 @@
     return { type: "Duration", value, unit };
   }
   function mkDate(iso) {
-    return { type: "Date", iso };
+    return { type: "Date", value: iso };
   }
   function mkEvent(name) {
-    return { type: "Event", name };
+    return { type: "Event", value: name };
   }
   function mkAmountInteger(n) {
     return { type: "AmountInteger", value: n };
@@ -23,6 +23,11 @@
   function collect(head, tail) {
     return [head, ...tail.map((t) => t[1])];
   }
+  function collectTwoOrMore(head, tail) {
+    const arr = collect(head, tail);
+    if (arr.length < 2) error("At least two items are required");
+    return arr;
+  }
 }
 
 Start
@@ -36,7 +41,7 @@ Start
    ----------------------------- */
 
 Amount
-  // any whole number
+  // Any decimal in [0,1] is a percent
   = x:Decimal {
       if (x < 0 || x > 1) {
         error("Decimal amount must be between 0 and 1 inclusive");
@@ -62,14 +67,15 @@ Decimal
 
 Expr
   = s:ScheduleBlock { return s; }
-  / "EARLIER"i _ "OF"i _ "(" _ xs:ExprList _ ")" {
+  / "EARLIER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
       return { type: "EarlierOfSchedules", items: xs };
     }
-  / "LATER"i _ "OF"i _ "(" _ xs:ExprList _ ")" {
+  / "LATER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
       return { type: "LaterOfSchedules", items: xs };
     }
 
-ExprList = head:Expr tail:(CommaSep Expr)* { return collect(head, tail); }
+ExprListTwoOrMore
+  = head:Expr tail:(CommaSep Expr)* { return collectTwoOrMore(head, tail); }
 
 /* ------------------------------
    Schedule block (time-based)
@@ -77,21 +83,22 @@ ExprList = head:Expr tail:(CommaSep Expr)* { return collect(head, tail); }
 
 ScheduleBlock
   = "SCHEDULE"i _ f:From? _ oe:OverEveryOpt _ c:Cliff? {
-      return {
+      const base = {
         type: "Schedule",
-        from: f ?? null, // TODO: Normalizer should inject EVENT grantDate when FROM is null
+        from: f ?? null,
         over: oe.over,
         every: oe.every,
-        cliff: c ?? { type: "Zero" },
       };
+      if (c) base.cliff = c;
+      return base;
     }
 
-// Enforce both-or-none for OVER/EVERY, and inject type: "Zero" when ommitted
+// Enforce both-or-none for OVER/EVERY, and inject default when omitted
 OverEveryOpt
   = o:Over _ e:Every { return { over: o, every: e }; }
   / o:Over { error("EVERY must be provided when OVER is present"); }
   / e:Every { error("OVER must be provided when EVERY is present"); }
-  / "" { return { over: { type: "Zero" }, every: { type: "Zero" } }; }
+  / "" { return { over: mkDuration(0, "DAYS"), every: mkDuration(0, "DAYS") }; }
 
 /* -------------------------------
    FROM with combinators + qualifiers
@@ -101,15 +108,17 @@ From = "FROM"i _ a:FromTerm { return a; }
 
 FromTerm
   = a:QualifiedAtom { return a; }
-  / "EARLIER"i _ "OF"i _ "(" _ xs:FromTermList _ ")" {
+  / "EARLIER"i _ "OF"i _ "(" _ xs:FromTermListTwoOrMore _ ")" {
       return { type: "EarlierOf", items: xs };
     }
-  / "LATER"i _ "OF"i _ "(" _ xs:FromTermList _ ")" {
+  / "LATER"i _ "OF"i _ "(" _ xs:FromTermListTwoOrMore _ ")" {
       return { type: "LaterOf", items: xs };
     }
 
-FromTermList
-  = head:FromTerm tail:(CommaSep FromTerm)* { return collect(head, tail); }
+FromTermListTwoOrMore
+  = head:FromTerm tail:(CommaSep FromTerm)* {
+      return collectTwoOrMore(head, tail);
+    }
 
 /* ----------------------------------
    OVER / EVERY (durations)
@@ -126,18 +135,19 @@ Every = "EVERY"i _ d:Duration { return d; }
 Cliff = "CLIFF"i _ v:CliffTerm { return v; }
 
 CliffTerm
-  = "0" _ "days"i { return { type: "Zero" }; }
-  / d:Duration { return d; }
+  = d:Duration { return d; }
   / a:QualifiedAtom { return a; }
-  / "EARLIER"i _ "OF"i _ "(" _ xs:CliffTermList _ ")" {
+  / "EARLIER"i _ "OF"i _ "(" _ xs:CliffTermListTwoOrMore _ ")" {
       return { type: "EarlierOf", items: xs };
     }
-  / "LATER"i _ "OF"i _ "(" _ xs:CliffTermList _ ")" {
+  / "LATER"i _ "OF"i _ "(" _ xs:CliffTermListTwoOrMore _ ")" {
       return { type: "LaterOf", items: xs };
     }
 
-CliffTermList
-  = head:CliffTerm tail:(CommaSep CliffTerm)* { return collect(head, tail); }
+CliffTermListTwoOrMore
+  = head:CliffTerm tail:(CommaSep CliffTerm)* {
+      return collectTwoOrMore(head, tail);
+    }
 
 /* -----------------------------
    Temporal qualifiers
@@ -180,15 +190,15 @@ TemporalPred
    ------------------------------ */
 
 Duration
-  = n:Number _ u:Unit {
-      if (u === "weeks") return mkDuration(n * 7, "days");
-      if (u === "years") return mkDuration(n * 12, "months");
+  = n:Integer _ u:Unit {
+      if (u === "weeks") return mkDuration(n * 7, "DAYS");
+      if (u === "years") return mkDuration(n * 12, "MONTHS");
       return mkDuration(n, u);
     }
 
 Unit
-  = "day"i "s"? { return "days"; }
-  / "month"i "s"? { return "months"; }
+  = "day"i "s"? { return "DAYS"; }
+  / "month"i "s"? { return "MONTHS"; }
   / "week"i "s"? { return "weeks"; }
   / "year"i "s"? { return "years"; }
 

@@ -13,5 +13,10 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/generated/**/*.js",
+    "src/generated/**/*.d.ts"
+  ]
 }

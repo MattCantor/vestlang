@@ -1,5 +1,5 @@
-import { Numeric, PeriodType, VestingDayOfMonth } from "./oct-types.js"
-import { Anchor, DateAnchor, EventAnchor } from "./raw-ast.js";
+import { Anchor, DateAnchor, EventAnchor } from "@vestlang/dsl";
+import { Numeric, PeriodType, VestingDayOfMonth } from "./types/oct-types.js"
 
 /* ------------------------
  * Helpers / utility types

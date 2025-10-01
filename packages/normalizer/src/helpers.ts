@@ -1,21 +1,21 @@
-import { DateGate, EventAtom, QualifiedAnchor } from "@vestlang/dsl"
-import { DateAnchor, EventAnchor } from "./types/shared.js"
-import { OCTDate } from "./oct-types.js"
+import { Anchor } from "@vestlang/dsl";
 import { Window } from "./types/normalized.js"
-export function createDateAnchor(anchor: DateGate): DateAnchor {
-    return {
-        type: "Date",
-        value: anchor.iso as OCTDate
-    }
-  }
 
-export function createEventAnchor(anchor: EventAtom): EventAnchor {
-  return {
-      type: "Event",
-      value: anchor.name
-  }
-}
+/* -------------
+ * Window
+* ------------- */
 
-export function createWindow(anchor: QualifiedAnchor): Window {
-  return undefined
-}
+export const Start = (at: Anchor, inclusive = true): Window => ({
+    start: { at, inclusive }
+})
+
+export const End = (at: Anchor, inclusive = true): Window => ({
+    end: { at, inclusive }
+})
+
+export const Range = (a: Anchor, ai = true, b: Anchor, bi = true): Window => ({
+    start: { at: a, inclusive: ai },
+    end: { at: b, inclusive: bi }
+})
+
+export const Empty: Window = {};

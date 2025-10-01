@@ -1,8 +1,9 @@
-// ==== Core statement ====
+// ==== Helpers ====
+type TwoOrMore<T> = [T, T, ...T[]];
 
-export interface Statement {
+export interface ASTStatement {
   amount: Amount; // { type: "AmountInteger" } | { type: "AmountPercent" }
-  expr: Expr; // Schedule | EarlierOfSchedules | LaterOfSchedules
+  expr: ASTExpr; // Schedule | EarlierOfSchedules | LaterOfSchedules
 }
 
 // ==== Amounts ====
@@ -16,29 +17,29 @@ export interface AmountInteger {
 
 export interface AmountPercent {
   type: "AmountPercent";
-  value: number; // faction in [0, 1]
+  value: number; // fraction in [0, 1]
 }
 
 // ==== Expressions ====
 
-export type Expr = Schedule | EarlierOfSchedules | LaterOfSchedules;
+export type ASTExpr = ASTSchedule | EarlierOfASTSchedules | LaterOfASTSchedules;
 
-export interface EarlierOfSchedules {
+export interface EarlierOfASTSchedules {
   type: "EarlierOfSchedules";
-  items: Expr[];
+  items: TwoOrMore<ASTExpr>;
 }
 
-export interface LaterOfSchedules {
+export interface LaterOfASTSchedules {
   type: "LaterOfSchedules";
-  items: Expr[];
+  items: TwoOrMore<ASTExpr>;
 }
 
-export interface Schedule {
+export interface ASTSchedule {
   type: "Schedule";
-  from?: FromTerm | null; // TODO: make this default to the grant date in the normalizer
-  over: Duration | ZeroGate;
-  every: Duration | ZeroGate;
-  cliff?: CliffTerm; // default: { type: "Zero" }
+  from?: FromTerm;
+  over: Duration;
+  every: Duration;
+  cliff?: CliffTerm; 
 }
 
 // ==== Durations (normalized by grammar) ====
@@ -49,20 +50,20 @@ export interface Duration {
   unit: Unit; // grammar converts weeks->days, years->months
 }
 
-export type Unit = "days" | "months";
+export type Unit = "DAYS" | "MONTHS";
 
 // ==== Anchors (atoms) ====
 
-export type Anchor = DateGate | EventAtom;
+export type Anchor = DateAnchor | EventAnchor;
 
-export interface DateGate {
+export interface DateAnchor {
   type: "Date";
-  iso: string; // YYYY-MM-DD
+  value: string; // YYYY-MM-DD
 }
 
-export interface EventAtom {
+export interface EventAnchor {
   type: "Event";
-  name: string; // Ident
+  value: string; // Ident
 }
 
 // ==== Predicates ====
@@ -88,61 +89,32 @@ export type FromTerm =
 
 export interface EarlierOfFrom {
   type: "EarlierOf";
-  items: FromTerm[];
+  items: TwoOrMore<FromTerm>;
 }
 
 export interface LaterOfFrom {
   type: "LaterOf";
-  items: FromTerm[];
+  items: TwoOrMore<FromTerm>
 }
 
 // ==== CLIFF (recursive) ====
 
 export type CliffTerm =
-  | ZeroGate
   | Duration // time-based cliff (e.g., ClIFF 12 months)
   | Anchor // date/event cliff
   | QualifiedAnchor // date/event with qualifier
   | EarlierOfCliff
   | LaterOfCliff;
 
-export interface ZeroGate {
-  type: "Zero";
-}
-
 export interface EarlierOfCliff {
   type: "EarlierOf";
-  items: CliffTerm[];
+  items: TwoOrMore<CliffTerm>
 }
 
 export interface LaterOfCliff {
   type: "LaterOf";
-  items: CliffTerm[];
-}
-
-// ==== Canonical window used everywhere downstream ====
-export interface TimeWindow {
-  start?: Anchor; // undefined = negative infinite
-  end?: Anchor; // undefined = positive infinity
-  includeStart: boolean; // defaults to true
-  includeEnd: boolean; // defaults to true
+  items: TwoOrMore<CliffTerm>
 }
 
 // A base that can be evaluated: either a bare anchor OR a combinator node from FromTerm
 export type FromBase = Anchor | EarlierOfFrom | LaterOfFrom;
-
-// Schedule after normalization: same data + resolved window for FROM
-export interface NormalizedSchedule {
-  type: "Schedule";
-  fromBase: FromBase | null; // The structural FROM (no predicates)
-  fromWindow: TimeWindow; // the lowered window (include* flags explicit)
-  over: Duration | ZeroGate;
-  every: Duration | ZeroGate;
-  cliff?: CliffTerm;
-}
-
-// Expr after normalization: recurse and normalize every Schedule
-export type NormalizedExpr =
-  | NormalizedSchedule
-  | { type: "EarlierOfSchedules"; items: NormalizedExpr[] }
-  | { type: "LaterOfSchedules"; items: NormalizedExpr[] };

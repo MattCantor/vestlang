@@ -1,4 +1,4 @@
-import { Numeric, OCTDate } from "../oct-types.js";
+import { Numeric } from "./oct-types.js";
 
 /* ------------------------
  * Helpers / utility types
@@ -47,34 +47,6 @@ interface AmountAbsolute extends BaseAmount {
 };
 
 export type Amount = AmountPercent | AmountAbsolute
-
-/* ----------------------------
-  * Anchor
-  * --------------------------- */
-
-// primitives/vestlang/EventAnchor
-interface BaseAnchor {
-  type: AnchorType
-}
-
-export interface DateAnchor extends BaseAnchor {
-  type: "Date"
-  value: OCTDate
-}
-
-export interface EventAnchor extends BaseAnchor {
-  type: "Event"
-  value: string
-}
-
-// types/vestlang/Anchor
-export type Anchor = DateAnchor | EventAnchor
-
-
-// enums/vestlang/AnchorType
-export type AnchorType =
-| "Date"
-| "Event"
 
 // enums/vestlang/ExpressionType
 export type ExprType =

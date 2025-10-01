@@ -1,24 +1,23 @@
 import type {
   Anchor,
-  DateGate,
-  EventAtom,
   TemporalPredNode,
   FromTerm,
   EarlierOfFrom,
   LaterOfFrom,
   Duration,
-  ZeroGate,
-  Expr,
-  Schedule,
+  ASTExpr,
+  ASTSchedule,
   QualifiedAnchor,
+  DateAnchor,
+  EventAnchor,
 } from "@vestlang/dsl";
 import { TwoOrMore } from "./shared.js";
 
 // ---- Primitive anchors
-export function isDate(a: Anchor | unknown): a is DateGate {
+export function isDate(a: Anchor | unknown): a is DateAnchor {
   return !!a && typeof a === "object" && (a as any).type === "Date";
 }
-export function isEvent(a: Anchor | unknown): a is EventAtom {
+export function isEvent(a: Anchor | unknown): a is EventAnchor {
   return !!a && typeof a === "object" && (a as any).type === "Event";
 }
 export function isAnchor(x: unknown): x is Anchor {
@@ -57,24 +56,21 @@ export function isLaterOfFrom(x: FromTerm | unknown): x is LaterOfFrom {
 export function isDuration(x: unknown): x is Duration {
   return !!x && typeof x === "object" && (x as any).type === "Duration";
 }
-export function isZeroGate(x: unknown): x is ZeroGate {
-  return !!x && typeof x === "object" && (x as any).type === "Zero";
-}
 
 // ---- Exprs / Schedules
-export function isSchedule(e: Expr | unknown): e is Schedule {
+export function isSchedule(e: ASTExpr | unknown): e is ASTSchedule {
   return !!e && typeof e === "object" && (e as any).type === "Schedule";
 }
 export function isEarlierOfSchedules(
-  e: Expr | unknown,
-): e is { type: "EarlierOfSchedules"; items: Expr[] } {
+  e: ASTExpr | unknown,
+): e is { type: "EarlierOfSchedules"; items: ASTExpr[] } {
   return (
     !!e && typeof e === "object" && (e as any).type === "EarlierOfSchedules"
   );
 }
 export function isLaterOfSchedules(
-  e: Expr | unknown,
-): e is { type: "LaterOfSchedules"; items: Expr[] } {
+  e: ASTExpr | unknown,
+): e is { type: "LaterOfSchedules"; items: ASTExpr[] } {
   return !!e && typeof e === "object" && (e as any).type === "LaterOfSchedules";
 }
 

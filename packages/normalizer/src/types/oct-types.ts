@@ -113,9 +113,8 @@ interface VestingPeriodInMonths extends VestingPeriod {
   day_of_month: VestingDayOfMonth
 }
 
-// types/Date
 declare const __isoDateBrand: unique symbol;
-export type OCTDate = string & { [__isoDateBrand]: never };
+type OCTDate = string & { [__isoDateBrand]: never };
 
 // types/Vesting
 interface Vesting {

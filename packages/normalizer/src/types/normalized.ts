@@ -1,23 +1,21 @@
+import { Anchor, DateAnchor, EventAnchor } from "@vestlang/dsl";
 import { PeriodType, VestingDayOfMonth } from "./oct-types.js"
-import { Amount, Anchor, DateAnchor, EventAnchor, ExprType, Integer, TwoOrMore } from "./shared.js";
-
+import { Amount, ExprType, Integer, TwoOrMore } from "./shared.js";
 
 /* ------------------------
- * Vesting Start
+ * Window
  * ------------------------ */
 
-// enums/vestlang/VestingStartType
-// type VestingStartType =
-// | "Date"
-// | "Event"
-// | "Qualified"
+export type Bound<A = Anchor> = {
+  at: A;
+  inclusive: boolean
+}
 
 // primitives/vestlang/Window
-export interface Window {
-  start?: Anchor;
-  end?: Anchor;
-  inclusiveStart?: boolean;
-  inclusiveEnd?: boolean;
+
+export type Window<A = Anchor> = {
+  start?: Bound<A>;
+  end?: Bound<A>
 }
 
 // primitives/vestlang/VestingStart
@@ -79,7 +77,6 @@ type Periodicity = PeriodicityInDays | PeriodicityInMonths;
  * Expr
  * ----------------------- */
 
-
 // primitives/vestlang/Expression
 interface BaseExpr {
   id: string;
@@ -128,5 +125,3 @@ export interface Statement {
   amount: Amount;
   expr: Expr;
 }
-
-

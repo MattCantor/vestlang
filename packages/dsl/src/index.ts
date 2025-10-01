@@ -1,10 +1,10 @@
-import * as t from "./types.js";
-import * as parser from "../dist/grammar.js";
+import * as parser from "./generated/grammar.js";
+export type * from "./generated/grammar.d.js"
 
-// export type { t };
-export type * from "./types.js";
+import type * as t from "./types.js"
+export type * from "./types.js"
 
-export function parse(input: string): t.Statement {
-  const stmt = parser.parse(input) as t.Statement;
+export function parse(input: string): t.ASTStatement {
+  const stmt = parser.parse(input) as t.ASTStatement;
   return stmt;
 }

@@ -8,10 +8,10 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "types": "./dist/grammar.d.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "rimraf dist && peggy --format es --dts -o dist/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
-    "dev": "peggy --format es --dts -w -o dist/grammar.js src/grammar.pegjs",
+    "build": "rimraf dist && peggy --format es --dts -o src/generated/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
+    "dev": "peggy --format es --dts -w -o src/generated/grammar.js src/grammar.pegjs",
     "test": "vitest"
   },
   "devDependencies": {

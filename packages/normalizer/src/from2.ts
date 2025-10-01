@@ -1,16 +1,7 @@
 import type {
-  CliffTerm,
-  Expr as ASTExpr,
-  Duration,
-  ZeroGate,
-  Schedule as ASTSchedule,
+  ASTExpr,
   FromTerm,
-  Anchor as ASTAnchor,
   QualifiedAnchor,
-  EarlierOfFrom,
-  LaterOfFrom,
-  DateGate,
-  EventAtom,
 } from "@vestlang/dsl";
 import {
   isSchedule,
@@ -25,10 +16,6 @@ import {
 } from "./types/raw-ast-guards.js";
 import { invariant, unexpectedAst } from "./errors.js";
 import { Expr, VestingStart, Window } from "./types/normalized.js";
-import { Anchor, EventAnchor } from "./types/shared.js";
-import { OCTDate } from "./oct-types.js";
-import { DateAnchor } from "./raw-ast.js";
-import { createDateAnchor, createEventAnchor } from "./helpers.js";
 
 const DEFAULT_GRANT_ANCHOR: VestingStart = { id: '', type: "Unqualified", anchor: {
   type: "Event",
@@ -60,17 +47,13 @@ function normalizeFrom(node: FromTerm | null): VestingStart {
   if (!node) {
     return DEFAULT_GRANT_ANCHOR
   }
-
-  function createWindow(anchor: QualifiedAnchor): Window {
-
-  }
-
+  
   if (isAnchor(node)) {
     switch(node.type) {
       case "Date":
-      return { id: '', anchor: createDateAnchor(node), type: "Unqualified" }
+      return { id: '', anchor: node, type: "Unqualified" }
       case "Event":
-      return { id: '', anchor: createEventAnchor(node), type: "Unqualified" }
+      return { id: '', anchor: node, type: "Unqualified" }
       default:
       return assertNever(node as never, "Unexpected Anchor variant in normalizer")
     }
@@ -81,7 +64,7 @@ function normalizeFrom(node: FromTerm | null): VestingStart {
       case 'Date':
       return {
           id: '',
-          anchor: createDateAnchor(node.base),
+          anchor: node.base,
           window: {
 
           }
@@ -89,7 +72,7 @@ function normalizeFrom(node: FromTerm | null): VestingStart {
       case 'Event':
       return {
           id: '',
-          anchor: createEventAnchor(node.base),
+          anchor: node.base,
           window: {
 
           }
