@@ -77,16 +77,12 @@ export function isLaterOfSchedules(
 }
 
 // ---- Utilities
-export function assertNever(x: never, msg = "Unexpected object"): never {
-  throw new Error(msg);
-}
 
 export function isTwoOrMore<T>(arr: T[]): arr is TwoOrMore<T> {
   return arr.length >= 2;
 }
 
-type OneOrMore<T> = [T, ...T[]];
-
-export function toTwoOrMore<T>(xs: OneOrMore<T>): [T, T, ...T[]] {
-  return (xs.length === 1 ? [xs[0], xs[0]] : xs) as [T, T, ...T[]];
+export function toTwoOrMore<T>(xs: T[]): TwoOrMore<T> {
+  if (xs.length < 2) throw new Error("Expected at least 2 items");
+  return xs as TwoOrMore<T>;
 }
