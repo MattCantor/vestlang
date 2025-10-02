@@ -1,5 +1,5 @@
 // ==== Helpers ====
-type TwoOrMore<T> = [T, T, ...T[]];
+export type TwoOrMore<T> = [T, T, ...T[]];
 
 export interface ASTStatement {
   amount: AstAmount; // { type: "AmountInteger" } | { type: "AmountPercent" }

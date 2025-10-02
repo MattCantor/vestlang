@@ -2,9 +2,8 @@
  * Cliff folding
  * ------------------------ */
 
-import { FromTerm } from "@vestlang/dsl";
+import type { FromTerm, TwoOrMore } from "@vestlang/dsl";
 import { invariant, unexpectedAst } from "../errors.js";
-import { Periodicity, VestingStartExpr } from "../types/normalized.js";
 import {
   isAnchor,
   isDuration,
@@ -13,11 +12,12 @@ import {
   isQualifiedAnchor,
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
-import { Integer, TwoOrMore } from "../types/shared.js";
-import { unitOfPeriodicity } from "./periodicity.js";
+import type { Integer } from "../types/shared.js";
+import { type Periodicity, unitOfPeriodicity } from "./periodicity.js";
 import {
   makeQualifiedStart,
   makeUnqualifiedStart,
+  type VestingStartExpr,
 } from "./vesting-start-date.js";
 
 export function foldCliffIntoStart(

@@ -1,15 +1,36 @@
+import type { Duration } from "@vestlang/dsl";
+import { invariant } from "../errors.js";
+import type { Integer } from "../types/shared.js";
+import type { VestingDayOfMonth } from "../types/oct-types.js";
+
+/* ------------------------
+ * Types
+ * ------------------------ */
+
+// types/vestlang/Periodicity
+interface BasePeriodicity {
+  id: string;
+  span: Integer;
+  count: Integer;
+  step: Integer;
+  cliff?: Integer;
+}
+
+export interface PeriodicityInDays extends BasePeriodicity {
+  periodType: "DAYS";
+  vesting_day_of_month?: never;
+}
+
+export interface PeriodicityInMonths extends BasePeriodicity {
+  periodType: "MONTHS";
+  vesting_day_of_month: VestingDayOfMonth;
+}
+
+export type Periodicity = PeriodicityInDays | PeriodicityInMonths;
+
 /* ------------------------
  * Periodicity
  * ------------------------ */
-
-import { Duration } from "@vestlang/dsl";
-import {
-  Periodicity,
-  PeriodicityInDays,
-  PeriodicityInMonths,
-} from "../types/normalized.js";
-import { invariant } from "../errors.js";
-import { Integer } from "../types/shared.js";
 
 export function normalizePeriodicity(
   over: Duration | undefined,

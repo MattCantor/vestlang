@@ -1,17 +1,39 @@
+import type {
+  Anchor,
+  DateAnchor,
+  TemporalPredNode,
+  TwoOrMore,
+} from "@vestlang/dsl";
+import { invariant, NormalizerError } from "../errors.js";
+import { isTwoOrMore, toTwoOrMore, isDate } from "../types/raw-ast-guards.js";
+
+/* ------------------------
+ * Types
+ * ------------------------ */
+
+export type BoundCandidate<A = Anchor> = {
+  at: A; // Date | Event (still unresolved here)
+  inclusive: boolean; // per-candicate inclusivity
+};
+
+export type StartWindow<A = Anchor> = {
+  combine: "LaterOf"; // semantic: pick the latest start
+  candidates: TwoOrMore<BoundCandidate<A>>;
+};
+
+export type EndWindow<A = Anchor> = {
+  combine: "EarlierOf"; // semantic: pick the earlierst end
+  candidates: TwoOrMore<BoundCandidate<A>>;
+};
+
+export type Window<A = Anchor> = {
+  start?: StartWindow<A>;
+  end?: EndWindow<A>;
+};
+
 /* ------------------------
  * Windows from predicates
  * ------------------------ */
-
-import { Anchor, DateAnchor, TemporalPredNode } from "@vestlang/dsl";
-import { isDate } from "util/types";
-import { invariant, NormalizerError } from "../errors.js";
-import {
-  BoundCandidate,
-  EndWindow,
-  StartWindow,
-  Window,
-} from "../types/normalized.js";
-import { isTwoOrMore, toTwoOrMore } from "../types/raw-ast-guards.js";
 
 /**
  * Reduce a list of temporal predicates (AFTER / BEFORE / BETWEEN)

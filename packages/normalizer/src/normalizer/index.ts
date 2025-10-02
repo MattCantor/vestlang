@@ -1,14 +1,4 @@
-/* ------------------------
- * Public API
- * ------------------------ */
-
-import { ASTExpr, ASTStatement } from "@vestlang/dsl";
-import {
-  EarlierOfSchedules,
-  Expr,
-  LaterOfSchedules,
-  Statement,
-} from "../types/normalized.js";
+import type { ASTExpr, ASTStatement, TwoOrMore } from "@vestlang/dsl";
 import { invariant, unexpectedAst } from "../errors.js";
 import {
   isEarlierOfSchedules,
@@ -16,9 +6,39 @@ import {
   isSchedule,
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
-import { ExprType, TwoOrMore } from "../types/shared.js";
-import { normalizeAmount } from "./amount.js";
-import { normalizeSchedule } from "./schedule.js";
+import { type Amount, normalizeAmount } from "./amount.js";
+import { normalizeSchedule, type Schedule } from "./schedule.js";
+import type { BaseExpr, ExprType } from "../types/shared.js";
+
+/* ------------------------
+ * Types
+ * ------------------------ */
+
+interface BaseScheduleCombinator extends BaseExpr {
+  items: TwoOrMore<Expr>;
+}
+
+export interface LaterOfSchedules extends BaseScheduleCombinator {
+  type: "LaterOfSchedules";
+}
+
+export interface EarlierOfSchedules extends BaseScheduleCombinator {
+  type: "EarlierOfSchedules";
+}
+
+type ScheduleCombinator = LaterOfSchedules | EarlierOfSchedules;
+
+export type Expr = Schedule | ScheduleCombinator;
+
+export interface Statement {
+  id: string;
+  amount: Amount;
+  expr: Expr;
+}
+
+/* ------------------------
+ * Public API
+ * ------------------------ */
 
 export function normalizeStatement(ast: ASTStatement): Statement {
   const expr = normalizeExpr(ast.expr, ["expr"]);

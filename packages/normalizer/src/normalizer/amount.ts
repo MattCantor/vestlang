@@ -1,10 +1,31 @@
+import type { BaseAmount } from "@vestlang/dsl";
+import { invariant, unexpectedAst } from "../errors.js";
+import type { Numeric } from "../types/oct-types.js";
+
 /* ------------------------
- * Amount
+ * Types
  * ------------------------ */
 
-import { invariant, unexpectedAst } from "../errors.js";
-import { Numeric } from "../types/oct-types.js";
-import { Amount } from "../types/shared.js";
+// types/vestlang/Amount
+interface AmountPercent extends BaseAmount {
+  type: "AmountPercent";
+  numerator: Numeric;
+  denominator: Numeric; // must not be "0" at runtime
+  quantity?: never;
+}
+
+interface AmountAbsolute extends BaseAmount {
+  type: "AmountAbsolute";
+  value: number;
+  numerator?: never;
+  denominator?: never;
+}
+
+export type Amount = AmountPercent | AmountAbsolute;
+
+/* ------------------------
+ * Amount
+ * ----------------------- */
 
 export function normalizeAmount(astAmount: any, path: string[]): Amount {
   if (astAmount?.type === "AmountAbsolute") {

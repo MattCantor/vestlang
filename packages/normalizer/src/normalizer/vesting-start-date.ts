@@ -1,17 +1,11 @@
-/* ------------------------
- * FROM -> VestingStartExpr
- * ------------------------ */
-
-import { Anchor, EventAnchor, FromTerm, QualifiedAnchor } from "@vestlang/dsl";
-import {
-  EarlierOfVestingStart,
-  LaterOfVestingStart,
-  VestingStart,
-  VestingStartDate,
-  VestingStartEvent,
-  VestingStartExpr,
-  VestingStartQualified,
-} from "../types/normalized.js";
+import type {
+  Anchor,
+  TwoOrMore,
+  EventAnchor,
+  FromTerm,
+  QualifiedAnchor,
+  DateAnchor,
+} from "@vestlang/dsl";
 import {
   isAnchor,
   isDate,
@@ -22,8 +16,63 @@ import {
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
 import { invariant, unexpectedAst } from "../errors.js";
-import { TwoOrMore } from "../types/shared.js";
-import { lowerPredicatesToWindow } from "./window.js";
+import { lowerPredicatesToWindow, type Window } from "./window.js";
+
+/* ------------------------
+ * Types
+ * ------------------------ */
+
+// primitives/vestlang/VestingStart
+interface BaseVestingStart {
+  id: string;
+  type: "Qualified" | "Unqualified";
+  anchor: Anchor;
+}
+
+export interface VestingStartDate extends BaseVestingStart {
+  type: "Unqualified";
+  anchor: DateAnchor;
+  window?: never;
+}
+
+export interface VestingStartEvent extends BaseVestingStart {
+  type: "Unqualified";
+  anchor: EventAnchor;
+  window?: never;
+}
+
+export interface VestingStartQualified extends BaseVestingStart {
+  type: "Qualified";
+  anchor: Anchor;
+  window: Window;
+}
+
+export type VestingStart =
+  | VestingStartDate
+  | VestingStartEvent
+  | VestingStartQualified;
+
+// combinators over vesting starts
+export interface EarlierOfVestingStart {
+  id: string;
+  type: "EarlierOf";
+  items: TwoOrMore<VestingStartExpr>;
+}
+
+export interface LaterOfVestingStart {
+  id: string;
+  type: "LaterOf";
+  items: TwoOrMore<VestingStartExpr>;
+}
+
+export type VestingStartExpr =
+  | VestingStart
+  | EarlierOfVestingStart
+  | LaterOfVestingStart;
+
+/* ------------------------
+ * Vesting Start
+ * ------------------------ */
 
 export function normalizeFromTermOrDefault(
   from: FromTerm | undefined,
@@ -102,11 +151,11 @@ export function makeUnqualifiedStart(a: Anchor): VestingStart {
 }
 
 export function makeQualifiedStart(q: QualifiedAnchor): VestingStartQualified {
-  const window = lowerPredicatesToWindow(q.predicates);
+  const created_window = lowerPredicatesToWindow(q.predicates);
   return {
     id: "",
     type: "Qualified",
     anchor: q.base,
-    window,
+    window: created_window,
   };
 }

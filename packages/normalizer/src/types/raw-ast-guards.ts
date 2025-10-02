@@ -12,8 +12,8 @@ import type {
   EventAnchor,
   EarlierOfASTSchedules,
   LaterOfASTSchedules,
+  TwoOrMore,
 } from "@vestlang/dsl";
-import { TwoOrMore } from "./shared.js";
 
 // ---- Primitive anchors
 export function isDate(a: Anchor | unknown): a is DateAnchor {
