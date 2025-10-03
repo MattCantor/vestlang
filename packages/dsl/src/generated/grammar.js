@@ -1521,6 +1521,9 @@ function peg$parse(input, options) {
         s5 = peg$parseDateAtom();
         if (s5 === peg$FAILED) {
           s5 = peg$parseEventAtom();
+          if (s5 === peg$FAILED) {
+            s5 = peg$parseQualifiedAtom();
+          }
         }
         if (s5 !== peg$FAILED) {
           peg$savedPos = s0;
@@ -1552,6 +1555,9 @@ function peg$parse(input, options) {
           s5 = peg$parseDateAtom();
           if (s5 === peg$FAILED) {
             s5 = peg$parseEventAtom();
+            if (s5 === peg$FAILED) {
+              s5 = peg$parseQualifiedAtom();
+            }
           }
           if (s5 !== peg$FAILED) {
             peg$savedPos = s0;

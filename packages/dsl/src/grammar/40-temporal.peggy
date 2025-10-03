@@ -18,9 +18,9 @@ TemporalPred
     "AND"i
     _
     b:(DateAtom / EventAtom) { return { type: "Between", a, b, strict: !!s }; }
-  / s:Strict? _ "BEFORE"i _ t:(DateAtom / EventAtom) {
+  / s:Strict? _ "BEFORE"i _ t:(DateAtom / EventAtom / QualifiedAtom) {
       return { type: "Before", i: t, strict: !!s };
     }
-  / s:Strict? _ "AFTER"i _ t:(DateAtom / EventAtom) {
+  / s:Strict? _ "AFTER"i _ t:(DateAtom / EventAtom / QualifiedAtom) {
       return { type: "After", i: t, strict: !!s };
     }

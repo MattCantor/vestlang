@@ -1,10 +1,11 @@
+VEST SCHEDULE
+
 123 VEST SCHEDULE OVER 12 months EVERY 1 month
 0.25 VEST SCHEDULE OVER 12 months EVERY 1 month
 .5 VEST SCHEDULE OVER 12 months EVERY 1 month
 VEST SCHEDULE OVER 12 months EVERY 1 month
 
 VEST SCHEDULE FROM DATE 2026-01-01
-VEST SCHEDULE
 VEST SCHEDULE OVER 0 days EVERY 0 days
 VEST SCHEDULE OVER 2 years EVERY 1 week
 
@@ -45,3 +46,4 @@ VEST SCHEDULE FROM EVENT cic_phase2
 
 Vest schedule from event ipo before date 2025-01-01
 vest schedule from event ipo after date 2025-01-01
+vest schedule from event ipo before earlier of (event a, event b)

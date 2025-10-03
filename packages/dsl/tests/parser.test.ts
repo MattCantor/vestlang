@@ -102,7 +102,7 @@ describe("vestlang PEG grammar", () => {
     });
   });
 
-  describe("Schedule basics + Zero semantics", () => {
+  describe("Schedule basics", () => {
     it("omitting OVER/EVERY injects Zero for both", () => {
       const ast = parse("VEST SCHEDULE FROM DATE 2026-01-01") as ASTStatement;
       const s = ast.expr as ASTSchedule;
