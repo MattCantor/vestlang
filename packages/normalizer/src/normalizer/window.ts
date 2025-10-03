@@ -1,26 +1,21 @@
-import type {
-  Anchor,
-  DateAnchor,
-  TemporalPredNode,
-  TwoOrMore,
-} from "@vestlang/dsl";
-import { invariant, NormalizerError } from "../errors.js";
-import { isTwoOrMore, toTwoOrMore, isDate } from "../types/raw-ast-guards.js";
+import type { Anchor, TemporalPredNode, TwoOrMore } from "@vestlang/dsl";
+import { toTwoOrMore } from "../types/raw-ast-guards.js";
+import { unexpectedAst } from "../errors.js";
 
 /* ------------------------
  * Types
  * ------------------------ */
 
-export type Bound = {
+type Bound = {
   at: Anchor;
   inclusive: boolean;
 };
 
-export type StartExpr =
+type StartExpr =
   | { type: "Start"; bound: Bound }
   | { type: "LaterOf"; candidates: TwoOrMore<Bound> };
 
-export type EndExpr =
+type EndExpr =
   | { type: "End"; bound: Bound }
   | { type: "EarlierOf"; candidates: TwoOrMore<Bound> };
 
@@ -53,7 +48,7 @@ export function lowerPredicatesToWindow(preds: TemporalPredNode[]): Window {
         break;
       }
       default: {
-        // Exhaustiveness guard (compile-time via never) can live elsewhere.
+        return unexpectedAst("Unsupported window predicate", { p });
       }
     }
   }

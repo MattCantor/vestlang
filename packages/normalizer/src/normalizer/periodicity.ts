@@ -16,12 +16,12 @@ interface BasePeriodicity {
   cliff?: Integer;
 }
 
-export interface PeriodicityInDays extends BasePeriodicity {
+interface PeriodicityInDays extends BasePeriodicity {
   periodType: "DAYS";
   vesting_day_of_month?: never;
 }
 
-export interface PeriodicityInMonths extends BasePeriodicity {
+interface PeriodicityInMonths extends BasePeriodicity {
   periodType: "MONTHS";
   vesting_day_of_month: VestingDayOfMonth;
 }

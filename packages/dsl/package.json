@@ -10,7 +10,7 @@
   },
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "rimraf dist && peggy --format es --dts -o src/generated/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
+    "build": "rimraf dist src/generated && peggy --format es --dts -o src/generated/grammar.js src/grammar.pegjs && tsc -p tsconfig.build.json",
     "dev": "peggy --format es --dts -w -o src/generated/grammar.js src/grammar.pegjs",
     "test": "vitest"
   },

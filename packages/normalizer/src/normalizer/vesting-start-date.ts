@@ -29,37 +29,37 @@ interface BaseVestingStart {
   anchor: Anchor;
 }
 
-export interface VestingStartDate extends BaseVestingStart {
+interface VestingStartDate extends BaseVestingStart {
   type: "Unqualified";
   anchor: DateAnchor;
   window?: never;
 }
 
-export interface VestingStartEvent extends BaseVestingStart {
+interface VestingStartEvent extends BaseVestingStart {
   type: "Unqualified";
   anchor: EventAnchor;
   window?: never;
 }
 
-export interface VestingStartQualified extends BaseVestingStart {
+interface VestingStartQualified extends BaseVestingStart {
   type: "Qualified";
   anchor: Anchor;
   window: Window;
 }
 
-export type VestingStart =
+type VestingStart =
   | VestingStartDate
   | VestingStartEvent
   | VestingStartQualified;
 
 // combinators over vesting starts
-export interface EarlierOfVestingStart {
+interface EarlierOfVestingStart {
   id: string;
   type: "EarlierOf";
   items: TwoOrMore<VestingStartExpr>;
 }
 
-export interface LaterOfVestingStart {
+interface LaterOfVestingStart {
   id: string;
   type: "LaterOf";
   items: TwoOrMore<VestingStartExpr>;
