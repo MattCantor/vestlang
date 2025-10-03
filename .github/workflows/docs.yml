@@ -1,12 +1,15 @@
-name: Deploy Docusaurus to Github Pages
+name: Deploy Docusaurus to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - "apps/docs/**"
       - ".github/workflows/docs.yml"
-  workflow_dipatch:
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
@@ -19,7 +22,7 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - uses: pnpm/actions-setup@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 9
 
@@ -29,8 +32,9 @@ jobs:
       - name: Build website
         run: pnpm --filter @vestlang/docs build
 
-      - name: Deploy to Github Pages
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: apps/docs/build
+
