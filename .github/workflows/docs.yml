@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # needed to push to gh-pages
 
 jobs:
   deploy:
@@ -22,9 +22,12 @@ jobs:
           node-version: 20
           cache: pnpm
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      # 👇 Make pnpm available on the runner
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Use pnpm 9.x
+        run: corepack prepare pnpm@9 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
