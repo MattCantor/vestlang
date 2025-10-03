@@ -4,4 +4,4 @@ title: vestlang
 slug: /
 ---
 
-Welcome to **vestlang**
+Welcome to **vestlang**!
