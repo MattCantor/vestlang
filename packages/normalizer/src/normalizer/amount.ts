@@ -42,6 +42,16 @@ export function normalizeAmount(astAmount: any, path: string[]): Amount {
   }
 
   if (astAmount?.type === "AmountPercent") {
+    //  First handle already-normalized shape (idempotency)
+    if ("numerator" in astAmount && "denominator" in astAmount) {
+      return {
+        type: "AmountPercent",
+        numerator: astAmount.numerator as Numeric,
+        denominator: astAmount.denominator as Numeric,
+      };
+    }
+
+    // Otherwise expect a numeric `value`
     const v = astAmount.value;
 
     invariant(
@@ -65,22 +75,11 @@ export function normalizeAmount(astAmount: any, path: string[]): Amount {
       };
     }
     return unexpectedAst(
-      "AmountPercent.value must be iether a fraction [0,1] or a percentage (1..100],",
+      "AmountPercent.value must be either a fraction [0,1] or a percentage (1..100].",
       { value: v },
       path,
     );
   }
-  // allow idempotency if a normalized version is ever passed in
-  if (
-    astAmount?.type === "AmountPercent" &&
-    "numerator" in astAmount &&
-    "denominator" in astAmount
-  ) {
-    return {
-      type: "AmountPercent",
-      numerator: astAmount.numerator as Numeric,
-      denominator: astAmount.denominator as Numeric,
-    };
-  }
+
   return unexpectedAst("Unknown Amount variant", { astAmount }, path);
 }

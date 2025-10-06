@@ -18,8 +18,8 @@ import {
   isEarlierOfFrom,
   isLaterOfFrom,
   isDuration,
-  assertNever,
 } from "../src/types/raw-ast-guards.js";
+import { assertNever } from "../src/types/shared.js";
 
 // helpers
 const date = (value: string): Anchor => ({ type: "Date", value });
@@ -124,6 +124,6 @@ describe("guards: durations & gates", () => {
 describe("guards: assertNever", () => {
   it("throws to signal unreachable code", () => {
     // At runtime we can only verify it throws.
-    expect(() => assertNever(undefined as never, "unreachable")).toThrowError();
+    expect(() => assertNever(undefined as never)).toThrowError();
   });
 });

@@ -1,0 +1,85 @@
+---
+title: Normalizer Types
+sidebar_position: 4
+---
+
+# Normalization Layer (OCT Model)
+
+The normalizer converts AST nodes into **OCT-compatible vesting condition types**, used by downstream systems for computation and visualization.
+
+---
+
+## Core Normalization Concepts
+
+| AST Concept | Normalized Equivalent | Purpose |
+|--------------|----------------------|----------|
+| `Date` / `Event` | `VestingConditionTrigger` | Defines a vesting trigger |
+| `Duration` | `VestingPeriod` | Defines period length and type |
+| `Schedule` | `BaseVestingCondition` | Core vesting condition |
+| `EarlierOf` / `LaterOf` | Composite condition | Logical trigger composition |
+| `AmountPercent` | `VestingConditionPortion` | Fractional vesting share |
+
+---
+
+## Vesting Triggers
+
+```ts
+type VestingTriggerType =
+  | "VESTING_START_DATE"
+  | "VESTING_SCHEDULE_ABSOLUTE"
+  | "VESTING_SCHEDULE_RELATIVE"
+  | "VESTING_EVENT";
+```
+
+---
+
+## Vesting Periods
+
+```ts
+interface VestingPeriod {
+  length: number;
+  type: "DAYS" | "MONTHS" | "YEARS";
+  occurrences: number;
+}
+```
+
+### Variants
+- `VestingPeriodInDays`
+- `VestingPeriodInMonths` (includes `day_of_month`)
+
+---
+
+## Conditions
+
+```ts
+interface BaseVestingCondition {
+  id: string;
+  trigger: VestingConditionTrigger;
+  next_condition_ids: readonly string[];
+}
+```
+
+---
+
+## Portions
+
+```ts
+interface VestingConditionPortion {
+  numerator: Numeric;
+  denominator: Numeric;
+  remainder?: boolean;
+}
+```
+
+Maps directly from AST `AmountPercent` (e.g. 0.25 → 1/4).
+
+---
+
+## Numeric and Date Primitives
+
+```ts
+type Numeric = string & { readonly __numericBrand: unique symbol };
+type OCTDate = string & { [__isoDateBrand]: never };
+```
+
+These branding patterns ensure strong typing at compile time.

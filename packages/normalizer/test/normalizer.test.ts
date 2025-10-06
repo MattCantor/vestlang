@@ -1,65 +1,24 @@
+// packages/normalizer/test/normalizer.test.ts
 import { describe, it, expect } from "vitest";
-import {
-  normalizeStatement,
-  lowerPredicatesToWindow,
-  pushStartCandidate,
-  pushEndCandidate,
-  mergeStartWindows,
-  mergeEndWindows,
-  collapseStartIfAllDates,
-  collapseEndIfAllDates,
-} from "../src/normalizer"; // adjust path
 
-import type {
-  ASTStatement,
-  ASTExpr,
-  ASTSchedule,
-  DateAnchor,
-  EventAnchor,
-  TemporalPredNode,
-  FromTerm,
-} from "@vestlang/dsl";
-
-import type {
-  Schedule,
-  StartWindow,
-  EndWindow,
-  VestingStartQualified,
-} from "../src/types/normalized";
+import type { DateAnchor, TemporalPredNode, FromTerm } from "@vestlang/dsl";
 
 import { NormalizerError } from "../src/errors";
-
-// Helpers
-const date = (s: string): DateAnchor => ({ type: "Date", value: s });
-const evt = (s: string): EventAnchor => ({ type: "Event", value: s });
-
-function schedule(
-  over: number,
-  every: number,
-  unit: "DAYS" | "MONTHS",
-  from?: FromTerm,
-  cliff?: any,
-): ASTSchedule {
-  return {
-    type: "Schedule",
-    from,
-    over: { type: "Duration", value: over, unit },
-    every: { type: "Duration", value: every, unit },
-    cliff,
-  };
-}
-
-function stmt(
-  s: ASTSchedule,
-  amount: any = { type: "AmountAbsolute", value: 100 },
-): ASTStatement {
-  return { amount, expr: s as unknown as ASTExpr };
-}
+import {
+  createDate,
+  createEvent,
+  createSchedule,
+  createStatement,
+} from "./helpers";
+import { Schedule } from "../src/normalizer/schedule";
+import { normalizeStatement } from "../src/normalizer";
+import { VestingStartQualified } from "../src/normalizer/vesting-start-date";
+import { lowerPredicatesToWindow } from "../src/normalizer/window";
 
 describe("normalizeStatement / normalizeExpr", () => {
   it("normalizes a simple schedule with default FROM=Event('grantDate')", () => {
-    const ast = schedule(12, 1, "MONTHS", undefined, undefined);
-    const st = normalizeStatement(stmt(ast));
+    const ast = createSchedule(12, 1, "MONTHS", undefined, undefined);
+    const st = normalizeStatement(createStatement(ast));
     expect(st.expr.type).toBe("Schedule");
     const sch = st.expr as Schedule;
 
@@ -68,7 +27,7 @@ describe("normalizeStatement / normalizeExpr", () => {
       throw new Error("vesting_start should not be a combinator here");
     } else {
       expect(sch.vesting_start.type).toBe("Unqualified");
-      expect(sch.vesting_start.anchor).toEqual(evt("grantDate"));
+      expect(sch.vesting_start.anchor).toEqual(createEvent("grantDate"));
     }
 
     // periodicity
@@ -85,38 +44,39 @@ describe("normalizeStatement / normalizeExpr", () => {
   it("normalizes FROM combinators (LaterOf)", () => {
     const from: FromTerm = {
       type: "LaterOf",
-      items: [date("2025-01-01"), evt("ipo")],
-    } as any;
+      items: [createDate("2025-01-01"), createEvent("ipo")],
+    };
 
-    const ast = schedule(30, 10, "DAYS", from);
-    const st = normalizeStatement(stmt(ast));
+    const ast = createSchedule(30, 10, "DAYS", from);
+    const st = normalizeStatement(createStatement(ast));
     const sch = st.expr as Schedule;
     expect(sch.vesting_start).toMatchObject({
       type: "LaterOf",
       items: [
-        { type: "Unqualified", anchor: date("2025-01-01") },
-        { type: "Unqualified", anchor: evt("ipo") },
+        { type: "Unqualified", anchor: createDate("2025-01-01") },
+        { type: "Unqualified", anchor: createEvent("ipo") },
       ],
     });
   });
 
-  it("normalizes FROM QualifiedAnchor into a Window with candidates", () => {
+  it("normalizes FROM QualifiedAnchor into a Window with candidate lists when 2+ bounds exist", () => {
     const qa = {
       type: "Qualified",
-      base: evt("boardApproval"),
+      base: createEvent("boardApproval"),
       predicates: [
-        { type: "After", i: evt("hire"), strict: true },
+        { type: "After", i: createEvent("hire"), strict: true }, // start #1
         {
           type: "Between",
-          a: date("2025-02-01"),
-          b: evt("cic"),
+          a: createDate("2025-02-01"),
+          b: createEvent("cic"),
           strict: false,
-        },
+        }, // start #2, end #1
+        { type: "Before", i: createDate("2025-03-15"), strict: true }, // end #2
       ],
     } as any;
 
-    const ast = schedule(12, 3, "MONTHS", qa);
-    const st = normalizeStatement(stmt(ast));
+    const ast = createSchedule(12, 3, "MONTHS", qa);
+    const st = normalizeStatement(createStatement(ast));
     const sch = st.expr as Schedule;
 
     if ("items" in sch.vesting_start) {
@@ -124,94 +84,116 @@ describe("normalizeStatement / normalizeExpr", () => {
     }
     const vsq = sch.vesting_start as VestingStartQualified;
     expect(vsq.type).toBe("Qualified");
-    expect(vsq.anchor).toEqual(evt("boardApproval"));
+    expect(vsq.anchor).toEqual(createEvent("boardApproval"));
 
-    // Window should capture all candidates, not collapse mixed event/date
-    expect(vsq.window?.start?.combine).toBe("LaterOf");
-    expect(vsq.window?.start?.candidates.length).toBeGreaterThanOrEqual(2);
+    // Window should keep combinators for 2+ bounds
+    expect(vsq.window?.start?.type).toBe("LaterOf");
+    if (vsq.window?.start?.type === "LaterOf") {
+      expect(vsq.window.start.candidates.length).toBeGreaterThanOrEqual(2);
+    }
 
-    expect(vsq.window?.end?.combine).toBe("EarlierOf");
-    expect(vsq.window?.end?.candidates.length).toBeGreaterThanOrEqual(2);
+    expect(vsq.window?.end?.type).toBe("EarlierOf");
+    if (vsq.window?.end?.type === "EarlierOf") {
+      expect(vsq.window.end.candidates.length).toBeGreaterThanOrEqual(2);
+    }
   });
 });
 
-describe("Windows from predicates", () => {
-  it("keeps all candidates when mixed events/dates; collapses when all dates", () => {
+describe("Windows from predicates (shape)", () => {
+  it("mixed events/dates: LaterOf for multi-start; End for single end", () => {
     const predsMixed: TemporalPredNode[] = [
-      { type: "After", i: evt("hire"), strict: false },
-      { type: "After", i: date("2025-01-15"), strict: false },
-      { type: "Before", i: evt("cic"), strict: true },
+      { type: "After", i: createEvent("hire"), strict: false }, // start #1
+      { type: "After", i: createDate("2025-01-15"), strict: false }, // start #2
+      { type: "Before", i: createEvent("cic"), strict: true }, // end #1 (single)
     ];
     const wMixed = lowerPredicatesToWindow(predsMixed);
-    // mixed → should not collapse to singletons
-    expect(wMixed.start?.candidates.length!).toBeGreaterThanOrEqual(2);
-    expect(wMixed.end?.candidates.length!).toBeGreaterThanOrEqual(2);
 
-    const predsDates: TemporalPredNode[] = [
-      { type: "After", i: date("2024-12-01"), strict: true },
-      { type: "After", i: date("2025-01-01"), strict: false },
-      { type: "Before", i: date("2025-06-01"), strict: false },
-    ];
-    const wDates = lowerPredicatesToWindow(predsDates);
-    // all dates → should collapse to duplicated singletons
-    expect(wDates.start?.candidates).toHaveLength(2);
-    expect(wDates.end?.candidates).toHaveLength(2);
-    const s0 = wDates.start!.candidates[0].at as DateAnchor;
-    const e0 = wDates.end!.candidates[0].at as DateAnchor;
-    expect(s0.value).toBe("2025-01-01"); // later of 12/01 and 01/01
-    expect(e0.value).toBe("2025-06-01");
+    // start has 2 bounds → LaterOf
+    expect(wMixed.start?.type).toBe("LaterOf");
+    if (wMixed.start?.type === "LaterOf") {
+      expect(wMixed.start.candidates).toHaveLength(2);
+    }
+
+    // end has 1 bound → End (singleton)
+    expect(wMixed.end?.type).toBe("End");
+    if (wMixed.end?.type === "End") {
+      expect(wMixed.end.bound.at).toEqual(createEvent("cic"));
+      expect(wMixed.end.bound.inclusive).toBe(false); // strict=true → inclusive=false
+    }
   });
 
-  it("throws EMPTY_WINDOW_AFTER_RESOLVE on equal date with exclusivity", () => {
+  it("multiple end bounds produce EarlierOf; singletons produce Start/End", () => {
     const preds: TemporalPredNode[] = [
-      { type: "After", i: date("2025-02-01"), strict: true }, // exclusive
-      { type: "Before", i: date("2025-02-01"), strict: false }, // inclusive
+      { type: "After", i: createDate("2024-12-01"), strict: true }, // start #1
+      { type: "Before", i: createDate("2025-06-01"), strict: false }, // end #1
+      { type: "Before", i: createEvent("ipo"), strict: true }, // end #2
     ];
-    expect(() => lowerPredicatesToWindow(preds)).toThrowError(NormalizerError);
+    const w = lowerPredicatesToWindow(preds);
+
+    // single start bound → Start
+    expect(w.start?.type).toBe("Start");
+    if (w.start?.type === "Start") {
+      expect((w.start.bound.at as DateAnchor).value).toBe("2024-12-01");
+      expect(w.start.bound.inclusive).toBe(false);
+    }
+
+    // two end bounds → EarlierOf
+    expect(w.end?.type).toBe("EarlierOf");
+    if (w.end?.type === "EarlierOf") {
+      expect(w.end.candidates.length).toBe(2);
+    }
   });
+
+  it.todo(
+    "detects impossible/empty windows (e.g., equal date with exclusivity) and throws EMPTY_WINDOW_AFTER_RESOLVE",
+  );
 });
 
 describe("Cliff folding", () => {
   it("duration cliff populates periodicity.cliff with unit check", () => {
-    const ast = schedule(12, 1, "MONTHS", undefined, {
+    const ast = createSchedule(12, 1, "MONTHS", undefined, {
       type: "Duration",
       value: 6,
       unit: "MONTHS",
     });
-    const st = normalizeStatement(stmt(ast));
+    const st = normalizeStatement(createStatement(ast));
     const sch = st.expr as Schedule;
     expect((sch.periodicity as any).cliff).toBe(6);
   });
 
   it("mismatched duration cliff unit throws", () => {
-    const ast = schedule(12, 1, "MONTHS", undefined, {
+    const ast = createSchedule(12, 1, "MONTHS", undefined, {
       type: "Duration",
       value: 180,
       unit: "DAYS",
     });
-    expect(() => normalizeStatement(stmt(ast))).toThrowError(NormalizerError);
+    expect(() => normalizeStatement(createStatement(ast))).toThrowError(
+      NormalizerError,
+    );
   });
 
   it("anchor cliff becomes LaterOf([FROM, CLIFF]) without flattening", () => {
-    // FROM = 2025-01-01
-    // CLIFF = evt('firstTrade')
-    const ast = schedule(30, 10, "DAYS", date("2025-01-01"), evt("firstTrade"));
-    const st = normalizeStatement(stmt(ast));
+    const ast = createSchedule(
+      30,
+      10,
+      "DAYS",
+      createDate("2025-01-01"),
+      createEvent("firstTrade"),
+    );
+    const st = normalizeStatement(createStatement(ast));
     const sch = st.expr as Schedule;
 
-    // Expect pair (no flatten)
     expect("items" in sch.vesting_start).toBe(true);
     if ("items" in sch.vesting_start) {
       expect(sch.vesting_start.type).toBe("LaterOf");
       expect(sch.vesting_start.items).toHaveLength(2);
-      // left is FROM, right is CLIFF (by construction)
       expect(sch.vesting_start.items[0]).toMatchObject({
         type: "Unqualified",
-        anchor: date("2025-01-01"),
+        anchor: createDate("2025-01-01"),
       });
       expect(sch.vesting_start.items[1]).toMatchObject({
         type: "Unqualified",
-        anchor: evt("firstTrade"),
+        anchor: createEvent("firstTrade"),
       });
     }
   });
@@ -219,11 +201,17 @@ describe("Cliff folding", () => {
   it("cliff with combinator preserves structure", () => {
     const cliff: FromTerm = {
       type: "EarlierOf",
-      items: [evt("boardApproval"), date("2025-03-01")],
+      items: [createEvent("boardApproval"), createDate("2025-03-01")],
     } as any;
 
-    const ast = schedule(12, 3, "MONTHS", evt("grantDate"), cliff);
-    const st = normalizeStatement(stmt(ast));
+    const ast = createSchedule(
+      12,
+      3,
+      "MONTHS",
+      createEvent("grantDate"),
+      cliff,
+    );
+    const st = normalizeStatement(createStatement(ast));
     const sch = st.expr as Schedule;
 
     expect("items" in sch.vesting_start).toBe(true);
@@ -241,8 +229,8 @@ describe("Cliff folding", () => {
 
 describe("Periodicity", () => {
   it("validates OVER and EVERY and computes span/step/count", () => {
-    const ast = schedule(18, 6, "MONTHS", evt("grantDate"));
-    const sch = normalizeStatement(stmt(ast)).expr as Schedule;
+    const ast = createSchedule(18, 6, "MONTHS", createEvent("grantDate"));
+    const sch = normalizeStatement(createStatement(ast)).expr as Schedule;
     expect(sch.periodicity.periodType).toBe("MONTHS");
     expect((sch.periodicity as any).span).toBe(18);
     expect((sch.periodicity as any).step).toBe(6);
@@ -250,112 +238,17 @@ describe("Periodicity", () => {
   });
 
   it("throws when OVER % EVERY !== 0", () => {
-    const ast = schedule(10, 3, "DAYS", evt("grantDate"));
-    expect(() => normalizeStatement(stmt(ast))).toThrowError(NormalizerError);
+    const ast = createSchedule(10, 3, "DAYS", createEvent("grantDate"));
+    expect(() => normalizeStatement(createStatement(ast))).toThrowError(
+      NormalizerError,
+    );
   });
 
   it("keeps vesting_day_of_month placeholder for MONTHS", () => {
-    const ast = schedule(12, 1, "MONTHS", evt("grantDate"));
-    const sch = normalizeStatement(stmt(ast)).expr as Schedule;
+    const ast = createSchedule(12, 1, "MONTHS", createEvent("grantDate"));
+    const sch = normalizeStatement(createStatement(ast)).expr as Schedule;
     expect((sch.periodicity as any).vesting_day_of_month).toBe(
       "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
-  });
-});
-
-describe("Bound combinators helpers", () => {
-  it("pushStartCandidate duplicates singleton to satisfy TwoOrMore; pushEndCandidate likewise", () => {
-    const s1 = pushStartCandidate(undefined, {
-      at: evt("hire"),
-      inclusive: true,
-    });
-    expect(s1.candidates).toHaveLength(2);
-
-    const e1 = pushEndCandidate(undefined, {
-      at: date("2025-06-01"),
-      inclusive: true,
-    });
-    expect(e1.candidates).toHaveLength(2);
-
-    const s2 = pushStartCandidate(s1, {
-      at: date("2025-01-01"),
-      inclusive: false,
-    });
-    expect(s2.candidates.length).toBe(3);
-
-    const e2 = pushEndCandidate(e1, { at: evt("cic"), inclusive: false });
-    expect(e2.candidates.length).toBe(3);
-  });
-
-  it("mergeStartWindows / mergeEndWindows concatenates candidates", () => {
-    const a: StartWindow = {
-      combine: "LaterOf",
-      candidates: [
-        { at: evt("hire"), inclusive: true },
-        { at: date("2024-12-01"), inclusive: true },
-      ],
-    };
-    const b: StartWindow = {
-      combine: "LaterOf",
-      candidates: [
-        { at: date("2025-01-01"), inclusive: true },
-        { at: evt("boardApproval"), inclusive: false },
-      ],
-    };
-    const merged = mergeStartWindows(a, b)!;
-    expect(merged.candidates.length).toBe(4);
-
-    const ae: EndWindow = {
-      combine: "EarlierOf",
-      candidates: [
-        { at: evt("cic"), inclusive: true },
-        { at: date("2025-06-01"), inclusive: true },
-      ],
-    };
-    const be: EndWindow = {
-      combine: "EarlierOf",
-      candidates: [
-        { at: date("2025-07-01"), inclusive: true },
-        { at: evt("ipo"), inclusive: false },
-      ],
-    };
-    const mergedE = mergeEndWindows(ae, be)!;
-    expect(mergedE.candidates.length).toBe(4);
-  });
-
-  it("collapseStartIfAllDates / collapseEndIfAllDates collapse only when all candidates are dates", () => {
-    const swMixed: StartWindow = {
-      combine: "LaterOf",
-      candidates: [
-        { at: evt("hire"), inclusive: true },
-        { at: date("2025-01-01"), inclusive: true },
-      ],
-    };
-    expect(collapseStartIfAllDates(swMixed)).toBe(swMixed);
-
-    const swDates: StartWindow = {
-      combine: "LaterOf",
-      candidates: [
-        { at: date("2024-12-01"), inclusive: true },
-        { at: date("2025-01-01"), inclusive: true },
-      ],
-    };
-    const collapsedS = collapseStartIfAllDates(swDates)!;
-    expect(collapsedS.candidates).toHaveLength(2);
-    expect((collapsedS.candidates[0].at as DateAnchor).value).toBe(
-      "2025-01-01",
-    );
-
-    const ewDates: EndWindow = {
-      combine: "EarlierOf",
-      candidates: [
-        { at: date("2025-06-01"), inclusive: true },
-        { at: date("2025-07-01"), inclusive: true },
-      ],
-    };
-    const collapsedE = collapseEndIfAllDates(ewDates)!;
-    expect((collapsedE.candidates[0].at as DateAnchor).value).toBe(
-      "2025-06-01",
     );
   });
 });

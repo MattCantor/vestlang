@@ -5,7 +5,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 const config: Config = {
   title: "vestlang",
   tagline: "A DSL for vesting schedules",
-  favicon: "img/favicon.ico",
+  favicon: "img/vestlang-icon.png",
 
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
@@ -46,8 +46,14 @@ const config: Config = {
   ],
 
   themeConfig: {
+    image: "img/vestlang-icon.png",
     navbar: {
       title: "vestlang",
+      logo: {
+        alt: "vestlang logo",
+        src: "img/vestlang-icon.png",
+        srcDark: "img/vestlang-icon.png",
+      },
     },
     prism: {
       theme: prismThemes.github,

@@ -41,7 +41,7 @@ interface VestingStartEvent extends BaseVestingStart {
   window?: never;
 }
 
-interface VestingStartQualified extends BaseVestingStart {
+export interface VestingStartQualified extends BaseVestingStart {
   type: "Qualified";
   anchor: Anchor;
   window: Window;
