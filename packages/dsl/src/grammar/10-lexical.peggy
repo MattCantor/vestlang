@@ -2,6 +2,8 @@ _ = [ \t\r\n]*
 
 AndSep = _ "AND"i _
 
+OrSep = _ "OR"i _
+
 CommaSep = _ "," _
 
 Strict = "STRICTLY"i

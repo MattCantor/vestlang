@@ -1,9 +1,24 @@
 // ==== Helpers ====
 export type TwoOrMore<T> = [T, T, ...T[]];
 
+export type SelectorTag = "EarlierOf" | "LaterOf";
+
+export interface Selector<T, K extends SelectorTag = SelectorTag> {
+  type: K;
+  items: TwoOrMore<T>;
+}
+
+export interface EarlierOf<T> extends Selector<T, "EarlierOf"> {}
+
+export interface LaterOf<T> extends Selector<T, "LaterOf"> {}
+
+/* ------------------------
+ * Statement
+ * ------------------------ */
+
 export interface ASTStatement {
-  amount: AstAmount; // { type: "AmountInteger" } | { type: "AmountPercent" }
-  expr: ASTExpr; // Schedule | EarlierOfSchedules | LaterOfSchedules
+  amount: AstAmount;
+  expr: ASTExpr;
 }
 
 /* ------------------------
@@ -31,21 +46,17 @@ export type AstAmount = ASTAmountAbsolute | ASTAmountPercent;
 
 // ==== Expressions ====
 
-export type ASTExpr = ASTSchedule | EarlierOfASTSchedules | LaterOfASTSchedules;
+export type ASTExpr = ASTSchedule | ASTExprSelector;
 
-export interface EarlierOfASTSchedules {
-  type: "EarlierOfSchedules";
-  items: TwoOrMore<ASTExpr>;
-}
+export interface EarlierOfASTExpr extends EarlierOf<ASTExpr> {}
 
-export interface LaterOfASTSchedules {
-  type: "LaterOfSchedules";
-  items: TwoOrMore<ASTExpr>;
-}
+export interface LaterOfASTExpr extends LaterOf<ASTExpr> {}
+
+export type ASTExprSelector = EarlierOfASTExpr | LaterOfASTExpr;
 
 export interface ASTSchedule {
   type: "Schedule";
-  from?: FromTerm;
+  from?: From;
   over: Duration;
   every: Duration;
   cliff?: CliffTerm;
@@ -63,7 +74,7 @@ export type Unit = "DAYS" | "MONTHS";
 
 // ==== Anchors (atoms) ====
 
-export type Anchor = DateAnchor | EventAnchor;
+export type BareAnchor = DateAnchor | EventAnchor;
 
 export interface DateAnchor {
   type: "Date";
@@ -77,53 +88,43 @@ export interface EventAnchor {
 
 // ==== Predicates ====
 
-export type TemporalPredNode =
-  | { type: "After"; i: Anchor; strict: boolean }
-  | { type: "Before"; i: Anchor; strict: boolean }
-  | { type: "Between"; a: Anchor; b: Anchor; strict: boolean };
+export type BaseConstraint =
+  | { type: "After"; i: BareAnchor; strict: boolean }
+  | { type: "Before"; i: BareAnchor; strict: boolean };
 
-export interface QualifiedAnchor {
-  type: "Qualified";
-  base: Anchor;
-  predicates: TemporalPredNode[];
+export interface AnyConstraint {
+  anyOf: TwoOrMore<BaseConstraint>;
 }
+
+export type Constraint = BaseConstraint | AnyConstraint;
+
+export interface ConstrainedAnchor {
+  type: "Constrained";
+  base: BareAnchor;
+  constraints: Constraint[];
+}
+
+export type Anchor = BareAnchor | ConstrainedAnchor;
 
 // ==== FROM (recursive) ====
 
-export type FromTerm =
-  | Anchor // bare Date / Event
-  | QualifiedAnchor // Date/Event with BY/BEFORE/AFTER/BETWEEN
-  | EarlierOfFrom
-  | LaterOfFrom;
+export type From = Anchor | FromOperator;
 
-export interface EarlierOfFrom {
-  type: "EarlierOf";
-  items: TwoOrMore<FromTerm>;
-}
+export interface FromEarlierOf extends EarlierOf<From> {}
 
-export interface LaterOfFrom {
-  type: "LaterOf";
-  items: TwoOrMore<FromTerm>;
-}
+export interface FromLaterOf extends LaterOf<From> {}
+
+export type FromOperator = FromEarlierOf | FromLaterOf;
 
 // ==== CLIFF (recursive) ====
 
 export type CliffTerm =
   | Duration // time-based cliff (e.g., ClIFF 12 months)
-  | Anchor // date/event cliff
-  | QualifiedAnchor // date/event with qualifier
-  | EarlierOfCliff
-  | LaterOfCliff;
+  | Anchor
+  | CliffOperator;
 
-export interface EarlierOfCliff {
-  type: "EarlierOf";
-  items: TwoOrMore<CliffTerm>;
-}
+export interface CliffEarlierOf extends EarlierOf<CliffTerm> {}
 
-export interface LaterOfCliff {
-  type: "LaterOf";
-  items: TwoOrMore<CliffTerm>;
-}
+export interface CliffLaterOf extends LaterOf<CliffTerm> {}
 
-// A base that can be evaluated: either a bare anchor OR a combinator node from FromTerm
-export type FromBase = Anchor | EarlierOfFrom | LaterOfFrom;
+export type CliffOperator = CliffEarlierOf | CliffLaterOf;

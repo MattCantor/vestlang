@@ -9,12 +9,12 @@ import type {
   Duration,
   DateAnchor,
   EventAnchor,
-  QualifiedAnchor,
-  EarlierOfFrom,
-  LaterOfFrom,
-  EarlierOfASTSchedules,
-  LaterOfASTSchedules,
-  TemporalPredNode,
+  ConstrainedAnchor,
+  FromEarlierOf,
+  FromLaterOf,
+  EarlierOfASTExpr,
+  LaterOfASTExpr,
+  BaseConstraint,
 } from "../src/types";
 
 // Helpers
@@ -30,38 +30,38 @@ const qBefore = (
   base: DateAnchor | EventAnchor,
   target: DateAnchor | EventAnchor,
   strict = false,
-): QualifiedAnchor => ({
-  type: "Qualified",
+): ConstrainedAnchor => ({
+  type: "Constrained",
   base,
-  predicates: [
+  constraints: [
     { type: "Before", i: target, strict },
-  ] satisfies TemporalPredNode[],
+  ] satisfies BaseConstraint[],
 });
 
 const qAfter = (
   base: DateAnchor | EventAnchor,
   target: DateAnchor | EventAnchor,
   strict = false,
-): QualifiedAnchor => ({
-  type: "Qualified",
+): ConstrainedAnchor => ({
+  type: "Constrained",
   base,
-  predicates: [
+  constraints: [
     { type: "After", i: target, strict },
-  ] satisfies TemporalPredNode[],
+  ] satisfies BaseConstraint[],
 });
 
-const qBetween = (
-  base: DateAnchor | EventAnchor,
-  start: DateAnchor | EventAnchor,
-  end: DateAnchor | EventAnchor,
-  strict = false,
-): QualifiedAnchor => ({
-  type: "Qualified",
-  base,
-  predicates: [
-    { type: "Between", a: start, b: end, strict },
-  ] satisfies TemporalPredNode[],
-});
+// const qBetween = (
+//   base: DateAnchor | EventAnchor,
+//   start: DateAnchor | EventAnchor,
+//   end: DateAnchor | EventAnchor,
+//   strict = false,
+// ): ConstrainedAnchor => ({
+//   type: "Constrained",
+//   base,
+//   constraints: [
+//     { type: "Between", a: start, b: end, strict },
+//   ] satisfies BaseConstraint[],
+// });
 
 describe("vestlang PEG grammar", () => {
   describe("Amount parsing", () => {
@@ -162,7 +162,7 @@ describe("vestlang PEG grammar", () => {
       const ast = parse(
         "VEST SCHEDULE FROM EARLIER OF (DATE 2026-06-01, EVENT cic)",
       ) as ASTStatement;
-      const from = (ast.expr as ASTSchedule).from as EarlierOfFrom;
+      const from = (ast.expr as ASTSchedule).from as FromEarlierOf;
       expect(from.type).toBe("EarlierOf");
       expect(from.items).toEqual([date("2026-06-01"), event("cic")]);
     });
@@ -171,7 +171,7 @@ describe("vestlang PEG grammar", () => {
       const ast = parse(
         "VEST SCHEDULE FROM LATER OF (EVENT ipo, DATE 2026-01-01)",
       ) as ASTStatement;
-      const from = (ast.expr as ASTSchedule).from as LaterOfFrom;
+      const from = (ast.expr as ASTSchedule).from as FromLaterOf;
       expect(from.type).toBe("LaterOf");
       expect(from.items).toEqual([event("ipo"), date("2026-01-01")]);
     });
@@ -257,7 +257,7 @@ describe("vestlang PEG grammar", () => {
         )
       `) as ASTStatement;
 
-      const e = ast.expr as EarlierOfASTSchedules;
+      const e = ast.expr as EarlierOfASTExpr;
       expect(e.type).toBe("EarlierOfSchedules");
       expect(e.items).toHaveLength(2);
 
@@ -276,7 +276,7 @@ describe("vestlang PEG grammar", () => {
         )
       `) as ASTStatement;
 
-      const e = ast.expr as LaterOfASTSchedules;
+      const e = ast.expr as LaterOfASTExpr;
       expect(e.type).toBe("LaterOfSchedules");
       expect(e.items).toHaveLength(2);
     });
@@ -285,7 +285,7 @@ describe("vestlang PEG grammar", () => {
       const ast = parse(`
         VEST EARLIER OF ( SCHEDULE, SCHEDULE ,  SCHEDULE )
       `) as ASTStatement;
-      const e = ast.expr as EarlierOfASTSchedules;
+      const e = ast.expr as EarlierOfASTExpr;
       expect(e.items).toHaveLength(3);
     });
   });

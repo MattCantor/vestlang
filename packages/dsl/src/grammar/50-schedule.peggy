@@ -11,7 +11,7 @@ OverEveryOpt
 From = "FROM"i _ a:FromTerm { return a; }
 
 FromTerm
-  = a:QualifiedAtom { return a; }
+  = a:ConstrainedAnchor { return a; }
   / "EARLIER"i _ "OF"i _ "(" _ xs:FromTermListTwoOrMore _ ")" {
       return { type: "EarlierOf", items: xs };
     }
@@ -28,7 +28,7 @@ Cliff = "CLIFF"i _ v:CliffTerm { return v; }
 
 CliffTerm
   = d:Duration { return d; }
-  / a:QualifiedAtom { return a; }
+  / a:ConstrainedAnchor { return a; }
   / "EARLIER"i _ "OF"i _ "(" _ xs:CliffTermListTwoOrMore _ ")" {
       return { type: "EarlierOf", items: xs };
     }
@@ -45,7 +45,7 @@ ScheduleBlock
   = "SCHEDULE"i _ f:From? _ oe:OverEveryOpt _ c:Cliff? {
       const base = {
         type: "Schedule",
-        from: f ?? null,
+        from: f,
         over: oe.over,
         every: oe.every,
       };

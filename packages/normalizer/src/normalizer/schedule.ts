@@ -26,7 +26,7 @@ export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
   // Vesting start: FROM (may include combinators)
   const baseStart = normalizeFromTermOrDefault(ast.from, [...path, "from"]);
 
-  // Periodicity: OVER / EVERY
+  // Periodicity: OVER / EVERY / CLIFF (may include combinators)
   const periodicity = normalizePeriodicity(ast.over, ast.every, [
     ...path,
     "periodicity",

@@ -47,3 +47,4 @@ VEST SCHEDULE FROM EVENT cic_phase2
 Vest schedule from event ipo before date 2025-01-01
 vest schedule from event ipo after date 2025-01-01
 vest schedule from event ipo before earlier of (event a, event b)
+vest schedule from event ipo before event a and before event b

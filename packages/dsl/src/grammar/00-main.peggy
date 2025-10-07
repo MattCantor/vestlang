@@ -14,9 +14,9 @@
   function mkAmountPercent(x) {
     return { type: "AmountPercent", value: x };
   }
-  function mkQualified(base, preds) {
-    return preds && preds.length
-      ? { type: "Qualified", base, predicates: preds }
+  function mkConstrained(base, constraints) {
+    return constraints && constraints.length
+      ? { type: "Constrained", base, constraints }
       : base;
   }
   function collect(head, tail) {
@@ -48,10 +48,10 @@ Amount
 Expr
   = s:ScheduleBlock { return s; }
   / "EARLIER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
-      return { type: "EarlierOfSchedules", items: xs };
+      return { type: "EarlierOf", items: xs };
     }
   / "LATER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
-      return { type: "LaterOfSchedules", items: xs };
+      return { type: "LaterOf", items: xs };
     }
 
 ExprListTwoOrMore
