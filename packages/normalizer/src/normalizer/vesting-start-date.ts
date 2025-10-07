@@ -2,9 +2,12 @@ import type {
   Anchor,
   TwoOrMore,
   EventAnchor,
-  FromTerm,
-  QualifiedAnchor,
-  DateAnchor,
+  From,
+  ConstrainedAnchor,
+  Constraint,
+  EarlierOf,
+  LaterOf,
+  BareAnchor,
 } from "@vestlang/dsl";
 import {
   isAnchor,
@@ -12,11 +15,10 @@ import {
   isEarlierOfFrom,
   isEvent,
   isLaterOfFrom,
-  isQualifiedAnchor,
+  isConstrainedAnchor,
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
 import { invariant, unexpectedAst } from "../errors.js";
-import { lowerPredicatesToWindow, type Window } from "./window.js";
 
 /* ------------------------
  * Types
@@ -25,75 +27,59 @@ import { lowerPredicatesToWindow, type Window } from "./window.js";
 // primitives/vestlang/VestingStart
 interface BaseVestingStart {
   id: string;
-  type: "Qualified" | "Unqualified";
-  anchor: Anchor;
+  base: BareAnchor;
 }
 
-interface VestingStartDate extends BaseVestingStart {
-  type: "Unqualified";
-  anchor: DateAnchor;
-  window?: never;
+interface VestingStartBare extends BaseVestingStart {
+  type: "Bare";
+  constraints?: never;
 }
 
-interface VestingStartEvent extends BaseVestingStart {
-  type: "Unqualified";
-  anchor: EventAnchor;
-  window?: never;
+export interface VestingStartConstrained extends BaseVestingStart {
+  type: "Constrained";
+  constraints: readonly Constraint[];
 }
 
-export interface VestingStartQualified extends BaseVestingStart {
-  type: "Qualified";
-  anchor: Anchor;
-  window: Window;
-}
+type VestingStartExpr = VestingStartBare | VestingStartConstrained;
 
-type VestingStart =
-  | VestingStartDate
-  | VestingStartEvent
-  | VestingStartQualified;
+interface EarlierOfVestingStart extends EarlierOf<VestingStart> {}
 
-// combinators over vesting starts
-interface EarlierOfVestingStart {
-  id: string;
-  type: "EarlierOf";
-  items: TwoOrMore<VestingStartExpr>;
-}
+interface LaterOfVestingStart extends LaterOf<VestingStart> {}
 
-interface LaterOfVestingStart {
-  id: string;
-  type: "LaterOf";
-  items: TwoOrMore<VestingStartExpr>;
-}
+type VestingStartOperator = EarlierOfVestingStart | LaterOfVestingStart;
 
-export type VestingStartExpr =
-  | VestingStart
-  | EarlierOfVestingStart
-  | LaterOfVestingStart;
+export type VestingStart = VestingStartExpr | VestingStartOperator;
 
 /* ------------------------
  * Vesting Start
  * ------------------------ */
 
 export function normalizeFromTermOrDefault(
-  from: FromTerm | undefined,
+  from: From | null | undefined,
   path: string[],
-): VestingStartExpr {
+): VestingStart {
+  // Insert default when FROM is not provided
   if (!from) {
     const grant: EventAnchor = { type: "Event", value: "grantDate" };
-    return makeUnqualifiedStart(grant);
+    return makeVestingStartBare(grant);
   }
+
+  // Otherwise normalize the FROM ast
   return normalizeFromTerm(from, path);
 }
 
-function normalizeFromTerm(from: FromTerm, path: string[]): VestingStartExpr {
+function normalizeFromTerm(from: From, path: string[]): VestingStart {
+  // BareAnchor
   if (isAnchor(from)) {
-    return makeUnqualifiedStart(from);
+    return makeVestingStartBare(from);
   }
 
-  if (isQualifiedAnchor(from)) {
-    return makeQualifiedStart(from);
+  // Constrained Anchor
+  if (isConstrainedAnchor(from)) {
+    return makeVestingStartConstrained(from);
   }
 
+  // Operators
   if (isEarlierOfFrom(from)) {
     const items = from.items.map((it, i) =>
       normalizeFromTerm(it, [...path, `items[${i}]`]),
@@ -105,7 +91,6 @@ function normalizeFromTerm(from: FromTerm, path: string[]): VestingStartExpr {
       path,
     );
     return {
-      id: "",
       type: "EarlierOf",
       items: items as TwoOrMore<VestingStartExpr>,
     } satisfies EarlierOfVestingStart;
@@ -122,7 +107,6 @@ function normalizeFromTerm(from: FromTerm, path: string[]): VestingStartExpr {
       path,
     );
     return {
-      id: "",
       type: "LaterOf",
       items: items as TwoOrMore<VestingStartExpr>,
     } satisfies LaterOfVestingStart;
@@ -130,32 +114,26 @@ function normalizeFromTerm(from: FromTerm, path: string[]): VestingStartExpr {
   return unexpectedAst("Unknown FromTerm variant", { from }, path);
 }
 
-export function makeUnqualifiedStart(a: Anchor): VestingStart {
-  if (isDate(a)) {
-    return <VestingStartDate>{
-      id: "",
-      type: "Unqualified",
-      anchor: a,
-      window: undefined,
-    };
-  }
-  if (isEvent(a)) {
-    return <VestingStartEvent>{
-      id: "",
-      type: "Unqualified",
-      anchor: a,
-      window: undefined,
-    };
-  }
-  return unexpectedAst("Anchor must be Date or Event", { a });
-}
-
-export function makeQualifiedStart(q: QualifiedAnchor): VestingStartQualified {
-  const created_window = lowerPredicatesToWindow(q.predicates);
+export function makeVestingStartBare(a: Anchor): VestingStart {
+  if (!(isDate(a) || isEvent(a)))
+    return unexpectedAst("Anchor must be Date or Event", { a });
   return {
     id: "",
-    type: "Qualified",
-    anchor: q.base,
-    window: created_window,
+    type: "Bare",
+    base: a,
+  };
+}
+
+export function makeVestingStartConstrained(
+  a: ConstrainedAnchor,
+): VestingStart {
+  if (!(isDate(a.base) || isEvent(a.base)))
+    return unexpectedAst("Anchor must be Date or Event", { a });
+
+  return {
+    id: "",
+    type: "Constrained",
+    base: a.base,
+    constraints: a.constraints,
   };
 }

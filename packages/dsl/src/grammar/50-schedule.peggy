@@ -42,7 +42,7 @@ CliffTermListTwoOrMore
     }
 
 ScheduleBlock
-  = "SCHEDULE"i _ f:From? _ oe:OverEveryOpt _ c:Cliff? {
+  = f:From? _ oe:OverEveryOpt _ c:Cliff? {
       const base = {
         type: "Schedule",
         from: f,

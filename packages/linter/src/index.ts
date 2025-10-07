@@ -2,9 +2,9 @@
 import type {
   ASTStatement,
   ASTExpr,
-  FromTerm,
-  QualifiedAnchor,
-  TemporalPredNode,
+  From,
+  ConstrainedAnchor,
+  BaseConstraint,
   Duration,
 } from "@vestlang/dsl";
 import { normalizeExpr } from "@vestlang/normalizer";
@@ -22,7 +22,7 @@ export function lint(stmt: ASTStatement): LintIssue[] {
   const out: LintIssue[] = [];
 
   // 1) Raw AST checks (predicates & lists)
-  lintExpr(stmt.expr, "expr", out);
+  // lintExpr(stmt.expr, "expr", out);
 
   // 2) Normalized checks (uses normalizer for schedule defaults consolidation)
   const norm = normalizeExpr(stmt.expr);
@@ -35,103 +35,103 @@ export function lint(stmt: ASTStatement): LintIssue[] {
  * Raw AST checks (no mutation)
  * =======================================================*/
 
-function lintExpr(node: ASTExpr, path: string, out: LintIssue[]) {
-  switch (node.type) {
-    case "Schedule":
-      if (node.from) lintFromTerm(node.from, `${path}.from`, out);
-      if (node.cliff) lintCliff(node.cliff as any, `${path}.cliff`, out);
-      return;
+// function lintExpr(node: ASTExpr, path: string, out: LintIssue[]) {
+//   switch (node.type) {
+//     case "Schedule":
+//       if (node.from) lintFromTerm(node.from, `${path}.from`, out);
+//       if (node.cliff) lintCliff(node.cliff as any, `${path}.cliff`, out);
+//       return;
+//
+//     case "EarlierOf":
+//     case "LaterOf": {
+//       const seen = new Set<string>();
+//       node.items.forEach((child, i) => {
+//         // duplicate schedules by structural equality
+//         const key = stableKey(child);
+//         if (seen.has(key)) {
+//           out.push({
+//             code: "LINT-LIST-DUP",
+//             message: `${node.type} contains a duplicate item at index ${i}`,
+//             path: `${path}.items[${i}]`,
+//           });
+//         } else {
+//           seen.add(key);
+//         }
+//         lintExpr(child, `${path}.items[${i}]`, out);
+//       });
+//       if (node.items.length === 1) {
+//         out.push({
+//           code: "LINT-LIST-SINGLETON",
+//           message: `${node.type} with a single item is unnecessary`,
+//           fix: "Inline the single schedule and remove the combinator.",
+//           path,
+//         });
+//       }
+//       return;
+//     }
+//   }
+// }
 
-    case "EarlierOfSchedules":
-    case "LaterOfSchedules": {
-      const seen = new Set<string>();
-      node.items.forEach((child, i) => {
-        // duplicate schedules by structural equality
-        const key = stableKey(child);
-        if (seen.has(key)) {
-          out.push({
-            code: "LINT-LIST-DUP",
-            message: `${node.type} contains a duplicate item at index ${i}`,
-            path: `${path}.items[${i}]`,
-          });
-        } else {
-          seen.add(key);
-        }
-        lintExpr(child, `${path}.items[${i}]`, out);
-      });
-      if (node.items.length === 1) {
-        out.push({
-          code: "LINT-LIST-SINGLETON",
-          message: `${node.type} with a single item is unnecessary`,
-          fix: "Inline the single schedule and remove the combinator.",
-          path,
-        });
-      }
-      return;
-    }
-  }
-}
+// function lintFromTerm(node: From, path: string, out: LintIssue[]) {
+//   if (isQualified(node)) {
+//     const preds = node.predicates ?? [];
+//     if (preds.length === 0) {
+//       out.push({
+//         code: "LINT-PRED-EMPTY",
+//         message: "Qualified anchor has no predicates.",
+//         fix: "Remove the 'Qualified' wrapper.",
+//         path,
+//       });
+//     }
+//     lintPredicates(preds, `${path}.predicates`, out);
+//     return;
+//   }
+//
+//   if (isEarlierOfFrom(node) || isLaterOfFrom(node)) {
+//     const items = node.items;
+//     // duplicates / singleton
+//     const seen = new Set<string>();
+//     items.forEach((it, i) => {
+//       const key = stableKey(it);
+//       if (seen.has(key)) {
+//         out.push({
+//           code: "LINT-LIST-DUP",
+//           message: "EarlierOf/LaterOf contains duplicate items.",
+//           path: `${path}.items[${i}]`,
+//         });
+//       } else {
+//         seen.add(key);
+//       }
+//       lintFromTerm(it, `${path}.items[${i}]`, out);
+//     });
+//     if (items.length === 1) {
+//       out.push({
+//         code: "LINT-LIST-SINGLETON",
+//         message: "EarlierOf/LaterOf with a single item is unnecessary.",
+//         fix: "Inline the single item.",
+//         path,
+//       });
+//     }
+//     return;
+//   }
+//
+//   // bare Anchor: nothing to lint here
+// }
 
-function lintFromTerm(node: FromTerm, path: string, out: LintIssue[]) {
-  if (isQualified(node)) {
-    const preds = node.predicates ?? [];
-    if (preds.length === 0) {
-      out.push({
-        code: "LINT-PRED-EMPTY",
-        message: "Qualified anchor has no predicates.",
-        fix: "Remove the 'Qualified' wrapper.",
-        path,
-      });
-    }
-    lintPredicates(preds, `${path}.predicates`, out);
-    return;
-  }
-
-  if (isEarlierOfFrom(node) || isLaterOfFrom(node)) {
-    const items = node.items;
-    // duplicates / singleton
-    const seen = new Set<string>();
-    items.forEach((it, i) => {
-      const key = stableKey(it);
-      if (seen.has(key)) {
-        out.push({
-          code: "LINT-LIST-DUP",
-          message: "EarlierOf/LaterOf contains duplicate items.",
-          path: `${path}.items[${i}]`,
-        });
-      } else {
-        seen.add(key);
-      }
-      lintFromTerm(it, `${path}.items[${i}]`, out);
-    });
-    if (items.length === 1) {
-      out.push({
-        code: "LINT-LIST-SINGLETON",
-        message: "EarlierOf/LaterOf with a single item is unnecessary.",
-        fix: "Inline the single item.",
-        path,
-      });
-    }
-    return;
-  }
-
-  // bare Anchor: nothing to lint here
-}
-
-function lintCliff(node: any, path: string, out: LintIssue[]) {
-  if (isQualified(node)) {
-    lintPredicates(node.predicates ?? [], `${path}.predicates`, out);
-    return;
-  }
-  if (isEarlierOf(node) || isLaterOf(node)) {
-    node.items.forEach((it: any, i: number) =>
-      lintCliff(it, `${path}.items[${i}]`, out),
-    );
-  }
-}
+// function lintCliff(node: any, path: string, out: LintIssue[]) {
+//   if (isQualified(node)) {
+//     lintPredicates(node.predicates ?? [], `${path}.predicates`, out);
+//     return;
+//   }
+//   if (isEarlierOf(node) || isLaterOf(node)) {
+//     node.items.forEach((it: any, i: number) =>
+//       lintCliff(it, `${path}.items[${i}]`, out),
+//     );
+//   }
+// }
 
 function lintPredicates(
-  preds: TemporalPredNode[],
+  preds: BaseConstraint[],
   path: string,
   out: LintIssue[],
 ) {
@@ -169,26 +169,26 @@ function lintPredicates(
   }
 
   // Date-only validations for BETWEEN (parser allows; evaluator would fail later)
-  for (const p of preds) {
-    if (p.type === "Between" && p.a.type === "Date" && p.b.type === "Date") {
-      if (p.a.value > p.b.value) {
-        out.push({
-          code: "LINT-PRED-DATE-ORDER",
-          message: `BETWEEN has start > end (${p.a.value} > ${p.b.value}).`,
-          fix: "Swap the endpoints or correct the dates.",
-          path,
-        });
-      }
-      if (p.a.value === p.b.value && p.strict) {
-        out.push({
-          code: "LINT-PRED-EQUAL-STRICT",
-          message: "STRICTLY BETWEEN identical endpoints is an empty set.",
-          fix: "Drop STRICTLY or choose different endpoints.",
-          path,
-        });
-      }
-    }
-  }
+  // for (const p of preds) {
+  //   if (p.type === "Between" && p.a.type === "Date" && p.b.type === "Date") {
+  //     if (p.a.value > p.b.value) {
+  //       out.push({
+  //         code: "LINT-PRED-DATE-ORDER",
+  //         message: `BETWEEN has start > end (${p.a.value} > ${p.b.value}).`,
+  //         fix: "Swap the endpoints or correct the dates.",
+  //         path,
+  //       });
+  //     }
+  //     if (p.a.value === p.b.value && p.strict) {
+  //       out.push({
+  //         code: "LINT-PRED-EQUAL-STRICT",
+  //         message: "STRICTLY BETWEEN identical endpoints is an empty set.",
+  //         fix: "Drop STRICTLY or choose different endpoints.",
+  //         path,
+  //       });
+  //     }
+  //   }
+  // }
 }
 
 /* =========================================================
@@ -228,12 +228,10 @@ function lintNormalizedExpr(node: any, path: string, out: LintIssue[]) {
  * Tiny helpers (no external deps)
  * =======================================================*/
 
-function isQualified(x: any): x is QualifiedAnchor {
+function isQualified(x: any): x is ConstrainedAnchor {
   return !!x && typeof x === "object" && x.type === "Qualified";
 }
-function isEarlierOfFrom(
-  x: any,
-): x is { type: "EarlierOf"; items: FromTerm[] } {
+function isEarlierOfFrom(x: any): x is { type: "EarlierOf"; items: From[] } {
   return (
     !!x &&
     typeof x === "object" &&
@@ -241,7 +239,7 @@ function isEarlierOfFrom(
     Array.isArray(x.items)
   );
 }
-function isLaterOfFrom(x: any): x is { type: "LaterOf"; items: FromTerm[] } {
+function isLaterOfFrom(x: any): x is { type: "LaterOf"; items: From[] } {
   return (
     !!x &&
     typeof x === "object" &&

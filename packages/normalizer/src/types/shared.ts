@@ -13,7 +13,7 @@ export interface BaseExpr {
 }
 
 // enums/vestlang/ExpressionType
-export type ExprType = "Schedule" | "LaterOfSchedules" | "EarlierOfSchedules";
+export type ExprType = "Schedule" | "LaterOf" | "EarlierOf";
 
 // Exhaustiveness helper
 export function assertNever(x: never): never {

@@ -5,7 +5,7 @@ import {
   ASTStatement,
   DateAnchor,
   EventAnchor,
-  FromTerm,
+  From,
   parse,
 } from "@vestlang/dsl";
 
@@ -22,7 +22,7 @@ export function createSchedule(
   over: number,
   every: number,
   unit: "DAYS" | "MONTHS",
-  from?: FromTerm,
+  from?: From,
   cliff?: any,
 ): ASTSchedule {
   return {

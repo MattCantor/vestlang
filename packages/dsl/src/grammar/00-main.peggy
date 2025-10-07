@@ -46,13 +46,13 @@ Amount
   / n:Integer { return mkAmountAbsolute(n); }
 
 Expr
-  = s:ScheduleBlock { return s; }
-  / "EARLIER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
+  = "EARLIER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
       return { type: "EarlierOf", items: xs };
     }
   / "LATER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
       return { type: "LaterOf", items: xs };
     }
+  / s:ScheduleBlock { return s; }
 
 ExprListTwoOrMore
   = head:Expr tail:(CommaSep Expr)* { return collectTwoOrMore(head, tail); }

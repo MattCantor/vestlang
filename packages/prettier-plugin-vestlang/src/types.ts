@@ -3,14 +3,14 @@ import type {
   ASTStatement,
   ASTExpr,
   ASTSchedule,
-  EarlierOfASTSchedules,
-  LaterOfASTSchedules,
+  EarlierOfASTExpr,
+  LaterOfASTExpr,
   Duration,
-  QualifiedAnchor,
+  ConstrainedAnchor,
   DateAnchor,
   EventAnchor,
-  FromTerm,
-  CliffTerm,
+  From,
+  Cliff,
 } from "@vestlang/dsl";
 
 // Our root node so Prettier has a typed entry point
@@ -23,17 +23,17 @@ export type AstNode =
   | Program
   | ASTExpr
   | ASTSchedule
-  | EarlierOfASTSchedules
-  | LaterOfASTSchedules
+  | EarlierOfASTExpr
+  | LaterOfASTExpr
   | Duration
-  | QualifiedAnchor
+  | ConstrainedAnchor
   | DateAnchor
   | EventAnchor
-  | FromTerm
-  | CliffTerm
+  | From
+  | Cliff
   | { type: string; [k: string]: any };
 
 export type ParseResult = Program;
 
-// Prettier Doc type (kept loose here)
-export type Doc = any;
+// export type Doc = any;
+export type { Doc } from "prettier";

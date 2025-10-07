@@ -1,9 +1,8 @@
 import type { ASTSchedule } from "@vestlang/dsl";
 import { normalizePeriodicity, Periodicity } from "./periodicity.js";
-import { foldCliffIntoStart } from "./cliff.js";
 import {
   normalizeFromTermOrDefault,
-  type VestingStartExpr,
+  type VestingStart,
 } from "./vesting-start-date.js";
 import type { BaseExpr } from "../types/shared.js";
 
@@ -14,7 +13,7 @@ import type { BaseExpr } from "../types/shared.js";
 // types/vestlang/Schedule
 export interface Schedule extends BaseExpr {
   type: "Schedule";
-  vesting_start: VestingStartExpr;
+  vesting_start: VestingStart;
   periodicity: Periodicity;
 }
 
@@ -24,7 +23,7 @@ export interface Schedule extends BaseExpr {
 
 export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
   // Vesting start: FROM (may include combinators)
-  const baseStart = normalizeFromTermOrDefault(ast.from, [...path, "from"]);
+  const vesting_start = normalizeFromTermOrDefault(ast.from, [...path, "from"]);
 
   // Periodicity: OVER / EVERY / CLIFF (may include combinators)
   const periodicity = normalizePeriodicity(ast.over, ast.every, [
@@ -33,15 +32,12 @@ export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
   ]);
 
   // Cliff
-  const vestingStart = foldCliffIntoStart(baseStart, ast.cliff, periodicity, [
-    ...path,
-    "cliff",
-  ]);
+  periodicity.cliff = ast.cliff;
 
   return {
     id: "",
     type: "Schedule",
-    vesting_start: vestingStart,
+    vesting_start,
     periodicity,
   };
 }

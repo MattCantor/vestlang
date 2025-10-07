@@ -56,10 +56,10 @@ export type ASTExprSelector = EarlierOfASTExpr | LaterOfASTExpr;
 
 export interface ASTSchedule {
   type: "Schedule";
-  from?: From;
+  from?: From | null;
   over: Duration;
   every: Duration;
-  cliff?: CliffTerm;
+  cliff?: Cliff;
 }
 
 // ==== Durations (normalized by grammar) ====
@@ -86,11 +86,11 @@ export interface EventAnchor {
   value: string; // Ident
 }
 
-// ==== Predicates ====
+// ==== Constraints ====
 
 export type BaseConstraint =
-  | { type: "After"; i: BareAnchor; strict: boolean }
-  | { type: "Before"; i: BareAnchor; strict: boolean };
+  | { type: "After"; anchor: BareAnchor; strict: boolean }
+  | { type: "Before"; anchor: BareAnchor; strict: boolean };
 
 export interface AnyConstraint {
   anyOf: TwoOrMore<BaseConstraint>;
@@ -106,8 +106,7 @@ export interface ConstrainedAnchor {
 
 export type Anchor = BareAnchor | ConstrainedAnchor;
 
-// ==== FROM (recursive) ====
-
+// ==== From ====
 export type From = Anchor | FromOperator;
 
 export interface FromEarlierOf extends EarlierOf<From> {}
@@ -116,15 +115,15 @@ export interface FromLaterOf extends LaterOf<From> {}
 
 export type FromOperator = FromEarlierOf | FromLaterOf;
 
-// ==== CLIFF (recursive) ====
+// ==== CLIFF ====
 
-export type CliffTerm =
+export type Cliff =
   | Duration // time-based cliff (e.g., ClIFF 12 months)
   | Anchor
   | CliffOperator;
 
-export interface CliffEarlierOf extends EarlierOf<CliffTerm> {}
+export interface CliffEarlierOf extends EarlierOf<Cliff> {}
 
-export interface CliffLaterOf extends LaterOf<CliffTerm> {}
+export interface CliffLaterOf extends LaterOf<Cliff> {}
 
 export type CliffOperator = CliffEarlierOf | CliffLaterOf;

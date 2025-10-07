@@ -1,4 +1,4 @@
-import type { Duration } from "@vestlang/dsl";
+import type { Cliff, Duration } from "@vestlang/dsl";
 import { invariant } from "../errors.js";
 import type { Integer } from "../types/shared.js";
 import type { VestingDayOfMonth } from "../types/oct-types.js";
@@ -13,7 +13,7 @@ interface BasePeriodicity {
   span: Integer;
   count: Integer;
   step: Integer;
-  cliff?: Integer;
+  cliff?: Cliff;
 }
 
 interface PeriodicityInDays extends BasePeriodicity {

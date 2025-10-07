@@ -1,20 +1,20 @@
 import { describe, it, expect } from "vitest";
 import type {
   Anchor,
-  TemporalPredNode,
-  QualifiedAnchor,
-  FromTerm,
+  ConstrainedAnchor,
+  From,
   Duration,
+  BaseConstraint,
+  BareAnchor,
 } from "@vestlang/dsl";
 
 import {
   isDate,
   isEvent,
   isAnchor,
-  isAfterPred,
-  isBeforePred,
-  isBetweenPred,
-  isQualifiedAnchor,
+  isAfterConstrainedAnchor,
+  isBeforeConstrainedAnchor,
+  isConstrainedAnchor,
   isEarlierOfFrom,
   isLaterOfFrom,
   isDuration,
@@ -22,13 +22,13 @@ import {
 import { assertNever } from "../src/types/shared.js";
 
 // helpers
-const date = (value: string): Anchor => ({ type: "Date", value });
-const event = (value: string): Anchor => ({ type: "Event", value });
+const makeDate = (value: string): BareAnchor => ({ type: "Date", value });
+const makeEvent = (value: string): BareAnchor => ({ type: "Event", value });
 
 describe("guards: anchors", () => {
   it("isDate / isEvent / isAnchor", () => {
-    const d = date("2025-01-01");
-    const e = event("ipo");
+    const d = makeDate("2025-01-01");
+    const e = makeEvent("ipo");
 
     expect(isDate(d)).toBe(true);
     expect(isEvent(d)).toBe(false);
@@ -44,69 +44,58 @@ describe("guards: anchors", () => {
 });
 
 describe("guards: temporal predicate nodes", () => {
-  it("isAfterPred / isBeforePred / isBetweenPred", () => {
-    const after: TemporalPredNode = {
+  it("isAfterConstrainedAnchor / isBeforeConstrainedAnchor", () => {
+    const after: BaseConstraint = {
       type: "After",
-      i: date("2025-01-01"),
+      anchor: makeDate("2025-01-01"),
       strict: false,
     };
-    const before: TemporalPredNode = {
+    const before: BaseConstraint = {
       type: "Before",
-      i: date("2025-12-31"),
+      anchor: makeDate("2025-12-31"),
       strict: true,
     };
-    const between: TemporalPredNode = {
-      type: "Between",
-      a: date("2025-01-01"),
-      b: date("2025-12-31"),
-      strict: false,
-    };
 
-    expect(isAfterPred(after)).toBe(true);
-    expect(isBeforePred(after)).toBe(false);
-    expect(isBetweenPred(after)).toBe(false);
-
-    expect(isAfterPred(before)).toBe(false);
-    expect(isBeforePred(before)).toBe(true);
-    expect(isBetweenPred(before)).toBe(false);
-
-    expect(isAfterPred(between)).toBe(false);
-    expect(isBeforePred(between)).toBe(false);
-    expect(isBetweenPred(between)).toBe(true);
+    expect(isAfterConstrainedAnchor(after)).toBe(true);
+    expect(isBeforeConstrainedAnchor(after)).toBe(false);
+    expect(isAfterConstrainedAnchor(before)).toBe(false);
+    expect(isBeforeConstrainedAnchor(before)).toBe(true);
   });
 });
 
 describe("guards: FromTerm variants", () => {
   it("isQualifiedAnchor, isEarlierOfFrom, isLaterOfFrom", () => {
-    const qa: QualifiedAnchor = {
-      type: "Qualified",
-      base: event("grant"),
-      predicates: [{ type: "After", i: date("2025-01-01"), strict: false }],
+    const ca: ConstrainedAnchor = {
+      type: "Constrained",
+      base: makeEvent("grant"),
+      constraints: [
+        { type: "After", anchor: makeDate("2025-01-01"), strict: false },
+      ],
     };
 
-    const earlier: FromTerm = {
+    const earlier: From = {
       type: "EarlierOf",
-      items: [event("ipo"), event("cic")],
+      items: [makeEvent("ipo"), makeEvent("cic")],
     };
-    const later: FromTerm = {
+    const later: From = {
       type: "LaterOf",
-      items: [event("board"), event("cic")],
+      items: [makeEvent("board"), makeEvent("cic")],
     };
-    const bare: FromTerm = date("2025-06-01");
+    const bare: From = makeDate("2025-06-01");
 
-    expect(isQualifiedAnchor(qa)).toBe(true);
-    expect(isEarlierOfFrom(qa)).toBe(false);
-    expect(isLaterOfFrom(qa)).toBe(false);
+    expect(isConstrainedAnchor(ca)).toBe(true);
+    expect(isEarlierOfFrom(ca)).toBe(false);
+    expect(isLaterOfFrom(ca)).toBe(false);
 
-    expect(isQualifiedAnchor(earlier)).toBe(false);
+    expect(isConstrainedAnchor(earlier)).toBe(false);
     expect(isEarlierOfFrom(earlier)).toBe(true);
     expect(isLaterOfFrom(earlier)).toBe(false);
 
-    expect(isQualifiedAnchor(later)).toBe(false);
+    expect(isConstrainedAnchor(later)).toBe(false);
     expect(isEarlierOfFrom(later)).toBe(false);
     expect(isLaterOfFrom(later)).toBe(true);
 
-    expect(isQualifiedAnchor(bare)).toBe(false);
+    expect(isConstrainedAnchor(bare)).toBe(false);
     expect(isEarlierOfFrom(bare)).toBe(false);
     expect(isLaterOfFrom(bare)).toBe(false);
     expect(isAnchor(bare)).toBe(true);

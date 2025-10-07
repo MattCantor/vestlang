@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { normalizeStatement } from "../src/normalizer";
 import { NormalizerError } from "../src/errors";
 import { createEvent, createSchedule, createStatement } from "./helpers";
+import { Numeric } from "../src/types/oct-types";
 
 describe("Amount normalization", () => {
   it("AmountAbsolute requires a numeric value", () => {
@@ -17,7 +18,10 @@ describe("Amount normalization", () => {
     const ok = normalizeStatement(
       createStatement(ast, { type: "AmountAbsolute", value: 100 }),
     );
-    expect(ok.amount).toEqual({ type: "AmountAbsolute", value: 100 });
+    expect(ok.amount).toEqual({
+      type: "AmountAbsolute",
+      value: "100" as Numeric,
+    });
   });
 
   it("AmountPercent accepts fraction [0,1] and percentage (1..100]", () => {
@@ -27,15 +31,13 @@ describe("Amount normalization", () => {
       createStatement(ast, { type: "AmountPercent", value: 0.25 }),
     ).amount as any;
     expect(frac.type).toBe("AmountPercent");
-    expect(frac.numerator).toBe("25");
-    expect(frac.denominator).toBe("100");
+    expect(frac.value).toBe("25");
 
     const pct = normalizeStatement(
       createStatement(ast, { type: "AmountPercent", value: 25 }),
     ).amount as any;
     expect(pct.type).toBe("AmountPercent");
-    expect(pct.numerator).toBe("25");
-    expect(pct.denominator).toBe("100");
+    expect(pct.value).toBe("25");
 
     expect(() =>
       normalizeStatement(
@@ -48,11 +50,15 @@ describe("Amount normalization", () => {
     const ast = createSchedule(12, 1, "MONTHS", createEvent("grantDate"));
     const amt = {
       type: "AmountPercent",
-      numerator: "33",
-      denominator: "100",
+      value: 33,
     } as const;
 
+    const outAmount = {
+      type: "AmountPercent",
+      value: "33" as Numeric,
+    };
+
     const out = normalizeStatement(createStatement(ast, amt)).amount as any;
-    expect(out).toEqual(amt);
+    expect(out).toEqual(outAmount);
   });
 });

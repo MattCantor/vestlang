@@ -2,8 +2,8 @@ import { ASTExpr, TwoOrMore } from "@vestlang/dsl";
 import { BaseExpr, ExprType } from "../types/shared.js";
 import { normalizeSchedule, Schedule } from "./schedule.js";
 import {
-  isEarlierOfSchedules,
-  isLaterOfSchedules,
+  isEarlierOfASTExpr,
+  isLaterOfASTExpr,
   isSchedule,
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
@@ -18,11 +18,11 @@ interface BaseScheduleCombinator extends BaseExpr {
 }
 
 export interface LaterOfSchedules extends BaseScheduleCombinator {
-  type: "LaterOfSchedules";
+  type: "LaterOf";
 }
 
 export interface EarlierOfSchedules extends BaseScheduleCombinator {
-  type: "EarlierOfSchedules";
+  type: "EarlierOf";
 }
 
 type ScheduleCombinator = LaterOfSchedules | EarlierOfSchedules;
@@ -38,7 +38,7 @@ export function normalizeExpr(ast: ASTExpr, path: string[] = []): Expr {
     return normalizeSchedule(ast, [...path, "Schedule"]);
   }
 
-  if (isLaterOfSchedules(ast)) {
+  if (isLaterOfASTExpr(ast)) {
     const items = ast.items.map((e, i) =>
       normalizeExpr(e, [...path, `items[${i}]`]),
     );
@@ -50,12 +50,12 @@ export function normalizeExpr(ast: ASTExpr, path: string[] = []): Expr {
     );
     return {
       id: "",
-      type: "LaterOfSchedules" as ExprType,
+      type: "LaterOf" as ExprType,
       items: items as TwoOrMore<Expr>,
     } as LaterOfSchedules;
   }
 
-  if (isEarlierOfSchedules(ast)) {
+  if (isEarlierOfASTExpr(ast)) {
     const items = ast.items.map((e, i) =>
       normalizeExpr(e, [...path, `items[${i}]`]),
     );
@@ -67,7 +67,7 @@ export function normalizeExpr(ast: ASTExpr, path: string[] = []): Expr {
     );
     return {
       id: "",
-      type: "EarlierOfSchedules" as ExprType,
+      type: "EarlierOf" as ExprType,
       items: items as TwoOrMore<Expr>,
     } as EarlierOfSchedules;
   }

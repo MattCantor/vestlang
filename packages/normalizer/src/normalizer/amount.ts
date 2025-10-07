@@ -9,16 +9,12 @@ import type { Numeric } from "../types/oct-types.js";
 // types/vestlang/Amount
 interface AmountPercent extends BaseAmount {
   type: "AmountPercent";
-  numerator: Numeric;
-  denominator: Numeric; // must not be "0" at runtime
-  quantity?: never;
+  value: Numeric;
 }
 
 interface AmountAbsolute extends BaseAmount {
   type: "AmountAbsolute";
-  value: number;
-  numerator?: never;
-  denominator?: never;
+  value: Numeric;
 }
 
 export type Amount = AmountPercent | AmountAbsolute;
@@ -28,57 +24,49 @@ export type Amount = AmountPercent | AmountAbsolute;
  * ----------------------- */
 
 export function normalizeAmount(astAmount: any, path: string[]): Amount {
-  if (astAmount?.type === "AmountAbsolute") {
-    invariant(
-      typeof astAmount.value === "number",
-      "AmountAbsolute.value must be a number",
-      { value: astAmount.value },
-      path,
-    );
-    return {
-      type: "AmountAbsolute",
-      value: astAmount.value,
-    };
-  }
+  const value = astAmount.value;
+
+  invariant(
+    typeof value === "number",
+    "Amount value must be a number",
+    {
+      value,
+    },
+    path,
+  );
+
+  invariant(
+    Number.isFinite(value),
+    "Amount value must be a finite number",
+    { value },
+    path,
+  );
 
   if (astAmount?.type === "AmountPercent") {
-    //  First handle already-normalized shape (idempotency)
-    if ("numerator" in astAmount && "denominator" in astAmount) {
+    if (value >= 0 && value <= 1) {
       return {
         type: "AmountPercent",
-        numerator: astAmount.numerator as Numeric,
-        denominator: astAmount.denominator as Numeric,
+        value: String(value * 100) as Numeric,
       };
     }
-
-    // Otherwise expect a numeric `value`
-    const v = astAmount.value;
-
-    invariant(
-      typeof v === "number" && Number.isFinite(v),
-      "AmountPercent.value must be a finite number",
-      { value: v },
-      path,
-    );
-    if (v >= 0 && v <= 1) {
+    if (value > 1 && value <= 100) {
       return {
         type: "AmountPercent",
-        numerator: String(v * 100) as Numeric,
-        denominator: "100" as Numeric,
-      };
-    }
-    if (v > 1 && v <= 100) {
-      return {
-        type: "AmountPercent",
-        numerator: String(v) as Numeric,
-        denominator: "100" as Numeric,
+        value: String(value) as Numeric,
       };
     }
     return unexpectedAst(
       "AmountPercent.value must be either a fraction [0,1] or a percentage (1..100].",
-      { value: v },
+      { value },
       path,
     );
+  }
+
+  if (astAmount?.type === "AmountAbsolute") {
+    return {
+      type: "AmountAbsolute",
+      value: String(value) as Numeric,
+    };
   }
 
   return unexpectedAst("Unknown Amount variant", { astAmount }, path);
