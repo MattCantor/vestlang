@@ -267,10 +267,10 @@ function peg$parse(input, options) {
     return mkConstrained(base, q ?? null);
   }
   function peg$f17(s, t) {
-    return { type: "Before", i: t, strict: !!s };
+    return { type: "Before", anchor: t, strict: !!s };
   }
   function peg$f18(s, t) {
-    return { type: "After", i: t, strict: !!s };
+    return { type: "After", anchor: t, strict: !!s };
   }
   function peg$f19(head, tail) {
     return { anyof: collect(head, tail) };

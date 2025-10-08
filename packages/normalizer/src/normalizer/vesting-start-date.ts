@@ -19,7 +19,7 @@ import {
   isTwoOrMore,
 } from "../types/raw-ast-guards.js";
 import { invariant, unexpectedAst } from "../errors.js";
-
+import { normalizeAnchorConstraints } from "./constraints.js";
 /* ------------------------
  * Types
  * ------------------------ */
@@ -92,7 +92,7 @@ function normalizeFromTerm(from: From, path: string[]): VestingStart {
     );
     return {
       type: "EarlierOf",
-      items: items as TwoOrMore<VestingStartExpr>,
+      items: items as TwoOrMore<VestingStart>,
     } satisfies EarlierOfVestingStart;
   }
 
@@ -102,13 +102,13 @@ function normalizeFromTerm(from: From, path: string[]): VestingStart {
     );
     invariant(
       isTwoOrMore(items),
-      "LaterOf fROM requires >= 2 items",
+      "LaterOf FROM requires >= 2 items",
       { items },
       path,
     );
     return {
       type: "LaterOf",
-      items: items as TwoOrMore<VestingStartExpr>,
+      items: items as TwoOrMore<VestingStart>,
     } satisfies LaterOfVestingStart;
   }
   return unexpectedAst("Unknown FromTerm variant", { from }, path);
@@ -127,6 +127,8 @@ export function makeVestingStartBare(a: Anchor): VestingStart {
 export function makeVestingStartConstrained(
   a: ConstrainedAnchor,
 ): VestingStart {
+  // sort/dedupe/singleton-collapse inside AnyOf
+  a = normalizeAnchorConstraints(a) as ConstrainedAnchor;
   if (!(isDate(a.base) || isEvent(a.base)))
     return unexpectedAst("Anchor must be Date or Event", { a });
 

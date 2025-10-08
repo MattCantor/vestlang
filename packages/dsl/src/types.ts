@@ -93,6 +93,7 @@ export type BaseConstraint =
   | { type: "Before"; anchor: BareAnchor; strict: boolean };
 
 export interface AnyConstraint {
+  type: "AnyOf";
   anyOf: TwoOrMore<BaseConstraint>;
 }
 
@@ -102,6 +103,7 @@ export interface ConstrainedAnchor {
   type: "Constrained";
   base: BareAnchor;
   constraints: Constraint[];
+  status?: "SAT" | "UNSAT" | "UNKNOWN";
 }
 
 export type Anchor = BareAnchor | ConstrainedAnchor;

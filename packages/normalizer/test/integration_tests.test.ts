@@ -119,7 +119,7 @@ describe("Integration: normalize DSL statements end-to-end", () => {
           "VEST FROM DATE 2025-01-01 BEFORE EVENT cic OVER 12 months EVERY 1 month",
         ),
       );
-
+      console.log(st);
       if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
       if (st.expr.vesting_start.type !== "Constrained")
         throw new Error("unexpected unconstrained vesting start");
@@ -271,17 +271,17 @@ describe("Integration: normalize DSL statements end-to-end", () => {
   });
 
   describe("Schedule combinators", () => {
-    it(`VEST EARLIER OF ( FROM DATE 2025-01-01 OVER 12 months EVERY 1 month, SCHEDULE FROM DATE 2025-06-01 )`, () => {
+    it(`VEST EARLIER OF ( FROM DATE 2025-01-01 OVER 12 months EVERY 1 month, FROM DATE 2025-06-01 )`, () => {
       const st = normalizeStatement(
         parseOne(`
         VEST EARLIER OF ( FROM DATE 2025-01-01 OVER 12 months EVERY 1 month, FROM DATE 2025-06-01)
       `),
       );
-      expect(st.expr.type).toBe("EarlierOfSchedules");
+      expect(st.expr.type).toBe("EarlierOf");
       expect((st.expr as any).items.length).toBe(2);
     });
 
-    it(`VEST LATER OF ( FROM DATE 2025-01-01, SCHEDULE FROM DATE 2025-06-01 OVER 6 months EVERY 1 month )`, () => {
+    it(`VEST LATER OF ( FROM DATE 2025-01-01, FROM DATE 2025-06-01 OVER 6 months EVERY 1 month )`, () => {
       const st = normalizeStatement(
         parseOne(`
         VEST LATER OF (
@@ -290,7 +290,7 @@ describe("Integration: normalize DSL statements end-to-end", () => {
         )
       `),
       );
-      expect(st.expr.type).toBe("LaterOfSchedules");
+      expect(st.expr.type).toBe("LaterOf");
       expect((st.expr as any).items.length).toBe(2);
     });
 

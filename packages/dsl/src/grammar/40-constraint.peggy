@@ -6,10 +6,10 @@ ConstrainedAnchor
 /* A single atomic constraint */
 BaseConstraint
   = s:Strict? _ "BEFORE"i _ t:(DateAnchor / EventAnchor) {
-      return { type: "Before", i: t, strict: !!s };
+      return { type: "Before", anchor: t, strict: !!s };
     }
   / s:Strict? _ "AFTER"i _ t:(DateAnchor / EventAnchor) {
-      return { type: "After", i: t, strict: !!s };
+      return { type: "After", anchor: t, strict: !!s };
     }
 
 /* Parenthesized OR of BaseConstraint(s). Requires 2+ items. */
