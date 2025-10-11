@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/objects/vestlang/VestlangExpression.schema.json",
+  "title": "Object - Vestlang Expression",
+  "description": "Describes the conditions / triggers to be satsified for vesting to occur",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/objects/Object.schema.json"
+    }
+  ],
+  "properties": {
+    "object_type": {
+      "const": "VESTLANG EXPRESSION"
+    },
+    "type": {
+      "description": "Describes whether this vestlang expression is a Schedule or an Earlier Of or Later Of combinator",
+      "oneOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/VestlangExpressionSchedule.schema.json"
+        },
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/VestlangExpressionEarlierOf.schema.json"
+        },
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/VestlangExpressionLaterOf.schema.json"
+        }
+      ]
+    },
+    "vesting_start": {
+      "description": "A vestlang vesting_start object",
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/objects/vestlang/VestingStart.schema.json"
+    }
+    "id": {},
+    "comments": {}
+  },
+  "additionalProperties": false,
+  "required": [],
+  "$comment": "Copyright © 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/objects/vestlang/VestlangExpression.schema.json"
+}

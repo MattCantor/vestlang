@@ -6,16 +6,16 @@ ConstrainedAnchor
 /* A single atomic constraint */
 BaseConstraint
   = s:Strict? _ "BEFORE"i _ t:(DateAnchor / EventAnchor) {
-      return { type: "Before", anchor: t, strict: !!s };
+      return { type: "BEFORE", base: t, strict: !!s };
     }
   / s:Strict? _ "AFTER"i _ t:(DateAnchor / EventAnchor) {
-      return { type: "After", anchor: t, strict: !!s };
+      return { type: "AFTER", base: t, strict: !!s };
     }
 
 /* Parenthesized OR of BaseConstraint(s). Requires 2+ items. */
 OrGroup
   = "(" _ head:BaseConstraint tail:(OrSep BaseConstraint)+ _ ")" {
-      return { anyof: collect(head, tail) };
+      return { items: collect(head, tail) };
     }
 
 /* One entry in the AND-list: either atomic or an OR-group */

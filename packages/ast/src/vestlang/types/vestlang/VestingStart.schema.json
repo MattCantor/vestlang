@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/VestingStart.schema.json",
+  "title": "Type - Vesting Start",
+  "description": "A vesting start node which may be bare or constrained",
+  "type": "object",
+  "anyOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/VestingNodeConstrained.schema.json"
+    },
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/VestingNodeBare.schema.json"
+    }
+  ],
+  "properties": {
+    "id": {},
+    "description": {},
+    "type": {},
+    "base": {},
+    "constraints": {}
+  },
+  "additionalProperties": false,
+  "required": ["id"],
+  "$comment": "Copyright \u00a9 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/types/vestlang/VestingStart.schema.json"
+}

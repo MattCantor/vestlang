@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/Periodicity.schema.json",
+  "title": "Primitive - Periodicity",
+  "description": "Describes a periodic vesting schedule",
+  "type": "object",
+  "anyOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vesting/VestingPeriodInMonths.schema.json"
+    },
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vesting/VestingPeriodInDays.schema.json"
+    }
+  ],
+  "properties": {
+    "cliff": {
+      "anyOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/CliffExpression.schema.json"
+        },
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/CliffEarlierOffExpression.schema.json"
+        },
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/CliffLaterOfExpression.schema.json"
+        }
+      ]
+    }
+  },
+  "required": ["cliff"],
+  "additionalProperties": false,
+  "$comment": "Copyright \u00a9 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/primitives/types/vestlang/Periodicity.schema.json"
+}

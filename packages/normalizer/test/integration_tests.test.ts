@@ -1,371 +1,298 @@
 import { describe, it, expect } from "vitest";
-import { normalizeStatement } from "../src/normalizer";
-import { NormalizerError } from "../src/errors";
-import { expectMonthsPeriodicity, parseOne } from "./helpers";
-import { Numeric } from "../src/types/oct-types";
+import {
+  ConstraintEnum,
+  parse,
+  PeriodTypeEnum,
+  VBaseEnum,
+  VNodeEnum,
+} from "../src/index";
 
-describe("Integration: normalize DSL statements end-to-end", () => {
-  describe("Amounts + simple schedules", () => {
-    it("123 VEST OVER 12 months EVERY 1 month", () => {
-      const st = normalizeStatement(
-        parseOne("123 VEST OVER 12 months EVERY 1 month"),
-      );
-      expect(st.amount).toEqual({
-        type: "AmountAbsolute",
-        value: "123" as Numeric,
-      });
-      expectMonthsPeriodicity(st.expr, 12, 1, 12);
-      // default FROM
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect(st.expr.vesting_start).toMatchObject({
-        id: "",
-        type: "Bare",
-        base: { type: "Event", value: "grantDate" },
-      });
+import {
+  ASTStatement,
+  ASTAmountAbsolute,
+  ASTAmountPercent,
+  ASTSchedule,
+  Duration,
+  VestingBaseDate,
+  VestingBaseEvent,
+  VestingNodeConstrained,
+  FromEarlierOf,
+  FromLaterOf,
+  EarlierOfASTExpr,
+  LaterOfASTExpr,
+  TemporalConstraint,
+  OCTDate,
+} from "../src/types";
+
+// Helpers
+const makeDuration = (value: number, unit: PeriodTypeEnum): Duration => ({
+  type: "DURATION",
+  value,
+  unit,
+});
+const makeDate = (value: string): VestingBaseDate => ({
+  type: VBaseEnum.DATE,
+  value: value as OCTDate,
+});
+const makeEvent = (value: string): VestingBaseEvent => ({
+  type: VBaseEnum.EVENT,
+  value,
+});
+
+interface constrainedProps {
+  base: VestingBaseDate | VestingBaseEvent;
+  target: VestingBaseDate | VestingBaseEvent;
+  strict: boolean;
+}
+
+const constrainedBefore = (
+  props: constrainedProps,
+): VestingNodeConstrained => ({
+  type: VNodeEnum.CONSTRAINED,
+  base: props.base,
+  constraints: [
+    { type: ConstraintEnum.BEFORE, base: props.target, strict: props.strict },
+  ] satisfies TemporalConstraint[],
+});
+
+const constrainedAfter = (props: constrainedProps): VestingNodeConstrained => ({
+  type: VNodeEnum.CONSTRAINED,
+  base: props.base,
+  constraints: [
+    { type: ConstraintEnum.AFTER, base: props.target, strict: props.strict },
+  ] satisfies TemporalConstraint[],
+});
+
+describe("...", () => {
+  describe("Amount parsing", () => {
+    it("parses whole-number Amount as AmountAbsolute", () => {
+      const ast = parse(
+        "123 VEST OVER 12 months EVERY 1 month",
+      ) as ASTStatement;
+      const amt = ast.amount as ASTAmountAbsolute;
+      expect(amt).toEqual({ type: "AmountAbsolute", value: 123 });
     });
 
-    it("0.25 VEST OVER 12 months EVERY 1 month", () => {
-      const st = normalizeStatement(
-        parseOne("0.25 VEST OVER 12 months EVERY 1 month"),
-      );
-      expect(st.amount).toEqual({
-        type: "AmountPercent",
-        value: "25" as Numeric,
-      });
-      expectMonthsPeriodicity(st.expr, 12, 1, 12);
+    it("parses decimal Amount in [0,1] as AmountPercent", () => {
+      const ast = parse(
+        "0.25 VEST OVER 12 months EVERY 1 month",
+      ) as ASTStatement;
+      const amt = ast.amount as ASTAmountPercent;
+      expect(amt).toEqual({ type: "AmountPercent", value: 0.25 });
     });
 
-    it(".5 VEST OVER 12 months EVERY 1 month", () => {
-      const st = normalizeStatement(
-        parseOne(".5 VEST OVER 12 months EVERY 1 month"),
-      );
-      expect(st.amount).toEqual({
-        type: "AmountPercent",
-        value: "50" as Numeric,
-      });
-      expectMonthsPeriodicity(st.expr, 12, 1, 12);
+    it("parses leading-dot decimal like .5", () => {
+      const ast = parse(".5 VEST OVER 12 months EVERY 1 month") as ASTStatement;
+      expect(ast.amount).toEqual({ type: "AmountPercent", value: 0.5 });
     });
 
-    it("VEST OVER 12 months EVERY 1 month (implicit 100)", () => {
-      const st = normalizeStatement(
-        parseOne("VEST OVER 12 months EVERY 1 month"),
-      );
-      // parser typically emits { type: AmountAbsolute, value: 100 } or similar default.
-      // We only assert the normalized shape is AmountAbsolute.
-      expect(st.amount.type).toBe("AmountPercent");
-      expectMonthsPeriodicity(st.expr, 12, 1, 12);
-    });
-  });
-
-  describe("FROM variants (anchors & combinators)", () => {
-    it("VEST FROM DATE 2027-01-01", () => {
-      const st = normalizeStatement(
-        parseOne("VEST FROM DATE 2027-01-01 OVER 12 months EVERY 1 month"),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect(st.expr.vesting_start).toMatchObject({
-        id: "",
-        type: "Bare",
-        base: { type: "Date", value: "2027-01-01" },
-      });
+    it("defaults to 100% when Amount omitted", () => {
+      const ast = parse("VEST OVER 12 months EVERY 1 month") as ASTStatement;
+      expect(ast.amount).toEqual({ type: "AmountPercent", value: 1 });
     });
 
-    it("VEST FROM EVENT ipo", () => {
-      const st = normalizeStatement(
-        parseOne("VEST FROM EVENT ipo OVER 12 months EVERY 1 month"),
+    it("rejects decimal > 1 (e.g., 1.5) with custom error", () => {
+      expect(() => parse("1.5 VEST OVER 12 months EVERY 1 month")).toThrow(
+        /Decimal amount must be between 0 and 1/i,
       );
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect(st.expr.vesting_start).toMatchObject({
-        type: "Bare",
-        base: { type: "Event", value: "ipo" },
-      });
-    });
-
-    it("VEST FROM EARLIER OF (DATE 2026-06-01, EVENT cic)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM EARLIER OF (DATE 2026-06-01, EVENT cic) OVER 12 months EVERY 1 month",
-        ),
-      );
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect("items" in st.expr.vesting_start).toBe(true);
-      if ("items" in st.expr.vesting_start) {
-        expect(st.expr.vesting_start.type).toBe("EarlierOf");
-        expect(st.expr.vesting_start.items).toHaveLength(2);
-      }
-    });
-
-    it("VEST FROM LATER OF (EVENT ipo, DATE 2026-01-01)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM LATER OF (EVENT ipo, DATE 2026-01-01) OVER 12 months EVERY 1 month",
-        ),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect("items" in st.expr.vesting_start).toBe(true);
-      if ("items" in st.expr.vesting_start) {
-        expect(st.expr.vesting_start.type).toBe("LaterOf");
-        expect(st.expr.vesting_start.items).toHaveLength(2);
-      }
     });
   });
 
-  describe("Qualified FROM (temporal predicates → Window)", () => {
-    it("FROM DATE 2025-01-01 BEFORE EVENT cic", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM DATE 2025-01-01 BEFORE EVENT cic OVER 12 months EVERY 1 month",
-        ),
-      );
-      console.log(st);
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      if (st.expr.vesting_start.type !== "Constrained")
-        throw new Error("unexpected unconstrained vesting start");
-      expect(st.expr.vesting_start.type).toBe("Constrained");
-      expect(st.expr.vesting_start.base).toEqual({
-        type: "Date",
-        value: "2025-01-01",
-      });
+  describe("Schedule basics", () => {
+    it("omitting OVER/EVERY injects Zero for both", () => {
+      const ast = parse("VEST FROM DATE 2026-01-01") as ASTStatement;
+      const s = ast.expr as ASTSchedule;
+      expect(s.over).toEqual(makeDuration(0, PeriodTypeEnum.DAYS));
+      expect(s.every).toEqual(makeDuration(0, PeriodTypeEnum.DAYS));
     });
 
-    it("STRICTLY BEFORE toggles inclusivity", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM DATE 2025-01-01 STRICTLY BEFORE EVENT cic OVER 12 months EVERY 1 month",
-        ),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      if (st.expr.vesting_start.type !== "Constrained")
-        throw new Error("expected Qualified");
+    it("default FROM may be null (to be filled by normalizer), and cliff defaults to Zero", () => {
+      const ast = parse("VEST") as ASTStatement;
+      const s = ast.expr as ASTSchedule;
+      expect(s.from ?? null).toBeNull();
+      // expect(s.over).toEqual({ type: "Duration", value: 0, unit: PeriodEnum.DAYS});
+      // expect(s.every).toEqual({ type: "Duration", value: 0, unit: PeriodEnum.DAYS});
+      // expect(s.cliff).toEqual({ type: "Duration", value: 0, unit: PeriodEnum.DAYS});
     });
 
-    it("AFTER DATE 2026-01-01 on an EVENT base", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM EVENT ipo AFTER DATE 2026-01-01 OVER 12 months EVERY 1 month",
-        ),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      const vs = st.expr.vesting_start;
-      if (vs.type !== "Constrained") throw new Error("expected Qualified");
-      expect(vs.base).toEqual({ type: "Event", value: "ipo" });
+    it("explicit 0-day durations stay as Duration, not Zero", () => {
+      const ast = parse("VEST OVER 0 days EVERY 0 days") as ASTStatement;
+      const s = ast.expr as ASTSchedule;
+      expect(s.over).toEqual(makeDuration(0, PeriodTypeEnum.DAYS));
+      expect(s.every).toEqual(makeDuration(0, PeriodTypeEnum.DAYS));
     });
 
-    it("BETWEEN / STRICTLY BETWEEN", () => {
-      const st1 = normalizeStatement(
-        parseOne(
-          "VEST FROM EVENT board AFTER DATE 2025-01-01 AND BEFORE DATE 2025-12-31 OVER 12 months EVERY 1 month",
-        ),
+    it("errors if only OVER is present", () => {
+      expect(() => parse("VEST OVER 12 months")).toThrow(
+        /EVERY must be provided when OVER is present/i,
       );
+    });
 
-      if (st1.expr.type !== "Schedule")
-        throw new Error("unexpected combinator");
-      const vs1 = st1.expr.vesting_start;
-      if (vs1.type !== "Constrained") throw new Error("expected Constrained");
-
-      const st2 = normalizeStatement(
-        parseOne(
-          "VEST FROM EVENT board STRICTLY AFTER DATE 2025-01-01 AND BEFORE DATE 2025-12-31 OVER 12 months EVERY 1 month",
-        ),
+    it("errors if only EVERY is present", () => {
+      expect(() => parse("VEST EVERY 1 month")).toThrow(
+        /OVER must be provided when EVERY is present/i,
       );
+    });
 
-      if (st2.expr.type !== "Schedule")
-        throw new Error("unexpected combinator");
-      const vs2 = st2.expr.vesting_start;
-      if (vs2.type !== "Constrained") throw new Error("expected Qualified");
+    it("normalizes weeks→days and years→months", () => {
+      const ast = parse("VEST OVER 2 years EVERY 1 week") as ASTStatement;
+      const s = ast.expr as ASTSchedule;
+      expect(s.over).toEqual(makeDuration(24, PeriodTypeEnum.MONTHS)); // 2y → 24m
+      expect(s.every).toEqual(makeDuration(7, PeriodTypeEnum.DAYS));
     });
   });
 
-  describe("CLIFF forms", () => {
-    it("CLIFF 0 months (no-op for months periodicity)", () => {
-      const st = normalizeStatement(
-        parseOne("VEST OVER 12 months EVERY 1 month CLIFF 0 months"),
-      );
-      expectMonthsPeriodicity(st.expr, 12, 1, 12);
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect((st.expr.periodicity as any).cliff ?? 0).toStrictEqual({
-        type: "Duration",
-        value: 0,
-        unit: "MONTHS",
-      });
+  describe("FROM term (Date/Event, Earlier/Later)", () => {
+    it("supports FROM DATE and FROM EVENT", () => {
+      const a = parse("VEST FROM DATE 2027-01-01") as ASTStatement;
+      const b = parse("VEST FROM EVENT ipo") as ASTStatement;
+      expect((a.expr as ASTSchedule).from).toEqual(makeDate("2027-01-01"));
+      expect((b.expr as ASTSchedule).from).toEqual(makeEvent("ipo"));
     });
 
-    it("CLIFF 6 months", () => {
-      const st = normalizeStatement(
-        parseOne("VEST OVER 12 months EVERY 1 month CLIFF 6 months"),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect((st.expr.periodicity as any).cliff?.value).toBe(6);
+    it("supports FROM EARLIER OF ( ... )", () => {
+      const ast = parse(
+        "VEST FROM EARLIER OF (DATE 2026-06-01, EVENT cic)",
+      ) as ASTStatement;
+      const from = (ast.expr as ASTSchedule).from as FromEarlierOf;
+      expect(from.type).toBe("EARLIER_OF");
+      expect(from.items).toEqual([makeDate("2026-06-01"), makeEvent("cic")]);
     });
 
-    // TODO: update normalizer to check that the cliff date falls on an installment date
-    it("CLIFF DATE 2026-03-01 (LaterOf with FROM)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM DATE 2026-01-01 OVER 30 days EVERY 10 days CLIFF DATE 2026-03-01",
-        ),
-      );
-
-      // if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      // expect("items" in st.expr.vesting_start).toBe(true);
-      // if ("items" in st.expr.vesting_start) {
-      //   expect(st.expr.vesting_start.type).toBe("LaterOf");
-      //   expect(st.expr.vesting_start.items).toHaveLength(2);
-      // }
+    it("supports FROM LATER OF ( ... )", () => {
+      const ast = parse(
+        "VEST FROM LATER OF (EVENT ipo, DATE 2026-01-01)",
+      ) as ASTStatement;
+      const from = (ast.expr as ASTSchedule).from as FromLaterOf;
+      expect(from.type).toBe("LATER_OF");
+      expect(from.items).toEqual([makeEvent("ipo"), makeDate("2026-01-01")]);
     });
 
-    it("CLIFF EVENT hire BEFORE EVENT cic (Qualified cliff)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST FROM EVENT ipo OVER 12 months EVERY 1 month CLIFF EVENT hire BEFORE EVENT cic",
-        ),
+    it("supports QualifiedAtom with BEFORE / AFTER / BETWEEN", () => {
+      const event = makeEvent("milestone");
+      const afterDate = makeDate("2025-01-01");
+      const before = parse(
+        "VEST FROM DATE 2025-01-01 BEFORE EVENT milestone",
+      ) as ASTStatement;
+      expect((before.expr as ASTSchedule).from).toEqual(
+        constrainedBefore({
+          base: afterDate,
+          target: event,
+          strict: false,
+        }),
       );
 
-      // if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      // expect("items" in st.expr.vesting_start).toBe(true);
-      // if ("items" in st.expr.vesting_start) {
-      //   const [, right] = st.expr.vesting_start.items;
-      //   expect("items" in right).toBe(false); // right is a Qualified leaf
-      //   expect(right.type).toBe("Qualified");
-      //   expect((right as any).window.end?.type).toBe("End");
-      // }
-    });
-
-    it("CLIFF EARLIER OF (...)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST OVER 12 months EVERY 1 month CLIFF EARLIER OF (EVENT ipo, DATE 2026-01-01)",
-        ),
+      const strictlyBefore = parse(
+        "VEST FROM DATE 2025-01-01 STRICTLY BEFORE EVENT milestone",
+      ) as ASTStatement;
+      expect((strictlyBefore.expr as ASTSchedule).from).toEqual(
+        constrainedBefore({
+          base: afterDate,
+          target: event,
+          strict: true,
+        }),
       );
 
-      // if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      // expect("items" in st.expr.vesting_start).toBe(true);
-      // if ("items" in st.expr.vesting_start) {
-      //   const [, right] = st.expr.vesting_start.items;
-      //   expect("items" in right).toBe(true);
-      //   if ("items" in right) expect(right.type).toBe("EarlierOf");
-      // }
-    });
-
-    it("CLIFF LATER OF (...)", () => {
-      const st = normalizeStatement(
-        parseOne(
-          "VEST OVER 12 months EVERY 1 month CLIFF LATER OF (EVENT ipo, DATE 2026-01-01)",
-        ),
+      const after = parse(
+        "VEST FROM EVENT milestone AFTER DATE 2025-01-01",
+      ) as ASTStatement;
+      expect((after.expr as ASTSchedule).from).toEqual(
+        constrainedAfter({
+          base: event,
+          target: afterDate,
+          strict: false,
+        }),
       );
-
-      // if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      // expect("items" in st.expr.vesting_start).toBe(true);
-      // if ("items" in st.expr.vesting_start) {
-      //   const [, right] = st.expr.vesting_start.items;
-      //   expect("items" in right).toBe(true);
-      //   if ("items" in right) expect(right.type).toBe("LaterOf");
-      // }
     });
   });
 
-  describe("Schedule combinators", () => {
-    it(`VEST EARLIER OF ( FROM DATE 2025-01-01 OVER 12 months EVERY 1 month, FROM DATE 2025-06-01 )`, () => {
-      const st = normalizeStatement(
-        parseOne(`
-        VEST EARLIER OF ( FROM DATE 2025-01-01 OVER 12 months EVERY 1 month, FROM DATE 2025-06-01)
-      `),
+  describe("CLIFF term", () => {
+    it("CLIFF <Duration>", () => {
+      const ast = parse("VEST CLIFF 6 months") as ASTStatement;
+      expect((ast.expr as ASTSchedule).cliff).toEqual(
+        makeDuration(6, PeriodTypeEnum.MONTHS),
       );
-      expect(st.expr.type).toBe("EarlierOf");
-      expect((st.expr as any).items.length).toBe(2);
     });
 
-    it(`VEST LATER OF ( FROM DATE 2025-01-01, FROM DATE 2025-06-01 OVER 6 months EVERY 1 month )`, () => {
-      const st = normalizeStatement(
-        parseOne(`
+    it("CLIFF as Anchor/Qualified/EarlierOf/LaterOf", () => {
+      const a = parse("VEST CLIFF DATE 2026-03-01") as ASTStatement;
+      expect((a.expr as ASTSchedule).cliff).toEqual(makeDate("2026-03-01"));
+
+      const b = parse("VEST CLIFF EVENT hire BEFORE EVENT cic") as ASTStatement;
+      expect((b.expr as ASTSchedule).cliff).toEqual(
+        constrainedBefore({
+          base: makeEvent("hire"),
+          target: makeEvent("cic"),
+          strict: false,
+        }),
+      );
+
+      const c = parse(
+        "VEST CLIFF EARLIER OF (EVENT ipo, DATE 2026-01-01)",
+      ) as ASTStatement;
+      expect((c.expr as ASTSchedule).cliff).toMatchObject({
+        type: "EARLIER_OF",
+      });
+
+      const dAst = parse(
+        "VEST CLIFF LATER OF (EVENT ipo, DATE 2026-01-01)",
+      ) as ASTStatement;
+      expect((dAst.expr as ASTSchedule).cliff).toMatchObject({
+        type: "LATER_OF",
+      });
+    });
+  });
+
+  describe("Top-level Expr composition", () => {
+    it("parses EARLIER OF (Schedule, ASTSchedule, ...)", () => {
+      const ast = parse(`
+        VEST EARLIER OF (
+          FROM DATE 2025-01-01 OVER 12 months EVERY 1 month,
+          FROM DATE 2025-06-01
+        )
+      `) as ASTStatement;
+
+      const e = ast.expr as EarlierOfASTExpr;
+      expect(e.type).toBe("EARLIER_OF");
+      expect(e.items).toHaveLength(2);
+
+      const s0 = e.items[0] as ASTSchedule;
+      const s1 = e.items[1] as ASTSchedule;
+
+      expect(s0.type).toBe("SINGLETON");
+      expect(s1.type).toBe("SINGLETON");
+    });
+
+    it("parses LATER OF (Schedule, ASTSchedule, ...)", () => {
+      const ast = parse(`
         VEST LATER OF (
           FROM DATE 2025-01-01,
           FROM DATE 2025-06-01 OVER 6 months EVERY 1 month
         )
-      `),
-      );
-      expect(st.expr.type).toBe("LaterOf");
-      expect((st.expr as any).items.length).toBe(2);
+      `) as ASTStatement;
+
+      const e = ast.expr as LaterOfASTExpr;
+      expect(e.type).toBe("LATER_OF");
+      expect(e.items).toHaveLength(2);
     });
 
-    it("VEST EARLIER OF ( VEST, VEST, VEST )", () => {
-      const st = normalizeStatement(
-        parseOne("VEST EARLIER OF ( FROM EVENT milestone, FROM EVENT ipo )"),
-      );
-      expect(st.expr.type).toBe("EarlierOf");
-      expect((st.expr as any).items.length).toBeGreaterThanOrEqual(2);
-    });
+    // it("handles ExprList commas/whitespace robustly", () => {
+    //   const ast = parse(`
+    //     VEST EARLIER OF ( VEST FROM EVENT grantDate, VEST FROM EVENT grantDate ,  VEST FROM EVENT grantDate )
+    //   `) as ASTStatement;
+    //   const e = ast.expr as EarlierOfASTExpr;
+    //   expect(e.items).toHaveLength(3);
+    // });
   });
 
-  describe("Odds & ends", () => {
-    it("VEST FROM EVENT cic_phase2", () => {
-      const st = normalizeStatement(
-        parseOne("VEST FROM EVENT cic_phase2 OVER 12 months EVERY 1 month"),
-      );
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      if ("items" in st.expr.vesting_start)
-        throw new Error("unexpected combinator");
-      expect(st.expr.vesting_start).toMatchObject({
-        id: "",
-        type: "Bare",
-        base: { type: "Event", value: "cic_phase2" },
-      });
+  describe("Lexical constraints", () => {
+    it("accepts event identifiers with underscores and digits after first char", () => {
+      const ast = parse("VEST FROM EVENT cic_phase2") as ASTStatement;
+      expect((ast.expr as ASTSchedule).from).toEqual(makeEvent("cic_phase2"));
     });
 
-    it("Case-insensitivity works", () => {
-      const a = normalizeStatement(
-        parseOne(
-          "Vest from event ipo before date 2025-01-01 over 12 months every 1 month",
-        ),
-      );
-      const b = normalizeStatement(
-        parseOne(
-          "vest from event ipo after date 2025-01-01 over 12 months every 1 month",
-        ),
-      );
-      // TODO: Decide whether we want this following to parse. Currently it does not
-      // const c = normalizeStatement(
-      //   parseOne(
-      //     "vest from event ipo before earlier of (event a, event b) over 12 months every 1 month",
-      //   ),
-      // );
-      //
-      expect(a.expr.type).toBe("Schedule");
-      expect(b.expr.type).toBe("Schedule");
-      // expect(c.expr.type).toBe("Schedule");
-
-      // Quick spot check on windows:
+    it("rejects invalid date formats", () => {
+      expect(() => parse("VEST FROM DATE 2025-13-40")).toThrow();
     });
-  });
-
-  describe("Edge/unit support (current behavior)", () => {
-    // it("VEST FROM DATE 2026-01-01", () => {
-    // TODO: this needs to throw an error as a result of needing EVERY if OVER is provided.  there is a parsing error but no normalization error.
-    // expect(() =>
-    //   normalizeStatement(parseOne("VEST FROM DATE OVER 4 years 2026-01-01")),
-    // ).toThrowError(NormalizerError);
-    // });
-
-    it("VEST OVER 0 days EVERY 0 days (allowed; count coerces to 1)", () => {
-      const st = normalizeStatement(parseOne("VEST OVER 0 days EVERY 0 days"));
-
-      if (st.expr.type !== "Schedule") throw new Error("unexpected combinator");
-      expect(st.expr.periodicity.periodType).toBe("DAYS");
-      expect(st.expr.periodicity.span).toBe(0);
-      expect(st.expr.periodicity.step).toBe(0);
-      expect(st.expr.periodicity.count).toBe(1);
-    });
-    // TODO: This throws a parse error but not a normalization error
-    //   expect(() =>
-    //     normalizeStatement(parseOne("VEST OVER 2 years EVERY 1 week")),
-    //   ).toThrowError(NormalizerError);
-    // });
   });
 });

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/TemporalConstraintAfter.schema.json",
+  "title": "Type - Temporal Constraint - After",
+  "description": "A constraint requiring the base to follow a target",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/TemporalConstraint.schema.json"
+    }
+  ],
+  "properties": {
+    "type": {
+      "const": "AFTER"
+    },
+    "base": {},
+    "strict": {}
+  },
+  "additionalProperties": false,
+  "required": ["type"],
+  "$comment": "Copyright \u00a9 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/types/vestlang/TemporalConstraintAfter.schema.json"
+}

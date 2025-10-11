@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/TemporalConstraintOrGroup.schema.json",
+  "title": "Type - Temporal Constraint - Or Group",
+  "description": "An array of constraints in an OR relationship",
+  "type": "object",
+  "properties": {
+    "type": {
+      "const": "OR"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/TemporalConstraintAfter.schema.json"
+          },
+          {
+            "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/TemporalConstraintBefore.schema.json"
+          }
+        ]
+      },
+      "minItems": 2
+    }
+  },
+  "additionalProperties": false,
+  "required": ["type", "items"],
+  "$comment": "Copyright \u00a9 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/types/vestlang/TemporalConstraintOrGroup.schema.json"
+}

@@ -1,16 +1,33 @@
+import {
+  ConstraintEnum,
+  ExprEnum,
+  PeriodTypeEnum,
+  VBaseEnum,
+  VNodeEnum,
+} from "./enums";
+
 // ==== Helpers ====
 export type TwoOrMore<T> = [T, T, ...T[]];
 
-export type SelectorTag = "EarlierOf" | "LaterOf";
+export type SelectorTag = ExprEnum.EARLIER_OF | ExprEnum.LATER_OF;
 
 export interface Selector<T, K extends SelectorTag = SelectorTag> {
   type: K;
   items: TwoOrMore<T>;
 }
 
-export interface EarlierOf<T> extends Selector<T, "EarlierOf"> {}
+export interface EarlierOf<T> extends Selector<T, ExprEnum.EARLIER_OF> {}
 
-export interface LaterOf<T> extends Selector<T, "LaterOf"> {}
+export interface LaterOf<T> extends Selector<T, ExprEnum.LATER_OF> {}
+
+/* ------------------------
+ * OCT Types
+ * ------------------------ */
+
+// types/Date.schema.json
+// existing OCT schema
+declare const __isoDateBrand: unique symbol;
+export type OCTDate = string & { [__isoDateBrand]: never };
 
 /* ------------------------
  * Statement
@@ -44,69 +61,121 @@ export interface ASTAmountPercent extends BaseAmount {
 
 export type AstAmount = ASTAmountAbsolute | ASTAmountPercent;
 
-// ==== Expressions ====
+/* ------------------------
+ * Expressions
+ * ------------------------ */
 
-export type ASTExpr = ASTSchedule | ASTExprSelector;
+export interface ASTExpr {
+  type: ExprEnum;
+}
 
-export interface EarlierOfASTExpr extends EarlierOf<ASTExpr> {}
+export interface EarlierOfASTExpr extends ASTExpr {
+  type: ExprEnum.EARLIER_OF;
+  items: TwoOrMore<AnyASTExpr>;
+}
 
-export interface LaterOfASTExpr extends LaterOf<ASTExpr> {}
+export interface LaterOfASTExpr extends ASTExpr {
+  type: ExprEnum.LATER_OF;
+  items: TwoOrMore<AnyASTExpr>;
+}
 
-export type ASTExprSelector = EarlierOfASTExpr | LaterOfASTExpr;
+// export type ASTExprSelector = EarlierOfASTExpr | LaterOfASTExpr;
 
-export interface ASTSchedule {
-  type: "Schedule";
+export interface ASTSchedule extends ASTExpr {
+  type: ExprEnum.SINGLETON;
   from?: From | null;
   over: Duration;
   every: Duration;
   cliff?: Cliff;
 }
 
+export type AnyASTExpr = ASTSchedule | EarlierOfASTExpr | LaterOfASTExpr;
+
 // ==== Durations (normalized by grammar) ====
 
+// types/vestlang/CliffDuration.schema.json
 export interface Duration {
-  type: "Duration";
+  type: "DURATION";
   value: number;
-  unit: Unit; // grammar converts weeks->days, years->months
+  unit: PeriodTypeEnum; // grammar converts weeks->days, years->months
 }
 
-export type Unit = "DAYS" | "MONTHS";
+// ==== Vesting Base ====
 
-// ==== Anchors (atoms) ====
-
-export type BareAnchor = DateAnchor | EventAnchor;
-
-export interface DateAnchor {
-  type: "Date";
-  value: string; // YYYY-MM-DD
+// primitives/vestlang/VestingBase.schema.json
+export interface VestingBase {
+  type: VBaseEnum;
+  value: string;
 }
 
-export interface EventAnchor {
-  type: "Event";
-  value: string; // Ident
+// export type BareAnchor = VestingBaseDate | VestingBaseEvent;
+
+// types/vestlang/VestingBaseDate.schema.json
+export interface VestingBaseDate extends VestingBase {
+  type: VBaseEnum.DATE;
+  value: OCTDate;
+}
+
+// types/vestlang/VestingBaseEvent.schema.json
+export interface VestingBaseEvent extends VestingBase {
+  type: VBaseEnum.EVENT;
+  value: string;
+}
+
+// === Vesting Node ===
+
+// primitives/types/vestlang/VestingNode.schema.json
+export interface VestingNode {
+  type: VNodeEnum;
+  base: VestingBaseDate | VestingBaseEvent;
+}
+
+// types/vestlang/VestingNodeBare.schema.json
+export interface VestingNodeBare extends VestingNode {
+  type: VNodeEnum.BARE;
 }
 
 // ==== Constraints ====
 
-export type BaseConstraint =
-  | { type: "After"; anchor: BareAnchor; strict: boolean }
-  | { type: "Before"; anchor: BareAnchor; strict: boolean };
-
-export interface AnyConstraint {
-  type: "AnyOf";
-  anyOf: TwoOrMore<BaseConstraint>;
+// primitives/types/vestlang/TemporalConstraint.schema.json
+export interface TemporalConstraint {
+  type: ConstraintEnum;
+  base: VestingBaseDate | VestingBaseEvent;
+  strict: boolean;
 }
 
-export type Constraint = BaseConstraint | AnyConstraint;
-
-export interface ConstrainedAnchor {
-  type: "Constrained";
-  base: BareAnchor;
-  constraints: Constraint[];
-  status?: "SAT" | "UNSAT" | "UNKNOWN";
+// types/vestlang/TemporalConstraintAfter.schema.json
+export interface TemporalConstraintAfter extends TemporalConstraint {
+  type: ConstraintEnum.AFTER;
 }
 
-export type Anchor = BareAnchor | ConstrainedAnchor;
+// types/vestlang/TemporalConstraintBefore.schema.json
+export interface TemporalConstraintBefore extends TemporalConstraint {
+  type: ConstraintEnum.BEFORE;
+}
+
+// types/vestlang/TemporalConstraintOrGroup
+export interface TemporalConstraintOrGroup {
+  type: "OR";
+  items: TwoOrMore<TemporalConstraint>;
+}
+
+export type Constraint = TemporalConstraint | TemporalConstraintOrGroup;
+
+// types/vestlang/VestingNodeConstrained.schema.json
+export interface VestingNodeConstrained extends VestingNode {
+  type: VNodeEnum.CONSTRAINED;
+  constraints: (
+    | TemporalConstraintBefore
+    | TemporalConstraintAfter
+    | TemporalConstraintOrGroup
+  )[];
+}
+
+export type Anchor =
+  | VestingBaseDate
+  | VestingBaseEvent
+  | VestingNodeConstrained;
 
 // ==== From ====
 export type From = Anchor | FromOperator;

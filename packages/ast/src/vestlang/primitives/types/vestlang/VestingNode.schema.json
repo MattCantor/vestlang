@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema",
+  "$id": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/primitives/types/vestlang/VestingNode.schema.json",
+  "title": "Primitive - Vesting Node",
+  "description": "A bare anchor or one with temporal constraints",
+  "type": "object",
+  "properties": {
+    "type": {
+      "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/enums/vestlang/VestingNodeType.schema.json"
+    },
+    "base": {
+      "anyOf": [
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/VestingBaseDate.schema.json"
+        },
+        {
+          "$ref": "https://raw.githubusercontent.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/main/schema/types/vestlang/VestingBaseEvent.schema.json"
+        }
+      ]
+    }
+  },
+  "required": ["type", "base"],
+  "additionalProperties": false,
+  "$comment": "Copyright \u00a9 2024 Open Cap Table Coalition (https://opencaptablecoalition.com) / Original File: https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/tree/main/schema/primitives/types/vestlang/VestingNode.schema.json"
+}

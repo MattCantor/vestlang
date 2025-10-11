@@ -1,4 +1,4 @@
-import { Selector, SelectorTag, TwoOrMore } from "@vestlang/dsl";
+import { Selector, SelectorTag, TwoOrMore, ExprEnum } from "@vestlang/dsl";
 
 type KeyFn<T> = (item: T) => string;
 
@@ -9,7 +9,7 @@ function sameTag(a: SelectorTag, b: SelectorTag): boolean {
 function isSelectorLike<T = unknown>(x: any): x is Selector<T> {
   return (
     x &&
-    (x.type === "EarlierOf" || x.type === "LaterOf") &&
+    (x.type === ExprEnum.EARLIER_OF || x.type === ExprEnum.LATER_OF) &&
     Array.isArray(x.items)
   );
 }

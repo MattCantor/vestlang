@@ -13,10 +13,10 @@ From = "FROM"i _ a:FromTerm { return a; }
 FromTerm
   = a:ConstrainedAnchor { return a; }
   / "EARLIER"i _ "OF"i _ "(" _ xs:FromTermListTwoOrMore _ ")" {
-      return { type: "EarlierOf", items: xs };
+      return { type: "EARLIER_OF", items: xs };
     }
   / "LATER"i _ "OF"i _ "(" _ xs:FromTermListTwoOrMore _ ")" {
-      return { type: "LaterOf", items: xs };
+      return { type: "LATER_OF", items: xs };
     }
 
 FromTermListTwoOrMore
@@ -30,10 +30,10 @@ CliffTerm
   = d:Duration { return d; }
   / a:ConstrainedAnchor { return a; }
   / "EARLIER"i _ "OF"i _ "(" _ xs:CliffTermListTwoOrMore _ ")" {
-      return { type: "EarlierOf", items: xs };
+      return { type: "EARLIER_OF", items: xs };
     }
   / "LATER"i _ "OF"i _ "(" _ xs:CliffTermListTwoOrMore _ ")" {
-      return { type: "LaterOf", items: xs };
+      return { type: "LATER_OF", items: xs };
     }
 
 CliffTermListTwoOrMore
@@ -44,7 +44,7 @@ CliffTermListTwoOrMore
 ScheduleBlock
   = f:From? _ oe:OverEveryOpt _ c:Cliff? {
       const base = {
-        type: "Schedule",
+        type: "SINGLETON",
         from: f,
         over: oe.over,
         every: oe.every,

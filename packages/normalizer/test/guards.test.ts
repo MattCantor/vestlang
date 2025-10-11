@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import type {
-  Anchor,
   ConstrainedAnchor,
   From,
   Duration,
@@ -22,8 +21,8 @@ import {
 import { assertNever } from "../src/types/shared.js";
 
 // helpers
-const makeDate = (value: string): BareAnchor => ({ type: "Date", value });
-const makeEvent = (value: string): BareAnchor => ({ type: "Event", value });
+const makeDate = (value: string): BareAnchor => ({ type: "DATE", value });
+const makeEvent = (value: string): BareAnchor => ({ type: "EVENT", value });
 
 describe("guards: anchors", () => {
   it("isDate / isEvent / isAnchor", () => {
@@ -46,12 +45,12 @@ describe("guards: anchors", () => {
 describe("guards: temporal predicate nodes", () => {
   it("isAfterConstrainedAnchor / isBeforeConstrainedAnchor", () => {
     const after: BaseConstraint = {
-      type: "After",
+      type: "AFTER",
       anchor: makeDate("2025-01-01"),
       strict: false,
     };
     const before: BaseConstraint = {
-      type: "Before",
+      type: "BEFORE",
       anchor: makeDate("2025-12-31"),
       strict: true,
     };
@@ -66,19 +65,19 @@ describe("guards: temporal predicate nodes", () => {
 describe("guards: FromTerm variants", () => {
   it("isQualifiedAnchor, isEarlierOfFrom, isLaterOfFrom", () => {
     const ca: ConstrainedAnchor = {
-      type: "Constrained",
+      type: "CONSTRAINED",
       base: makeEvent("grant"),
       constraints: [
-        { type: "After", anchor: makeDate("2025-01-01"), strict: false },
+        { type: "AFTER", anchor: makeDate("2025-01-01"), strict: false },
       ],
     };
 
     const earlier: From = {
-      type: "EarlierOf",
+      type: "EARLIER_OF",
       items: [makeEvent("ipo"), makeEvent("cic")],
     };
     const later: From = {
-      type: "LaterOf",
+      type: "LATER_OF",
       items: [makeEvent("board"), makeEvent("cic")],
     };
     const bare: From = makeDate("2025-06-01");
@@ -104,7 +103,7 @@ describe("guards: FromTerm variants", () => {
 
 describe("guards: durations & gates", () => {
   it("isDuration / isZeroGate", () => {
-    const dur: Duration = { type: "Duration", value: 6, unit: "MONTHS" };
+    const dur: Duration = { type: "DURATION", value: 6, unit: "MONTHS" };
 
     expect(isDuration(dur)).toBe(true);
   });
@@ -113,6 +112,6 @@ describe("guards: durations & gates", () => {
 describe("guards: assertNever", () => {
   it("throws to signal unreachable code", () => {
     // At runtime we can only verify it throws.
-    expect(() => assertNever(undefined as never)).toThrowError();
+    expect(() => assertNever(undefined as kever)).toThrowError();
   });
 });

@@ -1,12 +1,12 @@
 {
   function mkDuration(value, unit) {
-    return { type: "Duration", value, unit };
+    return { type: "DURATION", value, unit };
   }
   function mkDate(iso) {
-    return { type: "Date", value: iso };
+    return { type: "DATE", value: iso };
   }
   function mkEvent(name) {
-    return { type: "Event", value: name };
+    return { type: "EVENT", value: name };
   }
   function mkAmountAbsolute(n) {
     return { type: "AmountAbsolute", value: n };
@@ -16,7 +16,7 @@
   }
   function mkConstrained(base, constraints) {
     return constraints && constraints.length
-      ? { type: "Constrained", base, constraints }
+      ? { type: "CONSTRAINED", base, constraints }
       : base;
   }
   function collect(head, tail) {
@@ -47,10 +47,10 @@ Amount
 
 Expr
   = "EARLIER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
-      return { type: "EarlierOf", items: xs };
+      return { type: "EARLIER_OF", items: xs };
     }
   / "LATER"i _ "OF"i _ "(" _ xs:ExprListTwoOrMore _ ")" {
-      return { type: "LaterOf", items: xs };
+      return { type: "LATER_OF", items: xs };
     }
   / s:ScheduleBlock { return s; }
 

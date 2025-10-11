@@ -241,10 +241,10 @@ function peg$parse(input, options) {
   }
   function peg$f2(n) {    return mkAmountAbsolute(n);  }
   function peg$f3(xs) {
-    return { type: "EarlierOf", items: xs };
+    return { type: "EARLIER_OF", items: xs };
   }
   function peg$f4(xs) {
-    return { type: "LaterOf", items: xs };
+    return { type: "LATER_OF", items: xs };
   }
   function peg$f5(s) {    return s;  }
   function peg$f6(head, tail) {    return collectTwoOrMore(head, tail);  }
@@ -267,13 +267,13 @@ function peg$parse(input, options) {
     return mkConstrained(base, q ?? null);
   }
   function peg$f17(s, t) {
-    return { type: "Before", anchor: t, strict: !!s };
+    return { type: "BEFORE", base: t, strict: !!s };
   }
   function peg$f18(s, t) {
-    return { type: "After", anchor: t, strict: !!s };
+    return { type: "AFTER", base: t, strict: !!s };
   }
   function peg$f19(head, tail) {
-    return { anyof: collect(head, tail) };
+    return { items: collect(head, tail) };
   }
   function peg$f20(head, tail) {
     return collect(head, tail);
@@ -287,10 +287,10 @@ function peg$parse(input, options) {
   function peg$f27(a) {    return a;  }
   function peg$f28(a) {    return a;  }
   function peg$f29(xs) {
-    return { type: "EarlierOf", items: xs };
+    return { type: "EARLIER_OF", items: xs };
   }
   function peg$f30(xs) {
-    return { type: "LaterOf", items: xs };
+    return { type: "LATER_OF", items: xs };
   }
   function peg$f31(head, tail) {
     return collectTwoOrMore(head, tail);
@@ -299,17 +299,17 @@ function peg$parse(input, options) {
   function peg$f33(d) {    return d;  }
   function peg$f34(a) {    return a;  }
   function peg$f35(xs) {
-    return { type: "EarlierOf", items: xs };
+    return { type: "EARLIER_OF", items: xs };
   }
   function peg$f36(xs) {
-    return { type: "LaterOf", items: xs };
+    return { type: "LATER_OF", items: xs };
   }
   function peg$f37(head, tail) {
     return collectTwoOrMore(head, tail);
   }
   function peg$f38(f, oe, c) {
     const base = {
-      type: "Schedule",
+      type: "SINGLETON",
       from: f,
       over: oe.over,
       every: oe.every,
@@ -2216,13 +2216,13 @@ function peg$parse(input, options) {
 
 
   function mkDuration(value, unit) {
-    return { type: "Duration", value, unit };
+    return { type: "DURATION", value, unit };
   }
   function mkDate(iso) {
-    return { type: "Date", value: iso };
+    return { type: "DATE", value: iso };
   }
   function mkEvent(name) {
-    return { type: "Event", value: name };
+    return { type: "EVENT", value: name };
   }
   function mkAmountAbsolute(n) {
     return { type: "AmountAbsolute", value: n };
@@ -2232,7 +2232,7 @@ function peg$parse(input, options) {
   }
   function mkConstrained(base, constraints) {
     return constraints && constraints.length
-      ? { type: "Constrained", base, constraints }
+      ? { type: "CONSTRAINED", base, constraints }
       : base;
   }
   function collect(head, tail) {

@@ -1,75 +1,90 @@
-import { ASTExpr, TwoOrMore } from "@vestlang/dsl";
-import { BaseExpr, ExprType } from "../types/shared.js";
-import { normalizeSchedule, Schedule } from "./schedule.js";
 import {
-  isEarlierOfASTExpr,
-  isLaterOfASTExpr,
-  isSchedule,
-  isTwoOrMore,
-} from "../types/raw-ast-guards.js";
+  ExprEnum,
+  TwoOrMore,
+  AnyASTExpr,
+  ASTSchedule,
+  LaterOfASTExpr,
+  EarlierOfASTExpr,
+} from "@vestlang/dsl";
+import { normalizeSchedule, VestlangScheduleExpression } from "./schedule.js";
+import { isTwoOrMore } from "../types/raw-ast-guards.js";
 import { invariant, unexpectedAst } from "../errors.js";
+import { VestlangExpression } from "../types/shared.js";
 
 /* ------------------------
  * Types
  * ------------------------ */
 
-interface BaseScheduleCombinator extends BaseExpr {
-  items: TwoOrMore<Expr>;
+// types/vestlang/VestlangLaterOfExpression
+export interface VestlangEarlierOfExpression extends VestlangExpression {
+  type: ExprEnum.EARLIER_OF;
+  items: TwoOrMore<VestlangExpression>;
 }
 
-export interface LaterOfSchedules extends BaseScheduleCombinator {
-  type: "LaterOf";
+// types/vestlang/VestlangLaterOfExpression
+export interface VestlangLaterOfExpression extends VestlangExpression {
+  type: ExprEnum.LATER_OF;
+  items: TwoOrMore<VestlangExpression>;
 }
-
-export interface EarlierOfSchedules extends BaseScheduleCombinator {
-  type: "EarlierOf";
-}
-
-type ScheduleCombinator = LaterOfSchedules | EarlierOfSchedules;
-
-export type Expr = Schedule | ScheduleCombinator;
 
 /* ------------------------
  * Expression
  * ------------------------ */
 
-export function normalizeExpr(ast: ASTExpr, path: string[] = []): Expr {
-  if (isSchedule(ast)) {
-    return normalizeSchedule(ast, [...path, "Schedule"]);
-  }
+export function normalizeExpr(
+  ast: AnyASTExpr,
+  path: string[] = [],
+): VestlangExpression {
+  switch (ast.type) {
+    case ExprEnum.SINGLETON: {
+      const schedule = ast as ASTSchedule;
+      return normalizeSchedule(schedule, [...path, "SINGLETON"]);
+    }
 
-  if (isLaterOfASTExpr(ast)) {
-    const items = ast.items.map((e, i) =>
-      normalizeExpr(e, [...path, `items[${i}]`]),
-    );
-    invariant(
-      isTwoOrMore(items),
-      "LaterOfSchedules requires >= 2 items",
-      { items },
-      path,
-    );
-    return {
-      id: "",
-      type: "LaterOf" as ExprType,
-      items: items as TwoOrMore<Expr>,
-    } as LaterOfSchedules;
-  }
+    case ExprEnum.LATER_OF: {
+      const later = ast as LaterOfASTExpr;
+      const items = later.items.map((e, i) =>
+        normalizeExpr(e, [...path, `items[${i}]`]),
+      );
+      invariant(
+        isTwoOrMore(items),
+        "LaterOfSchedules requires >= 2 items",
+        { items },
+        path,
+      );
+      return {
+        id: "",
+        type: ExprEnum.LATER_OF,
+        items: items as TwoOrMore<
+          | VestlangScheduleExpression
+          | VestlangEarlierOfExpression
+          | VestlangLaterOfExpression
+        >,
+      } as VestlangLaterOfExpression;
+    }
 
-  if (isEarlierOfASTExpr(ast)) {
-    const items = ast.items.map((e, i) =>
-      normalizeExpr(e, [...path, `items[${i}]`]),
-    );
-    invariant(
-      isTwoOrMore(items),
-      "EarlierOfSchedules requires >= 2 items",
-      { items },
-      path,
-    );
-    return {
-      id: "",
-      type: "EarlierOf" as ExprType,
-      items: items as TwoOrMore<Expr>,
-    } as EarlierOfSchedules;
+    case ExprEnum.EARLIER_OF: {
+      const earlier = ast as EarlierOfASTExpr;
+      const items = earlier.items.map((e, i) =>
+        normalizeExpr(e, [...path, `items[${i}]`]),
+      );
+      invariant(
+        isTwoOrMore(items),
+        "EarlierOfSchedules requires >= 2 items",
+        { items },
+        path,
+      );
+      return {
+        id: "",
+        type: ExprEnum.EARLIER_OF,
+        items: items as TwoOrMore<
+          | VestlangScheduleExpression
+          | VestlangEarlierOfExpression
+          | VestlangLaterOfExpression
+        >,
+      } as VestlangEarlierOfExpression;
+    }
+    default:
+      return unexpectedAst("Unknown ASTExpr variant", { ast }, path);
   }
-  return unexpectedAst("Unknown ASTExpr variant", { ast }, path);
 }

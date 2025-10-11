@@ -10,11 +10,11 @@ import {
 } from "@vestlang/dsl";
 
 export const createDate = (s: string): DateAnchor => ({
-  type: "Date",
+  type: "DATE",
   value: s,
 });
 export const createEvent = (s: string): EventAnchor => ({
-  type: "Event",
+  type: "EVENT",
   value: s,
 });
 
@@ -26,10 +26,10 @@ export function createSchedule(
   cliff?: any,
 ): ASTSchedule {
   return {
-    type: "Schedule",
+    type: "SINGLETON",
     from,
-    over: { type: "Duration", value: over, unit },
-    every: { type: "Duration", value: every, unit },
+    over: { type: "DURATION", value: over, unit },
+    every: { type: "DURATION", value: every, unit },
     cliff,
   };
 }
@@ -52,7 +52,7 @@ export function expectMonthsPeriodicity(
   step: number,
   count: number,
 ) {
-  expect(expr.type).toBe("Schedule");
+  expect(expr.type).toBe("SINGLETON");
   expect(expr.periodicity.periodType).toBe("MONTHS");
   expect(expr.periodicity.span).toBe(span);
   expect(expr.periodicity.step).toBe(step);

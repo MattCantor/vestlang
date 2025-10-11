@@ -10,7 +10,7 @@ describe("AnyOf runtime asserts", () => {
         type: "AnyOf" as const,
         // @ts-expect-error: intentionally malformed for runtime check
         anyOf: [
-          { type: "Before", anchor: D("2025-12-31"), strict: false },
+          { type: "BEFORE", anchor: D("2025-12-31"), strict: false },
           {
             type: "AnyOf",
             anyOf: [{ type: "After", anchor: D("2026-01-01"), strict: true }],
@@ -38,27 +38,27 @@ describe("AnyOf runtime asserts", () => {
 describe("constraints canonicalization", () => {
   it("sorts base constraints (Before < After, strict first, then anchor)", () => {
     const input = [
-      { type: "After", anchor: E("ipo"), strict: true },
-      { type: "Before", anchor: E("cic"), strict: false },
-      { type: "Before", anchor: D("2025-12-31"), strict: true },
+      { type: "AFTER", anchor: E("ipo"), strict: true },
+      { type: "BEFORE", anchor: E("cic"), strict: false },
+      { type: "BEFORE", anchor: D("2025-12-31"), strict: true },
     ] as const;
 
     const out = canonicalizeConstraints(input as any);
     expect(out).toEqual([
-      { type: "Before", anchor: D("2025-12-31"), strict: true },
-      { type: "Before", anchor: E("cic"), strict: false },
-      { type: "After", anchor: E("ipo"), strict: true },
+      { type: "BEFORE", anchor: D("2025-12-31"), strict: true },
+      { type: "BEFORE", anchor: E("cic"), strict: false },
+      { type: "AFTER", anchor: E("ipo"), strict: true },
     ]);
   });
 
   it("dedupes identical base constraints", () => {
     const input = [
-      { type: "Before", anchor: E("cic"), strict: false },
-      { type: "Before", anchor: E("cic"), strict: false }, // dup
+      { type: "BEFORE", anchor: E("cic"), strict: false },
+      { type: "BEFORE", anchor: E("cic"), strict: false }, // dup
     ] as const;
 
     const out = canonicalizeConstraints(input as any);
-    expect(out).toEqual([{ type: "Before", anchor: E("cic"), strict: false }]);
+    expect(out).toEqual([{ type: "BEFORE", anchor: E("cic"), strict: false }]);
   });
 
   it("dedupes and sorts inside AnyOf; collapses singletons", () => {
@@ -66,8 +66,8 @@ describe("constraints canonicalization", () => {
       {
         type: "AnyOf",
         anyOf: [
-          { type: "After", anchor: D("2026-01-01"), strict: true },
-          { type: "After", anchor: D("2026-01-01"), strict: true }, // dup
+          { type: "AFTER", anchor: D("2026-01-01"), strict: true },
+          { type: "AFTER", anchor: D("2026-01-01"), strict: true }, // dup
         ],
       },
     ] as const;
@@ -75,7 +75,7 @@ describe("constraints canonicalization", () => {
     const out = canonicalizeConstraints(input as any);
     // AnyOf collapsed to its only member
     expect(out).toEqual([
-      { type: "After", anchor: D("2026-01-01"), strict: true },
+      { type: "AFTER", anchor: D("2026-01-01"), strict: true },
     ]);
   });
 
@@ -84,21 +84,21 @@ describe("constraints canonicalization", () => {
       {
         type: "AnyOf",
         anyOf: [
-          { type: "After", anchor: D("2026-01-01"), strict: true },
-          { type: "Before", anchor: D("2025-12-31"), strict: false },
+          { type: "AFTER", anchor: D("2026-01-01"), strict: true },
+          { type: "BEFORE", anchor: D("2025-12-31"), strict: false },
         ],
       },
-      { type: "Before", anchor: E("cic"), strict: false },
+      { type: "BEFORE", anchor: E("cic"), strict: false },
     ] as const;
 
     const out = canonicalizeConstraints(input as any);
     expect(out).toEqual([
-      { type: "Before", anchor: E("cic"), strict: false },
+      { type: "BEFORE", anchor: E("cic"), strict: false },
       {
         type: "AnyOf",
         anyOf: [
-          { type: "Before", anchor: D("2025-12-31"), strict: false },
-          { type: "After", anchor: D("2026-01-01"), strict: true },
+          { type: "BEFORE", anchor: D("2025-12-31"), strict: false },
+          { type: "AFTER", anchor: D("2026-01-01"), strict: true },
         ],
       },
     ]);
@@ -106,15 +106,15 @@ describe("constraints canonicalization", () => {
 
   it("is idempotent", () => {
     const input = [
-      { type: "Before", anchor: E("cic"), strict: false },
+      { type: "BEFORE", anchor: E("cic"), strict: false },
       {
         type: "AnyOf",
         anyOf: [
-          { type: "After", anchor: D("2026-01-01"), strict: true },
-          { type: "Before", anchor: D("2025-12-31"), strict: false },
+          { type: "AFTER", anchor: D("2026-01-01"), strict: true },
+          { type: "BEFORE", anchor: D("2025-12-31"), strict: false },
         ],
       },
-      { type: "Before", anchor: E("cic"), strict: false }, // dup
+      { type: "BEFORE", anchor: E("cic"), strict: false }, // dup
     ] as const;
 
     const once = canonicalizeConstraints(input as any);

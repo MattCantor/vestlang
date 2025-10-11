@@ -1,3 +1,5 @@
+import { ExprEnum } from "@vestlang/dsl";
+
 /* ------------------------
  * Helpers / utility types
  * ------------------------ */
@@ -6,14 +8,12 @@
 declare const __int: unique symbol;
 export type Integer = number & { [__int]: "Integer" };
 
-// primitives/vestlang/Expression
-export interface BaseExpr {
+// primitives/types/vestlang/VestlandExpression
+export interface VestlangExpression {
   id: string;
-  type: ExprType;
+  description?: string;
+  type: ExprEnum;
 }
-
-// enums/vestlang/ExpressionType
-export type ExprType = "Schedule" | "LaterOf" | "EarlierOf";
 
 // Exhaustiveness helper
 export function assertNever(x: never): never {

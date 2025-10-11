@@ -1,10 +1,10 @@
-import type { Anchor, ASTSchedule } from "@vestlang/dsl";
+import { ExprEnum, type Anchor, type ASTSchedule } from "@vestlang/dsl";
 import { normalizePeriodicity, Periodicity } from "./periodicity.js";
 import {
   normalizeFromTermOrDefault,
   type VestingStart,
 } from "./vesting-start-date.js";
-import type { BaseExpr } from "../types/shared.js";
+import type { VestlangExpression } from "../types/shared.js";
 import { normalizeAnchorConstraints } from "./constraints.js";
 
 /* ------------------------
@@ -12,8 +12,8 @@ import { normalizeAnchorConstraints } from "./constraints.js";
  * ------------------------ */
 
 // types/vestlang/Schedule
-export interface Schedule extends BaseExpr {
-  type: "Schedule";
+export interface VestlangScheduleExpression extends VestlangExpression {
+  type: ExprEnum.SINGLETON;
   vesting_start: VestingStart;
   periodicity: Periodicity;
 }
@@ -22,7 +22,10 @@ export interface Schedule extends BaseExpr {
  * Schedule
  * ------------------------ */
 
-export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
+export function normalizeSchedule(
+  ast: ASTSchedule,
+  path: string[],
+): VestlangScheduleExpression {
   // Vesting start: FROM (may include combinators)
   const vesting_start = normalizeFromTermOrDefault(ast.from, [...path, "from"]);
 
@@ -36,7 +39,7 @@ export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
   // leave Duration / selector untouched
   if (ast.cliff && typeof (ast.cliff as any).type === "string") {
     const t = (ast.cliff as any).type;
-    if (t === "Date" || t === "Event" || t === "Constrained") {
+    if (t === "DATE" || t === "EVENT" || t === "CONSTRAINED") {
       periodicity.cliff = normalizeAnchorConstraints(ast.cliff as Anchor);
     } else {
       periodicity.cliff = ast.cliff;
@@ -47,7 +50,7 @@ export function normalizeSchedule(ast: ASTSchedule, path: string[]): Schedule {
 
   return {
     id: "",
-    type: "Schedule",
+    type: ExprEnum.SINGLETON,
     vesting_start,
     periodicity,
   };
