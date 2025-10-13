@@ -1,4 +1,5 @@
 import {
+  AmountTypeEnum,
   ConstraintEnum,
   ConstraintType,
   ExprEnum,
@@ -36,32 +37,30 @@ export type OCTDate = string & { [__isoDateBrand]: never };
  * ------------------------ */
 
 export interface ASTStatement {
-  amount: AstAmount;
-  schedule: ASTExpr;
+  amount: Amount;
+  expresion: ASTExpr;
 }
 
 /* ------------------------
  * Amounts
  * ------------------------ */
 
-// enums/vestlang/AmountType
-export type AmountType = "AmountPercent" | "AmountAbsolute";
-
 export type BaseAmount = {
-  type: AmountType;
+  type: AmountTypeEnum;
 };
 
-export interface ASTAmountAbsolute extends BaseAmount {
-  type: "AmountAbsolute";
-  value: number; // whole shares
+export interface AmountQuantity extends BaseAmount {
+  type: AmountTypeEnum.QUANTITY;
+  value: number;
 }
 
-export interface ASTAmountPercent extends BaseAmount {
-  type: "AmountPercent";
-  value: number; // fraction in [0, 1]
+export interface AmountPortion extends BaseAmount {
+  type: AmountTypeEnum.PORTION;
+  numerator: number;
+  denominator: number;
 }
 
-export type AstAmount = ASTAmountAbsolute | ASTAmountPercent;
+export type Amount = AmountQuantity | AmountPortion;
 
 /* ------------------------
  * Expressions
@@ -139,7 +138,7 @@ export interface VestingNode {
 
 export interface ASTCondition {
   type: ConstraintType;
-  constraint: TemporalConstraint;
+  constraints: ASTCondition[];
 }
 
 // types/vestlang/VestingNodeBare.schema.json
@@ -148,6 +147,12 @@ export interface VestingNodeBare extends VestingNode {
 }
 
 // ==== Constraints ====
+
+// NOTE: this might not need any schema
+export interface ASTCondition {
+  type: ConstraintType;
+  constraint: TemporalConstraint;
+}
 
 // primitives/types/vestlang/TemporalConstraint.schema.json
 export interface TemporalConstraint {

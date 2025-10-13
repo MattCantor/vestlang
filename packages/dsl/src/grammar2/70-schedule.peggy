@@ -23,7 +23,7 @@ ScheduleBlock
           value: "grantDate"
         },
         offsets: [],
-        conditions: null
+        constraints: null
       },
       periodicity: p,
     };

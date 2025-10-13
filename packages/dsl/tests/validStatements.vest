@@ -62,3 +62,8 @@ VEST CLIFF 6 months
 VEST CLIFF event milestone + 6 months
 
 VEST FROM EVENT milestone AFTER 6 months
+
+VEST FROM EVENT milestore AFTER event ipo AND(AFTER EVENT milestone2, AFTER EVENT milestone3) AND OR(BEFORE event sugar, AFTER event spice)
+
+VEST FROM event grant before event a and after event b or before event c and after event d
+VEST FROM event grant (BEFORE event a or after event b) and before event c

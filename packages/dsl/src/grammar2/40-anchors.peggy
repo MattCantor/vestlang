@@ -3,7 +3,7 @@ DateLiteral
       return mkDate(iso);
     }
 
-Ident = $([A-Za-z_] [A-Za-z0-9_]*)
+Ident = $([A-Za-z_][A-Za-z0-9_]*)
 
 EventRef = "EVENT"i _ name:Ident {
   if (isSystemEvent(name.toLowerCase())) {
@@ -17,56 +17,46 @@ EventRef = "EVENT"i _ name:Ident {
 VestingNode
   = base:(EventRef / DateLiteral)
     offsets:(_ Duration)*
-    conditions:(_ ConditionTree)? {
+    constraints:(_ OrExpr)? {
       return {
-        type: conditions ? "CONDITIONED" : "BARE",
+        type: constraints ? "CONSTRAINED" : "BARE",
         base,
         offsets: offsets.map(o => o[1]),
-        conditions: conditions?.[1]
+        constraints: constraints?.[1] ?? null
       }
   }
 
-InFixConditions
-  = head:Condition tail:((AndSep / OrSep) Condition)+ {
-    return [
-      mkCondition("AND", head),
-      ...tail.map((t) => mkCondition(t[0][1].toUpperCase(), t[1]))
-    ]
-  }
-
-ConditionFunction
-  = op:("AND"i / "OR"i) "(" _ head:Condition tail:(CommaSep Condition)* _ ")" {
-    return [
-     mkCondition(op.toUpperCase(), head),
-     ...tail.map((t) => mkCondition(op.toUpperCase(), t[1]))
-    ]
-  }
-
-SingleCondition
-  = c:Condition {
-    return [ mkCondition("AND", c) ]
-  }
-
-ConditionTree = InFixConditions / ConditionFunction / SingleCondition
-
-ConditionExpr = ConditionSelector / VestingNode
-
-ConditionSelector
-  = op:("EARLIER"i / "LATER"i) _ "OF"i _ "(" _ head:ConditionExpr tail:(CommaSep ConditionExpr)* _ ")" {
-      return {
-        type: op.toUpperCase() === "EARLIER" ? "EARLIER_OF" : "LATER_OF",
-        items: collectTwoOrMore(head, tail)
-      };
-    }
-
-Condition
+Constraint
   = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:(VestingNode / GateExpr) {
     if (isDuration(base)) {
-      error(`When used with ${op}, a duration may only follow an EVENT or DATE. E.g., ${op} EVENT <milestone> ${base.sign} ${base.value} ${base.unit}`)
+      error(`When used with ${op}, a duration may only follow an EVENT or DATE. Use e.g,: ${op} EVENT <milestone> ${base.sign} ${base.value} ${base.unit}`)
     }
     return {
       type: op.toUpperCase(),
       base,
       strict: !!s
     }
+  }
+
+ParenCondition
+  = "(" _ e:OrExpr _ ")" { return e; }
+
+FunctionCondition
+  = op:("AND"i / "OR"i) "(" _ head:OrExpr tail:(CommaSep OrExpr)* _ ")" {
+    const OP = op.toUpperCase();
+    return mkBool( OP, collect(head, tail))
+  }
+
+Condition = ParenCondition / FunctionCondition / Constraint
+
+OrExpr
+  = head:AndExpr tail:(OrSep AndExpr)* {
+    if (tail.length === 0) return head;
+    return mkBool("OR", collect(head, tail))
+  }
+
+AndExpr
+  = head:Condition tail:(AndSep Condition)* {
+    if (tail.length === 0) return head;
+    return mkBool("AND", collect(head, tail))
   }

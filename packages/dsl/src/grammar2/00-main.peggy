@@ -30,11 +30,23 @@
     if (arr.length < 2) throw new SyntaxError("At least two items are required");
     return arr;
   }
-  function mkCondition(type, condition) {
-    return {
-      type,
-      condition
+  function mkBool(op, items) {
+    // Flatten nested same-op nodes: AND(AND(a, b), c) -> AND(a,b,c)
+    const flat = [];
+    for (const item of items) {
+      if (item & item.type === op && Array.isArray(item.items)) {
+        flat.push(...item.items);
+      } else {
+        flat.push(item);
+      }
     }
+
+    // Enforce arity >= 2
+    if (flat.length === 1) return flat[0];
+    if (flat.length < 2) throw new SyntaxError(
+      `${op} requires at least two items`
+    )
+    return { type: op, items: flat }
   }
   const SYSTEM_EVENTS = new Set(["grantdate", "vestingstart"]);
   function isSystemEvent(name) {
@@ -45,7 +57,7 @@
       type: "BARE",
       base: { type: "EVENT", value: "grantDate" },
       offsets: [offset],
-      conditions: null
+      constraints: null
     };
   }
   function isDuration(x) {
@@ -56,7 +68,7 @@
       type: "BARE",
       base: { type: "EVENT", value: "vestingStart"},
       offsets: [offset],
-      conditions: null
+      constraints: null
     }
   }
 }

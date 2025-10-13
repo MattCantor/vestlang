@@ -41,8 +41,14 @@ export const enum OffsetEnum {
   MINUS = "MINUS",
 }
 
-// NOTE: This might not needs a schema
+// NOTE: This might not need a schema
 export const enum ConstraintType {
   AND = "AND",
   OR = "OR",
+}
+
+// NOTE: this might have an existing schema
+export const enum AmountTypeEnum {
+  PORTION = "PORTION",
+  QUANTITY = "QUANTITY",
 }

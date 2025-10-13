@@ -9,8 +9,8 @@ import {
 
 import {
   ASTStatement,
-  ASTAmountAbsolute,
-  ASTAmountPercent,
+  AmountQuantity,
+  AmountPortion,
   ASTSchedule,
   Duration,
   VestingBaseDate,
@@ -69,7 +69,7 @@ describe("...", () => {
       const ast = parse(
         "123 VEST OVER 12 months EVERY 1 month",
       ) as ASTStatement;
-      const amt = ast.amount as ASTAmountAbsolute;
+      const amt = ast.amount as AmountQuantity;
       expect(amt).toEqual({ type: "AmountAbsolute", value: 123 });
     });
 
@@ -77,7 +77,7 @@ describe("...", () => {
       const ast = parse(
         "0.25 VEST OVER 12 months EVERY 1 month",
       ) as ASTStatement;
-      const amt = ast.amount as ASTAmountPercent;
+      const amt = ast.amount as AmountPortion;
       expect(amt).toEqual({ type: "AmountPercent", value: 0.25 });
     });
 
