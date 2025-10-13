@@ -12,12 +12,13 @@ Decimal
 // 2. Fraction with "/" (integers only)
 // 3. Absolute integer (quantity)
 
-Amount = _ a:(Percentage / Fraction / Quantity) _ { return a; }
+Amount = _ a:(PortionDecimal / Fraction / Quantity) _ { return a; }
 
 
-Percentage = s:Decimal {
+PortionDecimal
+  = s:Decimal {
       const value = parseFloat(s);
-      if (s < 0 || s > 1) {
+      if (value < 0 || value > 1) {
         error("Decimal portion must be between 0 and 1 inclusive");
       }
       const parts = s.startsWith(".") ? ["0", s.slice(1)] : s.split(".");
@@ -26,15 +27,11 @@ Percentage = s:Decimal {
       const numerator = Math.round(value * scale);
       const denominator = scale;
       const g = gcd(numerator, denominator);
-      return mkPortion(numerator / g, denominator / g);
+      return mkPortion(numerator, denominator);
     }
 
 Fraction = n:Integer _ "/" _ d:Integer {
-  if (d === 0) {
-    error("Denominator cannot be 0")
-  }
-  const g = gcd(n, d);
-  return mkPortion(n / g, d / g);
+  return mkPortion(n, d);
 }
 
 Quantity = n:Integer { return mkQuantity(n); }

@@ -21,4 +21,12 @@ ScheduleBlock
     return base
   }
 
+ScheduleExpr = ScheduleSelector / ScheduleBlock
 
+ScheduleSelector
+  = op:("EARLIER"i / "LATER"i) _ "OF"i _ "(" _ head:ScheduleExpr tail:(CommaSep ScheduleExpr)* _ ")" {
+      return {
+        type: op.toUpperCase() === "EARLIER" ? "EARLIER_OF" : "LATER_OF",
+        items: collectTwoOrMore(head, tail)
+      };
+    }

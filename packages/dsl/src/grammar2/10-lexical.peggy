@@ -1,8 +1,8 @@
 _ = [ \t\r\n]*
 
-AndSep = _ "AND"i _
+AndSep = _ "AND"i _ { return "AND"; }
 
-OrSep = _ "OR"i _
+OrSep = _ "OR"i _ { return "OR"; }
 
 CommaSep = _ "," _
 
