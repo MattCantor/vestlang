@@ -17,7 +17,7 @@
   function mkPortion(n, d) {
     if (d === 0) throw new SyntaxError("Denominator cannot be 0")
     // keep denominator positive, move sign to numerator if ever needed
-    if (d < 0) { return n = -n; d = -d; }
+    if (d < 0) { n = -n; d = -d; }
     const g = gcd(Math.abs(n), d);
     return { type: "PORTION", numerator: n / g, denominator: d / g };
   }
@@ -31,10 +31,11 @@
     return arr;
   }
   function mkBool(op, items) {
+    const OP = op.toUpperCase();
     // Flatten nested same-op nodes: AND(AND(a, b), c) -> AND(a,b,c)
     const flat = [];
     for (const item of items) {
-      if (item & item.type === op && Array.isArray(item.items)) {
+      if (item && item.type === OP && Array.isArray(item.items)) {
         flat.push(...item.items);
       } else {
         flat.push(item);
@@ -44,38 +45,45 @@
     // Enforce arity >= 2
     if (flat.length === 1) return flat[0];
     if (flat.length < 2) throw new SyntaxError(
-      `${op} requires at least two items`
+      `${OP} requires at least two items`
     )
-    return { type: op, items: flat }
+    return { type: OP, items: flat }
   }
   const SYSTEM_EVENTS = new Set(["grantdate", "vestingstart"]);
   function isSystemEvent(name) {
     return SYSTEM_EVENTS.has(name.toLowerCase())
   }
-  function mkGrantDateNode(offset) {
+  function mkVestingNode(duration, context) {
     return {
       type: "BARE",
-      base: { type: "EVENT", value: "grantDate" },
-      offsets: [offset],
-      constraints: null
-    };
-  }
-  function isDuration(x) {
-    return x && typeof x === "object" && x.type === "DURATION";
-  }
-  function mkVestingStartNode(offset) {
-    return {
-      type: "BARE",
-      base: { type: "EVENT", value: "vestingStart"},
-      offsets: [offset],
-      constraints: null
+      base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
+      offsets: [duration],
     }
+  }
+  function coerceToVestingNode(x, context) {
+    // Duration -> Vesting Node, depending on context
+    if (x && typeof x === "object" && x.type === "DURATION") {
+      return mkVestingNode(x, context)
+    }
+    
+    // Pass through vesting nodes
+    if (x && (x.type === "BARE" || x.type === "CONSTRAINED")) return x;
+
+    // Recurse into selectors and coerce their items
+    if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {
+      return {
+        type: x.type,
+        items: x.items.map((item) => coerceToVestingNode(item, context))
+      }
+    }
+
+    error(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
   }
 }
 
 Start
   = _ x:(list:VestStmtList { return list; }
-  / stmt:VestStmt { return stmt; }
+  / stmt:VestStmt { return [stmt]; }
   ) _ EOF { return x; }
 
 VestStmt

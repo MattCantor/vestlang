@@ -1,15 +1,9 @@
 From = "FROM"i _ a:(VestingNode / GateExpr) {
-  if (isDuration(a)) {
-    return mkGrantDateNode(a);
-  }
-  return a;
+  return coerceToVestingNode(a, "FROM")
 }
 
 Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) {
-  if (isDuration(a)) {
-    return mkVestingStartNode(a);
-  }
-  return a;
+  return coerceToVestingNode(a, "CLIFF")
 };
 
 ScheduleBlock

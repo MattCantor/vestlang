@@ -1,7 +1,7 @@
 import {
   AmountTypeEnum,
   ConstraintEnum,
-  ConstraintType,
+  ConditionTypeEnum,
   ExprEnum,
   OffsetEnum,
   PeriodTypeEnum,
@@ -38,7 +38,7 @@ export type OCTDate = string & { [__isoDateBrand]: never };
 
 export interface ASTStatement {
   amount: Amount;
-  expresion: ASTExpr;
+  expr: ASTExpr;
 }
 
 /* ------------------------
@@ -84,17 +84,15 @@ export interface LaterOfASTExpr extends ASTExpr {
 
 export interface ASTSchedule extends ASTExpr {
   type: ExprEnum.SINGLETON;
-  vesting_start: From | null;
+  vesting_start: From;
   periodicity: ASTVestingPeriod;
-  // from?: From | null;
-  // over: Duration;
-  // every: Duration;
-  // cliff?: Cliff;
 }
 
 export type AnyASTExpr = ASTSchedule | EarlierOfASTExpr | LaterOfASTExpr;
 
-// ==== Durations (normalized by grammar) ====
+/* ------------------------
+ * Durations
+ * ------------------------ */
 
 // types/vestlang/CliffDuration.schema.json
 export interface Duration {
@@ -104,15 +102,15 @@ export interface Duration {
   sign?: OffsetEnum;
 }
 
-// ==== Vesting Base ====
+/* ------------------------
+ * Vesting Base
+ * ------------------------ */
 
 // primitives/vestlang/VestingBase.schema.json
 export interface VestingBase {
   type: VBaseEnum;
   value: string;
 }
-
-// export type BareAnchor = VestingBaseDate | VestingBaseEvent;
 
 // types/vestlang/VestingBaseDate.schema.json
 export interface VestingBaseDate extends VestingBase {
@@ -126,7 +124,9 @@ export interface VestingBaseEvent extends VestingBase {
   value: string;
 }
 
-// === Vesting Node ===
+/* ------------------------
+ * Vesting Node
+ * ------------------------ */
 
 // primitives/types/vestlang/VestingNode.schema.json
 // TODO: update schema - include offsets
@@ -136,28 +136,52 @@ export interface VestingNode {
   offsets: Duration[];
 }
 
-export interface ASTCondition {
-  type: ConstraintType;
-  constraints: ASTCondition[];
-}
-
 // types/vestlang/VestingNodeBare.schema.json
 export interface VestingNodeBare extends VestingNode {
   type: VNodeEnum.BARE;
 }
 
-// ==== Constraints ====
+// types/vestlang/VestingNodeConstrained.schema.json
+// TODO: update this schema
+export interface VestingNodeConstrained extends VestingNode {
+  type: VNodeEnum.CONSTRAINED;
+  constraints: AnyCondition;
+}
+
+/* ------------------------
+ * Conditions
+ * ------------------------ */
 
 // NOTE: this might not need any schema
 export interface ASTCondition {
-  type: ConstraintType;
+  type: ConditionTypeEnum;
+}
+
+export interface ConditionAtom extends ASTCondition {
+  type: ConditionTypeEnum.ATOM;
   constraint: TemporalConstraint;
 }
+
+export interface ConditionAndGroup extends ASTCondition {
+  type: ConditionTypeEnum.AND;
+  items: TwoOrMore<AnyCondition>;
+}
+
+export interface ConditionOrGroup extends ASTCondition {
+  type: ConditionTypeEnum.OR;
+  items: TwoOrMore<AnyCondition>;
+}
+
+export type AnyCondition = ConditionAtom | ConditionAndGroup | ConditionOrGroup;
+
+/* ------------------------
+ * Constraints
+ * ------------------------ */
 
 // primitives/types/vestlang/TemporalConstraint.schema.json
 export interface TemporalConstraint {
   type: ConstraintEnum;
-  base: VestingBaseDate | VestingBaseEvent;
+  base: VestingNode;
   strict: boolean;
 }
 
@@ -172,39 +196,13 @@ export interface TemporalConstraintBefore extends TemporalConstraint {
 }
 
 // types/vestlang/TemporalConstraintOrGroup
-// TODO: remove or update this schema
+// TODO: remove corresponding json schema
 // export interface TemporalConstraintOrGroup {
 //   type: "OR";
 //   items: TwoOrMore<TemporalConstraint>;
 // }
 
-// export type Constraint = TemporalConstraint | TemporalConstraintOrGroup;
-
-// types/vestlang/VestingNodeConstrained.schema.json
-// TODO: update this schema
-export interface VestingNodeConstrained extends VestingNode {
-  type: VNodeEnum.CONSTRAINED;
-  // constraints: (
-  //   | TemporalConstraintBefore
-  //   | TemporalConstraintAfter
-  //   | TemporalConstraintOrGroup
-  // )[];
-  constraints: ASTCondition[];
-}
-
-export type Anchor =
-  | VestingBaseDate
-  | VestingBaseEvent
-  | VestingNodeConstrained;
-
-// ==== From ====
-export type From = Anchor | FromOperator;
-
-export interface FromEarlierOf extends EarlierOf<From> {}
-
-export interface FromLaterOf extends LaterOf<From> {}
-
-export type FromOperator = FromEarlierOf | FromLaterOf;
+export type From = VestingNode | EarlierOf<VestingNode> | LaterOf<VestingNode>;
 
 /* ------------------------
  * Periodicity
@@ -218,15 +216,4 @@ interface ASTVestingPeriod {
   cliff?: Cliff;
 }
 
-// ==== CLIFF ====
-
-export type Cliff =
-  | Duration // time-based cliff (e.g., ClIFF 12 months)
-  | Anchor
-  | CliffOperator;
-
-export interface CliffEarlierOf extends EarlierOf<Cliff> {}
-
-export interface CliffLaterOf extends LaterOf<Cliff> {}
-
-export type CliffOperator = CliffEarlierOf | CliffLaterOf;
+export type Cliff = VestingNode | EarlierOf<VestingNode> | LaterOf<VestingNode>;

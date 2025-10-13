@@ -57,6 +57,7 @@ VEST FROM 6 months
 VEST FROM EVENT milestone + 6 months
 VEST FROM EVENT milestone AFTER 6 months
 VEST FROM EVENT milestone AFTER EVENT ipo
+VEST FROM EVENT milestone AFTER event ipo and after event sugar
 
 VEST CLIFF 6 months
 VEST CLIFF event milestone + 6 months
@@ -67,3 +68,11 @@ VEST FROM EVENT milestore AFTER event ipo AND(AFTER EVENT milestone2, AFTER EVEN
 
 VEST FROM event grant before event a and after event b or before event c and after event d
 VEST FROM event grant (BEFORE event a or after event b) and before event c
+
+VEST FROM EARLIER OF (+3 months, EVENT milestone)
+VEST FROM event grant before earlier of (+3 months, event milestone)
+
+VEST FROM +3 months
+VEST FROM EARLIER OF (+3 months, EVENT m)
+VEST FROM event b BEFORE event a + 3 months and after date 2026-01-01 - 2 days
+[ VEST, VEST ]

@@ -239,7 +239,7 @@ function peg$parse(input, options) {
   const peg$e35 = peg$literalExpectation("CLIFF", true);
 
   function peg$f0(list) {    return list;  }
-  function peg$f1(stmt) {    return stmt;  }
+  function peg$f1(stmt) {    return [stmt];  }
   function peg$f2(x) {    return x;  }
   function peg$f3(a, s) {
     const amt = a ?? mkPortion(1, 1); // default 100%
@@ -263,7 +263,6 @@ function peg$parse(input, options) {
     const scale = Math.pow(10, decimals);
     const numerator = Math.round(value * scale);
     const denominator = scale;
-    const g = gcd(numerator, denominator);
     return mkPortion(numerator, denominator);
   }
   function peg$f11(n, d) {
@@ -292,7 +291,7 @@ function peg$parse(input, options) {
     return mkDate(iso);
   }
   function peg$f19(name) {
-    if (isSystemEvent(name.toLowerCase())) {
+    if (isSystemEvent(name)) {
       error(
         `'${name}' is a reserved system event. ` +
         'Pick a different event name'
@@ -300,21 +299,29 @@ function peg$parse(input, options) {
     }
     return mkEvent(name);  }
   function peg$f20(base, offsets, constraints) {
+    const offs = offsets.map(o => o[1])
+    if (constraints) {
+      return {
+        type: "CONSTRAINED",
+        base,
+        offsets: offs,
+        constraints: constraints[1]
+      }
+    }
     return {
-      type: constraints ? "CONSTRAINED" : "BARE",
+      type: "BARE",
       base,
-      offsets: offsets.map(o => o[1]),
-      constraints: constraints?.[1] ?? null
+      offsets: offs
     }
   }
   function peg$f21(s, op, base) {
-    if (isDuration(base)) {
-      error(`When used with ${op}, a duration may only follow an EVENT or DATE. Use e.g,: ${op} EVENT <milestone> ${base.sign} ${base.value} ${base.unit}`)
-    }
     return {
-      type: op.toUpperCase(),
-      base,
-      strict: !!s
+      type: "ATOM",
+      constraint: {
+        type: op.toUpperCase(),
+        base,
+        strict: !!s
+      }
     }
   }
   function peg$f22(e) {    return e;  }
@@ -349,6 +356,11 @@ function peg$parse(input, options) {
     return d;
   }
   function peg$f29(o, e) {
+    
+    if (o.unit !== e.unit) {
+      error("EVERY and OVER must have the same units")
+    }
+
     const span = o.value;
     const step = e.value
 
@@ -386,16 +398,10 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f33(a) {
-    if (isDuration(a)) {
-      return mkGrantDateNode(a);
-    }
-    return a;
+    return coerceToVestingNode(a, "FROM")
   }
   function peg$f34(a) {
-    if (isDuration(a)) {
-      return mkVestingStartNode(a);
-    }
-    return a;
+    return coerceToVestingNode(a, "CLIFF")
   }
   function peg$f35(f, p, c) {
     const base = {
@@ -1620,9 +1626,6 @@ function peg$parse(input, options) {
     if (s3 !== peg$FAILED) {
       s4 = peg$parse_();
       s5 = peg$parseVestingNode();
-      if (s5 === peg$FAILED) {
-        s5 = peg$parseGateExpr();
-      }
       if (s5 !== peg$FAILED) {
         peg$savedPos = s0;
         s0 = peg$f21(s1, s3, s5);
@@ -2353,7 +2356,7 @@ function peg$parse(input, options) {
   function mkPortion(n, d) {
     if (d === 0) throw new SyntaxError("Denominator cannot be 0")
     // keep denominator positive, move sign to numerator if ever needed
-    if (d < 0) { return n = -n; d = -d; }
+    if (d < 0) { n = -n; d = -d; }
     const g = gcd(Math.abs(n), d);
     return { type: "PORTION", numerator: n / g, denominator: d / g };
   }
@@ -2367,10 +2370,11 @@ function peg$parse(input, options) {
     return arr;
   }
   function mkBool(op, items) {
+    const OP = op.toUpperCase();
     // Flatten nested same-op nodes: AND(AND(a, b), c) -> AND(a,b,c)
     const flat = [];
     for (const item of items) {
-      if (item & item.type === op && Array.isArray(item.items)) {
+      if (item && item.type === OP && Array.isArray(item.items)) {
         flat.push(...item.items);
       } else {
         flat.push(item);
@@ -2380,32 +2384,39 @@ function peg$parse(input, options) {
     // Enforce arity >= 2
     if (flat.length === 1) return flat[0];
     if (flat.length < 2) throw new SyntaxError(
-      `${op} requires at least two items`
+      `${OP} requires at least two items`
     )
-    return { type: op, items: flat }
+    return { type: OP, items: flat }
   }
   const SYSTEM_EVENTS = new Set(["grantdate", "vestingstart"]);
   function isSystemEvent(name) {
     return SYSTEM_EVENTS.has(name.toLowerCase())
   }
-  function mkGrantDateNode(offset) {
+  function mkVestingNode(duration, context) {
     return {
       type: "BARE",
-      base: { type: "EVENT", value: "grantDate" },
-      offsets: [offset],
-      constraints: null
-    };
-  }
-  function isDuration(x) {
-    return x && typeof x === "object" && x.type === "DURATION";
-  }
-  function mkVestingStartNode(offset) {
-    return {
-      type: "BARE",
-      base: { type: "EVENT", value: "vestingStart"},
-      offsets: [offset],
-      constraints: null
+      base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
+      offsets: [duration],
     }
+  }
+  function coerceToVestingNode(x, context) {
+    // Duration -> Vesting Node, depending on context
+    if (x && typeof x === "object" && x.type === "DURATION") {
+      return mkVestingNode(x, context)
+    }
+    
+    // Pass through vesting nodes
+    if (x && (x.type === "BARE" || x.type === "CONSTRAINED")) return x;
+
+    // Recurse into selectors and coerce their items
+    if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {
+      return {
+        type: x.type,
+        items: x.items.map((item) => coerceToVestingNode(item, context))
+      }
+    }
+
+    error(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
   }
 
   peg$result = peg$startRuleFunction();

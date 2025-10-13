@@ -14,6 +14,11 @@ Every = "EVERY"i _ d:Duration {
 
 OverEveryOpt
   = o:Over _ e:Every {
+    
+    if (o.unit !== e.unit) {
+      error("EVERY and OVER must have the same units")
+    }
+
     const span = o.value;
     const step = e.value
 

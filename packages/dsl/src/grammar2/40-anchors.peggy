@@ -6,7 +6,7 @@ DateLiteral
 Ident = $([A-Za-z_][A-Za-z0-9_]*)
 
 EventRef = "EVENT"i _ name:Ident {
-  if (isSystemEvent(name.toLowerCase())) {
+  if (isSystemEvent(name)) {
     error(
       `'${name}' is a reserved system event. ` +
       'Pick a different event name'
@@ -18,23 +18,31 @@ VestingNode
   = base:(EventRef / DateLiteral)
     offsets:(_ Duration)*
     constraints:(_ OrExpr)? {
+      const offs = offsets.map(o => o[1])
+      if (constraints) {
+        return {
+          type: "CONSTRAINED",
+          base,
+          offsets: offs,
+          constraints: constraints[1]
+        }
+      }
       return {
-        type: constraints ? "CONSTRAINED" : "BARE",
+        type: "BARE",
         base,
-        offsets: offsets.map(o => o[1]),
-        constraints: constraints?.[1] ?? null
+        offsets: offs
       }
   }
 
 Constraint
-  = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:(VestingNode / GateExpr) {
-    if (isDuration(base)) {
-      error(`When used with ${op}, a duration may only follow an EVENT or DATE. Use e.g,: ${op} EVENT <milestone> ${base.sign} ${base.value} ${base.unit}`)
-    }
+  = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:VestingNode {
     return {
-      type: op.toUpperCase(),
-      base,
-      strict: !!s
+      type: "ATOM",
+      constraint: {
+        type: op.toUpperCase(),
+        base,
+        strict: !!s
+      }
     }
   }
 

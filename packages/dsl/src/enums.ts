@@ -42,7 +42,8 @@ export const enum OffsetEnum {
 }
 
 // NOTE: This might not need a schema
-export const enum ConstraintType {
+export const enum ConditionTypeEnum {
+  ATOM = "ATOM",
   AND = "AND",
   OR = "OR",
 }

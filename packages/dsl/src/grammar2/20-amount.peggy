@@ -26,7 +26,6 @@ PortionDecimal
       const scale = Math.pow(10, decimals);
       const numerator = Math.round(value * scale);
       const denominator = scale;
-      const g = gcd(numerator, denominator);
       return mkPortion(numerator, denominator);
     }
 
