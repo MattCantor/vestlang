@@ -36,6 +36,29 @@
       condition
     }
   }
+  const SYSTEM_EVENTS = new Set(["grantdate", "vestingstart"]);
+  function isSystemEvent(name) {
+    return SYSTEM_EVENTS.has(name.toLowerCase())
+  }
+  function mkGrantDateNode(offset) {
+    return {
+      type: "BARE",
+      base: { type: "EVENT", value: "grantDate" },
+      offsets: [offset],
+      conditions: null
+    };
+  }
+  function isDuration(x) {
+    return x && typeof x === "object" && x.type === "DURATION";
+  }
+  function mkVestingStartNode(offset) {
+    return {
+      type: "BARE",
+      base: { type: "EVENT", value: "vestingStart"},
+      offsets: [offset],
+      conditions: null
+    }
+  }
 }
 
 Start

@@ -52,3 +52,13 @@ VEST FROM LATER OF (EVENT milestone1 before EVENT milestone2, EVENT milestone2 b
 VEST FROM EVENT board AFTER DATE 2025-01-01 AND BEFORE DATE 2025-12-31 OR BEFORE EVENT milestone1
 
 [VEST, VEST]
+
+VEST FROM 6 months
+VEST FROM EVENT milestone + 6 months
+VEST FROM EVENT milestone AFTER 6 months
+VEST FROM EVENT milestone AFTER EVENT ipo
+
+VEST CLIFF 6 months
+VEST CLIFF event milestone + 6 months
+
+VEST FROM EVENT milestone AFTER 6 months

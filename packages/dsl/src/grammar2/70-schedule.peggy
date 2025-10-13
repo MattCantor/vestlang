@@ -1,6 +1,16 @@
-From = "FROM"i _ a:(VestingNode / GateExpr) { return a; }
+From = "FROM"i _ a:(VestingNode / GateExpr) {
+  if (isDuration(a)) {
+    return mkGrantDateNode(a);
+  }
+  return a;
+}
 
-Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) { return a; };
+Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) {
+  if (isDuration(a)) {
+    return mkVestingStartNode(a);
+  }
+  return a;
+};
 
 ScheduleBlock
   = f:From? _ p:OverEveryOpt _ c:Cliff? {

@@ -3,18 +3,27 @@ DateLiteral
       return mkDate(iso);
     }
 
-EventRef = "EVENT"i _ name:Ident { return mkEvent(name); }
+Ident = $([A-Za-z_] [A-Za-z0-9_]*)
+
+EventRef = "EVENT"i _ name:Ident {
+  if (isSystemEvent(name.toLowerCase())) {
+    error(
+      `'${name}' is a reserved system event. ` +
+      'Pick a different event name'
+    );
+  }
+  return mkEvent(name); }
 
 VestingNode
   = base:(EventRef / DateLiteral)
     offsets:(_ Duration)*
     conditions:(_ ConditionTree)? {
-    return {
-      type: conditions ? "CONDITIONED" : "BARE",
-      base,
-      offsets: offsets.map(o => o[1]),
-      conditions: conditions?.[1]
-    }
+      return {
+        type: conditions ? "CONDITIONED" : "BARE",
+        base,
+        offsets: offsets.map(o => o[1]),
+        conditions: conditions?.[1]
+      }
   }
 
 InFixConditions
@@ -40,8 +49,21 @@ SingleCondition
 
 ConditionTree = InFixConditions / ConditionFunction / SingleCondition
 
+ConditionExpr = ConditionSelector / VestingNode
+
+ConditionSelector
+  = op:("EARLIER"i / "LATER"i) _ "OF"i _ "(" _ head:ConditionExpr tail:(CommaSep ConditionExpr)* _ ")" {
+      return {
+        type: op.toUpperCase() === "EARLIER" ? "EARLIER_OF" : "LATER_OF",
+        items: collectTwoOrMore(head, tail)
+      };
+    }
+
 Condition
   = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:(VestingNode / GateExpr) {
+    if (isDuration(base)) {
+      error(`When used with ${op}, a duration may only follow an EVENT or DATE. E.g., ${op} EVENT <milestone> ${base.sign} ${base.value} ${base.unit}`)
+    }
     return {
       type: op.toUpperCase(),
       base,

@@ -10,6 +10,5 @@ Strict = "STRICTLY"i
 
 Offset = ("+" / "-")
 
-Ident = $([A-Za-z_] [A-Za-z0-9_]*)
 
 Integer = s:$[0-9]+ !"." { return parseInt(s, 10); }
