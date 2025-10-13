@@ -1,6 +1,8 @@
 import {
   ConstraintEnum,
+  ConstraintType,
   ExprEnum,
+  OffsetEnum,
   PeriodTypeEnum,
   VBaseEnum,
   VNodeEnum,
@@ -35,7 +37,7 @@ export type OCTDate = string & { [__isoDateBrand]: never };
 
 export interface ASTStatement {
   amount: AstAmount;
-  expr: ASTExpr;
+  schedule: ASTExpr;
 }
 
 /* ------------------------
@@ -83,10 +85,12 @@ export interface LaterOfASTExpr extends ASTExpr {
 
 export interface ASTSchedule extends ASTExpr {
   type: ExprEnum.SINGLETON;
-  from?: From | null;
-  over: Duration;
-  every: Duration;
-  cliff?: Cliff;
+  vesting_start: From | null;
+  periodicity: ASTVestingPeriod;
+  // from?: From | null;
+  // over: Duration;
+  // every: Duration;
+  // cliff?: Cliff;
 }
 
 export type AnyASTExpr = ASTSchedule | EarlierOfASTExpr | LaterOfASTExpr;
@@ -98,6 +102,7 @@ export interface Duration {
   type: "DURATION";
   value: number;
   unit: PeriodTypeEnum; // grammar converts weeks->days, years->months
+  sign?: OffsetEnum;
 }
 
 // ==== Vesting Base ====
@@ -125,9 +130,16 @@ export interface VestingBaseEvent extends VestingBase {
 // === Vesting Node ===
 
 // primitives/types/vestlang/VestingNode.schema.json
+// TODO: update schema - include offsets
 export interface VestingNode {
   type: VNodeEnum;
   base: VestingBaseDate | VestingBaseEvent;
+  offsets: Duration[];
+}
+
+export interface ASTCondition {
+  type: ConstraintType;
+  constraint: TemporalConstraint;
 }
 
 // types/vestlang/VestingNodeBare.schema.json
@@ -155,21 +167,24 @@ export interface TemporalConstraintBefore extends TemporalConstraint {
 }
 
 // types/vestlang/TemporalConstraintOrGroup
-export interface TemporalConstraintOrGroup {
-  type: "OR";
-  items: TwoOrMore<TemporalConstraint>;
-}
+// TODO: remove or update this schema
+// export interface TemporalConstraintOrGroup {
+//   type: "OR";
+//   items: TwoOrMore<TemporalConstraint>;
+// }
 
-export type Constraint = TemporalConstraint | TemporalConstraintOrGroup;
+// export type Constraint = TemporalConstraint | TemporalConstraintOrGroup;
 
 // types/vestlang/VestingNodeConstrained.schema.json
+// TODO: update this schema
 export interface VestingNodeConstrained extends VestingNode {
   type: VNodeEnum.CONSTRAINED;
-  constraints: (
-    | TemporalConstraintBefore
-    | TemporalConstraintAfter
-    | TemporalConstraintOrGroup
-  )[];
+  // constraints: (
+  //   | TemporalConstraintBefore
+  //   | TemporalConstraintAfter
+  //   | TemporalConstraintOrGroup
+  // )[];
+  constraints: ASTCondition[];
 }
 
 export type Anchor =
@@ -185,6 +200,18 @@ export interface FromEarlierOf extends EarlierOf<From> {}
 export interface FromLaterOf extends LaterOf<From> {}
 
 export type FromOperator = FromEarlierOf | FromLaterOf;
+
+/* ------------------------
+ * Periodicity
+ * ------------------------ */
+
+// NOTE: mimics existing OCT schema types/vesting/VestingPeriod, without `Integer` types
+interface ASTVestingPeriod {
+  type: PeriodTypeEnum;
+  occurrences: number; // the installment count
+  length: number; // the installment step
+  cliff?: Cliff;
+}
 
 // ==== CLIFF ====
 

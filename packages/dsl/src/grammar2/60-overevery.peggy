@@ -1,11 +1,11 @@
-Over = "OVER"i _ d:BareDuration {
+Over = "OVER"i _ d:Duration {
     if (d.sign === "MINUS") {
       error("OVER may not include a negative duration")
     }
     return d;
   }
 
-Every = "EVERY"i _ d:BareDuration {
+Every = "EVERY"i _ d:Duration {
     if (d.sign === "MINUS") {
       error("EVERY may not include a negative duration")
     }

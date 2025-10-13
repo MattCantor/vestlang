@@ -8,11 +8,19 @@
   function mkEvent(name) {
     return { type: "EVENT", value: name };
   }
-  function mkAmountAbsolute(n) {
-    return { type: "AmountAbsolute", value: n };
+  function mkQuantity(q) {
+    return { type: "QUANTITY", value: q };
   }
-  function mkAmountPercent(x) {
-    return { type: "AmountPercent", value: x };
+  function mkPortion(n, d) {
+    // keep denominator positive, move sign to numerator if ever needed
+    if (d < 0) { return n = -n; d = -d; }
+    return { type: "PORTION", numerator: n, denominator: d };
+  }
+  function gcd(a, b) {
+    a = Math.abs(a);
+    b = Math.abs(b);
+    while (b) { const t = a % b; a = b; b = t; }
+    return a || 1;
   }
   function collect(head, tail) {
     return [head, ...tail.map((t) => t[1])];
@@ -32,17 +40,6 @@
 
 Start
   = _ a:Amount? _ "VEST"i _ s:ScheduleBlock _ {
-      const amt = a ?? mkAmountPercent(1); // default 100%
+      const amt = a ?? mkPortion(1, 1); // default 100%
       return { amount: amt, schedule: s };
     }
-
-Amount
-  // Any decimal in [0,1] is a percent
-  = x:Decimal {
-      if (x < 0 || x > 1) {
-        error("Decimal amount must be between 0 and 1 inclusive");
-      }
-      return mkAmountPercent(x);
-    }
-  / n:Integer { return mkAmountAbsolute(n); }
-

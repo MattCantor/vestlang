@@ -7,7 +7,7 @@ EventRef = "EVENT"i _ name:Ident { return mkEvent(name); }
 
 VestingNode
   = base:(EventRef / DateLiteral)
-    offsets:(_ DurationWithOffset)*
+    offsets:(_ Duration)*
     conditions:(_ ConditionTree)? {
     return {
       type: conditions ? "CONDITIONED" : "BARE",
@@ -41,9 +41,10 @@ SingleCondition
 ConditionTree = InFixConditions / ConditionFunction / SingleCondition
 
 Condition
-  = op:("BEFORE"i / "AFTER"i) _ condition:(VestingNode / GateExpr) {
+  = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:(VestingNode / GateExpr) {
     return {
       type: op.toUpperCase(),
-      condition
+      base,
+      strict: !!s
     }
   }

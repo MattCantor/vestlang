@@ -1,4 +1,4 @@
-GateExpr = GateSelector / VestingNode / BareDuration 
+GateExpr = GateSelector / VestingNode / Duration 
 
 GateSelector
   = op:("EARLIER"i / "LATER"i) _ "OF"i _ "(" _ head:GateExpr tail:(CommaSep GateExpr)* _ ")" {
