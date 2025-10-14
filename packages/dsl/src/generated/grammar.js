@@ -413,7 +413,6 @@ function peg$parse(input, options) {
           value: "grantDate"
         },
         offsets: [],
-        constraints: null
       },
       periodicity: p,
     };

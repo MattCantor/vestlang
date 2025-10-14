@@ -1,0 +1,226 @@
+import { describe, it, expect } from "vitest";
+import { ASTSchedule, parse, VestingNode } from "../src/index";
+
+// handy helpers
+const asJSON = (x: unknown) => JSON.parse(JSON.stringify(x));
+const first = (src: string) => asJSON(parse(src)[0]);
+
+describe("Start & basics", () => {
+  it("returns an array even for a single statement", () => {
+    const ast = parse(`VEST`);
+    expect(Array.isArray(ast)).toBe(true);
+    expect(ast).toHaveLength(1);
+  });
+
+  it("default VEST (no FROM/period) produces default vesting_start and zero-length period", () => {
+    const stmt = first(`VEST`);
+    expect(stmt.amount).toEqual({
+      type: "PORTION",
+      numerator: 1,
+      denominator: 1,
+    });
+    expect(stmt.expr.type).toBe("SINGLETON");
+    expect(stmt.expr.vesting_start).toEqual({
+      type: "BARE",
+      base: { type: "EVENT", value: "grantDate" },
+      offsets: [],
+    });
+    expect(stmt.expr.periodicity).toEqual({
+      type: "DAYS",
+      length: 0,
+      occurrences: 1,
+    });
+  });
+
+  it("list form parses with trailing comma", () => {
+    const ast = parse(`[ VEST FROM EVENT a, VEST FROM EVENT b, ]`);
+    expect(ast).toHaveLength(2);
+
+    const first = ast[0].expr as ASTSchedule;
+    const firstVestingStart = first.vesting_start as VestingNode;
+    expect(firstVestingStart.base.value).toBe("a");
+
+    const second = ast[1].expr as ASTSchedule;
+    const secondVestingStart = second.vesting_start as VestingNode;
+    expect(secondVestingStart.base.value).toBe("b");
+  });
+});
+
+describe("Amount parsing", () => {
+  it("portion via decimal .5", () => {
+    const s = first(`.5 VEST FROM EVENT a`);
+    expect(s.amount).toEqual({ type: "PORTION", numerator: 1, denominator: 2 });
+  });
+
+  it("portion via fraction (reduces)", () => {
+    const s = first(`2/4 VEST FROM EVENT a`);
+    expect(s.amount).toEqual({ type: "PORTION", numerator: 1, denominator: 2 });
+  });
+
+  it("quantity via integer", () => {
+    const s = first(`10 VEST FROM EVENT a`);
+    expect(s.amount).toEqual({ type: "QUANTITY", value: 10 });
+  });
+
+  it("rejects out-of-range decimal portion", () => {
+    expect(() => parse(`1.1 VEST FROM EVENT a`)).toThrowError();
+  });
+});
+
+describe("FROM / CLIFF coercion", () => {
+  it("coerces top-level duration in FROM to a BARE node with grantDate", () => {
+    const s = first(`VEST FROM +3 months`);
+    const start = s.expr.vesting_start;
+    expect(start).toEqual({
+      type: "BARE",
+      base: { type: "EVENT", value: "grantDate" },
+      offsets: [{ type: "DURATION", value: 3, unit: "MONTHS", sign: "PLUS" }],
+    });
+    expect(start.offsets[0]).toMatchObject({
+      type: "DURATION",
+      value: 3,
+      unit: "MONTHS",
+      sign: "PLUS",
+    });
+  });
+
+  it("recursively coerces durations inside selectors for FROM", () => {
+    const s = first(`VEST FROM EARLIER OF ( +3 months, EVENT milestone )`);
+    const start = s.expr.vesting_start;
+    expect(start.type).toBe("EARLIER_OF");
+    expect(start.items[0]).toMatchObject({
+      type: "BARE",
+      base: { type: "EVENT", value: "grantDate" },
+      offsets: [{ type: "DURATION", value: 3, unit: "MONTHS", sign: "PLUS" }],
+    });
+    expect(start.items[1]).toMatchObject({
+      type: "BARE",
+      base: { type: "EVENT", value: "milestone" },
+      offsets: [],
+    });
+  });
+
+  it("uses vestingStart when coercing durations in CLIFF", () => {
+    const s = first(`VEST CLIFF EARLIER OF ( +2 months, EVENT x )`);
+    const cliff = s.expr.cliff;
+    expect(cliff.type).toBe("EARLIER_OF");
+    expect(cliff.items[0]).toMatchObject({
+      type: "BARE",
+      base: { type: "EVENT", value: "vestingStart" },
+      offsets: [{ type: "DURATION", value: 2, unit: "MONTHS", sign: "PLUS" }],
+    });
+  });
+});
+
+describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
+  it("parses a single ATOM constraint attached to a node", () => {
+    const s = first(`VEST FROM EVENT a BEFORE EVENT b + 10 days`);
+    const node = s.expr.vesting_start;
+    expect(node.type).toBe("CONSTRAINED");
+    expect(node.constraints).toMatchObject({
+      type: "ATOM",
+      constraint: {
+        type: "BEFORE",
+        strict: false,
+        base: {
+          type: "BARE",
+          base: { type: "EVENT", value: "b" },
+          offsets: [
+            { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },
+          ],
+        },
+      },
+    });
+  });
+
+  it("enforces SQL precedence: AND binds tighter than OR", () => {
+    const s = first(
+      `VEST FROM EVENT a BEFORE EVENT b AND AFTER EVENT c OR BEFORE DATE 2025-01-02`,
+    );
+    const c = s.expr.vesting_start.constraints;
+    // OR( AND( BEFORE b, AFTER c ), BEFORE date )
+    expect(c.type).toBe("OR");
+    expect(c.items).toHaveLength(2);
+    expect(c.items[0].type).toBe("AND");
+    expect(c.items[0].items.map((x: any) => x.type)).toEqual(["ATOM", "ATOM"]);
+    expect(c.items[1].type).toBe("ATOM");
+  });
+
+  it("Function form works: AND(...), OR(...)", () => {
+    const s = first(
+      `VEST FROM EVENT a AND( BEFORE EVENT b, AFTER DATE 2025-01-01 )`,
+    );
+    const c = s.expr.vesting_start.constraints;
+    expect(c.type).toBe("AND");
+    expect(c.items).toHaveLength(2);
+    expect(c.items[0].type).toBe("ATOM");
+    expect(c.items[1].type).toBe("ATOM");
+  });
+
+  it("disallows selectors in constraints (must use AND/OR)", () => {
+    expect(() =>
+      parse(`VEST FROM EVENT a BEFORE EARLIER OF ( EVENT b, EVENT c )`),
+    ).toThrowError();
+  });
+
+  it("disallows naked duration in constraints", () => {
+    expect(() => parse(`VEST FROM EVENT a BEFORE +3 months`)).toThrowError();
+  });
+});
+
+describe("System event protections", () => {
+  it("errors if EVENT grantDate appears as user-provided Ident", () => {
+    expect(() => parse(`VEST FROM EVENT grantDate`)).toThrowError();
+  });
+
+  it("errors if EVENT vestingStart appears as user-provided Ident", () => {
+    expect(() => parse(`VEST FROM EVENT vestingStart`)).toThrowError();
+  });
+});
+
+describe("Over/Every validations", () => {
+  it("computes period when OVER is multiple of EVERY", () => {
+    const s = first(`VEST OVER 12 months EVERY 3 months`);
+    expect(s.expr.periodicity).toEqual({
+      type: "MONTHS",
+      length: 3,
+      occurrences: 4,
+    });
+  });
+
+  it("errors when OVER not multiple of EVERY", () => {
+    expect(() => parse(`VEST OVER 10 days EVERY 3 days`)).toThrowError();
+  });
+
+  it("errors when ONLY OVER is present", () => {
+    expect(() => parse(`VEST OVER 3 months`)).toThrowError();
+  });
+
+  it("errors when ONLY EVERY is present", () => {
+    expect(() => parse(`VEST EVERY 1 months`)).toThrowError();
+  });
+
+  it("zero/zero yields a single immediate occurrence (identity period)", () => {
+    const s = first(`VEST OVER 0 days EVERY 0 days`);
+    expect(s.expr.periodicity).toEqual({
+      type: "DAYS",
+      length: 0,
+      occurrences: 1,
+    });
+  });
+});
+
+describe("Misc", () => {
+  it("EOF sentinel catches trailing junk", () => {
+    expect(() => parse(`VEST hello`)).toThrowError(); // no grammar path allows stray 'hello'
+  });
+
+  it("whitespace/newlines around commas tolerated in lists", () => {
+    const ast = parse(`[
+      VEST FROM EVENT a
+      ,
+      VEST FROM EVENT b
+    ]`);
+    expect(ast).toHaveLength(2);
+  });
+});
