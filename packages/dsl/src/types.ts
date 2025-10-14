@@ -1,27 +1,46 @@
-import {
-  AmountTypeEnum,
-  ConstraintEnum,
-  ConditionTypeEnum,
-  ExprEnum,
-  OffsetEnum,
-  PeriodTypeEnum,
-  VBaseEnum,
-  VNodeEnum,
-} from "./enums";
+/* ------------------------
+ * Enums
+ * ------------------------ */
+
+// enums/TemporalConstraintType.schema.json
+export type ConstraintTag = "BEFORE" | "AFTER";
+
+// enums/VestingBaseType.schema.json
+export type VBaseTag = "DATE" | "EVENT";
+
+// enums/VestingNodeType.schema.json
+export type VNodeTag = "BARE" | "CONSTRAINED";
+
+// enums/VestlangExpressionType.schema.json
+export type ExprTag = "SINGLETON" | "EARLIER_OF" | "LATER_OF";
+
+// enums/PeriodType.schema.json
+// existing OCT schema
+export type PeriodTag = "DAYS" | "MONTHS";
+
+// enums/Offset.schema.json
+// TODO: add this schema
+export type OffsetTag = "PLUS" | "MINUS";
+
+// NOTE: This might not need a schema
+export type ConditionTag = "ATOM" | "AND" | "OR";
+
+// NOTE: this might have an existing schema
+export type AmountTag = "PORTION" | "QUANTITY";
 
 // ==== Helpers ====
 export type TwoOrMore<T> = [T, T, ...T[]];
 
-export type SelectorTag = ExprEnum.EARLIER_OF | ExprEnum.LATER_OF;
+export type SelectorTag = "EARLIER_OF" | "LATER_OF";
 
 export interface Selector<T, K extends SelectorTag = SelectorTag> {
   type: K;
   items: TwoOrMore<T>;
 }
 
-export interface EarlierOf<T> extends Selector<T, ExprEnum.EARLIER_OF> {}
+export interface EarlierOf<T> extends Selector<T, "EARLIER_OF"> {}
 
-export interface LaterOf<T> extends Selector<T, ExprEnum.LATER_OF> {}
+export interface LaterOf<T> extends Selector<T, "LATER_OF"> {}
 
 /* ------------------------
  * OCT Types
@@ -46,16 +65,16 @@ export interface ASTStatement {
  * ------------------------ */
 
 export type BaseAmount = {
-  type: AmountTypeEnum;
+  type: AmountTag;
 };
 
 export interface AmountQuantity extends BaseAmount {
-  type: AmountTypeEnum.QUANTITY;
+  type: "QUANTITY";
   value: number;
 }
 
 export interface AmountPortion extends BaseAmount {
-  type: AmountTypeEnum.PORTION;
+  type: "PORTION";
   numerator: number;
   denominator: number;
 }
@@ -67,24 +86,24 @@ export type Amount = AmountQuantity | AmountPortion;
  * ------------------------ */
 
 export interface ASTExpr {
-  type: ExprEnum;
+  type: ExprTag;
 }
 
 export interface EarlierOfASTExpr extends ASTExpr {
-  type: ExprEnum.EARLIER_OF;
+  type: "EARLIER_OF";
   items: TwoOrMore<AnyASTExpr>;
 }
 
 export interface LaterOfASTExpr extends ASTExpr {
-  type: ExprEnum.LATER_OF;
+  type: "LATER_OF";
   items: TwoOrMore<AnyASTExpr>;
 }
 
 // export type ASTExprSelector = EarlierOfASTExpr | LaterOfASTExpr;
 
 export interface ASTSchedule extends ASTExpr {
-  type: ExprEnum.SINGLETON;
-  vesting_start: From;
+  type: "SINGLETON";
+  vesting_start: FromExpr;
   periodicity: ASTVestingPeriod;
 }
 
@@ -98,8 +117,8 @@ export type AnyASTExpr = ASTSchedule | EarlierOfASTExpr | LaterOfASTExpr;
 export interface Duration {
   type: "DURATION";
   value: number;
-  unit: PeriodTypeEnum; // grammar converts weeks->days, years->months
-  sign?: OffsetEnum;
+  unit: PeriodTag; // grammar converts weeks->days, years->months
+  sign?: OffsetTag;
 }
 
 /* ------------------------
@@ -108,19 +127,19 @@ export interface Duration {
 
 // primitives/vestlang/VestingBase.schema.json
 export interface VestingBase {
-  type: VBaseEnum;
+  type: VBaseTag;
   value: string;
 }
 
 // types/vestlang/VestingBaseDate.schema.json
 export interface VestingBaseDate extends VestingBase {
-  type: VBaseEnum.DATE;
+  type: "DATE";
   value: OCTDate;
 }
 
 // types/vestlang/VestingBaseEvent.schema.json
 export interface VestingBaseEvent extends VestingBase {
-  type: VBaseEnum.EVENT;
+  type: "EVENT";
   value: string;
 }
 
@@ -131,20 +150,20 @@ export interface VestingBaseEvent extends VestingBase {
 // primitives/types/vestlang/VestingNode.schema.json
 // TODO: update schema - include offsets
 export interface VestingNode {
-  type: VNodeEnum;
+  type: VNodeTag;
   base: VestingBaseDate | VestingBaseEvent;
   offsets: Duration[];
 }
 
 // types/vestlang/VestingNodeBare.schema.json
 export interface VestingNodeBare extends VestingNode {
-  type: VNodeEnum.BARE;
+  type: "BARE";
 }
 
 // types/vestlang/VestingNodeConstrained.schema.json
 // TODO: update this schema
 export interface VestingNodeConstrained extends VestingNode {
-  type: VNodeEnum.CONSTRAINED;
+  type: "CONSTRAINED";
   constraints: AnyCondition;
 }
 
@@ -154,21 +173,21 @@ export interface VestingNodeConstrained extends VestingNode {
 
 // NOTE: this might not need any schema
 export interface ASTCondition {
-  type: ConditionTypeEnum;
+  type: ConditionTag;
 }
 
 export interface ConditionAtom extends ASTCondition {
-  type: ConditionTypeEnum.ATOM;
+  type: "ATOM";
   constraint: TemporalConstraint;
 }
 
 export interface ConditionAndGroup extends ASTCondition {
-  type: ConditionTypeEnum.AND;
+  type: "AND";
   items: TwoOrMore<AnyCondition>;
 }
 
 export interface ConditionOrGroup extends ASTCondition {
-  type: ConditionTypeEnum.OR;
+  type: "OR";
   items: TwoOrMore<AnyCondition>;
 }
 
@@ -180,19 +199,19 @@ export type AnyCondition = ConditionAtom | ConditionAndGroup | ConditionOrGroup;
 
 // primitives/types/vestlang/TemporalConstraint.schema.json
 export interface TemporalConstraint {
-  type: ConstraintEnum;
+  type: ConstraintTag;
   base: VestingNode;
   strict: boolean;
 }
 
 // types/vestlang/TemporalConstraintAfter.schema.json
 export interface TemporalConstraintAfter extends TemporalConstraint {
-  type: ConstraintEnum.AFTER;
+  type: "AFTER";
 }
 
 // types/vestlang/TemporalConstraintBefore.schema.json
 export interface TemporalConstraintBefore extends TemporalConstraint {
-  type: ConstraintEnum.BEFORE;
+  type: "BEFORE";
 }
 
 // types/vestlang/TemporalConstraintOrGroup
@@ -202,7 +221,10 @@ export interface TemporalConstraintBefore extends TemporalConstraint {
 //   items: TwoOrMore<TemporalConstraint>;
 // }
 
-export type From = VestingNode | EarlierOf<VestingNode> | LaterOf<VestingNode>;
+export type FromEarlierOf = EarlierOf<FromExpr>;
+export type FromLaterOf = LaterOf<FromExpr>;
+
+export type FromExpr = VestingNode | FromEarlierOf | FromLaterOf;
 
 /* ------------------------
  * Periodicity
@@ -210,10 +232,12 @@ export type From = VestingNode | EarlierOf<VestingNode> | LaterOf<VestingNode>;
 
 // NOTE: mimics existing OCT schema types/vesting/VestingPeriod, without `Integer` types
 interface ASTVestingPeriod {
-  type: PeriodTypeEnum;
+  type: PeriodTag;
   occurrences: number; // the installment count
   length: number; // the installment step
-  cliff?: Cliff;
+  cliff?: CliffExpr;
 }
 
-export type Cliff = VestingNode | EarlierOf<VestingNode> | LaterOf<VestingNode>;
+export type CliffEarlierOf = EarlierOf<CliffExpr>;
+export type CliffLaterOf = LaterOf<CliffExpr>;
+export type CliffExpr = VestingNode | CliffEarlierOf | CliffLaterOf;
