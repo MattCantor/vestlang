@@ -1,0 +1,24 @@
+{
+  "name": "@vestlang/types",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "default": "./dist/index.d.ts",
+      "types": "./dist/index.d.ts"
+    },
+    "./dsl-only": {
+      "default": "./dist/dsl-only/index.d.ts",
+      "types": "./dist/dsl-only/index.d.ts"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json --emitDeclarationOnly"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
