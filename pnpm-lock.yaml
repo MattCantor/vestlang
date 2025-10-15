@@ -155,6 +155,9 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       rimraf:
         specifier: ^6.0.1
@@ -184,6 +187,12 @@ importers:
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.5.2)(jiti@1.21.7)(terser@5.44.0)(tsx@4.20.5)
+
+  packages/types:
+    devDependencies:
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
 
 packages:
 

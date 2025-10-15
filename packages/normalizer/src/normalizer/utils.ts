@@ -1,7 +1,18 @@
+import {
+  Condition,
+  RawCondition,
+  RawSchedule,
+  RawVestingNode,
+  Schedule,
+  ScheduleExpr,
+  VestingNode,
+  VestingNodeExpr,
+} from "@vestlang/types";
+
 /**
  * Create a deterministic key for sorting/deduplication.
  */
-export function stableKey(x: unknown): string {
+function stableKey(x: unknown): string {
   const seen = new WeakSet<object>();
   const stringify = (v: any): any => {
     if (v === null || typeof v !== "object") return v;
@@ -17,7 +28,7 @@ export function stableKey(x: unknown): string {
 }
 
 /** Remove structural duplicates while preserving the first occurrence. */
-export function dedupe<T>(arr: T[]): T[] {
+function dedupe<T>(arr: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const item of arr) {
@@ -28,4 +39,55 @@ export function dedupe<T>(arr: T[]): T[] {
     }
   }
   return out;
+}
+
+/**
+ * Normalize an expression
+ * - Recursively normalizes items
+ * - Flattens nested same-op selectors
+ * - Sorts and dedupes same-op selectors
+ */
+export function NormalizeAndSort<
+  T extends RawSchedule,
+  E extends { type: string; items: T[] },
+  N extends ScheduleExpr,
+>(expression: E, normalizeFN: (x: T) => N): N;
+export function NormalizeAndSort<
+  T extends RawVestingNode,
+  E extends { type: string; items: T[] },
+  N extends VestingNodeExpr,
+>(expression: E, normalizeFN: (x: T) => N): N;
+export function NormalizeAndSort<
+  T extends RawCondition,
+  E extends { type: string; items: T[] },
+  N extends Condition,
+>(expression: E, normalizeFN: (x: T) => N): N;
+export function NormalizeAndSort<
+  T extends RawSchedule | RawVestingNode | RawCondition,
+  E extends {
+    type: string;
+    items: T[];
+  },
+  N extends Schedule | VestingNode | Condition,
+>(expression: E, normalizeFN: (x: T) => N) {
+  // Normalize children (nested selecotrs or vesting nodes or schedules
+  let items = expression.items.map(normalizeFN);
+
+  // Flatten same-op: EARLIER_OF(EARLIER_OF(...), x) -> EARLIER_OF(...)
+  items = items.flatMap((item) =>
+    item.type === expression.type ? (item as any).items : [item],
+  );
+
+  // Sort & dedupe
+  items.sort((a, b) => stableKey(a).localeCompare(stableKey(b)));
+  items = dedupe(items);
+
+  // Collapse singletons
+  if (items.length === 1) return items[0];
+
+  if (items.length === 0) {
+    throw new Error(`${expression.type} became empty after normalization`);
+  }
+
+  return { type: expression.type, items };
 }

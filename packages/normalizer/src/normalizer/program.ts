@@ -1,51 +1,15 @@
-import {
-  ASTExpr,
-  ASTSchedule,
-  ASTStatement,
-  ASTCliffExpr,
-  EarlierOfASTExpr,
-  ASTFromExpr,
-  LaterOfASTExpr,
-  ASTNode,
-} from "@vestlang/dsl";
 import { normalizeVestingNode } from "./core.js";
-import { dedupe, stableKey } from "./utils.js";
+import { NormalizeAndSort } from "./utils.js";
 import {
-  EarlierOfSchedule,
-  EarlierOfVestingNode,
-  LaterOfSchedule,
-  LaterOfVestingNode,
+  RawSchedule,
+  RawScheduleExpr,
+  RawStatement,
+  RawVestingNodeExpr,
   Schedule,
+  ScheduleExpr,
   Statement,
-  VestingNode,
-} from "../types/index.js";
-
-/* ------------------------
- * Guards
- * ------------------------ */
-
-/** Type guard for Schedules */
-export function isSchedule(e: ASTExpr): e is ASTSchedule {
-  return !!e && typeof e === "object" && e.type === "SINGLETON";
-}
-
-/** Type guard for selectors (EARLIER_OF/LATER_OF) */
-export function isSelector(x: any): x is EarlierOfASTExpr | LaterOfASTExpr {
-  return (
-    !!x &&
-    typeof x === "object" &&
-    (x.type === "LATER_OF" || x.type === "EARLIER_OF")
-  );
-}
-
-/** Type guard for vesting nodes */
-export function isVestingNode(x: any): x is ASTNode {
-  return (
-    !!x &&
-    typeof x === "object" &&
-    (x.type === "BARE" || x.type === "CONSTRAINED")
-  );
-}
+  VestingNodeExpr,
+} from "@vestlang/types";
 
 /* ------------------------
  * Orchestration
@@ -55,43 +19,43 @@ export function isVestingNode(x: any): x is ASTNode {
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
-export function normalizeStatement(s: ASTStatement): Statement {
+export function normalizeStatement(s: RawStatement): Statement {
   return {
     amount: s.amount,
-    expr: normalizeExpr(s.expr),
+    expr: normalizeScheduleExpr(s.expr),
   };
 }
 
 /**
- * Normalize an ASTExpr
- * - SINGLETON schedules
- * - Selectors (EARLIER_OF/LATER_OF) across expressions
+ * Normalize a ScheduleExpr
+ * - SINGLETON schedule
+ * - Selectors (EARLIER_OF/LATER_OF) over Schedules
  */
-function normalizeExpr(
-  e: ASTExpr,
-): Schedule | LaterOfSchedule | EarlierOfSchedule {
-  if (isSchedule(e)) {
-    return normalizeSchedule(e);
+function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
+  switch (e.type) {
+    case "SINGLETON":
+      return normalizeSchedule(e);
+    case "EARLIER_OF":
+    case "LATER_OF":
+      return NormalizeAndSort(e, normalizeScheduleExpr);
+    default:
+      throw new Error(
+        `normalizeScheduleExpr: unexpected ScheduleExpr type ${(e as any)?.type}`,
+      );
   }
-
-  if (isSelector(e)) {
-    return normalizeExprSelector(e);
-  }
-
-  throw new Error(`normalizeExpr: unexpected expr type ${(e as any)?.type}`);
 }
 
 /**
  * Normalize a schedule
- * - Normaizes `vesting_start` and optional `cliff`
+ * - Normalizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: ASTSchedule): Schedule {
-  const vesting_start = normalizeFromOrCliff(s.vesting_start);
+function normalizeSchedule(s: RawSchedule): Schedule {
+  const vesting_start = normalizeVestingNodeExpr(s.vesting_start);
 
   const cliff =
     (s as any).cliff !== undefined
-      ? normalizeFromOrCliff((s as any).cliff)
+      ? normalizeVestingNodeExpr((s as any).cliff)
       : undefined;
 
   const periodicity = { ...s.periodicity };
@@ -102,51 +66,21 @@ function normalizeSchedule(s: ASTSchedule): Schedule {
 }
 
 /**
- * Normalizes a `FROM` or `CLIFF` payload, which may be a vesting node or a selector.
+ * Normalizes a `vesting_start` or `cliff` expression
+ * - BARE or CONSTRAINED vesting node
+ * - Selectors (EARLIER_OF/LATER_OF) over `vesting_start` or `cliff` expressions
  */
-function normalizeFromOrCliff(
-  x: ASTCliffExpr | ASTFromExpr,
-): VestingNode | LaterOfVestingNode | EarlierOfVestingNode {
-  if (isVestingNode(x)) return normalizeVestingNode(x);
-  if (isSelector(x)) return normalizeExprSelector(x);
-  throw new Error(
-    `normalizeFromOrCliff: unexpected expression type ${(x as any)?.type}`,
-  );
-}
-
-/* ------------------------
- * Selectors
- * ------------------------ */
-
-/**
- * Normalize an expression selector:
- * - Recursively normalizes items
- * - Flattens nested same-op selectors
- * - Sorts and dedupes items for determinism
- */
-export function normalizeExprSelector(
-  selector: EarlierOfASTExpr | LaterOfASTExpr,
-) {
-  const tag = selector.type; // EARLIER_OF | LATER_OF
-
-  // Normalize children (nested selecotrs or vesting nodes or schedules
-  let items = selector.items.map((item) =>
-    isVestingNode(item)
-      ? normalizeVestingNode(item)
-      : normalizeExpr(item as ASTExpr),
-  );
-
-  // Flatten same-op: EARLIER_OF(EARLIER_OF(...), x) -> EARLIER_OF(...)
-  items = items.flatMap((item) =>
-    isSelector(item) && item.type === tag ? (item as any).items : [item],
-  );
-
-  // Sort & dedupe
-  items.sort((a, b) => stableKey(a).localeCompare(stableKey(b)));
-  items = dedupe(items);
-
-  // Collapse singletons
-  if (items.length === 1) return items[0];
-
-  return { type: tag, items } as any;
+function normalizeVestingNodeExpr(e: RawVestingNodeExpr): VestingNodeExpr {
+  switch (e.type) {
+    case "BARE":
+    case "CONSTRAINED":
+      return normalizeVestingNode(e);
+    case "EARLIER_OF":
+    case "LATER_OF":
+      return NormalizeAndSort(e, normalizeVestingNodeExpr);
+    default:
+      throw new Error(
+        `normalizeVestingNodeExpr: unexpected VestingNode type ${(e as any)?.type}`,
+      );
+  }
 }

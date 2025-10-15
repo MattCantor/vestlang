@@ -1,6 +1,5 @@
-import { ASTStatement } from "@vestlang/dsl";
+import { Program, RawProgram } from "@vestlang/types";
 import { normalizeStatement } from "./program.js";
-import { Program } from "../types/index.js";
 
 /* ------------------------
  * Public API
@@ -27,6 +26,6 @@ import { Program } from "../types/index.js";
  *  const norm = normalizeProgram(ast);
  *  // `norm` will be fed to downstream (e.g., Open Cap Table, CNF converter)
  */
-export function normalizeProgram(stmts: ASTStatement[]): Program {
+export function normalizeProgram(stmts: RawProgram): Program {
   return stmts.map(normalizeStatement);
 }
