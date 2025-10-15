@@ -1,6 +1,17 @@
 import { Duration, OffsetTag, PeriodTag } from "@vestlang/dsl";
+import { DurationDay, DurationMonth, Offsets } from "../types/index.js";
 
 /** Construct a canonical Duration. */
+function makeDuration(
+  value: number,
+  unit: "MONTHS",
+  sign: OffsetTag,
+): DurationMonth;
+function makeDuration(
+  value: number,
+  unit: "DAYS",
+  sign: OffsetTag,
+): DurationDay;
 function makeDuration(
   value: number,
   unit: PeriodTag,
@@ -11,7 +22,7 @@ function makeDuration(
     value,
     unit,
     sign,
-  } as Duration;
+  };
 }
 
 /* ------------------------
@@ -27,7 +38,7 @@ function makeDuration(
  *  @example
  *    [+2M, -1M, +10D] -> [+1M, +10D]
  */
-export function normalizeOffsets(offsets: Duration[]): Duration[] {
+export function normalizeOffsets(offsets: Duration[]): Offsets {
   if (!offsets || offsets.length === 0) return [];
 
   let months = 0;
@@ -41,12 +52,18 @@ export function normalizeOffsets(offsets: Duration[]): Duration[] {
     else throw new Error(`normalizeOffsets: Unexpected unit: ${o.unit}`);
   }
 
-  const out: Duration[] = [];
-  if (months !== 0)
-    out.push(
-      makeDuration(Math.abs(months), "MONTHS", months < 0 ? "MINUS" : "PLUS"),
-    );
-  if (days !== 0)
-    out.push(makeDuration(Math.abs(days), "DAYS", days < 0 ? "MINUS" : "PLUS"));
-  return out;
+  const monthDur =
+    months !== 0
+      ? makeDuration(Math.abs(months), "MONTHS", months < 0 ? "MINUS" : "PLUS")
+      : undefined;
+
+  const dayDur =
+    days !== 0
+      ? makeDuration(Math.abs(days), "DAYS", days < 0 ? "MINUS" : "PLUS")
+      : undefined;
+
+  if (monthDur && dayDur) return [monthDur, dayDur];
+  if (monthDur) return [monthDur];
+  if (dayDur) return [dayDur];
+  return [];
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ASTSchedule, parse, VestingNode } from "../src/index";
+import { ASTSchedule, parse, ASTNode } from "../src/index";
 
 // handy helpers
 const asJSON = (x: unknown) => JSON.parse(JSON.stringify(x));
@@ -37,11 +37,11 @@ describe("Start & basics", () => {
     expect(ast).toHaveLength(2);
 
     const first = ast[0].expr as ASTSchedule;
-    const firstVestingStart = first.vesting_start as VestingNode;
+    const firstVestingStart = first.vesting_start as ASTNode;
     expect(firstVestingStart.base.value).toBe("a");
 
     const second = ast[1].expr as ASTSchedule;
-    const secondVestingStart = second.vesting_start as VestingNode;
+    const secondVestingStart = second.vesting_start as ASTNode;
     expect(secondVestingStart.base.value).toBe("b");
   });
 });

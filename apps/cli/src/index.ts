@@ -2,7 +2,7 @@
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { parse } from "@vestlang/dsl";
-import { normalizeStatement } from "@vestlang/normalizer";
+import { normalizeProgram } from "@vestlang/normalizer";
 
 function readAllStdin(): string {
   try {
@@ -35,7 +35,7 @@ program
   .action((parts: string[] = [], opts: { stdin?: boolean }) => {
     const input = opts.stdin ? readAllStdin() : parts.join(" ");
     const ast = parse(input);
-    const result = normalizeStatement(ast);
+    const result = normalizeProgram(ast);
     console.log(JSON.stringify(result, null, 2));
   });
 

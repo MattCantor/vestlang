@@ -1,23 +1,36 @@
 import {
   AnyCondition,
-  ConditionAndGroup,
   ConditionAtom,
-  ConditionOrGroup,
-  TemporalConstraint,
-  VestingNode,
-  VestingNodeBare,
-  VestingNodeConstrained,
+  ASTNode,
+  ASTNodeConstrained,
 } from "@vestlang/dsl";
 import { normalizeOffsets } from "./offsets.js";
 import { stableKey, dedupe } from "./utils.js";
+import {
+  AndCondition,
+  AtomCondition,
+  BareVestingNode,
+  Condition,
+  ConstrainedVestingNode,
+  OrCondition,
+  VestingNode,
+} from "../types/index.js";
 
 /* ------------------------
  * Guards
  * ------------------------ */
 
 /** Type guard for constrained vesting nodes */
-export function isConstrainedNode(x: any): x is VestingNodeConstrained {
+function isConstrainedASTNode(x: any): x is ASTNodeConstrained {
   return !!x && typeof x === "object" && x.type === "CONSTRAINED";
+}
+
+function isConstrainedVestingNode(x: any): x is ConstrainedVestingNode {
+  return !!x && typeof x === "object" && x.type === "CONSTRAINED";
+}
+
+function isBareVestingNode(x: any): x is BareVestingNode {
+  return !!x && typeof x === "object" && x.type === "BARE";
 }
 
 /* ------------------------
@@ -29,24 +42,24 @@ export function isConstrainedNode(x: any): x is VestingNodeConstrained {
  * - Canonicalize offsets
  * - Normalize constraints (if CONSTRAINED)
  */
-export function normalizeVestingNode(n: VestingNode): VestingNode {
+export function normalizeVestingNode(n: ASTNode): VestingNode {
   const base = n.base;
   const offsets = normalizeOffsets(n.offsets);
 
-  if (isConstrainedNode(n)) {
+  if (isConstrainedASTNode(n)) {
     const constraints = normalizeCondition(n.constraints);
     return {
       type: "CONSTRAINED",
       base,
       offsets,
       constraints,
-    } as VestingNodeConstrained;
+    } as ConstrainedVestingNode;
   }
   return {
     type: "BARE",
     base,
     offsets,
-  };
+  } as BareVestingNode;
 }
 
 /* ------------------------
@@ -63,7 +76,7 @@ export function normalizeVestingNode(n: VestingNode): VestingNode {
  *
  * Ensures no ATOM has a CONSTRAINED base after normalization
  */
-function normalizeCondition(node: AnyCondition): AnyCondition {
+function normalizeCondition(node: AnyCondition): Condition {
   switch (node.type) {
     case "ATOM":
       return normalizeAtom(node);
@@ -91,7 +104,7 @@ function normalizeCondition(node: AnyCondition): AnyCondition {
       return {
         type: node.type,
         items,
-      } as ConditionAndGroup | ConditionOrGroup;
+      } as AndCondition | OrCondition;
 
     default:
       throw new Error(
@@ -106,30 +119,36 @@ function normalizeCondition(node: AnyCondition): AnyCondition {
  * - If base is CONSTRAINED, hoist the inner constraints:
  *   ATOM(op, base=CONSTRAINED(B, C2))  ⇒  AND( C2 , ATOM(op, base=BARE(B)) )
  */
-function normalizeAtom(a: ConditionAtom): AnyCondition {
-  const baseNorm = normalizeVestingNode(a.constraint.base as VestingNode);
+function normalizeAtom(a: ConditionAtom): Condition {
+  const normalizedBase = normalizeVestingNode(a.constraint.base);
 
-  if (isConstrainedNode(baseNorm)) {
-    const bare: VestingNodeBare = {
+  if (isConstrainedVestingNode(normalizedBase)) {
+    const bare: BareVestingNode = {
       type: "BARE",
-      base: baseNorm.base,
-      offsets: baseNorm.offsets,
+      base: normalizedBase.base,
+      offsets: normalizedBase.offsets,
     };
-    const leaf: ConditionAtom = {
+    const leaf: AtomCondition = {
       type: "ATOM",
-      constraint: { ...a.constraint, base: bare } as TemporalConstraint,
+      constraint: { ...a.constraint, base: bare },
     };
     // Delegate combining and secondary normalization to caller (AND path)
     return normalizeCondition({
       type: "AND",
-      items: [baseNorm.constraints, leaf] as any,
-    });
+      items: [normalizedBase.constraints, leaf],
+    }) as AndCondition;
   }
 
-  return {
-    type: "ATOM",
-    constraint: { ...a.constraint, base: baseNorm } as TemporalConstraint,
-  };
+  if (isBareVestingNode(normalizedBase)) {
+    return {
+      type: "ATOM",
+      constraint: { ...a.constraint, base: normalizedBase },
+    };
+  }
+
+  throw new Error(
+    `normalizeAtom: unexpected vesting node type ${(a as any)?.type} `,
+  );
 }
 
 /**
@@ -140,22 +159,22 @@ function normalizeAtom(a: ConditionAtom): AnyCondition {
  *
  * The caller (parent group) will take care of flattening/sorting/deduping.
  */
-function hoistIfConstrainedBase(n: AnyCondition): AnyCondition[] {
-  if (n.type !== "ATOM") return [n];
+function hoistIfConstrainedBase(c: Condition): Condition[] {
+  if (c.type !== "ATOM") return [c];
 
-  const b = n.constraint.base as VestingNode;
-  if (isConstrainedNode(b)) {
-    const bare: VestingNodeBare = {
+  const vestingNode = c.constraint.base;
+  if (isConstrainedVestingNode(vestingNode)) {
+    const bare: BareVestingNode = {
       type: "BARE",
-      base: b.base,
-      offsets: b.offsets,
+      base: vestingNode.base,
+      offsets: vestingNode.offsets,
     };
-    const leaf: ConditionAtom = {
+    const leaf: AtomCondition = {
       type: "ATOM",
-      constraint: { ...n.constraint, base: bare } as TemporalConstraint,
+      constraint: { ...c.constraint, base: bare },
     };
     // Caller (normalizeCondition on the parent group) will flatten/sort/dedupe
-    return [b.constraints as AnyCondition, leaf];
+    return [vestingNode.constraints, leaf];
   }
-  return [n];
+  return [c];
 }

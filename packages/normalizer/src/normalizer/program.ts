@@ -2,14 +2,23 @@ import {
   ASTExpr,
   ASTSchedule,
   ASTStatement,
-  CliffExpr,
+  ASTCliffExpr,
   EarlierOfASTExpr,
-  FromExpr,
+  ASTFromExpr,
   LaterOfASTExpr,
+  ASTNode,
 } from "@vestlang/dsl";
-import { isSelector, isVestingNode } from "./guards.js";
 import { normalizeVestingNode } from "./core.js";
 import { dedupe, stableKey } from "./utils.js";
+import {
+  EarlierOfSchedule,
+  EarlierOfVestingNode,
+  LaterOfSchedule,
+  LaterOfVestingNode,
+  Schedule,
+  Statement,
+  VestingNode,
+} from "../types/index.js";
 
 /* ------------------------
  * Guards
@@ -20,6 +29,24 @@ export function isSchedule(e: ASTExpr): e is ASTSchedule {
   return !!e && typeof e === "object" && e.type === "SINGLETON";
 }
 
+/** Type guard for selectors (EARLIER_OF/LATER_OF) */
+export function isSelector(x: any): x is EarlierOfASTExpr | LaterOfASTExpr {
+  return (
+    !!x &&
+    typeof x === "object" &&
+    (x.type === "LATER_OF" || x.type === "EARLIER_OF")
+  );
+}
+
+/** Type guard for vesting nodes */
+export function isVestingNode(x: any): x is ASTNode {
+  return (
+    !!x &&
+    typeof x === "object" &&
+    (x.type === "BARE" || x.type === "CONSTRAINED")
+  );
+}
+
 /* ------------------------
  * Orchestration
  * ------------------------ */
@@ -28,7 +55,7 @@ export function isSchedule(e: ASTExpr): e is ASTSchedule {
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
-export function normalizeStatement(s: ASTStatement): ASTStatement {
+export function normalizeStatement(s: ASTStatement): Statement {
   return {
     amount: s.amount,
     expr: normalizeExpr(s.expr),
@@ -40,7 +67,9 @@ export function normalizeStatement(s: ASTStatement): ASTStatement {
  * - SINGLETON schedules
  * - Selectors (EARLIER_OF/LATER_OF) across expressions
  */
-function normalizeExpr(e: ASTExpr): ASTExpr {
+function normalizeExpr(
+  e: ASTExpr,
+): Schedule | LaterOfSchedule | EarlierOfSchedule {
   if (isSchedule(e)) {
     return normalizeSchedule(e);
   }
@@ -57,7 +86,7 @@ function normalizeExpr(e: ASTExpr): ASTExpr {
  * - Normaizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: ASTSchedule): ASTSchedule {
+function normalizeSchedule(s: ASTSchedule): Schedule {
   const vesting_start = normalizeFromOrCliff(s.vesting_start);
 
   const cliff =
@@ -75,7 +104,9 @@ function normalizeSchedule(s: ASTSchedule): ASTSchedule {
 /**
  * Normalizes a `FROM` or `CLIFF` payload, which may be a vesting node or a selector.
  */
-function normalizeFromOrCliff(x: CliffExpr | FromExpr): CliffExpr | FromExpr {
+function normalizeFromOrCliff(
+  x: ASTCliffExpr | ASTFromExpr,
+): VestingNode | LaterOfVestingNode | EarlierOfVestingNode {
   if (isVestingNode(x)) return normalizeVestingNode(x);
   if (isSelector(x)) return normalizeExprSelector(x);
   throw new Error(

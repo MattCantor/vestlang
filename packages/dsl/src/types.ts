@@ -8,7 +8,7 @@ export type ConstraintTag = "BEFORE" | "AFTER";
 // enums/VestingBaseType.schema.json
 export type VBaseTag = "DATE" | "EVENT";
 
-// enums/VestingNodeType.schema.json
+// NOTE: this doesn't need a schema because it is eliminated by the normalizer
 export type VNodeTag = "BARE" | "CONSTRAINED";
 
 // enums/VestlangExpressionType.schema.json
@@ -18,11 +18,12 @@ export type ExprTag = "SINGLETON" | "EARLIER_OF" | "LATER_OF";
 // existing OCT schema
 export type PeriodTag = "DAYS" | "MONTHS";
 
-// enums/Offset.schema.json
+// enums/OffsetType.schema.json
 // TODO: add this schema
 export type OffsetTag = "PLUS" | "MINUS";
 
-// NOTE: This might not need a schema
+// enums/ConditionType.schema.json
+// TODO: add this schema
 export type ConditionTag = "ATOM" | "AND" | "OR";
 
 // NOTE: this might have an existing schema
@@ -103,7 +104,7 @@ export interface LaterOfASTExpr extends ASTExpr {
 
 export interface ASTSchedule extends ASTExpr {
   type: "SINGLETON";
-  vesting_start: FromExpr;
+  vesting_start: ASTFromExpr;
   periodicity: ASTVestingPeriod;
 }
 
@@ -118,7 +119,7 @@ export interface Duration {
   type: "DURATION";
   value: number;
   unit: PeriodTag; // grammar converts weeks->days, years->months
-  sign?: OffsetTag;
+  sign: OffsetTag;
 }
 
 /* ------------------------
@@ -147,22 +148,17 @@ export interface VestingBaseEvent extends VestingBase {
  * Vesting Node
  * ------------------------ */
 
-// primitives/types/vestlang/VestingNode.schema.json
-// TODO: update schema - include offsets
-export interface VestingNode {
+export interface ASTNode {
   type: VNodeTag;
   base: VestingBaseDate | VestingBaseEvent;
   offsets: Duration[];
 }
 
-// types/vestlang/VestingNodeBare.schema.json
-export interface VestingNodeBare extends VestingNode {
+export interface ASTNodeBare extends ASTNode {
   type: "BARE";
 }
 
-// types/vestlang/VestingNodeConstrained.schema.json
-// TODO: update this schema
-export interface VestingNodeConstrained extends VestingNode {
+export interface ASTNodeConstrained extends ASTNode {
   type: "CONSTRAINED";
   constraints: AnyCondition;
 }
@@ -171,22 +167,23 @@ export interface VestingNodeConstrained extends VestingNode {
  * Conditions
  * ------------------------ */
 
-// NOTE: this might not need any schema
-export interface ASTCondition {
+// primitives/types/vestlang/Condition.schema.json
+// TODO: add this schema
+export interface BaseCondition {
   type: ConditionTag;
 }
 
-export interface ConditionAtom extends ASTCondition {
+export interface ConditionAtom extends BaseCondition {
   type: "ATOM";
   constraint: TemporalConstraint;
 }
 
-export interface ConditionAndGroup extends ASTCondition {
+export interface ConditionAndGroup extends BaseCondition {
   type: "AND";
   items: TwoOrMore<AnyCondition>;
 }
 
-export interface ConditionOrGroup extends ASTCondition {
+export interface ConditionOrGroup extends BaseCondition {
   type: "OR";
   items: TwoOrMore<AnyCondition>;
 }
@@ -197,34 +194,30 @@ export type AnyCondition = ConditionAtom | ConditionAndGroup | ConditionOrGroup;
  * Constraints
  * ------------------------ */
 
-// primitives/types/vestlang/TemporalConstraint.schema.json
 export interface TemporalConstraint {
   type: ConstraintTag;
-  base: VestingNode;
+  base: ASTNode;
   strict: boolean;
 }
 
-// types/vestlang/TemporalConstraintAfter.schema.json
 export interface TemporalConstraintAfter extends TemporalConstraint {
   type: "AFTER";
 }
 
-// types/vestlang/TemporalConstraintBefore.schema.json
 export interface TemporalConstraintBefore extends TemporalConstraint {
   type: "BEFORE";
 }
 
-// types/vestlang/TemporalConstraintOrGroup
 // TODO: remove corresponding json schema
 // export interface TemporalConstraintOrGroup {
 //   type: "OR";
 //   items: TwoOrMore<TemporalConstraint>;
 // }
 
-export type FromEarlierOf = EarlierOf<FromExpr>;
-export type FromLaterOf = LaterOf<FromExpr>;
+export type ASTFromEarlierOf = EarlierOf<ASTFromExpr>;
+export type ASTFromLaterOf = LaterOf<ASTFromExpr>;
 
-export type FromExpr = VestingNode | FromEarlierOf | FromLaterOf;
+export type ASTFromExpr = ASTNode | ASTFromEarlierOf | ASTFromLaterOf;
 
 /* ------------------------
  * Periodicity
@@ -235,9 +228,9 @@ interface ASTVestingPeriod {
   type: PeriodTag;
   occurrences: number; // the installment count
   length: number; // the installment step
-  cliff?: CliffExpr;
+  cliff?: ASTCliffExpr;
 }
 
-export type CliffEarlierOf = EarlierOf<CliffExpr>;
-export type CliffLaterOf = LaterOf<CliffExpr>;
-export type CliffExpr = VestingNode | CliffEarlierOf | CliffLaterOf;
+export type ASTCliffEarlierOf = EarlierOf<ASTCliffExpr>;
+export type ASTCliffLaterOf = LaterOf<ASTCliffExpr>;
+export type ASTCliffExpr = ASTNode | ASTCliffEarlierOf | ASTCliffLaterOf;
