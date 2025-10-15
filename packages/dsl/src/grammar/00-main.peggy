@@ -2,6 +2,25 @@
   function mkDuration(value, unit, sign) {
     return { type: "DURATION", value, unit, sign };
   }
+  function normalizeOffsets(offs) {
+    if (!offs || offs.length === 0) return [];
+
+    let months = 0, days = 0;
+
+    for (const o of offs) {
+      const value = Math.abs(o.value);
+      const signed = o.sign === "MINUS" ? -value : value;
+      if (o.unit === "MONTHS") { months += signed }
+      else if (o.unit === "DAYS") { days += signed }
+      else { throw new SyntaxError(`Unknown offset type ${o.unit}`) }
+    }
+
+    const offsets = [];
+    if (months !== 0) offsets.push(mkDuration(Math.abs(months), "MONTHS", months < 0 ? "MINUS" : "PLUS"))
+    if (days !== 0) offsets.push(mkDuration(Math.abs(days), "DAYS", days < 0 ? "MINUS" : "PLUS"))
+
+    return offsets
+  }
   function mkDate(iso) { return { type: "DATE", value: iso };
   }
   function mkEvent(name) { return { type: "EVENT", value: name };
@@ -57,7 +76,7 @@
     return {
       type: "BARE",
       base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
-      offsets: [duration],
+      offsets: normalizeOffsets([duration]),
     }
   }
   function coerceToVestingNode(x, context) {
@@ -77,8 +96,9 @@
       }
     }
 
-    error(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
+    throw new SyntaxError(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
   }
+  
 }
 
 Start

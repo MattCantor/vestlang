@@ -23,14 +23,14 @@ VestingNode
         return {
           type: "CONSTRAINED",
           base,
-          offsets: offs,
+          offsets: normalizeOffsets(offs),
           constraints: constraints[1]
         }
       }
       return {
         type: "BARE",
         base,
-        offsets: offs
+        offsets: normalizeOffsets(offs)
       }
   }
 

@@ -133,6 +133,16 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     });
   });
 
+  it("canonicalizes offsets: sum per unit, explicit sign, drop zeros", () => {
+    const s = first(`VEST FROM EVENT a + 2 months - 1 months + 10 days`);
+    const start = (s as any).expr.vesting_start;
+    expect(start.type).toBe("BARE");
+    expect(start.offsets).toEqual([
+      { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+      { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },
+    ]);
+  });
+
   it("enforces SQL precedence: AND binds tighter than OR", () => {
     const s = first(
       `VEST FROM EVENT a BEFORE EVENT b AND AFTER EVENT c OR BEFORE DATE 2025-01-02`,
