@@ -7,10 +7,6 @@
     ".": {
       "default": "./dist/index.d.ts",
       "types": "./dist/index.d.ts"
-    },
-    "./dsl-only": {
-      "default": "./dist/dsl-only/index.d.ts",
-      "types": "./dist/dsl-only/index.d.ts"
     }
   },
   "types": "./dist/index.d.ts",
