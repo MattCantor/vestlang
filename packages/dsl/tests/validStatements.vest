@@ -79,3 +79,6 @@ VEST FROM event b BEFORE event a + 3 months and after date 2026-01-01 - 2 days
 VEST FROM +3 months
 
 VEST FROM EARLIER OF (EARLIER OF (event a, event b), LATER OF (event c, event d))
+
+
+VEST FROM event a BEFORE EVENT b before event c

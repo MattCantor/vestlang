@@ -1,10 +1,6 @@
 import { normalizeVestingNode } from "./core.js";
 import { NormalizeAndSort } from "./utils.js";
 import {
-  RawSchedule,
-  RawScheduleExpr,
-  RawStatement,
-  RawVestingNodeExpr,
   Schedule,
   ScheduleExpr,
   Statement,
@@ -19,7 +15,7 @@ import {
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
-export function normalizeStatement(s: RawStatement): Statement {
+export function normalizeStatement(s: Statement): Statement {
   return {
     amount: s.amount,
     expr: normalizeScheduleExpr(s.expr),
@@ -31,7 +27,7 @@ export function normalizeStatement(s: RawStatement): Statement {
  * - SINGLETON schedule
  * - Selectors (EARLIER_OF/LATER_OF) over Schedules
  */
-function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
+function normalizeScheduleExpr(e: ScheduleExpr): ScheduleExpr {
   switch (e.type) {
     case "SINGLETON":
       return normalizeSchedule(e);
@@ -50,19 +46,17 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  * - Normalizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: RawSchedule): Schedule {
+function normalizeSchedule(s: Schedule): Schedule {
   const vesting_start = normalizeVestingNodeExpr(s.vesting_start);
 
-  const cliff =
-    (s as any).cliff !== undefined
-      ? normalizeVestingNodeExpr((s as any).cliff)
-      : undefined;
+  const periodicity = s.periodicity.cliff
+    ? {
+        ...s.periodicity,
+        cliff: normalizeVestingNodeExpr(s.periodicity.cliff),
+      }
+    : { ...s.periodicity };
 
-  const periodicity = { ...s.periodicity };
-
-  const out: any = { ...s, vesting_start, periodicity };
-  if (cliff !== undefined) out.cliff = cliff;
-  return out;
+  return { ...s, vesting_start, periodicity };
 }
 
 /**
@@ -70,7 +64,7 @@ function normalizeSchedule(s: RawSchedule): Schedule {
  * - BARE or CONSTRAINED vesting node
  * - Selectors (EARLIER_OF/LATER_OF) over `vesting_start` or `cliff` expressions
  */
-function normalizeVestingNodeExpr(e: RawVestingNodeExpr): VestingNodeExpr {
+function normalizeVestingNodeExpr(e: VestingNodeExpr): VestingNodeExpr {
   switch (e.type) {
     case "BARE":
     case "CONSTRAINED":

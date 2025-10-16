@@ -1,12 +1,9 @@
 import { NormalizeAndSort } from "./utils.js";
 import {
+  AtomCondition,
   BareVestingNode,
   Condition,
   ConstrainedVestingNode,
-  RawAtomCondition,
-  RawCondition,
-  RawConstrainedVestingNode,
-  RawVestingNode,
   VestingNode,
 } from "@vestlang/types";
 
@@ -18,13 +15,13 @@ import {
  * Normalize a vesting node:
  * - Normalize constraints (if CONSTRAINED)
  */
-export function normalizeVestingNode(node: RawVestingNode): VestingNode {
+export function normalizeVestingNode(node: VestingNode): VestingNode {
   switch (node.type) {
     case "CONSTRAINED":
       return {
         ...node,
         constraints: normalizeCondition(
-          (node as RawConstrainedVestingNode).constraints,
+          (node as ConstrainedVestingNode).constraints,
         ),
       } as ConstrainedVestingNode;
     case "BARE":
@@ -43,7 +40,7 @@ export function normalizeVestingNode(node: RawVestingNode): VestingNode {
  * - Sort & dedupe items for determinism
  * - Collapse singletons: AND(x) -> x, OR(x) -> x
  */
-function normalizeCondition(node: RawCondition): Condition {
+function normalizeCondition(node: Condition): Condition {
   switch (node.type) {
     case "ATOM":
       return normalizeAtom(node);
@@ -58,46 +55,13 @@ function normalizeCondition(node: RawCondition): Condition {
 }
 
 /**
- * Normalize an ATOM:
- * - Normalize its base vesting node
- * - If base is CONSTRAINED, hoist the inner constraints:
- *   ATOM(op, base=CONSTRAINED(B, C2))  ⇒  AND( C2 , ATOM(op, base=BARE(B)) )
+ * Normalize an ATOM's base vesting node
  */
-function normalizeAtom(a: RawAtomCondition): Condition {
-  const base = a.constraint.base;
+function normalizeAtom(a: AtomCondition): AtomCondition {
+  const normalizedBase = normalizeVestingNode(a.constraint.base);
 
-  switch (base.type) {
-    case "CONSTRAINED":
-      const bare: BareVestingNode = {
-        ...base,
-        type: "BARE",
-        constraints: undefined,
-      };
-
-      const leaf: RawAtomCondition = {
-        type: "ATOM",
-        constraint: { ...a.constraint, base: bare },
-      };
-
-      // Build a RAW AND node, then normalize it to canonical
-      const rawAnd: RawCondition = {
-        type: "AND",
-        items: [(base as RawConstrainedVestingNode).constraints, leaf],
-      };
-
-      return normalizeCondition(rawAnd);
-
-    case "BARE":
-      return {
-        type: "ATOM",
-        constraint: {
-          ...a.constraint,
-          base: base as BareVestingNode,
-        },
-      };
-    default:
-      throw new Error(
-        `normalizeAtom: unexpected condition type ${(a as any)?.type}`,
-      );
-  }
+  return {
+    type: "ATOM",
+    constraint: { ...a.constraint, base: normalizedBase },
+  };
 }

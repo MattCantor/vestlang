@@ -1,8 +1,5 @@
 import {
   Condition,
-  RawCondition,
-  RawSchedule,
-  RawVestingNode,
   Schedule,
   ScheduleExpr,
   VestingNode,
@@ -48,29 +45,26 @@ function dedupe<T>(arr: T[]): T[] {
  * - Sorts and dedupes same-op selectors
  */
 export function NormalizeAndSort<
-  T extends RawSchedule,
+  T extends Schedule,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
 >(expression: E, normalizeFN: (x: T) => N): N;
 export function NormalizeAndSort<
-  T extends RawVestingNode,
+  T extends VestingNode,
   E extends { type: string; items: T[] },
   N extends VestingNodeExpr,
 >(expression: E, normalizeFN: (x: T) => N): N;
 export function NormalizeAndSort<
-  T extends RawCondition,
+  T extends Condition,
   E extends { type: string; items: T[] },
   N extends Condition,
 >(expression: E, normalizeFN: (x: T) => N): N;
 export function NormalizeAndSort<
-  T extends RawSchedule | RawVestingNode | RawCondition,
-  E extends {
-    type: string;
-    items: T[];
-  },
+  T extends Schedule | VestingNode | Condition,
+  E extends { type: string; items: T[] },
   N extends Schedule | VestingNode | Condition,
 >(expression: E, normalizeFN: (x: T) => N) {
-  // Normalize children (nested selecotrs or vesting nodes or schedules
+  // Normalize children (nested selectors or vesting nodes or schedules
   let items = expression.items.map(normalizeFN);
 
   // Flatten same-op: EARLIER_OF(EARLIER_OF(...), x) -> EARLIER_OF(...)
@@ -89,5 +83,5 @@ export function NormalizeAndSort<
     throw new Error(`${expression.type} became empty after normalization`);
   }
 
-  return { type: expression.type, items };
+  return { ...expression, items };
 }

@@ -15,8 +15,6 @@ interface EarlierOf<T> extends Selector<T, "EARLIER_OF"> {}
 
 interface LaterOf<T> extends Selector<T, "LATER_OF"> {}
 
-type Shape = "raw" | "canonical";
-
 // types/Date.schema.json
 // existing OCT schema
 declare const __isoDateBrand: unique symbol;
@@ -109,11 +107,11 @@ export interface VestingBaseEvent extends VestingBase {
  * ------------------------ */
 
 // primitives/types/vestlang/VestingNode.schema.json
-export interface VestingNode<S extends Shape = "canonical"> {
+export interface VestingNode {
   type: VNodeTag;
   base: VestingBaseDate | VestingBaseEvent;
   offsets: Offsets;
-  constraints?: Condition<S>;
+  constraints?: Condition;
 }
 
 // types/vestlang/BareVestingNode.schema.json
@@ -123,35 +121,20 @@ export interface BareVestingNode extends VestingNode {
 }
 
 // types/vestlang/BareVestingNode.schema.json
-export interface ConstrainedVestingNode<S extends Shape = "canonical">
-  extends VestingNode<S> {
+export interface ConstrainedVestingNode extends VestingNode {
   type: "CONSTRAINED";
-  constraints: Condition<S>;
+  constraints: Condition;
 }
 
-export type RawConstrainedVestingNode = ConstrainedVestingNode<"raw">;
-
 // TODO: add to schmea
-export type LaterOfVestingNode<S extends Shape = "canonical"> = LaterOf<
-  VestingNode<S>
->;
+export type LaterOfVestingNode = LaterOf<VestingNode>;
 
-export type RawLaterOfVestingNode = LaterOfVestingNode<"raw">;
+export type EarlierOfVestingNode = EarlierOf<VestingNode>;
 
-export type EarlierOfVestingNode<S extends Shape = "canonical"> = EarlierOf<
-  VestingNode<S>
->;
-
-export type RawEarlierOfVestingNode = EarlierOfVestingNode<"raw">;
-
-export type RawVestingNode = VestingNode<"raw">;
-
-export type VestingNodeExpr<S extends Shape = "canonical"> =
-  | VestingNode<S>
-  | LaterOfVestingNode<S>
-  | EarlierOfVestingNode<S>;
-
-export type RawVestingNodeExpr = VestingNodeExpr<"raw">;
+export type VestingNodeExpr =
+  | VestingNode
+  | LaterOfVestingNode
+  | EarlierOfVestingNode;
 
 /* ------------------------
  * Conditions & Constraints
@@ -162,45 +145,29 @@ export interface BaseCondition {
 }
 
 // TODO: add to schema
-export interface AtomCondition<S extends Shape = "canonical">
-  extends BaseCondition {
+export interface AtomCondition extends BaseCondition {
   type: "ATOM";
-  constraint: S extends "canonical"
-    ? Omit<Constraint, "base"> & { base: BareVestingNode }
-    : Constraint<S>;
+  constraint: Constraint;
 }
 
-export type RawAtomCondition = AtomCondition<"raw">;
-
 // TODO: add to schema
-export interface AndCondition<S extends Shape = "canonical">
-  extends BaseCondition {
+export interface AndCondition extends BaseCondition {
   type: "AND";
-  items: TwoOrMore<Condition<S>>;
+  items: TwoOrMore<Condition>;
 }
 
-export type RawAndCondition = AndCondition<"raw">;
-
 // TODO: add to schema
-export interface OrCondition<S extends Shape = "canonical">
-  extends BaseCondition {
+export interface OrCondition extends BaseCondition {
   type: "OR";
-  items: TwoOrMore<Condition<S>>;
+  items: TwoOrMore<Condition>;
 }
 
-export type RawOrCondition = OrCondition<"raw">;
-
-export type Condition<S extends Shape = "canonical"> =
-  | AtomCondition<S>
-  | AndCondition<S>
-  | OrCondition<S>;
-
-export type RawCondition = Condition<"raw">;
+export type Condition = AtomCondition | AndCondition | OrCondition;
 
 // TODO: add to schema
-export interface Constraint<S extends Shape = "canonical"> {
+export interface Constraint {
   type: ConstraintTag;
-  base: BareVestingNode | ConstrainedVestingNode<S>;
+  base: VestingNode;
   strict: boolean;
 }
 
@@ -208,47 +175,30 @@ export interface Constraint<S extends Shape = "canonical"> {
  * Periodicity
  * ------------------------ */
 
-export interface VestingPeriod<S extends Shape = "canonical"> {
+export interface VestingPeriod {
   type: PeriodTag;
   occurrences: number;
   length: number;
-  cliff?: VestingNodeExpr<S>;
+  cliff?: VestingNodeExpr;
 }
-
-export type RawVestingPeriod = VestingPeriod<"raw">;
 
 /* ------------------------
  * Expressions
  * ------------------------ */
 
 // TODO: add to schema
-export interface Schedule<S extends Shape = "canonical"> {
+export interface Schedule {
   type: "SINGLETON";
-  vesting_start: VestingNodeExpr<S>;
-  periodicity: VestingPeriod<S>;
+  vesting_start: VestingNodeExpr;
+  periodicity: VestingPeriod;
 }
 
-export type RawSchedule = Schedule<"raw">;
-
 // TODO: add to schema
-export type LaterOfSchedule<S extends Shape = "canonical"> = LaterOf<
-  Schedule<S>
->;
+export type LaterOfSchedule = LaterOf<Schedule>;
 
-export type RawLaterOfSchedule = LaterOfSchedule<"raw">;
+export type EarlierOfSchedule = EarlierOf<Schedule>;
 
-export type EarlierOfSchedule<S extends Shape = "canonical"> = EarlierOf<
-  Schedule<S>
->;
-
-export type RawEarlierOfSchedule = EarlierOfSchedule<"raw">;
-
-export type ScheduleExpr<S extends Shape = "canonical"> =
-  | Schedule<S>
-  | LaterOfSchedule<S>
-  | EarlierOfSchedule<S>;
-
-export type RawScheduleExpr = ScheduleExpr<"raw">;
+export type ScheduleExpr = Schedule | LaterOfSchedule | EarlierOfSchedule;
 
 /* ------------------------
  * Statements
@@ -268,11 +218,9 @@ export interface AmountPortion extends BaseAmount {
 }
 export type Amount = AmountQuantity | AmountPortion;
 
-export interface Statement<S extends Shape = "canonical"> {
+export interface Statement {
   amount: Amount;
-  expr: ScheduleExpr<S>;
+  expr: ScheduleExpr;
 }
-export type RawStatement = Statement<"raw">;
 
-export type Program<S extends Shape = "canonical"> = Statement<S>[];
-export type RawProgram = Program<"raw">;
+export type Program = Statement[];
