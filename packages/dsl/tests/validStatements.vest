@@ -4,6 +4,7 @@ VEST
 0.25 VEST OVER 12 months EVERY 1 month
 .5 VEST OVER 12 months EVERY 1 month
 VEST OVER 12 months EVERY 1 month
+1/2 VEST OVER 12 months EVERy 1 month
 
 VEST FROM DATE 2026-01-01
 VEST OVER 0 days EVERY 0 days
@@ -82,3 +83,5 @@ VEST FROM EARLIER OF (EARLIER OF (event a, event b), LATER OF (event c, event d)
 
 
 VEST FROM event a BEFORE EVENT b before event c
+.5 VEST FROM LATER OF( EVENT milestone1, EVENT milestone2 ) OVER 0 days EVERY 0 days
+

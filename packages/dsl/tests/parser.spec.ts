@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ASTSchedule, parse, ASTNode } from "../src/index";
+import { parse } from "../src/index";
+import { Schedule, VestingNode } from "@vestlang/types";
 
 // handy helpers
 const asJSON = (x: unknown) => JSON.parse(JSON.stringify(x));
@@ -36,12 +37,12 @@ describe("Start & basics", () => {
     const ast = parse(`[ VEST FROM EVENT a, VEST FROM EVENT b, ]`);
     expect(ast).toHaveLength(2);
 
-    const first = ast[0].expr as ASTSchedule;
-    const firstVestingStart = first.vesting_start as ASTNode;
+    const first = ast[0].expr as Schedule;
+    const firstVestingStart = first.vesting_start as VestingNode;
     expect(firstVestingStart.base.value).toBe("a");
 
-    const second = ast[1].expr as ASTSchedule;
-    const secondVestingStart = second.vesting_start as ASTNode;
+    const second = ast[1].expr as Schedule;
+    const secondVestingStart = second.vesting_start as VestingNode;
     expect(secondVestingStart.base.value).toBe("b");
   });
 });
@@ -102,7 +103,7 @@ describe("FROM / CLIFF coercion", () => {
 
   it("uses vestingStart when coercing durations in CLIFF", () => {
     const s = first(`VEST CLIFF EARLIER OF ( +2 months, EVENT x )`);
-    const cliff = s.expr.cliff;
+    const cliff = s.expr.periodicity.cliff;
     expect(cliff.type).toBe("EARLIER_OF");
     expect(cliff.items[0]).toMatchObject({
       type: "BARE",

@@ -416,7 +416,7 @@ function peg$parse(input, options) {
       },
       periodicity: p,
     };
-    if (c) base.cliff = c;
+    if (c) base.periodicity.cliff = c;
     return base
   }
   function peg$f36(op, head, tail) {

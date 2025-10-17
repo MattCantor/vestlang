@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`normalize is idempotent > normalize(normalize(parse(src))) === normalize(parse(src)) 1`] = `
+[
+  {
+    "amount": {
+      "denominator": 1,
+      "numerator": 1,
+      "type": "PORTION",
+    },
+    "expr": {
+      "periodicity": {
+        "length": 1,
+        "occurrences": 12,
+        "type": "MONTHS",
+      },
+      "type": "SINGLETON",
+      "vesting_start": {
+        "items": [
+          {
+            "base": {
+              "type": "DATE",
+              "value": "2025-01-01",
+            },
+            "offsets": [],
+            "type": "BARE",
+          },
+          {
+            "base": {
+              "type": "EVENT",
+              "value": "x",
+            },
+            "offsets": [
+              {
+                "sign": "PLUS",
+                "type": "DURATION",
+                "unit": "MONTHS",
+                "value": 1,
+              },
+            ],
+            "type": "BARE",
+          },
+        ],
+        "type": "LATER_OF",
+      },
+    },
+  },
+]
+`;

@@ -20,7 +20,7 @@ ScheduleBlock
       },
       periodicity: p,
     };
-    if (c) base.cliff = c;
+    if (c) base.periodicity.cliff = c;
     return base
   }
 

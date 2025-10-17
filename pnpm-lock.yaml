@@ -120,6 +120,10 @@ importers:
         version: 3.1.1
 
   packages/dsl:
+    dependencies:
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       peggy:
         specifier: ^5.0.6
