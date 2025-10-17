@@ -1,238 +1,153 @@
-import type { Printer } from "prettier";
-import type { Doc } from "prettier";
-import type { AstNode } from "./types";
-import type {
-  ASTStatement,
-  ASTExpr,
-  ASTSchedule,
-  EarlierOfASTExpr,
-  LaterOfASTExpr,
-  Duration,
-  ConstrainedAnchor,
-  From,
-  DateAnchor,
-  EventAnchor,
-  Cliff,
-  BaseConstraint,
+import {
+  Amount,
+  AmountPortion,
+  Condition,
   Constraint,
-} from "@vestlang/dsl";
-import { doc as PrettierDoc } from "prettier";
+  Duration,
+  Offsets,
+  Program,
+  Schedule,
+  ScheduleExpr,
+  Statement,
+  VestingBase,
+  VestingNodeExpr,
+  VestingPeriod,
+} from "@vestlang/types";
+import type { Printer, AstPath, Doc } from "prettier";
+import {
+  group,
+  indent,
+  softline,
+  line,
+  hardline,
+  join,
+  wrapParen,
+  listWithCommas,
+  kw,
+} from "./builders.js";
 
-const { group, indent, line, softline, hardline, join, breakParent } =
-  PrettierDoc.builders;
-
-// ====== Formatting prefs ======
-const UNITS_UPPERCASE = false; // set true for MONTH(S)/DAY(S) in caps
-
-/* ---------- Leaf printers ---------- */
-
-function printAmount(stmt: ASTStatement): Doc {
-  const a = stmt.amount;
-  if (!a) return "";
-  if (a.type === "AmountAbsolute") return String(a.value) + " ";
-  if (a.type === "AmountPercent") {
-    const pct = (a.value * 100).toFixed(3).replace(/\.?0+$/, "");
-    return pct === "100" ? "" : pct + " ";
-  }
-  return "";
-}
-
-function printAnchor(a: DateAnchor | EventAnchor | undefined | null): Doc {
-  if (!a) return "";
-  if (a.type === "Date") return group(["DATE ", a.value]);
-  if (a.type === "Event") return group(["EVENT ", a.value]);
-  return "";
-}
-
-function printBaseConstraint(p: BaseConstraint): Doc {
-  // Keep spacing consistent: "<STRICTLY?> <AFTER/BEFORE> <anchor>"
-  const pieces: Doc[] = [];
-  if (p.strict) pieces.push("STRICTLY", " ");
-  if (p.type === "After") {
-    pieces.push("AFTER", " ", printAnchor(p.anchor));
-  } else if (p.type === "Before") {
-    pieces.push("BEFORE", " ", printAnchor(p.anchor));
-  }
-  return group(pieces);
-}
-
-function printConstraintEntry(c: Constraint): Doc {
-  // OR-group: ( AFTER A OR AFTER B ... )
-  if ("anyOf" in c) {
-    const parts = c.anyOf.map(printBaseConstraint);
-    return group([
-      " ",
-      "(",
-      indent(
-        group([
-          softline,
-          // sep must be a Doc — not an array/concat — so do:
-          join(group([" OR", line]), parts),
-        ]),
-      ),
-      softline,
-      ")",
-    ]);
-  }
-  // Atomic base constraint
-  return group([" ", printBaseConstraint(c)]);
-}
-
-function printConstrained(q: ConstrainedAnchor): Doc {
-  const entries = q.constraints?.map(printConstraintEntry) ?? [];
-  return group([printAnchor(q.base), ...entries]);
-}
-
-function printFromComb(name: "EARLIER OF" | "LATER OF", items: From[]): Doc {
-  return group([
-    name,
-    " (",
-    indent(
-      group([
-        softline,
-        // Use a Doc as the separator: ",\n"
-        join(group([",", line]), items.map(printFromTerm)),
-      ]),
-    ),
-    softline,
-    ")",
-  ]);
-}
-
-function printFromTerm(f: From): Doc {
-  switch (f.type) {
-    case "Date":
-    case "Event":
-      return printAnchor(f);
-    case "Constrained":
-      return printConstrained(f);
-    case "EarlierOf":
-      return printFromComb("EARLIER OF", f.items);
-    case "LaterOf":
-      return printFromComb("LATER OF", f.items);
-    default:
-      return "";
-  }
-}
-
-function normalizeUnit(u: string): "MONTHS" | "DAYS" {
-  const up = u.toUpperCase();
-  return up === "MONTH" || up === "MONTHS" ? "MONTHS" : "DAYS";
+function printAmount(a: Amount): Doc {
+  if (a.type === "QUANTITY") return String(a.value);
+  const p = a as AmountPortion;
+  return `${p.numerator}/${p.denominator}`;
 }
 
 function printDuration(d: Duration): Doc {
-  const base = normalizeUnit(d.unit); // normalize for comparisons
-  const singular = base === "MONTHS" ? "month" : "day";
-  let unit = d.value === 1 ? singular : base.toLowerCase(); // "months"/"days"
-  if (UNITS_UPPERCASE) unit = unit.toUpperCase();
-  return `${d.value} ${unit}`;
+  const sign = d.sign === "MINUS" ? "-" : "+";
+  const unit = d.unit === "DAYS" ? "DAYS" : "MONTHS";
+  return `${sign}${d.value} ${unit}`;
 }
 
-/* ---------- Expr printers ---------- */
-
-function printCliffComb(name: "EARLIER OF" | "LATER OF", items: Cliff[]): Doc {
-  return group([
-    name,
-    " (",
-    indent(group([softline, join(group([",", line]), items.map(printCliff))])),
-    softline,
-    ")",
-  ]);
+function printVestingBase(base: VestingBase): Doc {
+  if (base.type === "EVENT") return [kw("EVENT"), " ", base.value];
+  return [kw("DATE"), " ", base.value];
 }
 
-function printCliff(c: Cliff): Doc {
-  if (!c) return "";
-  if (c.type === "Duration") return printDuration(c);
-  if (c.type === "Date" || c.type === "Event") return printAnchor(c);
-  if (c.type === "Constrained") return printConstrained(c);
-  if (c.type === "EarlierOf" || c.type === "LaterOf") {
-    return printCliffComb(
-      c.type === "EarlierOf" ? "EARLIER OF" : "LATER OF",
-      c.items,
-    );
-  }
-  return "";
+function printOffsets(offsets: Offsets): Doc {
+  if (!offsets || offsets.length === 0) return "";
+  return [" ", join(" ", offsets.map(printDuration))];
 }
 
-function printSchedule(n: ASTSchedule): Doc {
-  const fromDoc = n.from ? printFromTerm(n.from) : ("EVENT grant" as Doc); // default
-
-  const parts: Doc[] = [
-    hardline,
-    "FROM ",
-    fromDoc,
-    hardline,
-    "OVER ",
-    printDuration(n.over),
-    hardline,
-    "EVERY ",
-    printDuration(n.every),
-  ];
-
-  const cliffDoc = n.cliff ? printCliff(n.cliff) : "";
-  if (cliffDoc) {
-    parts.push(hardline, "CLIFF ", cliffDoc);
-  }
-
-  return group([breakParent, "SCHEDULE", indent(parts)]);
+function printConstraint(c: Constraint): Doc {
+  const strict = c.strict ? [kw("STRICTLY"), " "] : "";
+  return [strict, kw(c.type), " ", printVestingNode(c.base)];
 }
 
-function printExprComb(name: "EARLIER OF" | "LATER OF", items: ASTExpr[]): Doc {
-  return group([
-    name,
-    " (",
-    indent(group([softline, join(group([",", line]), items.map(printExpr))])),
-    softline,
-    ")",
-  ]);
-}
-
-function printExpr(e: ASTExpr): Doc {
-  switch (e.type) {
-    case "Schedule":
-      return printSchedule(e);
-    case "EarlierOf":
-      return printExprComb("EARLIER OF", e.items);
-    case "LaterOf":
-      return printExprComb("LATER OF", e.items);
-    default:
-      return "";
-  }
-}
-
-/* ---------- Root printer ---------- */
-
-const docPrint = (node: AstNode): Doc => {
+function printCondition(node?: Condition): Doc {
   if (!node) return "";
-
   switch (node.type) {
-    case "Program":
+    case "ATOM":
+      return printConstraint(node.constraint);
+    case "AND":
+    case "OR":
+      const name = kw(node.type);
+      const items = node.items.map(printCondition);
+      return [name, " ", wrapParen(indent([listWithCommas(items)]))];
+  }
+}
+
+function printVestingNode(node: VestingNodeExpr): Doc {
+  switch (node.type) {
+    case "EARLIER_OF":
+    case "LATER_OF":
+      const head = kw(node.type.replace("_", " "));
+      const items = node.items.map((item) => printVestingNode(item));
+      return [head, " ", wrapParen(indent([listWithCommas(items)]))];
+    case "CONSTRAINED":
+      return [
+        [printVestingBase(node.base), printOffsets(node.offsets)],
+        line,
+        printCondition(node.constraints),
+      ];
+    case "BARE":
+      return [printVestingBase(node.base), printOffsets(node.offsets)];
+  }
+}
+
+function printPeriodicity(p: VestingPeriod): Doc {
+  const base = [
+    kw("OVER"),
+    " ",
+    printDuration({
+      type: "DURATION",
+      value: p.length * p.occurrences,
+      unit: p.type,
+      sign: "PLUS",
+    }),
+    printDuration({
+      type: "DURATION",
+      value: p.length,
+      unit: p.type,
+      sign: "PLUS",
+    }),
+  ];
+  return base;
+}
+
+function printSchedule(s: Schedule): Doc {
+  const parts: Doc[] = [];
+  parts.push(printPeriodicity(s.periodicity));
+  parts.push(" ", kw("FROM"), " ", printVestingNode(s.vesting_start));
+  if (s.periodicity.cliff) {
+    parts.push(line, kw("ClIFF"), " ", printVestingNode(s.periodicity.cliff));
+  }
+  return group(parts);
+}
+
+function printScheduleExpr(e: ScheduleExpr): Doc {
+  switch (e.type) {
+    case "SINGLETON":
+      return printSchedule(e);
+    case "LATER_OF":
+    case "EARLIER_OF":
+      return printScheduleExpr(e);
+  }
+}
+
+function printStatement(s: Statement): Doc {
+  const amount = [printAmount(s.amount), " "];
+  return group([amount, kw("VEST"), " ", printScheduleExpr(s.expr)]);
+}
+
+const printer: Printer = {
+  print(path: AstPath): Doc {
+    const node = path.getValue() as Program | Statement | ScheduleExpr | any;
+
+    if (Array.isArray(node)) {
+      if (node.length === 1) return [printStatement(node[0]), hardline];
+      const docs = node.map((s) => printStatement(s));
       return group([
-        join(
-          hardline,
-          (node.body as ASTStatement[]).map((s) =>
-            group([printAmount(s), "VEST ", printExpr(s.expr)]),
-          ),
-        ),
+        "[",
+        indent([softline, join([",", hardline], docs)]),
+        ",",
+        softline,
+        "]",
         hardline,
       ]);
+    }
 
-    case "Schedule":
-      return printSchedule(node as ASTSchedule);
-    case "EarlierOf":
-      return printExprComb("EARLIER OF", (node as EarlierOfASTExpr).items);
-    case "LaterOf":
-      return printExprComb("LATER OF", (node as LaterOfASTExpr).items);
-
-    default:
-      return "";
-  }
-};
-
-export const printer: Printer<AstNode> = {
-  print(path): Doc {
-    // Prefer `path.node` in Prettier v3+
-    const node = path.node as AstNode;
-    return docPrint(node);
+    return "";
   },
 };
+
+export default printer;

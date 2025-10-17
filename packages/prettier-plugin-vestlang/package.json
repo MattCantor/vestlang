@@ -16,7 +16,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vestlang/dsl": "workspace:*"
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/types": "workspace:*"
   },
   "devDependencies": {
     "prettier": "^3.6.2",
