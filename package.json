@@ -2,10 +2,7 @@
   "name": "vestlang",
   "private": true,
   "packageManager": "pnpm@10.17.1",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
+  "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
@@ -13,6 +10,9 @@
     "lint": "turbo lint",
     "clean": "turbo run clean && rimraf node_modules",
     "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@vestlang/prettier-plugin-vestlang": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",

@@ -45,12 +45,12 @@ function dedupe<T>(arr: T[]): T[] {
  * - Sorts and dedupes same-op selectors
  */
 export function NormalizeAndSort<
-  T extends Schedule,
+  T extends ScheduleExpr,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
 >(expression: E, normalizeFN: (x: T) => N): N;
 export function NormalizeAndSort<
-  T extends VestingNode,
+  T extends VestingNodeExpr,
   E extends { type: string; items: T[] },
   N extends VestingNodeExpr,
 >(expression: E, normalizeFN: (x: T) => N): N;

@@ -127,9 +127,9 @@ export interface ConstrainedVestingNode extends VestingNode {
 }
 
 // TODO: add to schmea
-export type LaterOfVestingNode = LaterOf<VestingNode>;
+export type LaterOfVestingNode = LaterOf<VestingNodeExpr>;
 
-export type EarlierOfVestingNode = EarlierOf<VestingNode>;
+export type EarlierOfVestingNode = EarlierOf<VestingNodeExpr>;
 
 export type VestingNodeExpr =
   | VestingNode
@@ -194,9 +194,9 @@ export interface Schedule {
 }
 
 // TODO: add to schema
-export type LaterOfSchedule = LaterOf<Schedule>;
+export type LaterOfSchedule = LaterOf<ScheduleExpr>;
 
-export type EarlierOfSchedule = EarlierOf<Schedule>;
+export type EarlierOfSchedule = EarlierOf<ScheduleExpr>;
 
 export type ScheduleExpr = Schedule | LaterOfSchedule | EarlierOfSchedule;
 

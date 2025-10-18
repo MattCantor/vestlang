@@ -4,18 +4,15 @@
   "trailingComma": "all",
   "printWidth": 80,
   "tabWidth": 2,
+  "plugins": ["@vestlang/prettier-plugin-vestlang"],
   "overrides": [
     {
       "files": ["**/*.peggy"],
-      "plugins": [
-        "prettier-plugin-pegjs"
-      ]
+      "plugins": ["prettier-plugin-pegjs"]
     },
     {
       "files": ["**/*.vest"],
-      "plugins": [
-        "@vestlang/prettier-plugin-vestlang"
-      ],
+      "plugins": ["@vestlang/prettier-plugin-vestlang"],
       "options": {
         "parser": "vestlang-parser"
       }

@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@vestlang/prettier-plugin-vestlang':
+        specifier: workspace:*
+        version: link:packages/prettier-plugin-vestlang
     devDependencies:
       '@types/node':
         specifier: ^24.5.2
@@ -143,6 +147,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../types
     devDependencies:
       rimraf:
         specifier: ^6.0.1

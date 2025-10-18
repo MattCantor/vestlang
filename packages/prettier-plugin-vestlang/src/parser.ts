@@ -1,4 +1,4 @@
-import type { Parser, ParserOptions } from "prettier";
+import type { Parser } from "prettier";
 
 import { parse as vestParse } from "@vestlang/dsl";
 
@@ -10,5 +10,3 @@ export const parser: Parser = {
   locStart: () => 0,
   locEnd: () => 0,
 };
-
-export default parser;

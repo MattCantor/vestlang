@@ -36,14 +36,6 @@ function getVestingStartItems(p: Program) {
     : [];
 }
 
-/** Getter for cliff selector items, else [] */
-function getCliffItems(p: Program) {
-  const cliff = getSingleton(p).periodicity.cliff;
-  return cliff && (cliff.type === "EARLIER_OF" || cliff.type === "LATER_OF")
-    ? cliff.items
-    : [];
-}
-
 /* ------------------------
  * Selectors
  * ------------------------ */

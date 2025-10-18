@@ -27,9 +27,10 @@ import {
 } from "./builders.js";
 
 function printAmount(a: Amount): Doc {
-  if (a.type === "QUANTITY") return String(a.value);
+  if (a.type === "QUANTITY") return `${String(a.value)} `;
   const p = a as AmountPortion;
-  return `${p.numerator}/${p.denominator}`;
+  if (p.numerator === 1 && p.denominator === 1) return [];
+  return `${p.numerator}/${p.denominator} `;
 }
 
 function printDuration(d: Duration): Doc {
@@ -50,7 +51,9 @@ function printOffsets(offsets: Offsets): Doc {
 
 function printConstraint(c: Constraint): Doc {
   const strict = c.strict ? [kw("STRICTLY"), " "] : "";
-  return [strict, kw(c.type), " ", printVestingNode(c.base)];
+  return group(
+    indent([line, strict, kw(c.type), " ", printVestingNode(c.base)]),
+  );
 }
 
 function printCondition(node?: Condition): Doc {
@@ -62,7 +65,7 @@ function printCondition(node?: Condition): Doc {
     case "OR":
       const name = kw(node.type);
       const items = node.items.map(printCondition);
-      return [name, " ", wrapParen(indent([listWithCommas(items)]))];
+      return [name, " (", indent([line, join([",", line], items)]), line, ")"];
   }
 }
 
@@ -72,7 +75,8 @@ function printVestingNode(node: VestingNodeExpr): Doc {
     case "LATER_OF":
       const head = kw(node.type.replace("_", " "));
       const items = node.items.map((item) => printVestingNode(item));
-      return [head, " ", wrapParen(indent([listWithCommas(items)]))];
+
+      return [head, " (", indent([line, join([",", line], items)]), line, ")"];
     case "CONSTRAINED":
       return [
         [printVestingBase(node.base), printOffsets(node.offsets)],
@@ -85,7 +89,9 @@ function printVestingNode(node: VestingNodeExpr): Doc {
 }
 
 function printPeriodicity(p: VestingPeriod): Doc {
+  if (p.length === 0) return [];
   const base = [
+    line,
     kw("OVER"),
     " ",
     printDuration({
@@ -94,6 +100,9 @@ function printPeriodicity(p: VestingPeriod): Doc {
       unit: p.type,
       sign: "PLUS",
     }),
+    " ",
+    kw("EVERY"),
+    " ",
     printDuration({
       type: "DURATION",
       value: p.length,
@@ -106,10 +115,10 @@ function printPeriodicity(p: VestingPeriod): Doc {
 
 function printSchedule(s: Schedule): Doc {
   const parts: Doc[] = [];
+  parts.push(kw("FROM"), " ", printVestingNode(s.vesting_start));
   parts.push(printPeriodicity(s.periodicity));
-  parts.push(" ", kw("FROM"), " ", printVestingNode(s.vesting_start));
   if (s.periodicity.cliff) {
-    parts.push(line, kw("ClIFF"), " ", printVestingNode(s.periodicity.cliff));
+    parts.push(line, kw("CLIFF"), " ", printVestingNode(s.periodicity.cliff));
   }
   return group(parts);
 }
@@ -120,20 +129,27 @@ function printScheduleExpr(e: ScheduleExpr): Doc {
       return printSchedule(e);
     case "LATER_OF":
     case "EARLIER_OF":
-      return printScheduleExpr(e);
+      const head = kw(e.type.replace("_", " "));
+      const items = e.items.map((item) => printScheduleExpr(item));
+      return [head, " ", wrapParen(indent([listWithCommas(items)]))];
   }
 }
 
 function printStatement(s: Statement): Doc {
-  const amount = [printAmount(s.amount), " "];
+  const amount = [printAmount(s.amount)];
   return group([amount, kw("VEST"), " ", printScheduleExpr(s.expr)]);
 }
 
-const printer: Printer = {
+export const printer: Printer = {
   print(path: AstPath): Doc {
-    const node = path.getValue() as Program | Statement | ScheduleExpr | any;
+    const node = path.node as Program | Statement | ScheduleExpr | any;
 
     if (Array.isArray(node)) {
+      // Program = Statement[]
+      if (node.length === 0) return "";
+
+      // const docs = node.map((s) => printStatement(s));
+      // return [join(hardline, docs), hardline];
       if (node.length === 1) return [printStatement(node[0]), hardline];
       const docs = node.map((s) => printStatement(s));
       return group([
@@ -149,5 +165,3 @@ const printer: Printer = {
     return "";
   },
 };
-
-export default printer;
