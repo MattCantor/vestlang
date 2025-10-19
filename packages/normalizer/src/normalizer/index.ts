@@ -1,4 +1,4 @@
-import { Program } from "@vestlang/types";
+import { Program, RawProgram } from "@vestlang/types";
 import { normalizeStatement } from "./program.js";
 
 /* ------------------------
@@ -24,6 +24,6 @@ import { normalizeStatement } from "./program.js";
  *  const norm = normalizeProgram(ast);
  *  // `norm` will be fed to downstream (e.g., Open Cap Table, CNF converter)
  */
-export function normalizeProgram(stmts: Program): Program {
+export function normalizeProgram(stmts: RawProgram): Program {
   return stmts.map(normalizeStatement);
 }

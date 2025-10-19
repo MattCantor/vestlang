@@ -1,23 +1,16 @@
 From = "FROM"i _ a:(VestingNode / GateExpr) {
-  return coerceToVestingNode(a, "FROM")
+  return a
 }
 
 Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) {
-  return coerceToVestingNode(a, "CLIFF")
+  return a
 };
 
 ScheduleBlock
   = f:From? _ p:OverEveryOpt _ c:Cliff? {
     const base = {
       type: "SINGLETON",
-      vesting_start: f ?? {
-        type: "BARE",
-        base: {
-          type: "EVENT",
-          value: "grantDate"
-        },
-        offsets: [],
-      },
+      vesting_start: f,
       periodicity: p,
     };
     if (c) base.periodicity.cliff = c;

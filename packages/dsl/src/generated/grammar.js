@@ -398,22 +398,15 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f33(a) {
-    return coerceToVestingNode(a, "FROM")
+    return a
   }
   function peg$f34(a) {
-    return coerceToVestingNode(a, "CLIFF")
+    return a
   }
   function peg$f35(f, p, c) {
     const base = {
       type: "SINGLETON",
-      vesting_start: f ?? {
-        type: "BARE",
-        base: {
-          type: "EVENT",
-          value: "grantDate"
-        },
-        offsets: [],
-      },
+      vesting_start: f,
       periodicity: p,
     };
     if (c) base.periodicity.cliff = c;

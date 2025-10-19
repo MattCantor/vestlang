@@ -1,6 +1,11 @@
 import { normalizeVestingNode } from "./core.js";
 import { NormalizeAndSort } from "./utils.js";
 import {
+  BareVestingNode,
+  Offsets,
+  RawSchedule,
+  RawScheduleExpr,
+  RawStatement,
   Schedule,
   ScheduleExpr,
   Statement,
@@ -15,7 +20,7 @@ import {
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
-export function normalizeStatement(s: Statement): Statement {
+export function normalizeStatement(s: RawStatement): Statement {
   return {
     amount: s.amount,
     expr: normalizeScheduleExpr(s.expr),
@@ -27,7 +32,7 @@ export function normalizeStatement(s: Statement): Statement {
  * - SINGLETON schedule
  * - Selectors (EARLIER_OF/LATER_OF) over Schedules
  */
-function normalizeScheduleExpr(e: ScheduleExpr): ScheduleExpr {
+function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
   switch (e.type) {
     case "SINGLETON":
       return normalizeSchedule(e);
@@ -46,8 +51,18 @@ function normalizeScheduleExpr(e: ScheduleExpr): ScheduleExpr {
  * - Normalizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: Schedule): Schedule {
-  const vesting_start = normalizeVestingNodeExpr(s.vesting_start);
+function normalizeSchedule(s: RawSchedule): Schedule {
+  const vesting_start = normalizeVestingNodeExpr(
+    s.vesting_start ??
+      ({
+        type: "BARE",
+        base: {
+          type: "EVENT",
+          value: "grantDate",
+        },
+        offsets: [] as Offsets,
+      } as BareVestingNode),
+  );
 
   const periodicity = s.periodicity.cliff
     ? {

@@ -2,7 +2,7 @@
  * Helpers
  * ------------------------ */
 
-type TwoOrMore<T> = [T, T, ...T[]];
+export type TwoOrMore<T> = [T, T, ...T[]];
 
 type SelectorTag = "EARLIER_OF" | "LATER_OF";
 
@@ -19,6 +19,8 @@ interface LaterOf<T> extends Selector<T, "LATER_OF"> {}
 // existing OCT schema
 declare const __isoDateBrand: unique symbol;
 type OCTDate = string & { [__isoDateBrand]: never };
+
+type Shape = "raw" | "canonical";
 
 /* ------------------------
  * Enums
@@ -187,18 +189,31 @@ export interface VestingPeriod {
  * ------------------------ */
 
 // TODO: add to schema
-export interface Schedule {
+export interface Schedule<S extends Shape = "canonical"> {
   type: "SINGLETON";
-  vesting_start: VestingNodeExpr;
+  vesting_start: S extends "canonical"
+    ? VestingNodeExpr
+    : VestingNodeExpr | null;
   periodicity: VestingPeriod;
 }
 
+export type RawSchedule = Schedule<"raw">;
+
 // TODO: add to schema
-export type LaterOfSchedule = LaterOf<ScheduleExpr>;
+export type LaterOfSchedule<S extends Shape = "canonical"> = LaterOf<
+  ScheduleExpr<S>
+>;
 
-export type EarlierOfSchedule = EarlierOf<ScheduleExpr>;
+export type EarlierOfSchedule<S extends Shape = "canonical"> = EarlierOf<
+  ScheduleExpr<S>
+>;
 
-export type ScheduleExpr = Schedule | LaterOfSchedule | EarlierOfSchedule;
+export type ScheduleExpr<S extends Shape = "canonical"> =
+  | Schedule<S>
+  | LaterOfSchedule<S>
+  | EarlierOfSchedule<S>;
+
+export type RawScheduleExpr = ScheduleExpr<"raw">;
 
 /* ------------------------
  * Statements
@@ -218,9 +233,13 @@ export interface AmountPortion extends BaseAmount {
 }
 export type Amount = AmountQuantity | AmountPortion;
 
-export interface Statement {
+export interface Statement<S extends Shape = "canonical"> {
   amount: Amount;
-  expr: ScheduleExpr;
+  expr: ScheduleExpr<S>;
 }
 
-export type Program = Statement[];
+export type RawStatement = Statement<"raw">;
+
+export type Program<S extends Shape = "canonical"> = Statement<S>[];
+
+export type RawProgram = Program<"raw">;

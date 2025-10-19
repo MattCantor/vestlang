@@ -65,3 +65,32 @@ function normalizeAtom(a: AtomCondition): AtomCondition {
     constraint: { ...a.constraint, base: normalizedBase },
   };
 }
+
+// function normalizeOffsets(offsets: Offsets): Offsets {
+//   if (offsets.length === 0) return offsets;
+//
+//   let months = 0,
+//     days = 0;
+//
+//   for (const o of offsets) {
+//     const value = Math.abs(o.value);
+//     const signed = o.sign === "MINUS" ? -value : value;
+//     if (o.unit === "MONTHS") {
+//       months += signed;
+//     } else if (o.unit === "DAYS") {
+//       days += signed;
+//     } else {
+//       throw new Error(`Unexpected offset type ${(o as any)?.type}`);
+//     }
+//   }
+//
+//   const out: Offsets = [];
+//   if (months !== 0)
+//     out.push({
+//       type: "DURATION",
+//       value: Math.abs(months),
+//       unit: "MONTHS",
+//       sign: months < 0 ? "MINUS" : "PLUS",
+//     } as Duration);
+//   return out;
+// }

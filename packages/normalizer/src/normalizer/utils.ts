@@ -1,5 +1,6 @@
 import {
   Condition,
+  RawScheduleExpr,
   Schedule,
   ScheduleExpr,
   VestingNode,
@@ -45,7 +46,7 @@ function dedupe<T>(arr: T[]): T[] {
  * - Sorts and dedupes same-op selectors
  */
 export function NormalizeAndSort<
-  T extends ScheduleExpr,
+  T extends RawScheduleExpr,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
 >(expression: E, normalizeFN: (x: T) => N): N;
