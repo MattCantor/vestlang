@@ -2,6 +2,7 @@ import { normalizeVestingNode } from "./core.js";
 import { NormalizeAndSort } from "./utils.js";
 import {
   BareVestingNode,
+  Duration,
   Offsets,
   RawSchedule,
   RawScheduleExpr,
@@ -10,6 +11,7 @@ import {
   ScheduleExpr,
   Statement,
   VestingNodeExpr,
+  VestingPeriod,
 } from "@vestlang/types";
 
 /* ------------------------
@@ -67,11 +69,34 @@ function normalizeSchedule(s: RawSchedule): Schedule {
   const periodicity = s.periodicity.cliff
     ? {
         ...s.periodicity,
-        cliff: normalizeVestingNodeExpr(s.periodicity.cliff),
+        cliff: normalizeCliff(s.periodicity.cliff),
       }
-    : { ...s.periodicity };
+    : ({ ...s.periodicity } as VestingPeriod);
 
   return { ...s, vesting_start, periodicity };
+}
+
+function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
+  switch (c.type) {
+    case "DURATION":
+      return {
+        type: "BARE",
+        base: {
+          type: "EVENT",
+          value: "vestingStart",
+        },
+        offsets: [c],
+      };
+    case "LATER_OF":
+    case "EARLIER_OF":
+    case "BARE":
+    case "CONSTRAINED":
+      return normalizeVestingNodeExpr(c);
+    default:
+      throw new Error(
+        `normalizeCliff: unexpected cliff type ${(c as any)?.type}`,
+      );
+  }
 }
 
 /**

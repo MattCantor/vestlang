@@ -177,12 +177,16 @@ export interface Constraint {
  * Periodicity
  * ------------------------ */
 
-export interface VestingPeriod {
+export interface VestingPeriod<S extends Shape = "canonical"> {
   type: PeriodTag;
   occurrences: number;
   length: number;
-  cliff?: VestingNodeExpr;
+  cliff?: S extends "canonical"
+    ? VestingNodeExpr | undefined
+    : Duration | VestingNodeExpr | undefined;
 }
+
+export type RawVestingPeriod = VestingPeriod<"raw">;
 
 /* ------------------------
  * Expressions
@@ -194,7 +198,7 @@ export interface Schedule<S extends Shape = "canonical"> {
   vesting_start: S extends "canonical"
     ? VestingNodeExpr
     : VestingNodeExpr | null;
-  periodicity: VestingPeriod;
+  periodicity: VestingPeriod<S>;
 }
 
 export type RawSchedule = Schedule<"raw">;

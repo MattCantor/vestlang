@@ -4,10 +4,8 @@ import {
   RawSchedule,
   RawScheduleExpr,
   RawStatement,
-  Schedule,
-  ScheduleExpr,
   VestingNodeExpr,
-  VestingPeriod,
+  RawVestingPeriod,
 } from "@vestlang/types";
 import { Doc } from "prettier";
 import { group, hardline, indent, kw, line } from "../builders.js";
@@ -56,17 +54,30 @@ function printSchedule(s: RawSchedule): Doc {
   }
   parts.push(printPeriodicity(s.periodicity));
   if (s.periodicity.cliff) {
-    parts.push(
-      line,
-      kw("CLIFF"),
-      " ",
-      printVestingNodeExpr(s.periodicity.cliff),
-    );
+    if (s.periodicity.cliff.type === "DURATION") {
+      parts.push(
+        indent([
+          line,
+          kw("CLIFF"),
+          " ",
+          `${s.periodicity.cliff.value} ${s.periodicity.cliff.unit}`,
+        ]),
+      );
+    } else {
+      parts.push(
+        indent([
+          line,
+          kw("CLIFF"),
+          " ",
+          printVestingNodeExpr(s.periodicity.cliff),
+        ]),
+      );
+    }
   }
   return group(parts);
 }
 
-function printPeriodicity(p: VestingPeriod): Doc {
+function printPeriodicity(p: RawVestingPeriod): Doc {
   if (p.length === 0) return [];
   const base = indent([
     hardline,
