@@ -18,7 +18,7 @@ interface LaterOf<T> extends Selector<T, "LATER_OF"> {}
 // types/Date.schema.json
 // existing OCT schema
 declare const __isoDateBrand: unique symbol;
-type OCTDate = string & { [__isoDateBrand]: never };
+export type OCTDate = string & { [__isoDateBrand]: never };
 
 type Shape = "raw" | "canonical";
 

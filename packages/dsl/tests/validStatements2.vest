@@ -1,3 +1,1 @@
-VEST
-  OVER 12 MONTHS EVERY 12 MONTHS
-  CLIFF 3 MONTHS
+VEST FROM EVENT milestone1 +3 months  AFTER EVENT milestone2 +3 months

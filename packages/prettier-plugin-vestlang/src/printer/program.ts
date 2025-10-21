@@ -9,7 +9,7 @@ import {
 } from "@vestlang/types";
 import { Doc } from "prettier";
 import { group, hardline, indent, kw, line } from "../builders.js";
-import { printDuration, printVestingNode } from "./core.js";
+import { printVestingNode } from "./core.js";
 import { printParenGroup } from "./utils.js";
 
 /* ------------------------

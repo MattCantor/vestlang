@@ -29,7 +29,7 @@ export function printVestingNode(node: VestingNode): Doc {
 
 export function printDuration(d: Duration): Doc {
   const sign = d.sign === "MINUS" ? "-" : "+";
-  const unit = d.unit === "DAYS" ? "DAYS" : "MONTHS";
+  const unit = d.unit === "DAYS" ? "days" : "months";
   return `${sign}${d.value} ${unit}`;
 }
 
