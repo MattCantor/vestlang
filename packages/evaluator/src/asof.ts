@@ -1,6 +1,6 @@
 import { Amount, Statement as NormalizedStatement } from "@vestlang/types";
 import { EvaluationContextInput, Tranche } from "./types.js";
-import { buildSchedulePlan } from "./schedule.js";
+import { buildSchedulePlan } from "./selectors.js";
 import { createEvaluationContext } from "./utils.js";
 
 export interface VestedResult {

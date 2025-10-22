@@ -130,6 +130,9 @@ function planFromSingleton(
     };
   }
 
+  // supple synthetic vestingStart event for cliff
+  ctx.events["vestingStart"] = startRes.date;
+
   const cadence = generateCadence(startRes.date, expr.periodicity, ctx);
   let finalDates = cadence;
   let applied = false;

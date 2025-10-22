@@ -1,7 +1,6 @@
 // test/addMonthsRule.test.ts
 import { describe, it, expect } from "vitest";
 import { addMonthsRule } from "../src/time.js";
-import { addMonths } from "date-fns";
 import { OCTDate, vesting_day_of_month } from "@vestlang/types";
 import { EvaluationContext } from "../dist/types.js";
 
@@ -120,13 +119,4 @@ describe("addMonthsRule", () => {
       expect(got).toBe(expected);
     },
   );
-
-  // it("matches date-fns addMonths month target but with day clamped per rule", () => {
-  //   const src = "2024-01-31" as OCTDate;
-  //   // What month addMonths *targets* (ignoring day overflow):
-  //   const target = addMonths(new Date(src + "T00:00:00Z"), 1);
-  //   // Our function should stay in that same (year, month) with a clamped day.
-  //   const got = addMonthsRule(src, 1, ctx("31_OR_LAST_DAY_OF_MONTH"));
-  //   expect(got.startsWith(`${target.getUTCFullYear()}-02-`)).toBe(true);
-  // });
 });

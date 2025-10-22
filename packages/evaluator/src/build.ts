@@ -12,7 +12,7 @@ import {
   SymbolicDate,
   TrancheStatus,
 } from "./types.js";
-import { nextDate, pickScheduleByStart } from "./schedule.js";
+import { nextDate, pickScheduleByStart } from "./selectors.js";
 import { resolveNodeExpr } from "./resolve.js";
 import { analyzeUnresolvedReasons } from "./trace.js";
 import { createEvaluationContext } from "./utils.js";
