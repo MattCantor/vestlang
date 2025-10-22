@@ -27,12 +27,16 @@ export function resolveNodeBaseDate(
   return eventDate ? { date: eventDate } : undefined;
 }
 
-function applyOffsets(base: OCTDate, offsets: Offsets): OCTDate {
+function applyOffsets(
+  base: OCTDate,
+  offsets: Offsets,
+  ctx: EvaluationContext,
+): OCTDate {
   let d = base;
   for (const o of offsets) {
     d =
       o.unit === "MONTHS"
-        ? addMonthsRule(d, o.sign === "PLUS" ? o.value : -o.value)
+        ? addMonthsRule(d, o.sign === "PLUS" ? o.value : -o.value, ctx)
         : addDays(d, o.sign === "PLUS" ? o.value : -o.value);
   }
   return d;
@@ -52,7 +56,10 @@ export function resolveConcreteNode(
   }
   const base = resolveNodeBaseDate(node, ctx, /*checkConstraints*/ false);
   if (!base) return { state: "unresolved" };
-  return { state: "resolved", date: applyOffsets(base.date, node.offsets) };
+  return {
+    state: "resolved",
+    date: applyOffsets(base.date, node.offsets, ctx),
+  };
 }
 
 export function resolveNodeExpr(

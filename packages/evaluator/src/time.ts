@@ -1,26 +1,47 @@
 import { OCTDate } from "@vestlang/types";
-import {
-  addDays as dfAddDays,
-  addMonths,
-  endOfMonth,
-  isBefore,
-  isAfter,
-  isEqual,
-} from "date-fns";
+import { addDays as dfAddDays, isBefore, isAfter, isEqual } from "date-fns";
+import { EvaluationContext } from "./types.js";
 
 // convert ISO-string ↔ Date
 export const toDate = (iso: OCTDate) => new Date(iso + "T00:00:00Z");
 export const toISO = (d: Date): OCTDate =>
   d.toISOString().slice(0, 10) as OCTDate;
 
-/** “Vesting date or last day of month” rule */
-// TODO: Replace this with existing implementation
-export function addMonthsRule(iso: OCTDate, months: number): OCTDate {
-  const d = toDate(iso);
-  const next = addMonths(d, months);
-  // if target month has fewer days, clamp to endOfMonth
-  if (d.getUTCDate() !== next.getUTCDate()) return toISO(endOfMonth(next));
-  return toISO(next);
+export function addMonthsRule(
+  iso: OCTDate,
+  months: number,
+  ctx: EvaluationContext,
+): OCTDate {
+  const d = toDate(iso); // original date (UTC)
+
+  // --- Compute target (year, month) in UTC
+  const y0 = d.getUTCFullYear();
+  const m0 = d.getUTCMonth();
+  const mSum = m0 + months;
+  const ty = y0 + Math.floor(mSum / 12);
+  const tm = ((mSum % 12) + 12) % 12;
+
+  // --- Last day of target month in UTC: day 0 next month
+  const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+
+  const pickDay = (): number => {
+    switch (ctx.vesting_day_of_month) {
+      case "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH":
+        return Math.min(d.getUTCDate(), lastDay);
+      case "29_OR_LAST_DAY_OF_MONTH":
+        return Math.min(29, lastDay);
+      case "30_OR_LAST_DAY_OF_MONTH":
+        return Math.min(30, lastDay);
+      case "31_OR_LAST_DAY_OF_MONTH":
+        return Math.min(31, lastDay);
+      default:
+        // clamp to last day to avoid overflow
+        return Math.min(parseInt(ctx.vesting_day_of_month, 10), lastDay);
+    }
+  };
+
+  const result = new Date(Date.UTC(ty, tm, pickDay()));
+  return toISO(result);
 }
 
 export const addDays = (iso: OCTDate, n: number): OCTDate =>

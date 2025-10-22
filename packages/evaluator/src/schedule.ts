@@ -14,16 +14,25 @@ import { addMonthsRule, addDays, lt } from "./time.js";
  * Cadence helpers
  * ------------------------ */
 
-function nextDate(d: OCTDate, unit: PeriodTag, length: number): OCTDate {
-  return unit === "MONTHS" ? addMonthsRule(d, length) : addDays(d, length);
+export function nextDate(
+  d: OCTDate,
+  unit: PeriodTag,
+  length: number,
+  ctx: EvaluationContext,
+): OCTDate {
+  return unit === "MONTHS" ? addMonthsRule(d, length, ctx) : addDays(d, length);
 }
 
 /** Generate raw cadence from start (no cliff yet), as a list of dates. */
-function generateCadence(start: OCTDate, p: VestingPeriod): OCTDate[] {
+function generateCadence(
+  start: OCTDate,
+  p: VestingPeriod,
+  ctx: EvaluationContext,
+): OCTDate[] {
   const out: OCTDate[] = [];
   let d = start;
   for (let i = 0; i < p.occurrences; i++) {
-    out.push(i === 0 ? d : (d = nextDate(d, p.type, p.length)));
+    out.push((d = nextDate(d, p.type, p.length, ctx)));
   }
   return out;
 }
@@ -121,7 +130,7 @@ function planFromSingleton(
     };
   }
 
-  const cadence = generateCadence(startRes.date, expr.periodicity);
+  const cadence = generateCadence(startRes.date, expr.periodicity, ctx);
   let finalDates = cadence;
   let applied = false;
 

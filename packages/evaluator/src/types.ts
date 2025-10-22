@@ -2,13 +2,21 @@ import {
   OCTDate,
   Statement as NormalizedStatement,
   PeriodTag,
+  vesting_day_of_month,
 } from "@vestlang/types";
 
 export interface EvaluationContext {
   events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
   asOf: OCTDate;
+  vesting_day_of_month: vesting_day_of_month;
 }
+
+export type EvaluationContextInput = Omit<
+  EvaluationContext,
+  "vesting_day_of_month"
+> &
+  Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
 
 export type NodeResolutionState =
   | { state: "inactive" }

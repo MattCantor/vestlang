@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
+  buildSchedulePlan,
   buildScheduleWithBlockers,
   evaluateStatementAsOf,
   EvaluationContext,
@@ -93,6 +94,7 @@ program
         events: { grantDate: validateDate(opts.grantDate) },
         grantQuantity: quantity,
         asOf: validateDate(opts.date ?? getTodayISO()),
+        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       };
 
       const input = opts.stdin ? readAllStdin() : parts.join(" ");
@@ -130,13 +132,15 @@ program
         events: { grantDate: validateDate(opts.grantDate) },
         grantQuantity: quantity,
         asOf: validateDate(getTodayISO()),
+        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       };
 
       const input = opts.stdin ? readAllStdin() : parts.join(" ");
       const ast = parse(input);
       const normalized = normalizeProgram(ast);
       const schedule = normalized.map((s) =>
-        buildScheduleWithBlockers(s.expr, ctx),
+        // buildScheduleWithBlockers(s.expr, ctx),
+        buildSchedulePlan(s.expr, ctx),
       );
       console.log(JSON.stringify(schedule, null, 2));
     },

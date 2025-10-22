@@ -1,6 +1,7 @@
 import { Amount, Statement as NormalizedStatement } from "@vestlang/types";
-import { EvaluationContext, Tranche } from "./types.js";
+import { EvaluationContextInput, Tranche } from "./types.js";
 import { buildSchedulePlan } from "./schedule.js";
+import { createEvaluationContext } from "./utils.js";
 
 export interface VestedResult {
   vested: Tranche[];
@@ -16,8 +17,9 @@ function amountToQuantify(a: Amount, grantQuantity: number): number {
 
 export function evaluateStatementAsOf(
   stmt: NormalizedStatement,
-  ctx: EvaluationContext,
+  ctx_input: EvaluationContextInput,
 ): VestedResult {
+  const ctx = createEvaluationContext(ctx_input);
   const plan = buildSchedulePlan(stmt.expr, ctx);
   const total = amountToQuantify(stmt.amount, ctx.grantQuantity);
 

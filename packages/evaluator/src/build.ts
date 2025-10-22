@@ -8,13 +8,15 @@ import {
 import {
   Blocker,
   EvaluationContext,
+  EvaluationContextInput,
   SymbolicDate,
   TrancheStatus,
 } from "./types.js";
-import { addDays, addMonthsRule, lt } from "./time.js";
-import { pickScheduleByStart } from "./schedule.js";
+import { nextDate, pickScheduleByStart } from "./schedule.js";
 import { resolveNodeExpr } from "./resolve.js";
 import { analyzeUnresolvedReasons } from "./trace.js";
+import { createEvaluationContext } from "./utils.js";
+import { lt } from "./time.js";
 
 /** --- symbolic helpers --- */
 const symStart: SymbolicDate = { type: "START" };
@@ -25,9 +27,9 @@ const symPlus = (unit: PeriodTag, steps: number): SymbolicDate => ({
   steps,
 });
 
-function nextDate(d: OCTDate, unit: PeriodTag, length: number): OCTDate {
-  return unit === "MONTHS" ? addMonthsRule(d, length) : addDays(d, length);
-}
+// function nextDate(d: OCTDate, unit: PeriodTag, length: number): OCTDate {
+//   return unit === "MONTHS" ? addMonthsRule(d, length) : addDays(d, length);
+// }
 
 /* Build symbolic dates list (no cliff yet) */
 function symbolicCadence(p: {
@@ -53,8 +55,9 @@ function selectScheduleFromExpr(
 
 export function buildScheduleWithBlockers(
   expr: ScheduleExpr,
-  ctx: EvaluationContext,
+  ctx_input: EvaluationContextInput,
 ): TrancheStatus[] {
+  const ctx = createEvaluationContext(ctx_input);
   // Choose schedule by resolved vesting_start if selector
   const sched = selectScheduleFromExpr(expr, ctx);
   if (!sched) {
@@ -119,7 +122,12 @@ export function buildScheduleWithBlockers(
       out.push(
         i === 0
           ? d
-          : (d = nextDate(d, sched.periodicity.type, sched.periodicity.length)),
+          : (d = nextDate(
+              d,
+              sched.periodicity.type,
+              sched.periodicity.length,
+              ctx,
+            )),
       );
     }
     return out;
