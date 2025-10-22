@@ -4,6 +4,7 @@ import {
   VestingPeriod,
   OCTDate,
   Schedule as NormalizedSchedule,
+  SelectorTag,
 } from "@vestlang/types";
 import { EvaluationContext, Schedule, Tranche } from "./types.js";
 import { resolveNodeExpr } from "./resolve.js";
@@ -45,32 +46,30 @@ type Picked = {
   unresolved: boolean;
 };
 
-function pickScheduleByStart(
+export function pickScheduleByStart(
   items: ScheduleExpr[],
   ctx: EvaluationContext,
-  mode: "EARLIER" | "LATER",
+  mode: SelectorTag,
 ): Picked {
-  let candidate: { s: NormalizedSchedule; start: OCTDate } | undefined;
+  let candidate: { schedule: NormalizedSchedule; start: OCTDate } | undefined;
   let unresolved = false;
 
   for (const it of items) {
     if (it.type !== "SINGLETON") {
       // Recurse into nested selectors
-      const sub = pickScheduleByStart(
-        (it as any).items,
-        ctx,
-        it.type === "EARLIER_OF" ? "EARLIER" : "LATER",
-      );
+      const sub = pickScheduleByStart((it as any).items, ctx, it.type);
       if (!sub.chosen) {
         unresolved = unresolved || sub.unresolved;
         continue;
       }
       const d = sub.start!;
-      if (!candidate) candidate = { s: sub.chosen, start: d };
+      if (!candidate) candidate = { schedule: sub.chosen, start: d };
       else {
         const better =
-          mode === "EARLIER" ? lt(d, candidate.start) : lt(candidate.start, d);
-        if (better) candidate = { s: sub.chosen, start: d };
+          mode === "EARLIER_OF"
+            ? lt(d, candidate.start)
+            : lt(candidate.start, d);
+        if (better) candidate = { schedule: sub.chosen, start: d };
       }
       continue;
     }
@@ -82,18 +81,18 @@ function pickScheduleByStart(
       continue;
     }
 
-    if (!candidate) candidate = { s: it, start: startRes.date };
+    if (!candidate) candidate = { schedule: it, start: startRes.date };
     else {
       const better =
-        mode === "EARLIER"
+        mode === "EARLIER_OF"
           ? lt(startRes.date, candidate.start)
           : lt(candidate.start, startRes.date);
-      if (better) candidate = { s: it, start: startRes.date };
+      if (better) candidate = { schedule: it, start: startRes.date };
     }
   }
 
   if (!candidate) return { unresolved };
-  return { chosen: candidate.s, start: candidate.start, unresolved };
+  return { chosen: candidate.schedule, start: candidate.start, unresolved };
 }
 
 /* ------------------------
@@ -160,8 +159,7 @@ export function buildSchedulePlan(
 ): Schedule {
   if (expr.type === "SINGLETON") return planFromSingleton(expr, ctx);
 
-  const mode = expr.type === "EARLIER_OF" ? "EARLIER" : "LATER";
-  const picked = pickScheduleByStart(expr.items, ctx, mode);
+  const picked = pickScheduleByStart(expr.items, ctx, expr.type);
 
   // LATER requires all items resolved to select; EARLIER can proceed with any resolved candidate.
   if (!picked.chosen)

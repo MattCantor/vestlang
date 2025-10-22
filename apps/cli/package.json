@@ -11,9 +11,11 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@vestlang/types": "workspace:*",
     "@vestlang/dsl": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
+    "@vestlang/evaluator": "workspace: *",
     "commander": "^14.0.1",
     "tsx": "^4.20.5"
   },

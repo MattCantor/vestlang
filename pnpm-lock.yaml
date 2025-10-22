@@ -42,12 +42,18 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
+      '@vestlang/evaluator':
+        specifier: 'workspace: *'
+        version: link:../../packages/evaluator
       '@vestlang/linter':
         specifier: workspace:*
         version: link:../../packages/linter
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       commander:
         specifier: ^14.0.1
         version: 14.0.1

@@ -4,7 +4,7 @@
 
 export type TwoOrMore<T> = [T, T, ...T[]];
 
-type SelectorTag = "EARLIER_OF" | "LATER_OF";
+export type SelectorTag = "EARLIER_OF" | "LATER_OF";
 
 interface Selector<T, K extends SelectorTag = SelectorTag> {
   type: K;

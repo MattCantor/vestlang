@@ -1,4 +1,8 @@
-import { OCTDate, Statement as NormalizedStatement } from "@vestlang/types";
+import {
+  OCTDate,
+  Statement as NormalizedStatement,
+  PeriodTag,
+} from "@vestlang/types";
 
 export interface EvaluationContext {
   events: Record<string, OCTDate | undefined>;
@@ -14,6 +18,29 @@ export type NodeResolutionState =
 export interface Tranche {
   date: OCTDate;
   amount: number;
+}
+
+/** Symbolic date for display/debug */
+export type SymbolicDate =
+  | { type: "START" }
+  | { type: "CLIFF" }
+  | { type: "START_PLUS"; unit: PeriodTag; steps: number };
+
+/** Why a tranche cannot be resolved yet */
+export type Blocker =
+  | { type: "MISSING_EVENT"; event: string }
+  | { type: "UNRESOLVED_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF" }
+  | { type: "UNRESOLVED_START" }
+  | { type: "UNRESOLVED_CLIFF" }
+  | { type: "CONSTRAINT_FALSE_BUT_SATISFIABLE"; note: string }
+  | { type: "CONSTRAINT_FALSE_NOT_SATISFIABLE"; note: string };
+
+export interface TrancheStatus {
+  index: number;
+  status: NodeResolutionState;
+  symbolicDate?: SymbolicDate;
+  amount: number;
+  blockers: Blocker[];
 }
 
 export interface Schedule {

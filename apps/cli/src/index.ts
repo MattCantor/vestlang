@@ -3,6 +3,12 @@ import { Command } from "commander";
 import { readFileSync } from "node:fs";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
+import {
+  buildScheduleWithBlockers,
+  evaluateStatementAsOf,
+  EvaluationContext,
+} from "@vestlang/evaluator";
+import { OCTDate } from "@vestlang/types";
 
 function readAllStdin(): string {
   try {
@@ -12,11 +18,30 @@ function readAllStdin(): string {
   }
 }
 
+function getTodayISO(): OCTDate {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}` as OCTDate;
+}
+
+function validateDate(input: string): OCTDate {
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+  if (!dateRegex.test(input)) {
+    console.error("Invalide date format. Use YYYY-MM-DD.");
+    process.exit(1);
+  }
+
+  return input as OCTDate;
+}
+
 const program = new Command();
 
 program.name("vest").description("Vestlang CLI").version("0.1.0");
 
-// vest inspect [input...] [--stdin]
+// vestlang inspect [input...] [--stdin]
 program
   .command("inspect")
   .argument("[input...]", "DSL text")
@@ -27,7 +52,7 @@ program
     console.log(JSON.stringify(ast, null, 2));
   });
 
-// vest compile [input...] [--stdin]
+// vestlang compile [input...] [--stdin]
 program
   .command("compile")
   .argument("[input...]", "DSL text")
@@ -38,5 +63,83 @@ program
     const result = normalizeProgram(ast);
     console.log(JSON.stringify(result, null, 2));
   });
+
+program
+  .command("asOf")
+  .description("Evaluate vesting as of a specific date.")
+  .requiredOption("-q, --quantity <number>", "total number of shares granted")
+  .requiredOption("-g, --grantDate <string>", "grant date of the award")
+  .option("-d, --date <YYYY-MM-DD>", "as-of date in YYYY-MM-DD format")
+  .option("--stdin", "read input from stdin")
+  .argument("<input...>", "DSL text")
+  .action(
+    (
+      parts: string[],
+      opts: {
+        quantity: string;
+        grantDate: string;
+        date?: string;
+        stdin?: boolean;
+      },
+    ) => {
+      // quantity: must be a whole number
+      const quantity = Number(opts.quantity);
+      if (!Number.isInteger(quantity) || quantity < 0) {
+        console.error("Quantity must be a non-negative whole number.");
+        process.exit(1);
+      }
+
+      const ctx: EvaluationContext = {
+        events: { grantDate: validateDate(opts.grantDate) },
+        grantQuantity: quantity,
+        asOf: validateDate(opts.date ?? getTodayISO()),
+      };
+
+      const input = opts.stdin ? readAllStdin() : parts.join(" ");
+      const ast = parse(input);
+      const normalized = normalizeProgram(ast);
+      const results = normalized.map((s) => evaluateStatementAsOf(s, ctx));
+      console.log(JSON.stringify(results, null, 2));
+    },
+  );
+
+program
+  .command("build")
+  .description("Build the vesting schedule")
+  .requiredOption("-q, --quantity <number>", "total number of shares granted")
+  .requiredOption("-g, --grantDate <string>", "grant date of the award")
+  .option("--stdin", "read input from stdin")
+  .argument("<input...>", "DSL text")
+  .action(
+    (
+      parts: string[],
+      opts: {
+        quantity: string;
+        grantDate: string;
+        stdin?: boolean;
+      },
+    ) => {
+      // quantity: must be a whole number
+      const quantity = Number(opts.quantity);
+      if (!Number.isInteger(quantity) || quantity < 0) {
+        console.error("Quantity must be a non-negative whole number.");
+        process.exit(1);
+      }
+
+      const ctx: EvaluationContext = {
+        events: { grantDate: validateDate(opts.grantDate) },
+        grantQuantity: quantity,
+        asOf: validateDate(getTodayISO()),
+      };
+
+      const input = opts.stdin ? readAllStdin() : parts.join(" ");
+      const ast = parse(input);
+      const normalized = normalizeProgram(ast);
+      const schedule = normalized.map((s) =>
+        buildScheduleWithBlockers(s.expr, ctx),
+      );
+      console.log(JSON.stringify(schedule, null, 2));
+    },
+  );
 
 program.parseAsync();
