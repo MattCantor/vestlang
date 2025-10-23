@@ -10,9 +10,12 @@ import {
   Schedule,
   ScheduleExpr,
   Statement,
+  VestingNode,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+
+type SYSTEM_EVENT = "grantdate" | "vestingstart";
 
 /* ------------------------
  * Orchestration
@@ -54,7 +57,7 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  * - Periodicity comes already canonical from the grammar
  */
 function normalizeSchedule(s: RawSchedule): Schedule {
-  const vesting_start = normalizeVestingNodeExpr(
+  const vesting_start = normalizeVestingStart(
     s.vesting_start ??
       ({
         type: "BARE",
@@ -76,19 +79,23 @@ function normalizeSchedule(s: RawSchedule): Schedule {
   return { ...s, vesting_start, periodicity };
 }
 
-function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
+function normalizeNode(
+  c: Duration | VestingNodeExpr,
+  durationRef: SYSTEM_EVENT,
+): VestingNodeExpr {
   switch (c.type) {
     case "DURATION":
       return {
         type: "BARE",
         base: {
           type: "EVENT",
-          value: "vestingStart",
+          value: durationRef,
         },
         offsets: [c],
       };
     case "LATER_OF":
     case "EARLIER_OF":
+      return NormalizeAndSort(c, normalizeCliff);
     case "BARE":
     case "CONSTRAINED":
       return normalizeVestingNodeExpr(c);
@@ -97,6 +104,14 @@ function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
         `normalizeCliff: unexpected cliff type ${(c as any)?.type}`,
       );
   }
+}
+
+function normalizeVestingStart(c: Duration | VestingNodeExpr): VestingNodeExpr {
+  return normalizeNode(c, "grantdate");
+}
+
+function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
+  return normalizeNode(c, "vestingstart");
 }
 
 /**

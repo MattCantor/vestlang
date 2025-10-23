@@ -6,10 +6,11 @@ import {
   RawStatement,
   VestingNodeExpr,
   RawVestingPeriod,
+  Duration,
 } from "@vestlang/types";
 import { Doc } from "prettier";
 import { group, hardline, indent, kw, line } from "../builders.js";
-import { printVestingNode } from "./core.js";
+import { printDuration, printVestingNode } from "./core.js";
 import { printParenGroup } from "./utils.js";
 
 /* ------------------------
@@ -83,7 +84,7 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
     hardline,
     kw("OVER"),
     " ",
-    `${p.length * p.occurrences} ${p.type}`,
+    `${p.length * p.occurrences} ${p.type.toLocaleLowerCase()}`,
     // printDuration({
     //   type: "DURATION",
     //   value: p.length * p.occurrences,
@@ -93,7 +94,7 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
     " ",
     kw("EVERY"),
     " ",
-    `${p.length * p.occurrences} ${p.type}`,
+    `${p.length} ${p.type.toLocaleLowerCase()}`,
     // printDuration({
     //   type: "DURATION",
     //   value: p.length,
@@ -104,8 +105,10 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
   return base;
 }
 
-function printVestingNodeExpr(node: VestingNodeExpr): Doc {
+function printVestingNodeExpr(node: Duration | VestingNodeExpr): Doc {
   switch (node.type) {
+    case "DURATION":
+      return printDuration(node);
     case "EARLIER_OF":
     case "LATER_OF":
       const keyword = kw(node.type.replace("_", " "));
