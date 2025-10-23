@@ -7,5 +7,6 @@ export function createEvaluationContext(
     ...input,
     vesting_day_of_month:
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    allocation_type: input.allocation_type ?? "CUMULATIVE_ROUND_DOWN",
   };
 }

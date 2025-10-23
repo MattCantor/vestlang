@@ -4,6 +4,7 @@ import {
   PeriodTag,
   vesting_day_of_month,
   Schedule as NormalizedSchedule,
+  allocation_type,
 } from "@vestlang/types";
 
 export interface EvaluationContext {
@@ -11,6 +12,7 @@ export interface EvaluationContext {
   grantQuantity: number;
   asOf: OCTDate;
   vesting_day_of_month: vesting_day_of_month;
+  allocation_type: allocation_type;
 }
 
 export type EvaluationContextInput = Omit<
@@ -24,8 +26,11 @@ export type NodeResolutionState =
   | { state: "unresolved" }
   | { state: "resolved"; date: OCTDate };
 
-export interface Tranche {
+export interface TrancheDate {
   date: OCTDate;
+}
+
+export interface Tranche extends TrancheDate {
   amount: number;
 }
 
@@ -61,7 +66,14 @@ export type PickedSchedule = {
 export interface ExpandedSchedule {
   vesting_start: NodeResolutionState;
   cliff?: { input: NodeResolutionState; applied: boolean };
-  tranches: Tranche[]; // empty if unresolved/inactive
+  tranches: TrancheDate[]; // empty if unresolved/inactive
+}
+
+export interface AllocatedSchedule {
+  vesting_start: NodeResolutionState;
+  cliff?: { input: NodeResolutionState; applied: boolean };
+  tranches: Tranche[]; // empty if unresolved/inactive;
+  unresolved: number;
 }
 
 export interface Statement {

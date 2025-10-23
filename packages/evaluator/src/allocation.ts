@@ -19,7 +19,7 @@ export function allocateQuantity(
       const out = new Array<number>(n).fill(0);
       for (let i = 0; i < n; i++) {
         const prev = i === 0 ? 0 : out.slice(0, i).reduce((a, b) => a + b, 0);
-        const target = Math.round((i + 1) / n) * quantity;
+        const target = Math.round(((i + 1) / n) * quantity);
         out[i] = target - prev;
       }
       return out;

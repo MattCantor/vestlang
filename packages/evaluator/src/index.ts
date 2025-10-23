@@ -1,4 +1,4 @@
 export type * from "./types.js";
 export { evaluateStatementAsOf, type VestedResult } from "./asof.js";
 export { buildScheduleWithBlockers } from "./build.js";
-export { expandSchedule } from "./expandSchedule.js";
+export { expandAllocatedSchedule } from "./expandSchedule.js";

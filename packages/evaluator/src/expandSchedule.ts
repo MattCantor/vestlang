@@ -2,16 +2,18 @@ import { OCTDate, ScheduleExpr } from "@vestlang/types";
 import { resolveNodeExpr } from "./resolve.js";
 import { pickScheduleByStart } from "./selectors.js";
 import {
+  AllocatedSchedule,
   EvaluationContext,
   ExpandedSchedule,
   PickedSchedule,
 } from "./types.js";
 import { nextDate } from "./time.js";
+import { allocateQuantity } from "./allocation.js";
 
 /**
- * Expand a ScheduleExpr into a concrete (or partially concrete) sequence of vesting tranches.
+ * Expand a ScheduleExpr into a concrete (or partially concrete) sequence of vesting dates.
  */
-export function expandSchedule(
+function expandSchedule(
   expr: ScheduleExpr,
   ctx: EvaluationContext,
 ): ExpandedSchedule {
@@ -26,6 +28,8 @@ export function expandSchedule(
   }
 
   const sched = picked.chosen;
+
+  // resolve start
   const startRes = picked.vesting_start
     ? { state: "resolved" as const, date: picked.vesting_start }
     : resolveNodeExpr(sched.vesting_start, ctx);
@@ -34,12 +38,13 @@ export function expandSchedule(
     return { vesting_start: startRes, tranches: [] };
   }
 
-  // Generate cadence (no cliff yet)
-  const cadence: OCTDate[] = [];
+  // Generate cadence (first installment at start + 1 period)
+  const dates: OCTDate[] = [];
   let d = startRes.date;
   const { type, length, occurrences } = sched.periodicity;
   for (let i = 0; i < occurrences; i++) {
-    cadence.push((d = nextDate(d, type, length, ctx)));
+    d = nextDate(d, type, length, ctx);
+    dates.push(d);
   }
 
   // Resolve cliff using overlay ctx
@@ -56,9 +61,9 @@ export function expandSchedule(
     if (cliffRes.state === "resolved") {
       // Catch-up: combine installments before the cliff into one tranche
       let idx = 0;
-      while (idx < cadence.length && cadence[idx] < cliffRes.date) idx++;
+      while (idx < dates.length && dates[idx] < cliffRes.date) idx++;
       if (idx > 0) {
-        cadence.splice(0, idx, cliffRes.date);
+        dates.splice(0, idx, cliffRes.date);
         applied = true;
       }
       cliffField = { input: cliffRes, applied };
@@ -67,13 +72,47 @@ export function expandSchedule(
     }
   }
 
-  // Even split across installments
-  // TODO: implement rounding here
-  const n = cadence.length;
-  const tranches = cadence.map((date) => ({
-    date,
-    amount: n > 0 ? 1 / n : 0,
-  }));
+  return {
+    vesting_start: startRes,
+    cliff: cliffField,
+    tranches: dates.map((date) => ({ date })),
+  };
+}
 
-  return { vesting_start: startRes, cliff: cliffField, tranches };
+/** Expand a ScheduleExpr and allocate integer shares accross its tranches.
+ * Returns tranches with concrete amount and an 'unresolved' remainder (should be 0).
+ */
+export function expandAllocatedSchedule(
+  expr: ScheduleExpr,
+  ctx: EvaluationContext,
+): AllocatedSchedule {
+  const expanded = expandSchedule(expr, ctx);
+
+  if (
+    expanded.vesting_start.state !== "resolved" ||
+    expanded.tranches.length === 0
+  ) {
+    return {
+      vesting_start: expanded.vesting_start,
+      cliff: expanded.cliff,
+      tranches: [],
+      unresolved: Math.round(ctx.grantQuantity),
+    };
+  }
+
+  const n = expanded.tranches.length;
+  const totalInt = Math.round(ctx.grantQuantity);
+  const splits = allocateQuantity(totalInt, n, ctx.allocation_type);
+  const scheduled = splits.reduce((a, b) => a + b, 0);
+  const remainder = totalInt - scheduled;
+
+  return {
+    vesting_start: expanded.vesting_start,
+    cliff: expanded.cliff,
+    tranches: expanded.tranches.map((tranche, i) => ({
+      date: tranche.date,
+      amount: splits[i],
+    })),
+    unresolved: remainder < 0 ? 0 : remainder,
+  };
 }

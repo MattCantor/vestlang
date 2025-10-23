@@ -4,8 +4,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
-  expandSchedule,
-  // buildScheduleWithBlockers,
+  expandAllocatedSchedule,
   evaluateStatementAsOf,
   EvaluationContext,
 } from "@vestlang/evaluator";
@@ -95,13 +94,22 @@ program
         grantQuantity: quantity,
         asOf: validateDate(opts.date ?? getTodayISO()),
         vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        allocation_type: "CUMULATIVE_ROUND_DOWN",
       };
 
       const input = opts.stdin ? readAllStdin() : parts.join(" ");
       const ast = parse(input);
       const normalized = normalizeProgram(ast);
       const results = normalized.map((s) => evaluateStatementAsOf(s, ctx));
-      console.log(JSON.stringify(results, null, 2));
+      results.forEach((r) => {
+        console.log("VESTED");
+        console.table(r.vested);
+        console.log("UNVESTED");
+        console.table(r.unvested);
+        console.log("UNRESOLVED");
+        console.log(r.unresolved);
+      });
+      // console.log(JSON.stringify(results, null, 2));
     },
   );
 
@@ -133,16 +141,30 @@ program
         grantQuantity: quantity,
         asOf: validateDate(getTodayISO()),
         vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        allocation_type: "CUMULATIVE_ROUND_DOWN",
       };
 
       const input = opts.stdin ? readAllStdin() : parts.join(" ");
       const ast = parse(input);
       const normalized = normalizeProgram(ast);
-      const schedule = normalized.map((s) =>
+      const results = normalized.map((s) =>
         // buildScheduleWithBlockers(s.expr, ctx),
-        expandSchedule(s.expr, ctx),
+        expandAllocatedSchedule(s.expr, ctx),
       );
-      console.log(JSON.stringify(schedule, null, 2));
+      results.forEach((r) => {
+        console.log("VESTING START");
+        console.table(r.vesting_start);
+        if (r.cliff) {
+          console.log("CLIFF");
+          console.table(r.cliff);
+        }
+        console.log("TRANCHES");
+        console.table(r.tranches);
+        console.log("UNRESOLVED");
+        console.log(r.unresolved);
+      });
+
+      // console.log(JSON.stringify(schedule, null, 2));
     },
   );
 
