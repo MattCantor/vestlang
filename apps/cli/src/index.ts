@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
-  buildSchedulePlan,
-  buildScheduleWithBlockers,
+  expandSchedule,
+  // buildScheduleWithBlockers,
   evaluateStatementAsOf,
   EvaluationContext,
 } from "@vestlang/evaluator";
@@ -31,7 +31,7 @@ function validateDate(input: string): OCTDate {
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
   if (!dateRegex.test(input)) {
-    console.error("Invalide date format. Use YYYY-MM-DD.");
+    console.error("Invalid date format. Use YYYY-MM-DD.");
     process.exit(1);
   }
 
@@ -72,7 +72,7 @@ program
   .requiredOption("-g, --grantDate <string>", "grant date of the award")
   .option("-d, --date <YYYY-MM-DD>", "as-of date in YYYY-MM-DD format")
   .option("--stdin", "read input from stdin")
-  .argument("<input...>", "DSL text")
+  .argument("[input...]", "DSL text")
   .action(
     (
       parts: string[],
@@ -106,12 +106,12 @@ program
   );
 
 program
-  .command("build")
-  .description("Build the vesting schedule")
+  .command("expand")
+  .description("Expand the vesting schedule")
   .requiredOption("-q, --quantity <number>", "total number of shares granted")
   .requiredOption("-g, --grantDate <string>", "grant date of the award")
   .option("--stdin", "read input from stdin")
-  .argument("<input...>", "DSL text")
+  .argument("[input...]", "DSL text")
   .action(
     (
       parts: string[],
@@ -140,7 +140,7 @@ program
       const normalized = normalizeProgram(ast);
       const schedule = normalized.map((s) =>
         // buildScheduleWithBlockers(s.expr, ctx),
-        buildSchedulePlan(s.expr, ctx),
+        expandSchedule(s.expr, ctx),
       );
       console.log(JSON.stringify(schedule, null, 2));
     },

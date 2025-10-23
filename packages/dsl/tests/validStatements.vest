@@ -26,7 +26,6 @@ VEST FROM EVENT grantDate CLIFF event ipo before event milestone and before DATE
 
 VEST CLIFF 0 days
 VEST CLIFF 6 months
-VEST CLIFF DATE 2026-03-01
 VEST CLIFF EVENT hire BEFORE EVENT cic
 VEST CLIFF EARLIER OF (EVENT ipo, DATE 2026-01-01)
 VEST CLIFF LATER OF (EVENT ipo, DATE 2026-01-01)
@@ -61,7 +60,7 @@ VEST FROM EVENT milestone AFTER EVENT ipo
 VEST FROM EVENT milestone AFTER event ipo and after event sugar
 
 VEST CLIFF 6 months
-VEST CLIFF event milestone + 6 months
+VEST FROM event milestone1 + 3 months over 4 years every 3 months CLIFF event milestone2 + 6 months
 
 VEST FROM EVENT milestone AFTER 6 months
 
@@ -85,3 +84,4 @@ VEST FROM EARLIER OF (EARLIER OF (event a, event b), LATER OF (event c, event d)
 VEST FROM event a BEFORE EVENT b before event c
 .5 VEST FROM LATER OF( EVENT milestone1, EVENT milestone2 ) OVER 0 days EVERY 0 days
 
+VEST OVER 4 years Every 3 months ClIFF LATER OF (12 months, EARLIER OF (event milestone, event IPO))

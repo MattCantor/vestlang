@@ -1,7 +1,11 @@
-import { Amount, Statement as NormalizedStatement } from "@vestlang/types";
+import {
+  Statement as NormalizedStatement,
+  allocation_type,
+} from "@vestlang/types";
 import { EvaluationContextInput, Tranche } from "./types.js";
-import { buildSchedulePlan } from "./selectors.js";
+import { expandSchedule } from "./expandSchedule.js";
 import { createEvaluationContext } from "./utils.js";
+import { amountToQuantify, allocateQuantity } from "./allocation.js";
 
 export interface VestedResult {
   vested: Tranche[];
@@ -9,21 +13,23 @@ export interface VestedResult {
   unresolved: number; // quantity not yet schedulable
 }
 
-function amountToQuantify(a: Amount, grantQuantity: number): number {
-  return a.type === "QUANTITY"
-    ? a.value
-    : grantQuantity * (a.numerator / a.denominator);
-}
-
+/**
+ * Evaluate a normallized Statement as of a given date.
+ * Expands the schedule, converts amount -> quantity, and splits tranches
+ */
 export function evaluateStatementAsOf(
   stmt: NormalizedStatement,
   ctx_input: EvaluationContextInput,
+  allocation_mode: allocation_type = "CUMULATIVE_ROUND_DOWN",
 ): VestedResult {
   const ctx = createEvaluationContext(ctx_input);
-  const plan = buildSchedulePlan(stmt.expr, ctx);
+  const expanded = expandSchedule(stmt.expr, ctx);
   const total = amountToQuantify(stmt.amount, ctx.grantQuantity);
 
-  if (plan.tranches.length === 0) {
+  if (
+    expanded.tranches.length === 0 ||
+    expanded.vesting_start.state !== "resolved"
+  ) {
     return {
       vested: [],
       unvested: [],
@@ -33,12 +39,18 @@ export function evaluateStatementAsOf(
 
   const vested: Tranche[] = [];
   const unvested: Tranche[] = [];
+  const allocations = allocateQuantity(
+    total,
+    expanded.tranches.length,
+    allocation_mode,
+  );
 
-  for (const t of plan.tranches) {
-    const amt = total * t.amount;
-    (t.date <= ctx.asOf ? vested : unvested).push({
-      date: t.date,
-      amount: amt,
+  for (let i = 0; i < expanded.tranches.length; i++) {
+    const date = expanded.tranches[i].date;
+    const amount = allocations[i];
+    (date <= ctx.asOf ? vested : unvested).push({
+      date,
+      amount,
     });
   }
 

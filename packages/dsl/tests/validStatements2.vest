@@ -1,1 +1,9 @@
-VEST FROM EVENT milestone1 +3 months  AFTER EVENT milestone2 +3 months
+VEST
+  OVER 48 months EVERY 3 months
+  CLIFF LATER OF(
+    +12 months,
+    EARLIER OF(
+      EVENT milestone,
+      EVENT IPO
+    )
+  )

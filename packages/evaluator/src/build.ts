@@ -12,11 +12,11 @@ import {
   SymbolicDate,
   TrancheStatus,
 } from "./types.js";
-import { nextDate, pickScheduleByStart } from "./selectors.js";
+import { pickScheduleByStart } from "./selectors.js";
 import { resolveNodeExpr } from "./resolve.js";
 import { analyzeUnresolvedReasons } from "./trace.js";
 import { createEvaluationContext } from "./utils.js";
-import { lt } from "./time.js";
+import { lt, nextDate } from "./time.js";
 
 /** --- symbolic helpers --- */
 const symStart: SymbolicDate = { type: "START" };

@@ -3,6 +3,7 @@ import {
   Statement as NormalizedStatement,
   PeriodTag,
   vesting_day_of_month,
+  Schedule as NormalizedSchedule,
 } from "@vestlang/types";
 
 export interface EvaluationContext {
@@ -51,7 +52,13 @@ export interface TrancheStatus {
   blockers: Blocker[];
 }
 
-export interface Schedule {
+export type PickedSchedule = {
+  chosen?: NormalizedSchedule;
+  vesting_start?: OCTDate;
+  unresolved: boolean;
+};
+
+export interface ExpandedSchedule {
   vesting_start: NodeResolutionState;
   cliff?: { input: NodeResolutionState; applied: boolean };
   tranches: Tranche[]; // empty if unresolved/inactive
@@ -59,7 +66,7 @@ export interface Schedule {
 
 export interface Statement {
   source: NormalizedStatement;
-  schedule: Schedule;
+  schedule: ExpandedSchedule;
 }
 
 export interface Program {
