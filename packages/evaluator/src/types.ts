@@ -19,7 +19,7 @@ export type EvaluationContextInput = Omit<
   EvaluationContext,
   "vesting_day_of_month"
 > &
-  Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
+  Partial<Pick<EvaluationContext, "vesting_day_of_month" | "allocation_type">>;
 
 export type NodeResolutionState =
   | { state: "inactive" }

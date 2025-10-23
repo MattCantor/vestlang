@@ -21,7 +21,7 @@ export function evaluateStatementAsOf(
   const ctx = createEvaluationContext(ctx_input);
   const total = amountToQuantify(stmt.amount, ctx.grantQuantity);
 
-  const allocated = expandAllocatedSchedule(stmt.expr, ctx);
+  const allocated = expandAllocatedSchedule(stmt.expr, ctx, stmt.amount, total);
 
   const vested: Tranche[] = [];
   const unvested: Tranche[] = [];

@@ -1,9 +1,10 @@
 import {
-  OCTDate,
-  PeriodTag,
   ScheduleExpr,
   Schedule as NormalizedSchedule,
+  Statement as NormalizedStatement,
   VestingNodeExpr,
+  PeriodTag,
+  Amount,
 } from "@vestlang/types";
 import {
   Blocker,
@@ -16,7 +17,8 @@ import { pickScheduleByStart } from "./selectors.js";
 import { resolveNodeExpr } from "./resolve.js";
 import { analyzeUnresolvedReasons } from "./trace.js";
 import { createEvaluationContext } from "./utils.js";
-import { lt, nextDate } from "./time.js";
+import { expandAllocatedSchedule } from "./expandSchedule.js";
+import { allocateQuantity, amountToQuantify } from "./allocation.js";
 
 /** --- symbolic helpers --- */
 const symStart: SymbolicDate = { type: "START" };
@@ -26,23 +28,6 @@ const symPlus = (unit: PeriodTag, steps: number): SymbolicDate => ({
   unit,
   steps,
 });
-
-// function nextDate(d: OCTDate, unit: PeriodTag, length: number): OCTDate {
-//   return unit === "MONTHS" ? addMonthsRule(d, length) : addDays(d, length);
-// }
-
-/* Build symbolic dates list (no cliff yet) */
-function symbolicCadence(p: {
-  type: PeriodTag;
-  length: number;
-  occurrences: number;
-}): SymbolicDate[] {
-  const out: SymbolicDate[] = [];
-  for (let i = 0; i < p.occurrences; i++) {
-    out.push(i === 0 ? symStart : symPlus(p.type, i * p.length));
-  }
-  return out;
-}
 
 function selectScheduleFromExpr(
   expr: ScheduleExpr,
@@ -54,10 +39,13 @@ function selectScheduleFromExpr(
 }
 
 export function buildScheduleWithBlockers(
-  expr: ScheduleExpr,
+  stmt: NormalizedStatement,
   ctx_input: EvaluationContextInput,
 ): TrancheStatus[] {
   const ctx = createEvaluationContext(ctx_input);
+  const { amount, expr } = stmt;
+  const quantity = amountToQuantify(amount, ctx.grantQuantity);
+
   // Choose schedule by resolved vesting_start if selector
   const sched = selectScheduleFromExpr(expr, ctx);
   if (!sched) {
@@ -71,7 +59,7 @@ export function buildScheduleWithBlockers(
         index: 0,
         status: { state: "unresolved" },
         amount: ctx.grantQuantity,
-        symbolicDate: { type: "START" },
+        symbolicDate: symStart,
         blockers: [
           {
             type: "UNRESOLVED_SELECTOR",
@@ -84,8 +72,9 @@ export function buildScheduleWithBlockers(
 
   // Determine vesting start date and its blockers
   const startRes = resolveNodeExpr(sched.vesting_start, ctx);
-  const symbols = symbolicCadence(sched.periodicity);
-  const even = 1 / symbols.length;
+  const occurrences = sched.periodicity.occurrences;
+  const unit = sched.periodicity.type;
+  const step = sched.periodicity.length;
 
   // Helper to attach blockers discovered via dependency analysis:
   const blockersFor = (node: VestingNodeExpr): Blocker[] =>
@@ -103,96 +92,76 @@ export function buildScheduleWithBlockers(
           ]
         : blockersFor(sched.vesting_start);
 
+    const n = Math.max(occurrences, 0);
+    if (n === 0) {
+      return [];
+    }
+
+    const amounts = allocateQuantity(quantity, n, ctx.allocation_type);
+    const symbols: SymbolicDate[] = Array.from({ length: n }, (_, i) =>
+      i === 0 ? symStart : { type: "START_PLUS", unit, steps: i * step },
+    );
     const result: TrancheStatus[] = symbols.map((s, i) => ({
       index: i,
       status: { state: "unresolved" },
       symbolicDate: s,
-      amount: even,
+      amount: amounts[i],
       blockers: [...startBlockers],
     }));
 
     return result;
   }
 
-  // generate concrete cadence from start
-  const concrete: OCTDate[] = (() => {
-    const out: OCTDate[] = [];
-    let d = startRes.date;
-    for (let i = 0; i < sched.periodicity.occurrences; i++) {
-      out.push(
-        i === 0
-          ? d
-          : (d = nextDate(
-              d,
-              sched.periodicity.type,
-              sched.periodicity.length,
-              ctx,
-            )),
-      );
-    }
-    return out;
-  })();
+  // Start resolved -> expand dates (and cliff catch-up) in one place
+  const expanded = expandAllocatedSchedule(expr, ctx, amount, quantity);
+  const dates = expanded.tranches.map((t) => t.date);
+  const n = dates.length || occurrences; // dates length should equal occurrences. fallback for safety
+  // NOTE: consider throwing an error if dates.length !== occurrences
 
-  // supply synthetic vestingStart event for cliff
-  ctx.events["vestingStart"] = startRes.date;
-
-  // handle cliff
-  let dates = concrete;
-  let cliffSymbolic = false;
-  if (sched.periodicity.cliff) {
-    const cliffRes = resolveNodeExpr(sched.periodicity.cliff, ctx);
-    if (cliffRes.state === "resolved") {
-      // catch-up: aggregate earlier installments strictly before cliff
-      let idx = 0;
-      while (idx < dates.length && lt(dates[idx], cliffRes.date)) idx++;
-      if (idx > 0) dates = [cliffRes.date, ...dates.slice(idx)];
-    } else {
-      // unresolved cliff -> tranche[0] becomes a symbolic cliff and carries blockers
-      cliffSymbolic = true;
-    }
-  }
-
-  // build final tranches (resolved where we have concrete dates)
-  const tranches: TrancheStatus[] = dates.map((d, i) => ({
-    index: i,
-    status: { state: "resolved", date: d },
-    amount: 1 / dates.length,
-    blockers: [],
-  }));
-
-  // if cliff unresolved, rewrite tranche[0] to unresolved with blockers
-  if (cliffSymbolic) {
-    const cliffBlockers = analyzeUnresolvedReasons(
-      sched.periodicity.cliff!,
-      ctx,
+  // If cliff unresolved -> rewrite as symbolic (CLIFF + START_PLUS), keep portions
+  if (
+    sched.periodicity.cliff &&
+    expanded.cliff &&
+    expanded.cliff.input.state !== "resolved"
+  ) {
+    const blockers = analyzeUnresolvedReasons(sched.periodicity.cliff, ctx);
+    const amounts = allocateQuantity(
+      quantity,
+      Math.max(n, 0),
+      ctx.allocation_type,
     );
-    tranches[0] = {
+    const out: TrancheStatus[] = [];
+
+    if (n === 0) return [];
+
+    // tranche[0] = CLIFF (unresolved)
+    out.push({
       index: 0,
       status: { state: "unresolved" },
       symbolicDate: symCliff,
-      amount: 1 / concrete.length,
-      blockers: cliffBlockers.length
-        ? cliffBlockers
-        : [{ type: "UNRESOLVED_CLIFF" }],
-    };
+      amount: amounts[0],
+      blockers: blockers.length ? blockers : [{ type: "UNRESOLVED_CLIFF" }],
+    });
 
-    // the rest of the tranches depend on cliff position. Without a resolved cliff we cannot assert their dates.
-    // Make them unresolved with START_PLUS symbols and inherit cliff blockers.
-    for (let i = 1; i < tranches.length; i++) {
-      tranches[i] = {
+    // the rest depend on cliff position -> symbolic START_PLUS
+    for (let i = 1; i < n; i++) {
+      out.push({
         index: i,
         status: { state: "unresolved" },
-        symbolicDate: symPlus(
-          sched.periodicity.type,
-          i * sched.periodicity.length,
-        ),
-        amount: 1 / concrete.length,
-        blockers: cliffBlockers.length
-          ? cliffBlockers
-          : [{ type: "UNRESOLVED_CLIFF" }],
-      };
+        symbolicDate: symPlus(unit, i * step),
+        amount: amounts[i],
+        blockers: blockers.length ? blockers : [{ type: "UNRESOLVED_CLIFF" }],
+      });
     }
+
+    return out;
   }
 
-  return tranches;
+  // Fully resolved dates -> resolved tranche statuses
+  return dates.map((date, i) => ({
+    index: i,
+    status: { state: "resolved", date },
+    amount: allocateQuantity(quantity, dates.length, ctx.allocation_type)[i],
+    blockers: [],
+  }));
 }

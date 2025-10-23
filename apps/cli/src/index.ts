@@ -7,6 +7,7 @@ import {
   expandAllocatedSchedule,
   evaluateStatementAsOf,
   EvaluationContext,
+  buildScheduleWithBlockers,
 } from "@vestlang/evaluator";
 import { OCTDate } from "@vestlang/types";
 
@@ -149,7 +150,7 @@ program
       const normalized = normalizeProgram(ast);
       const results = normalized.map((s) =>
         // buildScheduleWithBlockers(s.expr, ctx),
-        expandAllocatedSchedule(s.expr, ctx),
+        expandAllocatedSchedule(s.expr, ctx, s.amount, ctx.grantQuantity),
       );
       results.forEach((r) => {
         console.log("VESTING START");
@@ -168,4 +169,44 @@ program
     },
   );
 
+program
+  .command("build")
+  .description("Build the vesting schedule with metadata")
+  .requiredOption("-q, --quantity <number>", "total number of shares granted")
+  .requiredOption("-g, --grantDate <string>", "grant date of the award")
+  .option("--stdin", "read input from stdin")
+  .argument("[input...]", "DSL text")
+  .action(
+    (
+      parts: string[],
+      opts: {
+        quantity: string;
+        grantDate: string;
+        stdin?: boolean;
+      },
+    ) => {
+      // quantity: must be a whole number
+      const quantity = Number(opts.quantity);
+      if (!Number.isInteger(quantity) || quantity < 0) {
+        console.error("Quantity must be a non-negative whole number.");
+        process.exit(1);
+      }
+
+      const ctx: EvaluationContext = {
+        events: { grantDate: validateDate(opts.grantDate) },
+        grantQuantity: quantity,
+        asOf: validateDate(getTodayISO()),
+        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        allocation_type: "CUMULATIVE_ROUND_DOWN",
+      };
+
+      const input = opts.stdin ? readAllStdin() : parts.join(" ");
+      const ast = parse(input);
+      const normalized = normalizeProgram(ast);
+      const results = normalized.map((s) => buildScheduleWithBlockers(s, ctx));
+      results.forEach((r) => {
+        console.table(r);
+      });
+    },
+  );
 program.parseAsync();

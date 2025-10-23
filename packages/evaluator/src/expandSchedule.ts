@@ -1,4 +1,4 @@
-import { OCTDate, ScheduleExpr } from "@vestlang/types";
+import { Amount, OCTDate, ScheduleExpr } from "@vestlang/types";
 import { resolveNodeExpr } from "./resolve.js";
 import { pickScheduleByStart } from "./selectors.js";
 import {
@@ -8,7 +8,7 @@ import {
   PickedSchedule,
 } from "./types.js";
 import { nextDate } from "./time.js";
-import { allocateQuantity } from "./allocation.js";
+import { allocateQuantity, amountToQuantify } from "./allocation.js";
 
 /**
  * Expand a ScheduleExpr into a concrete (or partially concrete) sequence of vesting dates.
@@ -85,7 +85,14 @@ function expandSchedule(
 export function expandAllocatedSchedule(
   expr: ScheduleExpr,
   ctx: EvaluationContext,
+  amount: Amount,
+  totalQuantity: number,
 ): AllocatedSchedule {
+  const quantity = amountToQuantify(amount, totalQuantity);
+  if (quantity % 1 !== 0 || quantity < 0)
+    throw new Error(
+      `expandAllocatedSchedule: totalQuantity must be a positive whole number or zero: ${totalQuantity}`,
+    );
   const expanded = expandSchedule(expr, ctx);
 
   if (
@@ -96,15 +103,14 @@ export function expandAllocatedSchedule(
       vesting_start: expanded.vesting_start,
       cliff: expanded.cliff,
       tranches: [],
-      unresolved: Math.round(ctx.grantQuantity),
+      unresolved: quantity,
     };
   }
 
   const n = expanded.tranches.length;
-  const totalInt = Math.round(ctx.grantQuantity);
-  const splits = allocateQuantity(totalInt, n, ctx.allocation_type);
+  const splits = allocateQuantity(quantity, n, ctx.allocation_type);
   const scheduled = splits.reduce((a, b) => a + b, 0);
-  const remainder = totalInt - scheduled;
+  const remainder = quantity - scheduled;
 
   return {
     vesting_start: expanded.vesting_start,
