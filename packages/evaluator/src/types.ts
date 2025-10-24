@@ -8,7 +8,7 @@ import {
 } from "@vestlang/types";
 
 export interface EvaluationContext {
-  events: Record<string, OCTDate | undefined>;
+  events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>;
   grantQuantity: number;
   asOf: OCTDate;
   vesting_day_of_month: vesting_day_of_month;

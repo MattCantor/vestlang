@@ -10,12 +10,11 @@ import {
   Schedule,
   ScheduleExpr,
   Statement,
-  VestingNode,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 
-type SYSTEM_EVENT = "grantdate" | "vestingstart";
+type SYSTEM_EVENT = "grantDate" | "vestingStart";
 
 /* ------------------------
  * Orchestration
@@ -107,11 +106,11 @@ function normalizeNode(
 }
 
 function normalizeVestingStart(c: Duration | VestingNodeExpr): VestingNodeExpr {
-  return normalizeNode(c, "grantdate");
+  return normalizeNode(c, "grantDate");
 }
 
 function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
-  return normalizeNode(c, "vestingstart");
+  return normalizeNode(c, "vestingStart");
 }
 
 /**

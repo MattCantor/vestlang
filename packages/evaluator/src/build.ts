@@ -4,7 +4,6 @@ import {
   Statement as NormalizedStatement,
   VestingNodeExpr,
   PeriodTag,
-  Amount,
 } from "@vestlang/types";
 import {
   Blocker,
@@ -99,7 +98,7 @@ export function buildScheduleWithBlockers(
 
     const amounts = allocateQuantity(quantity, n, ctx.allocation_type);
     const symbols: SymbolicDate[] = Array.from({ length: n }, (_, i) =>
-      i === 0 ? symStart : { type: "START_PLUS", unit, steps: i * step },
+      i === 0 ? symStart : symPlus(unit, i * step),
     );
     const result: TrancheStatus[] = symbols.map((s, i) => ({
       index: i,
@@ -158,10 +157,31 @@ export function buildScheduleWithBlockers(
   }
 
   // Fully resolved dates -> resolved tranche statuses
-  return dates.map((date, i) => ({
+  const trancheStatuses: TrancheStatus[] = dates.map((date, i) => ({
     index: i,
     status: { state: "resolved", date },
     amount: allocateQuantity(quantity, dates.length, ctx.allocation_type)[i],
     blockers: [],
   }));
+
+  // Aggregate consecutive identical statuses
+  const aggregated: TrancheStatus[] = trancheStatuses.reduce((acc, current) => {
+    const prev = acc[acc.length - 1];
+
+    if (
+      prev &&
+      prev.status.state === "resolved" &&
+      current.status.state === "resolved" &&
+      prev.status.date === current.status.date
+    ) {
+      // Merge into previous item
+      prev.amount += current.amount;
+    } else {
+      acc.push({ ...current });
+    }
+
+    return acc;
+  }, [] as TrancheStatus[]);
+
+  return aggregated;
 }

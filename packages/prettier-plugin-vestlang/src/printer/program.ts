@@ -61,7 +61,7 @@ function printSchedule(s: RawSchedule): Doc {
           line,
           kw("CLIFF"),
           " ",
-          `${s.periodicity.cliff.value} ${s.periodicity.cliff.unit}`,
+          `${s.periodicity.cliff.value} ${s.periodicity.cliff.unit.toLowerCase()}`,
         ]),
       );
     } else {
@@ -84,7 +84,7 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
     hardline,
     kw("OVER"),
     " ",
-    `${p.length * p.occurrences} ${p.type.toLocaleLowerCase()}`,
+    `${p.length * p.occurrences} ${p.type.toLowerCase()}`,
     // printDuration({
     //   type: "DURATION",
     //   value: p.length * p.occurrences,
@@ -94,7 +94,7 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
     " ",
     kw("EVERY"),
     " ",
-    `${p.length} ${p.type.toLocaleLowerCase()}`,
+    `${p.length} ${p.type.toLowerCase()}`,
     // printDuration({
     //   type: "DURATION",
     //   value: p.length,
