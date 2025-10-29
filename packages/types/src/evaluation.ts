@@ -1,4 +1,4 @@
-import { Constraint } from "./ast.js";
+import { Condition, Constraint } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { allocation_type, vesting_day_of_month } from "./oct_types.js";
@@ -27,18 +27,18 @@ export type SymbolicDate =
  * False Constraints
  * ------------------------ */
 
-export interface ImpossibleConstraint {
-  type: "IMPOSSIBLE";
-  constraint: Constraint;
-}
-
-export interface UnresolvedConstraint {
-  type: "UNRESOLVED";
-  constraint: Constraint;
-}
-
-export type UnsatisfiedConstraint = ImpossibleConstraint | UnresolvedConstraint;
-
+// export interface ImpossibleConstraint {
+//   type: "IMPOSSIBLE";
+//   constraint: Constraint;
+// }
+//
+// export interface UnresolvedConstraint {
+//   type: "UNRESOLVED";
+//   constraint: Constraint;
+// }
+//
+// export type UnsatisfiedConstraint = ImpossibleConstraint | UnresolvedConstraint;
+//
 /* ------------------------
  * Blockers
  * ------------------------ */
@@ -46,21 +46,28 @@ export type UnsatisfiedConstraint = ImpossibleConstraint | UnresolvedConstraint;
 export type UnresolvedBlocker =
   | {
       type: "MISSING_EVENT";
-      constraints: UnsatisfiedConstraint[];
-      event?: never;
+      event: string;
     }
-  | { type: "MISSING_EVENT"; event: string; constraints?: never }
   | {
       type: "UNRESOLVED_SELECTOR";
       selector: "EARLIER_OF" | "LATER_OF";
-      constraints: UnsatisfiedConstraint[];
+      blockers: Blocker[];
+    }
+  | {
+      type: "DATE_NOT_YET_OCCURRED";
+      date: OCTDate;
     };
 
-export type ImpossibleBlocker = {
-  type: "RESOLVED_SELECTOR";
-  selector: "EARLIER_OF" | "LATER_OF";
-  constraints: UnsatisfiedConstraint[];
-};
+export type ImpossibleBlocker =
+  | {
+      type: "IMPOSSIBLE_SELECTOR";
+      selector: "EARLIER_OF" | "LATER_OF";
+      blockers: ImpossibleBlocker[];
+    }
+  | {
+      type: "IMPOSSIBLE_CONDITION";
+      condition: Condition;
+    };
 
 export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
 
