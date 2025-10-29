@@ -1,8 +1,10 @@
-import { Statement as NormalizedStatement } from "@vestlang/types";
-import { EvaluationContextInput, Tranche } from "./types.js";
-import { expandAllocatedSchedule } from "./expandSchedule.js";
-import { createEvaluationContext } from "./utils.js";
-import { amountToQuantify } from "./allocation.js";
+import {
+  EvaluationContextInput,
+  Statement as NormalizedStatement,
+  Tranche,
+} from "@vestlang/types";
+import { buildSchedule } from "./build.js";
+import { prepare } from "./utils.js";
 
 export interface VestedResult {
   vested: Tranche[];
@@ -18,31 +20,38 @@ export function evaluateStatementAsOf(
   stmt: NormalizedStatement,
   ctx_input: EvaluationContextInput,
 ): VestedResult {
-  const ctx = createEvaluationContext(ctx_input);
-  const total = amountToQuantify(stmt.amount, ctx.grantQuantity);
+  const { ctx, statementQuantity } = prepare(stmt, ctx_input);
 
-  const allocated = expandAllocatedSchedule(stmt.expr, ctx, stmt.amount, total);
+  const tranches = buildSchedule(stmt, ctx_input);
 
   const vested: Tranche[] = [];
   const unvested: Tranche[] = [];
+  let unresolved = 0;
 
-  if (
-    allocated.tranches.length === 0 ||
-    allocated.vesting_start.state !== "resolved"
-  ) {
+  if (tranches.length === 0) {
     return {
       vested,
       unvested,
-      unresolved: Math.round(total),
+      unresolved: statementQuantity,
     };
   }
 
-  for (const t of allocated.tranches) {
-    (t.date <= ctx.asOf ? vested : unvested).push({
-      date: t.date,
-      amount: t.amount,
-    });
+  for (const t of tranches) {
+    switch (t.meta.state) {
+      case "IMPOSSIBLE":
+      case "UNRESOLVED":
+        unresolved += t.amount;
+        break;
+      case "RESOLVED":
+        (t.date! <= ctx.asOf ? vested : unvested).push({
+          date: t.date!,
+          amount: t.amount,
+          meta: {
+            state: "RESOLVED",
+          },
+        });
+    }
   }
 
-  return { vested, unvested, unresolved: allocated.unresolved };
+  return { vested, unvested, unresolved };
 }

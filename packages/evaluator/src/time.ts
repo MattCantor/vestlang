@@ -1,6 +1,5 @@
-import { OCTDate, PeriodTag } from "@vestlang/types";
+import { EvaluationContext, OCTDate, PeriodTag } from "@vestlang/types";
 import { addDays as dfAddDays, isBefore, isAfter, isEqual } from "date-fns";
-import { EvaluationContext } from "./types.js";
 
 // convert ISO-string ↔ Date
 export const toDate = (iso: OCTDate) => new Date(iso + "T00:00:00Z");

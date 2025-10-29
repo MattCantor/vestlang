@@ -56,17 +56,15 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  * - Periodicity comes already canonical from the grammar
  */
 function normalizeSchedule(s: RawSchedule): Schedule {
-  const vesting_start = normalizeVestingStart(
-    s.vesting_start ??
-      ({
-        type: "BARE",
-        base: {
-          type: "EVENT",
-          value: "grantDate",
-        },
-        offsets: [] as Offsets,
-      } as BareVestingNode),
-  );
+  const startNode = s.vesting_start ?? {
+    type: "BARE",
+    base: {
+      type: "EVENT",
+      value: "grantDate",
+    },
+    offsets: [] as Offsets,
+  };
+  const vesting_start = normalizeVestingStart(startNode);
 
   const periodicity = s.periodicity.cliff
     ? {
@@ -94,7 +92,10 @@ function normalizeNode(
       };
     case "LATER_OF":
     case "EARLIER_OF":
-      return NormalizeAndSort(c, normalizeCliff);
+      return NormalizeAndSort(
+        c,
+        durationRef === "grantDate" ? normalizeVestingStart : normalizeCliff,
+      );
     case "BARE":
     case "CONSTRAINED":
       return normalizeVestingNodeExpr(c);

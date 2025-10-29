@@ -1,7 +1,8 @@
-import { evaluateStatementAsOf, EvaluationContext } from "@vestlang/evaluator";
+import { evaluateStatementAsOf } from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { parse } from "@vestlang/dsl";
+import { EvaluationContext } from "@vestlang/types";
 
 export function asof(
   parts: string[],

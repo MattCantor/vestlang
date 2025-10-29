@@ -1,10 +1,8 @@
-import {
-  buildScheduleWithBlockers,
-  EvaluationContext,
-} from "@vestlang/evaluator";
+import { buildSchedule } from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
+import { EvaluationContext } from "@vestlang/types";
 
 export function build(
   parts: string[],
@@ -31,14 +29,14 @@ export function build(
 
   const ast = parse(input(parts, opts.stdin));
   const normalized = normalizeProgram(ast);
-  const results = normalized.map((s) => buildScheduleWithBlockers(s, ctx));
+  const results = normalized.map((s) => buildSchedule(s, ctx));
   results.forEach((r) => {
     console.table(
       r.map((item) => ({
-        ...item,
-        status: JSON.stringify(item.status),
-        symbolicDate: JSON.stringify(item.symbolicDate),
-        blockers: item.blockers.map((b) => JSON.stringify(b)),
+        amount: item.amount,
+        date: item.date ?? JSON.stringify(item.meta.date) ?? "None",
+        state: item.meta.state,
+        blockers: item.meta.blockers?.map((b) => JSON.stringify(b)) ?? "None",
       })),
     );
   });

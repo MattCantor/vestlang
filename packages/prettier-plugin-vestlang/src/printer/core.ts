@@ -19,7 +19,7 @@ export function printVestingNode(node: VestingNode): Doc {
     case "CONSTRAINED":
       return [
         [printVestingBase(node.base), printOffsets(node.offsets)],
-        line,
+        // line,
         printCondition(node.constraints),
       ];
     case "BARE":
@@ -29,7 +29,6 @@ export function printVestingNode(node: VestingNode): Doc {
 
 export function printDuration(d: Duration): Doc {
   const sign = d.sign === "MINUS" ? "-" : "+";
-  // const unit = d.unit === "DAYS" ? "days" : "months";
   return `${sign}${d.value} ${d.unit.toLowerCase()}`;
 }
 
@@ -47,9 +46,6 @@ function printCondition(node?: Condition): Doc {
       const keyword = kw(node.type);
       const items = node.items.map(printCondition);
       return printParenGroup(keyword, items);
-    // const name = kw(node.type);
-    // const items = node.items.map(printCondition);
-    // return [name, " (", indent([line, join([",", line], items)]), line, ")"];
   }
 }
 

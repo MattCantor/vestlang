@@ -42,9 +42,6 @@ function printScheduleExpr(e: RawScheduleExpr): Doc {
       const keyword = kw(e.type.replace("_", " "));
       const items = e.items.map((item) => printScheduleExpr(item));
       return printParenGroup(keyword, items);
-    // const head = kw(e.type.replace("_", " "));
-    // const items = e.items.map((item) => printScheduleExpr(item));
-    // return [head, " ", wrapParen(indent([listWithCommas(items)]))];
   }
 }
 
@@ -85,22 +82,10 @@ function printPeriodicity(p: RawVestingPeriod): Doc {
     kw("OVER"),
     " ",
     `${p.length * p.occurrences} ${p.type.toLowerCase()}`,
-    // printDuration({
-    //   type: "DURATION",
-    //   value: p.length * p.occurrences,
-    //   unit: p.type,
-    //   sign: "PLUS",
-    // }),
     " ",
     kw("EVERY"),
     " ",
     `${p.length} ${p.type.toLowerCase()}`,
-    // printDuration({
-    //   type: "DURATION",
-    //   value: p.length,
-    //   unit: p.type,
-    //   sign: "PLUS",
-    // }),
   ]);
   return base;
 }
@@ -114,10 +99,6 @@ function printVestingNodeExpr(node: Duration | VestingNodeExpr): Doc {
       const keyword = kw(node.type.replace("_", " "));
       const items = node.items.map((item) => printVestingNodeExpr(item));
       return printParenGroup(keyword, items);
-    // const head = kw(node.type.replace("_", " "));
-    // const items = node.items.map((item) => printVestingNodeExpr(item));
-    //
-    // return [head, " (", indent([line, join([",", line], items)]), line, ")"];
     case "CONSTRAINED":
     case "BARE":
       return printVestingNode(node);

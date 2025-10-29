@@ -1,71 +1,214 @@
 import {
+  EvaluationContext,
+  ResolvedNode,
+  Blocker,
+  VestingNodeExpr,
+  Schedule,
+  UnresolvedNode,
+  ImpossibleNode,
+  ImpossibleBlocker,
+  VestingNode,
   ScheduleExpr,
-  OCTDate,
-  Schedule as NormalizedSchedule,
-  SelectorTag,
+  EarlierOfSchedule,
+  LaterOfSchedule,
+  LaterOfVestingNode,
+  EarlierOfVestingNode,
 } from "@vestlang/types";
-import { EvaluationContext, PickedSchedule } from "./types.js";
-import { resolveNodeExpr } from "./resolve.js";
+import { resolveNode } from "./resolveConditions.js";
 import { lt } from "./time.js";
 
-/* ------------------------
- * Schedule selectors picked by vesting_start
- * ------------------------ */
+type Picked<T> = {
+  type: "PICKED";
+  picked: T;
+  meta: ResolvedNode | UnresolvedNode;
+};
 
-/**
- * Choose which ScheduleExpr should apply be comparing resolved vesting_start dates.
- * - EARLIER_OF: pick earliest resolved start
- * - LATER_OF: pick latest resolved start (requires all resolved)
- */
-export function pickScheduleByStart(
-  items: ScheduleExpr[],
+type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
+
+export function pickFromScheduleExpr(
+  expr: ScheduleExpr,
   ctx: EvaluationContext,
-  mode: SelectorTag,
-): PickedSchedule {
-  let candidate: { schedule: NormalizedSchedule; start: OCTDate } | undefined;
-  let unresolved = false;
-
-  for (const item of items) {
-    if (item.type !== "SINGLETON") {
-      // Recurse into nested selectors
-      const sub = pickScheduleByStart((item as any).items, ctx, item.type);
-      if (!sub.chosen) {
-        unresolved ||= sub.unresolved;
-        continue;
+): PickReturn<Schedule> {
+  let candidates: PickReturn<Schedule>[] | undefined = undefined;
+  switch (expr.type) {
+    case "EARLIER_OF":
+      candidates = expr.items.map((item) => pickFromScheduleExpr(item, ctx));
+      return handleEarlierOf(expr, candidates);
+    case "LATER_OF":
+      candidates = expr.items.map((item) => pickFromScheduleExpr(item, ctx));
+      return handleLaterOf(expr, candidates);
+    case "SINGLETON":
+      const res = pickFromVestingNodeExpr(expr.vesting_start, ctx);
+      switch (res.type) {
+        case "PICKED":
+          return {
+            type: res.type,
+            picked: expr as Schedule,
+            meta: res.meta,
+          } as Picked<Schedule>;
+        case "UNRESOLVED":
+        case "IMPOSSIBLE":
+          return res;
       }
-      const startDate = sub.vesting_start!;
-      if (!candidate) candidate = { schedule: sub.chosen, start: startDate };
-      else {
-        const better =
-          mode === "EARLIER_OF"
-            ? lt(startDate, candidate.start)
-            : lt(candidate.start, startDate);
-        if (better) candidate = { schedule: sub.chosen, start: startDate };
+  }
+}
+
+export function pickFromVestingNodeExpr(
+  expr: VestingNodeExpr,
+  ctx: EvaluationContext,
+): PickReturn<VestingNode> {
+  let candidates: PickReturn<VestingNode>[] | undefined = undefined;
+  switch (expr.type) {
+    case "EARLIER_OF":
+      candidates = expr.items.map((item) => pickFromVestingNodeExpr(item, ctx));
+      return handleEarlierOf(expr, candidates);
+    case "LATER_OF":
+      candidates = expr.items.map((item) => pickFromVestingNodeExpr(item, ctx));
+      return handleLaterOf(expr, candidates);
+    case "BARE":
+    case "CONSTRAINED":
+      const res = resolveNode(expr, ctx);
+      switch (res.type) {
+        case "RESOLVED":
+          return { type: "PICKED", picked: expr, meta: res };
+        case "UNRESOLVED":
+          return { type: "PICKED", picked: expr, meta: res };
+        case "IMPOSSIBLE":
+          return res;
       }
-      continue;
-    }
+  }
+}
 
-    const startRes = resolveNodeExpr(item.vesting_start, ctx);
-    if (startRes.state === "inactive") continue; // ignore inactive
-    if (startRes.state !== "resolved") {
-      unresolved = true;
-      continue;
-    }
+function isResolved(x: any): x is {
+  type: "PICKED";
+  meta: ResolvedNode;
+} {
+  return (
+    !!x &&
+    typeof x === "object" &&
+    x.type === "PICKED" &&
+    x.meta.type === "RESOLVED"
+  );
+}
 
-    if (!candidate) candidate = { schedule: item, start: startRes.date };
-    else {
-      const better =
-        mode === "EARLIER_OF"
-          ? lt(startRes.date, candidate.start)
-          : lt(candidate.start, startRes.date);
-      if (better) candidate = { schedule: item, start: startRes.date };
+function handleEarlierOf<T extends Schedule | VestingNode>(
+  expr: T extends Schedule ? EarlierOfSchedule : EarlierOfVestingNode,
+  candidates: PickReturn<T>[],
+): PickReturn<T> {
+  let picked: T | undefined;
+  let best: ResolvedNode | undefined = undefined;
+
+  // Resolved only if at least one item is resolved
+  if (candidates.some((r) => isResolved(r))) {
+    for (const r of candidates) {
+      if (isResolved(r)) {
+        if (!best) {
+          best = r.meta;
+          picked = r.picked;
+        } else {
+          best = evaluateNode(best, r.meta, expr.type);
+          if (best === r.meta) picked = r.picked;
+        }
+      }
     }
+    if (best && picked)
+      return {
+        type: "PICKED",
+        picked: picked,
+        meta: best,
+      };
+    throw new Error(
+      `evaluateScheduleExpr: unexpected unresolved expressions: ${candidates}`,
+    );
   }
 
-  if (!candidate) return { unresolved };
+  // Impossible if all items are impossible
+  if (candidates.every((r) => r.type === "IMPOSSIBLE")) {
+    return {
+      type: "IMPOSSIBLE",
+      blockers: candidates.reduce((acc, r) => {
+        acc.push(...r.blockers);
+        return acc;
+      }, [] as ImpossibleBlocker[]),
+    };
+  }
+
+  // Otherwise unresolved
   return {
-    chosen: candidate.schedule,
-    vesting_start: candidate.start,
-    unresolved,
+    type: "UNRESOLVED",
+    blockers: candidates.reduce((acc, r) => {
+      if (r.type === "PICKED") return acc;
+      acc.push(...r.blockers);
+      return acc;
+    }, [] as Blocker[]),
   };
+}
+
+function handleLaterOf<T extends Schedule | VestingNode>(
+  expr: T extends Schedule ? LaterOfSchedule : LaterOfVestingNode,
+  candidates: PickReturn<T>[],
+): PickReturn<T> {
+  let picked: T | undefined = undefined;
+  let best: ResolvedNode | undefined = undefined;
+
+  console.log(" ");
+  console.log("handleLaterOf - candidates:", JSON.stringify(candidates));
+
+  // Resolved only if all items are resolved
+  if (candidates.every((r) => isResolved(r))) {
+    for (const r of candidates) {
+      if (!best) {
+        best = r.meta;
+        picked = r.picked;
+      } else {
+        best = evaluateNode(best, r.meta, expr.type);
+        if (best === r.meta) picked = r.picked;
+      }
+    }
+    if (best && picked)
+      return {
+        type: "PICKED",
+        picked: picked,
+        meta: best,
+      };
+    throw new Error(
+      `evaluateScheduleExpr: unexpected unresolved expressions: ${candidates}`,
+    );
+  }
+
+  // Impossible if all items are impossible
+  if (candidates.every((r) => r.type === "IMPOSSIBLE")) {
+    return {
+      type: "IMPOSSIBLE",
+      blockers: candidates.reduce((acc, r) => {
+        acc.push(...r.blockers);
+        return acc;
+      }, [] as ImpossibleBlocker[]),
+    };
+  }
+
+  // Otherwise unresolved
+  return {
+    type: "UNRESOLVED",
+    blockers: candidates.reduce((acc, r) => {
+      if (r.type === "PICKED" && r.meta.type === "UNRESOLVED")
+        acc.push(...r.meta.blockers);
+      if (r.type === "IMPOSSIBLE") acc.push(...r.blockers);
+      return acc;
+    }, [] as Blocker[]),
+  };
+}
+
+function evaluateNode(
+  best: ResolvedNode,
+  candidate: ResolvedNode,
+  selectorType: "EARLIER_OF" | "LATER_OF",
+) {
+  const better =
+    selectorType === "EARLIER_OF"
+      ? lt(candidate.date, best.date)
+      : lt(best.date, candidate.date);
+
+  if (better) best = candidate;
+  return best;
 }

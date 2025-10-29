@@ -3,7 +3,7 @@ import { Command } from "commander";
 import { inspect } from "./inspect.js";
 import { compile } from "./compile.js";
 import { asof } from "./asof.js";
-import { expand } from "./expand.js";
+// import { expand } from "./expand.js";
 import { build } from "./build.js";
 
 const program = new Command();
@@ -50,25 +50,25 @@ program
     },
   );
 
-program
-  .command("expand")
-  .description("Expand the vesting schedule")
-  .requiredOption("-q, --quantity <number>", "total number of shares granted")
-  .requiredOption("-g, --grantDate <string>", "grant date of the award")
-  .option("--stdin", "read input from stdin")
-  .argument("[input...]", "DSL text")
-  .action(
-    (
-      parts: string[],
-      opts: {
-        quantity: string;
-        grantDate: string;
-        stdin?: boolean;
-      },
-    ) => {
-      expand(parts, opts);
-    },
-  );
+// program
+//   .command("expand")
+//   .description("Expand the vesting schedule")
+//   .requiredOption("-q, --quantity <number>", "total number of shares granted")
+//   .requiredOption("-g, --grantDate <string>", "grant date of the award")
+//   .option("--stdin", "read input from stdin")
+//   .argument("[input...]", "DSL text")
+//   .action(
+//     (
+//       parts: string[],
+//       opts: {
+//         quantity: string;
+//         grantDate: string;
+//         stdin?: boolean;
+//       },
+//     ) => {
+//       expand(parts, opts);
+//     },
+//   );
 
 program
   .command("build")
