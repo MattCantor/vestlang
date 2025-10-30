@@ -4,9 +4,6 @@ export type ConstraintTag = "BEFORE" | "AFTER";
 // enums/VestingBaseType.schema.json
 export type VBaseTag = "DATE" | "EVENT";
 
-// enums/VestingNodeType.schema.json
-export type VNodeTag = "BARE" | "CONSTRAINED";
-
 // enums/VestlangExpressionType.schema.json
 export type ExprTag = "SINGLETON" | "EARLIER_OF" | "LATER_OF";
 

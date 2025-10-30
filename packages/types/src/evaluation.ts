@@ -1,4 +1,4 @@
-import { Condition, Constraint } from "./ast.js";
+import { Condition } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { allocation_type, vesting_day_of_month } from "./oct_types.js";
