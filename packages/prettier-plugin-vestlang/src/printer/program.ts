@@ -99,8 +99,7 @@ function printVestingNodeExpr(node: Duration | VestingNodeExpr): Doc {
       const keyword = kw(node.type.replace("_", " "));
       const items = node.items.map((item) => printVestingNodeExpr(item));
       return printParenGroup(keyword, items);
-    case "CONSTRAINED":
-    case "BARE":
+    case "SINGLETON":
       return printVestingNode(node);
   }
 }

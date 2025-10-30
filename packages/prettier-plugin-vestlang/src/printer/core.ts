@@ -15,16 +15,14 @@ import { printParenGroup } from "./utils.js";
  * ------------------------ */
 
 export function printVestingNode(node: VestingNode): Doc {
-  switch (node.type) {
-    case "CONSTRAINED":
-      return [
-        [printVestingBase(node.base), printOffsets(node.offsets)],
-        // line,
-        printCondition(node.constraints),
-      ];
-    case "BARE":
-      return [printVestingBase(node.base), printOffsets(node.offsets)];
+  if (node.constraints) {
+    return [
+      [printVestingBase(node.base), printOffsets(node.offsets)],
+      printCondition(node.constraints),
+    ];
   }
+
+  return [printVestingBase(node.base), printOffsets(node.offsets)];
 }
 
 export function printDuration(d: Duration): Doc {
