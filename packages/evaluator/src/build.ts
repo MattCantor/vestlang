@@ -12,6 +12,9 @@ import {
   UnresolvedTranche,
   VestingPeriod,
   VestingNodeExpr,
+  ResolvedNode,
+  UnresolvedNode,
+  ImpossibleNode,
 } from "@vestlang/types";
 import { catchUp, prepare, probeLaterOf } from "./utils.js";
 import { allocateQuantity } from "./allocation.js";
@@ -42,7 +45,6 @@ export function buildSchedule(
 
   // Choose schedule by resolved vesting_start if selector
   const selection = pickFromScheduleExpr(expr, ctx);
-  console.log("buildSchedule - selection:", JSON.stringify(selection));
 
   switch (selection.type) {
     case "IMPOSSIBLE":
@@ -108,12 +110,11 @@ export function buildSchedule(
       }
   }
 
-  console.log("buildSchedule - startRes:", JSON.stringify(startRes));
   return aggregateDuplicateTranches(tranches);
 }
 
 function buildUnresolvedStart(
-  startRes: Extract<NodeMeta, { type: "IMPOSSIBLE" | "UNRESOLVED" }>,
+  startRes: UnresolvedNode | ImpossibleNode,
   selectedSchedule: Schedule,
   installmentAmounts: number[],
 ): Tranche[] {
@@ -161,26 +162,16 @@ function buildResolvedStart(
   ctx: EvaluationContext,
 ): Tranche[] {
   let dates = generateCadence(selectedSchedule.periodicity, startRes.date, ctx);
+  const vestingPeriod = selectedSchedule.periodicity;
 
-  // Resolve cliff using overlay ctx
-  // let cliffRes: NodeMeta;
-
-  if (selectedSchedule.periodicity.cliff) {
+  if (vestingPeriod.cliff) {
     const overlayCtx: EvaluationContext = {
       ...ctx,
       events: { ...ctx.events, vestingStart: startRes.date },
     };
 
     // Choose cliff
-    const selection = pickFromVestingNodeExpr(
-      selectedSchedule.periodicity.cliff,
-      overlayCtx,
-    );
-
-    // cliffRes = pickFromVestingNodeExpr(
-    //   selectedSchedule.periodicity.cliff,
-    //   overlayCtx,
-    // );
+    const selection = pickFromVestingNodeExpr(vestingPeriod.cliff, overlayCtx);
 
     switch (selection.type) {
       case "IMPOSSIBLE":
@@ -197,32 +188,29 @@ function buildResolvedStart(
         );
 
       case "UNRESOLVED":
-        return Array.from({ length: dates.length }, (_) => ({
-          amount: 0,
-          meta: {
-            state: "UNRESOLVED",
-            date: { type: "MAYBE_BEFORE_CLIFF" },
-            blockers: selection.blockers,
-          },
-        }));
+        return buildUnresolvedCliff(
+          selection,
+          dates,
+          installmentAmounts,
+          vestingPeriod as VestingPeriod & { cliff: VestingNodeExpr },
+          overlayCtx,
+        );
 
       case "PICKED":
         switch (selection.meta.type) {
-          case "UNRESOLVED":
-            return buildUnresolvedCliff(
-              selection.meta,
-              dates,
-              installmentAmounts,
-              selectedSchedule.periodicity as VestingPeriod & {
-                cliff: Extract<VestingNodeExpr, { type: "LATER_OF" }>;
-              },
-              overlayCtx,
-            );
           case "RESOLVED":
             return buildResolvedCliff(
               selection.meta,
               dates,
               installmentAmounts,
+            );
+          case "UNRESOLVED":
+            return buildUnresolvedCliff(
+              selection.meta,
+              dates,
+              installmentAmounts,
+              vestingPeriod as VestingPeriod & { cliff: VestingNodeExpr },
+              overlayCtx,
             );
         }
     }
@@ -274,7 +262,7 @@ function generateCadence(
 }
 
 function buildResolvedCliff(
-  nodeMeta: Extract<NodeMeta, { type: "RESOLVED" }>,
+  nodeMeta: ResolvedNode,
   dates: OCTDate[],
   installmentAmounts: number[],
 ) {
@@ -309,7 +297,7 @@ function buildResolvedCliff(
 }
 
 function buildUnresolvedCliff(
-  nodeMeta: Extract<NodeMeta, { type: "UNRESOLVED" }>,
+  nodeMeta: UnresolvedNode,
   dates: OCTDate[],
   installmentAmounts: number[],
   vestingPeriod: VestingPeriod & {

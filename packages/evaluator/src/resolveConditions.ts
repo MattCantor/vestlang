@@ -125,8 +125,6 @@ export function resolveNode(
   if (!blockers) return resBase;
 
   // Compile and return a new Node
-  console.log(" ");
-  console.log("resolveNode - blockers:", JSON.stringify(blockers));
   if (allImpossibleBlockers(blockers)) {
     return {
       type: "IMPOSSIBLE",

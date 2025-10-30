@@ -17,6 +17,7 @@ import {
 import { resolveNode } from "./resolveConditions.js";
 import { lt } from "./time.js";
 
+// Picked with UnresolvedNode indicates an unresolved LaterOf selector, where picked represents the latest of the resolved items
 type Picked<T> = {
   type: "PICKED";
   picked: T;
@@ -72,7 +73,6 @@ export function pickFromVestingNodeExpr(
         case "RESOLVED":
           return { type: "PICKED", picked: expr, meta: res };
         case "UNRESOLVED":
-          return { type: "PICKED", picked: expr, meta: res };
         case "IMPOSSIBLE":
           return res;
       }
@@ -151,9 +151,6 @@ function handleLaterOf<T extends Schedule | VestingNode>(
   let picked: T | undefined = undefined;
   let best: ResolvedNode | undefined = undefined;
 
-  console.log(" ");
-  console.log("handleLaterOf - candidates:", JSON.stringify(candidates));
-
   // Resolved only if all items are resolved
   if (candidates.every((r) => isResolved(r))) {
     for (const r of candidates) {
@@ -168,7 +165,7 @@ function handleLaterOf<T extends Schedule | VestingNode>(
     if (best && picked)
       return {
         type: "PICKED",
-        picked: picked,
+        picked,
         meta: best,
       };
     throw new Error(
@@ -187,13 +184,44 @@ function handleLaterOf<T extends Schedule | VestingNode>(
     };
   }
 
+  // Return Picked with UnresolvedNode if any candidates are resolved
+  const resolvedCandidates = candidates.filter((r) => isResolved(r));
+  if (resolvedCandidates.length > 0) {
+    for (const r of resolvedCandidates) {
+      if (!best) {
+        best = r.meta;
+        picked = r.picked;
+      } else {
+        best = evaluateNode(best, r.meta, expr.type);
+        if (best === r.meta) picked = r.picked;
+      }
+    }
+    if (best && picked) {
+      const blockers: UnresolvedNode["blockers"] = candidates.reduce(
+        (acc, c) => {
+          if (c.type === "PICKED") return acc;
+          acc.push(...c.blockers);
+          return acc;
+        },
+        [] as UnresolvedNode["blockers"],
+      );
+      return {
+        type: "PICKED",
+        picked,
+        meta: {
+          type: "UNRESOLVED",
+          blockers,
+        },
+      };
+    }
+  }
+
   // Otherwise unresolved
   return {
     type: "UNRESOLVED",
     blockers: candidates.reduce((acc, r) => {
-      if (r.type === "PICKED" && r.meta.type === "UNRESOLVED")
-        acc.push(...r.meta.blockers);
-      if (r.type === "IMPOSSIBLE") acc.push(...r.blockers);
+      if (r.type === "PICKED") return acc;
+      acc.push(...r.blockers);
       return acc;
     }, [] as Blocker[]),
   };
