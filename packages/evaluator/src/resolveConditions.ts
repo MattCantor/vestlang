@@ -5,7 +5,6 @@ import {
   VestingNode,
   OCTDate,
   Offsets,
-  ConstrainedVestingNode,
   Blocker,
   ResolvedNode,
   UnresolvedNode,
@@ -112,14 +111,10 @@ export function resolveNode(
   const resBase = resolveBaseNode(node, ctx, asOf);
 
   // Return the resolved vesting node base if there are no constraints
-  if (node.type === "BARE") return resBase;
+  if (!node.constraints) return resBase;
 
   // Resolve constraints
-  const blockers = resolveCondition(
-    resBase,
-    (node as ConstrainedVestingNode).constraints,
-    ctx,
-  );
+  const blockers = resolveCondition(resBase, node.constraints, ctx);
 
   // Return the resolved vesting node base if all constraints succeeded
   if (!blockers) return resBase;

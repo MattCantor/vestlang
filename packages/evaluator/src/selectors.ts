@@ -66,8 +66,7 @@ export function pickFromVestingNodeExpr(
     case "LATER_OF":
       candidates = expr.items.map((item) => pickFromVestingNodeExpr(item, ctx));
       return handleLaterOf(expr, candidates);
-    case "BARE":
-    case "CONSTRAINED":
+    case "SINGLETON":
       const res = resolveNode(expr, ctx);
       switch (res.type) {
         case "RESOLVED":

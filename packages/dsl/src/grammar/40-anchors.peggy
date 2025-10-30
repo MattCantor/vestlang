@@ -19,19 +19,13 @@ VestingNode
     offsets:(_ Duration)*
     constraints:(_ OrExpr)? {
       const offs = offsets.map(o => o[1])
-      if (constraints) {
-        return {
-          type: "CONSTRAINED",
-          base,
-          offsets: normalizeOffsets(offs),
-          constraints: constraints[1]
-        }
-      }
-      return {
-        type: "BARE",
+      const node = {
+        type: "SINGLETON",
         base,
         offsets: normalizeOffsets(offs)
       }
+      if (constraints) node.constraints = constraints[1]
+      return node 
   }
 
 Constraint

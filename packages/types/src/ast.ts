@@ -5,7 +5,6 @@ import {
   OffsetTag,
   PeriodTag,
   VBaseTag,
-  VNodeTag,
 } from "./enums.js";
 import { EarlierOf, LaterOf, OCTDate, TwoOrMore } from "./helpers.js";
 
@@ -68,22 +67,10 @@ export interface VestingBaseEvent extends VestingBase {
 
 // primitives/types/vestlang/VestingNode.schema.json
 export interface VestingNode {
-  type: VNodeTag;
+  type: "SINGLETON";
   base: VestingBaseDate | VestingBaseEvent;
   offsets: Offsets;
   constraints?: Condition;
-}
-
-// types/vestlang/BareVestingNode.schema.json
-export interface BareVestingNode extends VestingNode {
-  type: "BARE";
-  constraints?: never;
-}
-
-// types/vestlang/BareVestingNode.schema.json
-export interface ConstrainedVestingNode extends VestingNode {
-  type: "CONSTRAINED";
-  constraints: Condition;
 }
 
 // TODO: add to schmea

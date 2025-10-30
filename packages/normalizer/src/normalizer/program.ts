@@ -1,7 +1,6 @@
 import { normalizeVestingNode } from "./core.js";
 import { NormalizeAndSort } from "./utils.js";
 import {
-  BareVestingNode,
   Duration,
   Offsets,
   RawSchedule,
@@ -57,7 +56,7 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  */
 function normalizeSchedule(s: RawSchedule): Schedule {
   const startNode = s.vesting_start ?? {
-    type: "BARE",
+    type: "SINGLETON",
     base: {
       type: "EVENT",
       value: "grantDate",
@@ -83,7 +82,7 @@ function normalizeNode(
   switch (c.type) {
     case "DURATION":
       return {
-        type: "BARE",
+        type: "SINGLETON",
         base: {
           type: "EVENT",
           value: durationRef,
@@ -96,8 +95,7 @@ function normalizeNode(
         c,
         durationRef === "grantDate" ? normalizeVestingStart : normalizeCliff,
       );
-    case "BARE":
-    case "CONSTRAINED":
+    case "SINGLETON":
       return normalizeVestingNodeExpr(c);
     default:
       throw new Error(
@@ -121,8 +119,7 @@ function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
  */
 function normalizeVestingNodeExpr(e: VestingNodeExpr): VestingNodeExpr {
   switch (e.type) {
-    case "BARE":
-    case "CONSTRAINED":
+    case "SINGLETON":
       return normalizeVestingNode(e);
     case "EARLIER_OF":
     case "LATER_OF":

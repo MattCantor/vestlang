@@ -300,19 +300,13 @@ function peg$parse(input, options) {
     return mkEvent(name);  }
   function peg$f20(base, offsets, constraints) {
     const offs = offsets.map(o => o[1])
-    if (constraints) {
-      return {
-        type: "CONSTRAINED",
-        base,
-        offsets: normalizeOffsets(offs),
-        constraints: constraints[1]
-      }
-    }
-    return {
-      type: "BARE",
+    const node = {
+      type: "SINGLETON",
       base,
       offsets: normalizeOffsets(offs)
     }
+    if (constraints) node.constraints = constraints[1]
+    return node 
   }
   function peg$f21(s, op, base) {
     return {
@@ -2405,7 +2399,7 @@ function peg$parse(input, options) {
   }
   function mkVestingNode(duration, context) {
     return {
-      type: "BARE",
+      type: "SINGLETON",
       base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
       offsets: normalizeOffsets([duration]),
     }
@@ -2416,8 +2410,8 @@ function peg$parse(input, options) {
       return mkVestingNode(x, context)
     }
     
-    // Pass through vesting nodes
-    if (x && (x.type === "BARE" || x.type === "CONSTRAINED")) return x;
+    // Pass through singleton vesting nodes
+    if (x && (x.type === "SINGLETON")) return x;
 
     // Recurse into selectors and coerce their items
     if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {

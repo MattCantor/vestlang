@@ -9,7 +9,6 @@ export type {
 export type {
   ConstraintTag,
   VBaseTag,
-  VNodeTag,
   ExprTag,
   PeriodTag,
   OffsetTag,
@@ -25,8 +24,6 @@ export {
   VestingBaseDate,
   VestingBaseEvent,
   VestingNode,
-  BareVestingNode,
-  ConstrainedVestingNode,
   LaterOfVestingNode,
   EarlierOfVestingNode,
   VestingNodeExpr,

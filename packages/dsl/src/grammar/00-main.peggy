@@ -74,7 +74,7 @@
   }
   function mkVestingNode(duration, context) {
     return {
-      type: "BARE",
+      type: "SINGLETON",
       base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
       offsets: normalizeOffsets([duration]),
     }
@@ -85,8 +85,8 @@
       return mkVestingNode(x, context)
     }
     
-    // Pass through vesting nodes
-    if (x && (x.type === "BARE" || x.type === "CONSTRAINED")) return x;
+    // Pass through singleton vesting nodes
+    if (x && (x.type === "SINGLETON")) return x;
 
     // Recurse into selectors and coerce their items
     if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {
