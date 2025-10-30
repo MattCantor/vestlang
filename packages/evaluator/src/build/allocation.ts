@@ -1,10 +1,4 @@
-import { allocation_type, Amount } from "@vestlang/types";
-
-export function amountToQuantify(a: Amount, grantQuantity: number): number {
-  return a.type === "QUANTITY"
-    ? a.value
-    : grantQuantity * (a.numerator / a.denominator);
-}
+import { allocation_type } from "@vestlang/types";
 
 /** Split an integer quantity across N installments according to the chosen allocation_type. */
 export function allocateQuantity(

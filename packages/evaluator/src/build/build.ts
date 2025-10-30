@@ -16,7 +16,8 @@ import {
   UnresolvedNode,
   ImpossibleNode,
 } from "@vestlang/types";
-import { catchUp, prepare, probeLaterOf } from "./utils.js";
+import { prepare } from '../utils.js'
+import { catchUp, probeLaterOf } from "./utils.js";
 import { allocateQuantity } from "./allocation.js";
 import { pickFromVestingNodeExpr, pickFromScheduleExpr } from "./selectors.js";
 import { nextDate, lt, eq } from "./time.js";

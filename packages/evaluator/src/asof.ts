@@ -3,7 +3,7 @@ import {
   Statement as NormalizedStatement,
   Tranche,
 } from "@vestlang/types";
-import { buildSchedule } from "./build.js";
+import { buildSchedule } from "./build/index.js";
 import { prepare } from "./utils.js";
 
 export interface VestedResult {
