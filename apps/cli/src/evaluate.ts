@@ -1,10 +1,10 @@
-import { buildSchedule } from "@vestlang/evaluator";
+import { evaluateStatement } from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { EvaluationContext } from "@vestlang/types";
 
-export function build(
+export function evaluate(
   parts: string[],
   opts: {
     quantity: string;
@@ -29,7 +29,7 @@ export function build(
 
   const ast = parse(input(parts, opts.stdin));
   const normalized = normalizeProgram(ast);
-  const results = normalized.map((s) => buildSchedule(s, ctx));
+  const results = normalized.map((s) => evaluateStatement(s, ctx));
   results.forEach((r) => {
     console.table(
       r.map((item) => ({

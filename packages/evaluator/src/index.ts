@@ -1,2 +1,2 @@
 export { evaluateStatementAsOf, type VestedResult } from "./asof.js";
-export { buildSchedule, buildProgram } from "./build/index.js";
+export { evaluateStatement, evaluateProgram } from "./evaluate/index.js";

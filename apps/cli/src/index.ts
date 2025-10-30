@@ -4,7 +4,7 @@ import { inspect } from "./inspect.js";
 import { compile } from "./compile.js";
 import { asof } from "./asof.js";
 // import { expand } from "./expand.js";
-import { build } from "./build.js";
+import { evaluate } from "./evaluate.js";
 
 const program = new Command();
 
@@ -86,7 +86,7 @@ program
         stdin?: boolean;
       },
     ) => {
-      build(parts, opts);
+      evaluate(parts, opts);
     },
   );
 program.parseAsync();

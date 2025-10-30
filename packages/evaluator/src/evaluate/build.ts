@@ -16,10 +16,10 @@ import {
   UnresolvedNode,
   ImpossibleNode,
 } from "@vestlang/types";
-import { prepare } from '../utils.js'
+import { prepare } from "../utils.js";
 import { catchUp, probeLaterOf } from "./utils.js";
 import { allocateQuantity } from "./allocation.js";
-import { pickFromVestingNodeExpr, pickFromScheduleExpr } from "./selectors.js";
+import { evaluateVestingNodeExpr, evaluateScheduleExpr } from "./selectors.js";
 import { nextDate, lt, eq } from "./time.js";
 
 const symPlus = (unit: PeriodTag, steps: number): SymbolicDate => ({
@@ -33,7 +33,7 @@ const symPlus = (unit: PeriodTag, steps: number): SymbolicDate => ({
  * Inputs: a normalized `Statement` and an `EvaluationContextInput`.
  * returns: `Tranche[]`
  */
-export function buildSchedule(
+export function evaluateStatement(
   stmt: Statement,
   ctx_input: EvaluationContextInput,
 ): Tranche[] {
@@ -45,7 +45,7 @@ export function buildSchedule(
   let startRes: NodeMeta | undefined = undefined;
 
   // Choose schedule by resolved vesting_start if selector
-  const selection = pickFromScheduleExpr(expr, ctx);
+  const selection = evaluateScheduleExpr(expr, ctx);
 
   switch (selection.type) {
     case "IMPOSSIBLE":
@@ -172,7 +172,7 @@ function buildResolvedStart(
     };
 
     // Choose cliff
-    const selection = pickFromVestingNodeExpr(vestingPeriod.cliff, overlayCtx);
+    const selection = evaluateVestingNodeExpr(vestingPeriod.cliff, overlayCtx);
 
     switch (selection.type) {
       case "IMPOSSIBLE":

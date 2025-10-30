@@ -1,6 +1,10 @@
-import { EvaluationContext, LaterOfVestingNode, OCTDate } from "@vestlang/types";
+import {
+  EvaluationContext,
+  LaterOfVestingNode,
+  OCTDate,
+} from "@vestlang/types";
 import { lt } from "./time.js";
-import { pickFromVestingNodeExpr } from "./selectors.js";
+import { evaluateVestingNodeExpr } from "./selectors.js";
 
 /**
  * Catch-up: collapse all installments strictly before `floor` into one tranche on `floor`.
@@ -24,7 +28,7 @@ export function probeLaterOf(
   const resolvedDates: OCTDate[] = [];
 
   for (const item of expr.items) {
-    const res = pickFromVestingNodeExpr(item, ctx);
+    const res = evaluateVestingNodeExpr(item, ctx);
     if (res.type === "PICKED" && res.meta.type === "RESOLVED")
       resolvedDates.push(res.meta.date);
     continue;

@@ -3,7 +3,7 @@ import {
   Statement as NormalizedStatement,
   Tranche,
 } from "@vestlang/types";
-import { buildSchedule } from "./build/index.js";
+import { evaluateStatement } from "./evaluate/index.js";
 import { prepare } from "./utils.js";
 
 export interface VestedResult {
@@ -22,7 +22,7 @@ export function evaluateStatementAsOf(
 ): VestedResult {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
 
-  const tranches = buildSchedule(stmt, ctx_input);
+  const tranches = evaluateStatement(stmt, ctx_input);
 
   const vested: Tranche[] = [];
   const unvested: Tranche[] = [];
