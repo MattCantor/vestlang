@@ -6,6 +6,7 @@ import type {
   ResolvedTranche,
   Tranche,
   UnresolvedBlocker,
+  UnresolvedNode,
   UnresolvedTranche,
 } from "@vestlang/types";
 
@@ -85,4 +86,27 @@ export function makeBeforeVestingStartTranche(
       blockers,
     },
   };
+}
+
+export function makeBeforeCliffTranche(
+  amount: number,
+  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
+): UnresolvedTranche {
+  return {
+    amount,
+    meta: {
+      state: "UNRESOLVED",
+      date: { type: "MAYBE_BEFORE_CLIFF" },
+      blockers,
+    },
+  };
+}
+
+export function makeBeforeCliffTranches(
+  amounts: number[],
+  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
+): UnresolvedTranche[] {
+  return Array.from({ length: amounts.length }, (_, i) => {
+    return makeBeforeCliffTranche(amounts[i], blockers);
+  });
 }

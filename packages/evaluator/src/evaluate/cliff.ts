@@ -4,7 +4,6 @@ import type {
   OCTDate,
   PeriodTag,
   ResolvedTranche,
-  Tranche,
   UnresolvedTranche,
   VestingNode,
 } from "@vestlang/types";
@@ -12,15 +11,14 @@ import {
   isPickedResolved,
   type PickedResolved,
   type PickedUnresolved,
-  type PickReturn,
   probeLaterOf,
   type ScheduleWithCliff,
-  type VestingPeriodWithCliff,
 } from "./utils.js";
 import { eq, lt } from "./time.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
 import {
-  makeBeforeVestingStartTranche,
+  makeBeforeCliffTranche,
+  makeBeforeCliffTranches,
   makeImpossibleTranches,
   makeResolvedTranche,
   makeStartPlusTranche,
@@ -48,9 +46,7 @@ export function evaluateCliff(
 
   // unresolved cliff and no best of LATER_OF selector
   if (resCliff.type === "UNRESOLVED")
-    return Array.from({ length: dates.length }, (_, i) =>
-      makeBeforeVestingStartTranche(amounts[i], resCliff.blockers),
-    );
+    return makeBeforeCliffTranches(amounts, resCliff.blockers);
 
   // Resolved Cliff
   if (isPickedResolved(resCliff))
@@ -61,14 +57,7 @@ export function evaluateCliff(
   if (vestingPeriod.cliff.type === "LATER_OF") {
     const probedDate = probeLaterOf(vestingPeriod.cliff, overlayCtx);
     if (probedDate) {
-      return evaluateUnresolvedCliff(
-        dates,
-        amounts,
-        probedDate,
-        vestingPeriod.type,
-        vestingPeriod.length,
-        blockers,
-      );
+      return evaluateUnresolvedCliff(dates, amounts, probedDate, blockers);
     }
   }
 
@@ -86,7 +75,7 @@ function evaluateCliffGeneric<T>(
   dates: OCTDate[],
   amounts: number[],
   cliffDate: OCTDate,
-  fn: (x: { i: number; date: OCTDate; amount: number }) => T,
+  fn: (x: { date: OCTDate; amount: number }) => T,
 ): T[] {
   const tranches: T[] = [];
   let aggregate = 0;
@@ -102,10 +91,10 @@ function evaluateCliffGeneric<T>(
 
     if (isBefore) continue;
     if (isAt) {
-      tranches.push(fn({ i, date, amount: aggregate }));
+      tranches.push(fn({ date, amount: aggregate }));
       continue;
     }
-    tranches.push(fn({ i, date, amount: amt }));
+    tranches.push(fn({ date, amount: amt }));
   }
 
   return tranches;
@@ -128,15 +117,12 @@ function evaluateUnresolvedCliff(
   dates: OCTDate[],
   amounts: number[],
   cliffDate: OCTDate,
-  type: PeriodTag,
-  length: number,
   blockers: Blocker[],
 ): UnresolvedTranche[] {
   return evaluateCliffGeneric<UnresolvedTranche>(
     dates,
     amounts,
     cliffDate,
-    ({ i, amount }) =>
-      makeStartPlusTranche(i + 1, amount, type, length, blockers),
+    ({ amount }) => makeBeforeCliffTranche(amount, blockers),
   );
 }

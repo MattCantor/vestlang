@@ -68,10 +68,6 @@
     )
     return { type: OP, items: flat }
   }
-  const SYSTEM_EVENTS = new Set(["grantdate", "vestingstart"]);
-  function isSystemEvent(name) {
-    return SYSTEM_EVENTS.has(name.toLowerCase())
-  }
   function mkVestingNode(duration, context) {
     return {
       type: "SINGLETON",

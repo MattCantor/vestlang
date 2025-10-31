@@ -3,16 +3,17 @@ DateLiteral
       return mkDate(iso);
     }
 
+SystemRef
+  = "grantdate"i { return "grantDate"; }
+  / "grant_date"i { return "grantDate"; }
+  / "grant-date"i { return "grantDate"; }
+  / "vestingstart"i { return "vestingStart"; }
+  / "vesting_start"i { return "vestingStart"; }
+  / "vesting-start"i { return "vestingStart"; }
+
 Ident = $([A-Za-z_][A-Za-z0-9_]*)
 
-EventRef = "EVENT"i _ name:Ident {
-  if (isSystemEvent(name)) {
-    error(
-      `'${name}' is a reserved system event. ` +
-      'Pick a different event name'
-    );
-  }
-  return mkEvent(name); }
+EventRef = "EVENT"i _ name:( SystemRef / Ident ) { return mkEvent(name); }
 
 VestingNode
   = base:(EventRef / DateLiteral)
