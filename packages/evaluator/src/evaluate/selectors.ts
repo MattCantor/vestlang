@@ -1,11 +1,9 @@
-import {
+import type {
   EvaluationContext,
   ResolvedNode,
   Blocker,
   VestingNodeExpr,
   Schedule,
-  UnresolvedNode,
-  ImpossibleNode,
   ImpossibleBlocker,
   VestingNode,
   ScheduleExpr,
@@ -13,32 +11,16 @@ import {
 } from "@vestlang/types";
 import { resolveNode } from "./resolveConditions.js";
 import { lt } from "./time.js";
+import {
+  isPickedResolved,
+  type Picked,
+  type PickedResolved,
+  type PickReturn,
+} from "./utils.js";
 
 /* ------------------------
  * Types & Guards
  * ------------------------ */
-
-// Picked with UnresolvedNode indicates an unresolved LaterOf selector, where picked represents the latest of the resolved items
-interface Picked<T> {
-  type: "PICKED";
-  picked: T;
-  meta: ResolvedNode | UnresolvedNode;
-}
-
-interface PickedResolved<T> extends Picked<T> {
-  meta: ResolvedNode;
-}
-
-type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
-
-function isPickedResolved<T>(x: any): x is PickedResolved<T> {
-  return (
-    !!x &&
-    typeof x === "object" &&
-    x.type === "PICKED" &&
-    x.meta.type === "RESOLVED"
-  );
-}
 
 function allImpossible<T>(x: PickReturn<T>[]) {
   return x.every((r) => r.type === "IMPOSSIBLE");

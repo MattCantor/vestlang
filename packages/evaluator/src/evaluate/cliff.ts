@@ -1,160 +1,142 @@
-import {
+import type {
+  Blocker,
   EvaluationContext,
   OCTDate,
+  PeriodTag,
+  ResolvedTranche,
   Tranche,
-  UnresolvedNode,
-  VestingNodeExpr,
-  VestingPeriod,
+  UnresolvedTranche,
+  VestingNode,
 } from "@vestlang/types";
-import { probeLaterOf } from "./utils.js";
+import {
+  isPickedResolved,
+  type PickedResolved,
+  type PickedUnresolved,
+  type PickReturn,
+  probeLaterOf,
+  type ScheduleWithCliff,
+  type VestingPeriodWithCliff,
+} from "./utils.js";
 import { eq, lt } from "./time.js";
+import { evaluateVestingNodeExpr } from "./selectors.js";
+import {
+  makeBeforeVestingStartTranche,
+  makeImpossibleTranches,
+  makeResolvedTranche,
+  makeStartPlusTranche,
+  makeStartPlusTranches,
+} from "./makeTranches.js";
 
-type CliffOpts =
-  | {
-      type: "RESOLVED";
-      pivotDate: OCTDate;
-    }
-  | {
-      type: "UNRESOLVED";
-      nodeMeta: UnresolvedNode;
-      vestingPeriod: VestingPeriod & {
-        cliff: VestingNodeExpr;
-      };
-      ctx: EvaluationContext;
-    };
-
-export function accumulateUntilPivot(
+export function evaluateCliff(
+  resSchedule: PickedResolved<ScheduleWithCliff>,
   dates: OCTDate[],
   amounts: number[],
-  opts: CliffOpts,
-): Tranche[] {
-  let pivotDate: OCTDate;
+  ctx: EvaluationContext,
+) {
+  // Prepare ctx and check if the cliff is resolved
+  const overlayCtx: EvaluationContext = {
+    ...ctx,
+    events: { ...ctx.events, vestingStart: resSchedule.meta.date },
+  };
 
-  // Resolved cliff
-  if (opts.type === "RESOLVED") {
-    pivotDate = opts.pivotDate;
+  const vestingPeriod = resSchedule.picked.periodicity;
+  const resCliff = evaluateVestingNodeExpr(vestingPeriod.cliff, overlayCtx);
 
-    console.log("accumulateUntilPivot:", pivotDate);
-    return applyCliffToDates(dates, pivotDate, amounts, opts);
-  }
+  // impossible cliff
+  if (resCliff.type === "IMPOSSIBLE")
+    return makeImpossibleTranches(dates.length, resCliff.blockers);
 
-  // Unresolved cliff
-  const { cliff } = opts.vestingPeriod;
-
-  if (cliff.type === "LATER_OF") {
-    const probedDate = probeLaterOf(cliff, opts.ctx);
-    if (probedDate) {
-      pivotDate = probedDate;
-      console.log("accumulateUntilPivot:", pivotDate);
-      return applyCliffToDates(dates, pivotDate, amounts, opts);
-    }
-    // return Array.from({ length: dates.length }, (_, i) => ({
-    //   amount: amounts[i],
-    //   meta: {
-    //     state: "UNRESOLVED",
-    //     date: { type: "MAYBE_BEFORE_CLIFF" },
-    //     blockers: opts.nodeMeta.blockers,
-    //   },
-    // }));
-  }
-  return Array.from({ length: dates.length }, (_, i) => ({
-    amount: amounts[i],
-    meta: {
-      state: "UNRESOLVED",
-      date: { type: "MAYBE_BEFORE_CLIFF" },
-      blockers: opts.nodeMeta.blockers,
-    },
-  }));
-}
-
-function createTranche(
-  index: number,
-  date: OCTDate,
-  newCarry: number,
-  opts: CliffOpts,
-): Tranche {
-  switch (opts.type) {
-    case "RESOLVED": {
-      return {
-        amount: newCarry,
-        date,
-        meta: { state: "RESOLVED" },
-      };
-    }
-    case "UNRESOLVED": {
-      return {
-        amount: newCarry,
-        meta: {
-          state: "UNRESOLVED",
-          date: {
-            type: "START_PLUS",
-            unit: opts.vestingPeriod.type,
-            steps: index * opts.vestingPeriod.length,
-          },
-          blockers: opts.nodeMeta.blockers,
-        },
-      };
-    }
-  }
-}
-
-function applyCliff(
-  index: number,
-  date: OCTDate,
-  pivotDate: OCTDate,
-  amount: number,
-  carry: number,
-  opts: CliffOpts,
-): { tranche?: Tranche; newCarry: number } {
-  const isBefore = lt(date, pivotDate);
-  const isAt = eq(date, pivotDate);
-  const isAtOrBefore = isBefore || isAt;
-
-  if (isAtOrBefore) {
-    const newCarry = carry + amount;
-
-    if (isAt) {
-      return {
-        newCarry,
-        tranche: createTranche(index, date, newCarry, opts),
-      };
-    }
-
-    if (opts.type === "UNRESOLVED") {
-      return {
-        newCarry,
-        tranche: createTranche(index, date, 0, opts),
-      };
-    }
-
-    return { newCarry };
-  } else {
-    return {
-      newCarry: amount,
-      tranche: createTranche(index, date, amount, opts),
-    };
-  }
-}
-
-function applyCliffToDates(
-  dates: OCTDate[],
-  pivotDate: OCTDate,
-  amounts: number[],
-  opts: CliffOpts,
-): Tranche[] {
-  const tranches: Tranche[] = [];
-  let carry = 0;
-  dates.forEach((date, i) => {
-    const { newCarry, tranche } = applyCliff(
-      i,
-      date,
-      pivotDate,
-      amounts[i],
-      carry,
-      opts,
+  // unresolved cliff and no best of LATER_OF selector
+  if (resCliff.type === "UNRESOLVED")
+    return Array.from({ length: dates.length }, (_, i) =>
+      makeBeforeVestingStartTranche(amounts[i], resCliff.blockers),
     );
-    if (tranche) tranches.push(tranche);
-    carry = newCarry;
-  });
+
+  // Resolved Cliff
+  if (isPickedResolved(resCliff))
+    return evaluateResolvedCliff(dates, amounts, resCliff.meta.date);
+
+  // Unresolved Cliff with best of LATER_OF selector
+  const blockers = (resCliff as PickedUnresolved<VestingNode>).meta.blockers;
+  if (vestingPeriod.cliff.type === "LATER_OF") {
+    const probedDate = probeLaterOf(vestingPeriod.cliff, overlayCtx);
+    if (probedDate) {
+      return evaluateUnresolvedCliff(
+        dates,
+        amounts,
+        probedDate,
+        vestingPeriod.type,
+        vestingPeriod.length,
+        blockers,
+      );
+    }
+  }
+
+  // Unresolved Cliff and no best of LATER_OF selector
+  // NOTE: consider throwing an error here.  cliffRes should not return Picked with an unresolved node unless cliff.type is LATER_OF
+  return makeStartPlusTranches(
+    amounts,
+    vestingPeriod.type,
+    vestingPeriod.length,
+    blockers,
+  );
+}
+
+function evaluateCliffGeneric<T>(
+  dates: OCTDate[],
+  amounts: number[],
+  cliffDate: OCTDate,
+  fn: (x: { i: number; date: OCTDate; amount: number }) => T,
+): T[] {
+  const tranches: T[] = [];
+  let aggregate = 0;
+
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const amt = amounts[i];
+
+    const isBefore = lt(date, cliffDate);
+    const isAt = eq(date, cliffDate);
+
+    aggregate += amt;
+
+    if (isBefore) continue;
+    if (isAt) {
+      tranches.push(fn({ i, date, amount: aggregate }));
+      continue;
+    }
+    tranches.push(fn({ i, date, amount: amt }));
+  }
+
   return tranches;
+}
+
+function evaluateResolvedCliff(
+  dates: OCTDate[],
+  amounts: number[],
+  cliffDate: OCTDate,
+): ResolvedTranche[] {
+  return evaluateCliffGeneric<ResolvedTranche>(
+    dates,
+    amounts,
+    cliffDate,
+    ({ date, amount }) => makeResolvedTranche(date, amount),
+  );
+}
+
+function evaluateUnresolvedCliff(
+  dates: OCTDate[],
+  amounts: number[],
+  cliffDate: OCTDate,
+  type: PeriodTag,
+  length: number,
+  blockers: Blocker[],
+): UnresolvedTranche[] {
+  return evaluateCliffGeneric<UnresolvedTranche>(
+    dates,
+    amounts,
+    cliffDate,
+    ({ i, amount }) =>
+      makeStartPlusTranche(i + 1, amount, type, length, blockers),
+  );
 }

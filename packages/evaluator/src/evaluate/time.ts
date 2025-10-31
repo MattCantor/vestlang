@@ -1,4 +1,4 @@
-import { EvaluationContext, OCTDate, PeriodTag } from "@vestlang/types";
+import type { EvaluationContext, OCTDate, PeriodTag } from "@vestlang/types";
 import { addDays as dfAddDays, isBefore, isAfter, isEqual } from "date-fns";
 
 // convert ISO-string ↔ Date

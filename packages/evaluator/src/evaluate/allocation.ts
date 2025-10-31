@@ -1,4 +1,4 @@
-import { allocation_type } from "@vestlang/types";
+import type { allocation_type } from "@vestlang/types";
 
 /** Split an integer quantity across N installments according to the chosen allocation_type. */
 export function allocateQuantity(
