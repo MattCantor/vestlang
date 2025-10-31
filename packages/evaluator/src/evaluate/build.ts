@@ -4,29 +4,68 @@ import {
   OCTDate,
   EvaluationContext,
   EvaluationContextInput,
-  SymbolicDate,
   Tranche,
   Schedule,
   NodeMeta,
-  ImpossibleTranche,
   UnresolvedTranche,
   VestingPeriod,
   VestingNodeExpr,
-  ResolvedNode,
   UnresolvedNode,
   ImpossibleNode,
+  ImpossibleBlocker,
+  Blocker,
 } from "@vestlang/types";
 import { prepare } from "../utils.js";
-import { catchUp, probeLaterOf } from "./utils.js";
 import { allocateQuantity } from "./allocation.js";
 import { evaluateVestingNodeExpr, evaluateScheduleExpr } from "./selectors.js";
-import { nextDate, lt, eq } from "./time.js";
+import { nextDate } from "./time.js";
+import { accumulateUntilPivot } from "./cliff.js";
 
-const symPlus = (unit: PeriodTag, steps: number): SymbolicDate => ({
-  type: "START_PLUS",
-  unit,
-  steps,
-});
+/* ------------------------
+ * Helpers
+ * ------------------------ */
+
+function makeImpossibleTranches(
+  n: number,
+  blockers: ImpossibleBlocker[],
+): Tranche[] {
+  return Array.from({ length: n }, () => ({
+    amount: 0,
+    meta: { state: "IMPOSSIBLE", blockers },
+  }));
+}
+
+function makeStartPlusTranches(
+  amounts: number[],
+  unit: PeriodTag,
+  steplength: number,
+  blockers: Blocker[],
+): UnresolvedTranche[] {
+  return Array.from({ length: amounts.length }, (_, i) => ({
+    amount: amounts[i],
+    meta: {
+      state: "UNRESOLVED",
+      date: {
+        type: "START_PLUS",
+        unit,
+        steps: i * steplength,
+      },
+      blockers,
+    },
+  }));
+}
+
+function makeResolvedTranches(dates: OCTDate[], amounts: number[]): Tranche[] {
+  const tranches: Tranche[] = [];
+  dates.forEach((date, i) =>
+    tranches.push({
+      amount: amounts[i],
+      date,
+      meta: { state: "RESOLVED" },
+    }),
+  );
+  return tranches;
+}
 
 /**
  * Produce a list of tranches with symbolic dates and blockers
@@ -49,15 +88,8 @@ export function evaluateStatement(
 
   switch (selection.type) {
     case "IMPOSSIBLE":
-      return [
-        {
-          amount: 0,
-          meta: {
-            state: "IMPOSSIBLE",
-            blockers: selection.blockers,
-          },
-        },
-      ];
+      makeImpossibleTranches(1, selection.blockers);
+
     case "UNRESOLVED":
       return [
         {
@@ -120,40 +152,15 @@ function buildUnresolvedStart(
   installmentAmounts: number[],
 ): Tranche[] {
   if (startRes.type === "IMPOSSIBLE") {
-    return Array.from(
-      { length: installmentAmounts.length },
-      (_) =>
-        ({
-          amount: 0,
-          meta: {
-            state: "IMPOSSIBLE",
-            blockers: startRes.blockers,
-          },
-        }) as ImpossibleTranche,
-    );
+    return makeImpossibleTranches(installmentAmounts.length, startRes.blockers);
   }
 
-  const symbolicDates: SymbolicDate[] = Array.from(
-    { length: installmentAmounts.length },
-    (_, i) =>
-      symPlus(
-        selectedSchedule.periodicity.type,
-        i * selectedSchedule.periodicity.length,
-      ),
+  return makeStartPlusTranches(
+    installmentAmounts,
+    selectedSchedule.periodicity.type,
+    selectedSchedule.periodicity.length,
+    startRes.blockers,
   );
-  const result: Tranche[] = symbolicDates.map(
-    (s, i) =>
-      ({
-        amount: installmentAmounts[i],
-        meta: {
-          state: "UNRESOLVED",
-          date: s,
-          blockers: startRes.blockers,
-        },
-      }) as UnresolvedTranche,
-  );
-
-  return result;
 }
 
 function buildResolvedStart(
@@ -171,58 +178,38 @@ function buildResolvedStart(
       events: { ...ctx.events, vestingStart: startRes.date },
     };
 
+    const resVestingPeriod = vestingPeriod as VestingPeriod & {
+      cliff: VestingNodeExpr;
+    };
+
     // Choose cliff
     const selection = evaluateVestingNodeExpr(vestingPeriod.cliff, overlayCtx);
 
-    switch (selection.type) {
-      case "IMPOSSIBLE":
-        return Array.from(
-          { length: dates.length },
-          (_) =>
-            ({
-              amount: 0,
-              meta: {
-                state: "IMPOSSIBLE",
-                blockers: selection.blockers,
-              },
-            }) as ImpossibleTranche,
-        );
+    if (selection.type === "IMPOSSIBLE")
+      return makeImpossibleTranches(dates.length, selection.blockers);
 
-      case "UNRESOLVED":
-        return buildUnresolvedCliff(
-          selection,
-          dates,
-          installmentAmounts,
-          vestingPeriod as VestingPeriod & { cliff: VestingNodeExpr },
-          overlayCtx,
-        );
+    if (selection.type === "PICKED" && selection.meta.type === "RESOLVED")
+      return accumulateUntilPivot(dates, installmentAmounts, {
+        type: "RESOLVED",
+        pivotDate: selection.meta.date,
+      });
 
-      case "PICKED":
-        switch (selection.meta.type) {
-          case "RESOLVED":
-            return buildResolvedCliff(
-              selection.meta,
-              dates,
-              installmentAmounts,
-            );
-          case "UNRESOLVED":
-            return buildUnresolvedCliff(
-              selection.meta,
-              dates,
-              installmentAmounts,
-              vestingPeriod as VestingPeriod & { cliff: VestingNodeExpr },
-              overlayCtx,
-            );
-        }
-    }
+    if (selection.type === "PICKED" && selection.meta.type === "UNRESOLVED")
+      return accumulateUntilPivot(dates, installmentAmounts, {
+        type: "UNRESOLVED",
+        nodeMeta: selection.meta,
+        vestingPeriod: resVestingPeriod,
+        ctx: overlayCtx,
+      });
+
+    return accumulateUntilPivot(dates, installmentAmounts, {
+      type: "UNRESOLVED",
+      nodeMeta: selection as UnresolvedNode,
+      vestingPeriod: resVestingPeriod,
+      ctx: overlayCtx,
+    });
   }
-  return dates.map((date, i) => ({
-    amount: installmentAmounts[i],
-    date,
-    meta: {
-      state: "RESOLVED",
-    },
-  }));
+  return makeResolvedTranches(dates, installmentAmounts);
 }
 
 function aggregateDuplicateTranches(tranches: Tranche[]) {
@@ -262,85 +249,85 @@ function generateCadence(
   return dates;
 }
 
-function buildResolvedCliff(
-  nodeMeta: ResolvedNode,
-  dates: OCTDate[],
-  installmentAmounts: number[],
-) {
-  const cliffDate = nodeMeta.date;
-  dates = catchUp(dates, cliffDate);
+// function buildResolvedCliff(
+//   nodeMeta: ResolvedNode,
+//   dates: OCTDate[],
+//   installmentAmounts: number[],
+// ) {
+//   const cliffDate = nodeMeta.date;
+//   dates = catchUp(dates, cliffDate);
+//
+//   const result = dates.reduce((acc, date, i) => {
+//     let accumulatedAmount = 0;
+//     if (lt(date, cliffDate)) accumulatedAmount += installmentAmounts[i];
+//     if (eq(date, cliffDate)) {
+//       accumulatedAmount += installmentAmounts[i];
+//       acc.push({
+//         amount: accumulatedAmount,
+//         date,
+//         meta: {
+//           state: "RESOLVED",
+//         },
+//       });
+//     } else {
+//       acc.push({
+//         amount: installmentAmounts[i],
+//         date,
+//         meta: {
+//           state: "RESOLVED",
+//         },
+//       });
+//     }
+//
+//     return acc;
+//   }, [] as Tranche[]);
+//   return result;
+// }
 
-  const result = dates.reduce((acc, date, i) => {
-    let accumulatedAmount = 0;
-    if (lt(date, cliffDate)) accumulatedAmount += installmentAmounts[i];
-    if (eq(date, cliffDate)) {
-      accumulatedAmount += installmentAmounts[i];
-      acc.push({
-        amount: accumulatedAmount,
-        date,
-        meta: {
-          state: "RESOLVED",
-        },
-      });
-    } else {
-      acc.push({
-        amount: installmentAmounts[i],
-        date,
-        meta: {
-          state: "RESOLVED",
-        },
-      });
-    }
-
-    return acc;
-  }, [] as Tranche[]);
-  return result;
-}
-
-function buildUnresolvedCliff(
-  nodeMeta: UnresolvedNode,
-  dates: OCTDate[],
-  installmentAmounts: number[],
-  vestingPeriod: VestingPeriod & {
-    cliff: VestingNodeExpr;
-  },
-  ctx: EvaluationContext,
-): Tranche[] {
-  const { type, length, cliff } = vestingPeriod;
-  const blockers = nodeMeta.blockers;
-
-  if (cliff.type === "LATER_OF") {
-    const floor = probeLaterOf(cliff, ctx);
-    if (floor) {
-      dates = catchUp(dates, floor);
-      let accumulatedAmount = 0;
-      const result = dates.reduce((acc, date, i) => {
-        let amount = 0;
-        if (lt(date, floor) || eq(date, floor)) {
-          accumulatedAmount += installmentAmounts[i];
-        } else {
-          amount = installmentAmounts[i];
-        }
-
-        acc.push({
-          amount,
-          meta: {
-            state: "UNRESOLVED",
-            date: symPlus(type, i * length),
-            blockers,
-          },
-        } as UnresolvedTranche);
-        return acc;
-      }, [] as Tranche[]);
-      return result;
-    }
-  }
-  return dates.map((_, i) => ({
-    amount: installmentAmounts[i],
-    meta: {
-      state: "UNRESOLVED",
-      date: { type: "MAYBE_BEFORE_CLIFF" },
-      blockers,
-    },
-  }));
-}
+// function buildUnresolvedCliff(
+//   nodeMeta: UnresolvedNode,
+//   dates: OCTDate[],
+//   installmentAmounts: number[],
+//   vestingPeriod: VestingPeriod & {
+//     cliff: VestingNodeExpr;
+//   },
+//   ctx: EvaluationContext,
+// ): Tranche[] {
+//   const { type, length, cliff } = vestingPeriod;
+//   const blockers = nodeMeta.blockers;
+//
+//   if (cliff.type === "LATER_OF") {
+//     const floor = probeLaterOf(cliff, ctx);
+//     if (floor) {
+//       dates = catchUp(dates, floor);
+//       let accumulatedAmount = 0;
+//       const result = dates.reduce((acc, date, i) => {
+//         let amount = 0;
+//         if (lt(date, floor) || eq(date, floor)) {
+//           accumulatedAmount += installmentAmounts[i];
+//         } else {
+//           amount = installmentAmounts[i];
+//         }
+//
+//         acc.push({
+//           amount,
+//           meta: {
+//             state: "UNRESOLVED",
+//             date: symPlus(type, i * length),
+//             blockers,
+//           },
+//         } as UnresolvedTranche);
+//         return acc;
+//       }, [] as Tranche[]);
+//       return result;
+//     }
+//   }
+//   return dates.map((_, i) => ({
+//     amount: installmentAmounts[i],
+//     meta: {
+//       state: "UNRESOLVED",
+//       date: { type: "MAYBE_BEFORE_CLIFF" },
+//       blockers,
+//     },
+//   }));
+// }
