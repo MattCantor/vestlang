@@ -78,6 +78,7 @@ export function makeBeforeVestingStartTranche(
   amount: number,
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): UnresolvedTranche {
+  console.log("makeBeforeVestingStartTranche:", JSON.stringify(blockers));
   return {
     amount,
     meta: {

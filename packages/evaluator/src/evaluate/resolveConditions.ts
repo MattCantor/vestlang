@@ -50,7 +50,8 @@ function compareDates(
           if (resConstraintBase.type == "RESOLVED") {
             // Unresolved if B's date has not yet occurrred
             const constraintBaseDate = resConstraintBase.date;
-            if (gt(constraintBaseDate, ctx.asOf)) return resSubject.blockers;
+            if (gt(constraintBaseDate, ctx.asOf))
+              return [{ type: "UNRESOLVED_CONDITION", condition }];
 
             // Impossible if B's date has occurred
             return [impossible()];
@@ -88,7 +89,8 @@ function compareDates(
           if (resConstraintBase.type === "RESOLVED") {
             // Unresolved if B'd date has not yet occurred
             const constraintBaseDate = resConstraintBase.date;
-            if (gt(constraintBaseDate, ctx.asOf)) return resSubject.blockers;
+            if (gt(constraintBaseDate, ctx.asOf))
+              return [{ type: "UNRESOLVED_CONDITION", condition }];
 
             // Impossible if B's date has occurred
             return [impossible()];
@@ -162,13 +164,10 @@ function resolveBaseNode(
   node: VestingNode,
   ctx: EvaluationContext,
 ): ResolvedNode | UnresolvedNode {
-  console.log("resolveBaseNode:", JSON.stringify(node));
   switch (node.base.type) {
     case "DATE":
       const offsetDate = applyOffsets(node.base.value, node.offsets, ctx);
-      console.log("offsetDate:", offsetDate);
       const notResolved = gt(offsetDate, ctx.asOf);
-      console.log("notResolved:", notResolved);
       return notResolved
         ? {
             type: "UNRESOLVED",
@@ -180,14 +179,13 @@ function resolveBaseNode(
           };
     case "EVENT":
       const eventDate = ctx.events[node.base.value];
-      console.log("eventDate:", eventDate);
       return eventDate
         ? { type: "RESOLVED", date: applyOffsets(eventDate, node.offsets, ctx) }
         : {
             type: "UNRESOLVED",
             blockers: [
               {
-                type: "MISSING_EVENT",
+                type: "EVENT_NOT_YET_OCCURRED",
                 event: node.base.value,
               },
             ],
@@ -227,6 +225,7 @@ function resolveCondition(
         acc.push(...results);
         return acc;
       }, [] as Blocker[]);
+
     case "OR":
       let anyUnblocked: boolean = false;
       const blockers: Blocker[] = [];

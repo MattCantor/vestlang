@@ -109,7 +109,14 @@ function handleSelector<T extends Schedule | VestingNode>(
   if (allImpossible(candidates))
     return {
       type: "IMPOSSIBLE",
-      blockers: collectImpossibleBlockers(candidates),
+      // blockers: collectImpossibleBlockers(candidates),
+      blockers: [
+        {
+          type: "IMPOSSIBLE_SELECTOR",
+          selector: policy.selector,
+          blockers: collectImpossibleBlockers(candidates),
+        },
+      ],
     };
 
   const resolved = candidates.filter(isPickedResolved) as PickedResolved<T>[];
@@ -128,12 +135,30 @@ function handleSelector<T extends Schedule | VestingNode>(
     return {
       type: "PICKED",
       picked,
-      meta: { type: "UNRESOLVED", blockers: collectBlockers(candidates) },
+      meta: {
+        type: "UNRESOLVED",
+        blockers: [
+          {
+            type: "UNRESOLVED_SELECTOR",
+            selector: policy.selector,
+            blockers: collectBlockers(candidates),
+          },
+        ],
+      },
     };
   }
 
   // Otherwise unresolved (aggregate blockers of non-picked)
-  return { type: "UNRESOLVED", blockers: collectBlockers(candidates) };
+  return {
+    type: "UNRESOLVED",
+    blockers: [
+      {
+        type: "UNRESOLVED_SELECTOR",
+        selector: policy.selector,
+        blockers: collectBlockers(candidates),
+      },
+    ],
+  };
 }
 
 /* ------------------------

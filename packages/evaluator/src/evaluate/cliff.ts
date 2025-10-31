@@ -2,7 +2,6 @@ import type {
   Blocker,
   EvaluationContext,
   OCTDate,
-  PeriodTag,
   ResolvedTranche,
   UnresolvedTranche,
   VestingNode,
@@ -21,7 +20,6 @@ import {
   makeBeforeCliffTranches,
   makeImpossibleTranches,
   makeResolvedTranche,
-  makeStartPlusTranche,
   makeStartPlusTranches,
 } from "./makeTranches.js";
 

@@ -1,4 +1,4 @@
-import { Condition } from "./ast.js";
+import { Condition, VestingBase } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { allocation_type, vesting_day_of_month } from "./oct_types.js";
@@ -45,7 +45,7 @@ export type SymbolicDate =
 
 export type UnresolvedBlocker =
   | {
-      type: "MISSING_EVENT";
+      type: "EVENT_NOT_YET_OCCURRED";
       event: string;
     }
   | {
@@ -56,6 +56,10 @@ export type UnresolvedBlocker =
   | {
       type: "DATE_NOT_YET_OCCURRED";
       date: OCTDate;
+    }
+  | {
+      type: "UNRESOLVED_CONDITION";
+      condition: Condition;
     };
 
 export type ImpossibleBlocker =
