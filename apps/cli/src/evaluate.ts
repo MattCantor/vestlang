@@ -9,6 +9,7 @@ export function evaluate(
   opts: {
     quantity: string;
     grantDate: string;
+    event: Record<string, string>;
     stdin?: boolean;
   },
 ): void {
@@ -20,7 +21,7 @@ export function evaluate(
   }
 
   const ctx: EvaluationContext = {
-    events: { grantDate: validateDate(opts.grantDate) },
+    events: { ...opts.event, grantDate: validateDate(opts.grantDate) },
     grantQuantity: quantity,
     asOf: validateDate(getTodayISO()),
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
@@ -36,7 +37,6 @@ export function evaluate(
         amount: item.amount,
         date: item.date ?? JSON.stringify(item.meta.date) ?? "None",
         state: item.meta.state,
-        // blockers: item.meta.blockers?.map((b) => JSON.stringify(b)) ?? "None",
         blockers: item.meta.blockers ?? "None",
       })),
     );

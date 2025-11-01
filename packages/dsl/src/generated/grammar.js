@@ -403,7 +403,6 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f39(a) {
-    console.log(a)
     if (a.base.type === "EVENT" && a.base.value === "vestingStart") {
       throw new SyntaxError('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
     }

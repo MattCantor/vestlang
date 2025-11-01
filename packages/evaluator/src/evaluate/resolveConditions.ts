@@ -54,6 +54,14 @@ function resolveConstraint(
     condition: createBlockerCondition(vestingNode),
   });
 
+  console.log("resolveConstraint - resSubject:", JSON.stringify(resSubject));
+  console.log(
+    "resolveConstraint - resConstraintBase:",
+    JSON.stringify(resConstraintBase),
+  );
+  console.log("resolveConstraint - vestingNode:", JSON.stringify(vestingNode));
+  console.log("resolveConstraint - ctx:", JSON.stringify(ctx));
+
   const condition = vestingNode.constraints;
   switch (condition.constraint.type) {
     case "BEFORE":
@@ -90,6 +98,12 @@ function resolveConstraint(
           if (resConstraintBase.type === "RESOLVED") {
             const subjectDate = resSubject.date;
             const constraintBaseDate = resConstraintBase.date;
+
+            // console.log("resolveConstraint - subjectDate:", subjectDate);
+            // console.log(
+            //   "resolveConstraint - constraintBaseDate:",
+            //   constraintBaseDate,
+            // );
 
             // Impossible if A is not before B
             const constraintFailed = condition.constraint.strict
