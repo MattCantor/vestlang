@@ -1,8 +1,15 @@
 From = "FROM"i _ a:(VestingNode / GateExpr) {
+  console.log(a)
+  if (a.base.type === "EVENT" && a.base.value === "vestingStart") {
+    throw new SyntaxError('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
+  }
   return a
 }
 
 Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) {
+  if (a.base.type === "EVENT" && a.base.value === "grantDate") {
+    throw new SyntaxError('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
+  }
   return a
 };
 

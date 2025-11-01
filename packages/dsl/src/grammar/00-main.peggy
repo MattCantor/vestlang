@@ -94,7 +94,6 @@
 
     throw new SyntaxError(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
   }
-  
 }
 
 Start

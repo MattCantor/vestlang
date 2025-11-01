@@ -403,9 +403,16 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f39(a) {
+    console.log(a)
+    if (a.base.type === "EVENT" && a.base.value === "vestingStart") {
+      throw new SyntaxError('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
+    }
     return a
   }
   function peg$f40(a) {
+    if (a.base.type === "EVENT" && a.base.value === "grantDate") {
+      throw new SyntaxError('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
+    }
     return a
   }
   function peg$f41(f, p, c) {
@@ -2528,7 +2535,6 @@ function peg$parse(input, options) {
 
     throw new SyntaxError(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
   }
-  
 
   peg$result = peg$startRuleFunction();
 
