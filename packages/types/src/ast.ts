@@ -73,6 +73,10 @@ export interface VestingNode {
   constraints?: Condition;
 }
 
+export type ConstrainedVestingNode = VestingNode & {
+  contraints: Condition;
+};
+
 // TODO: add to schmea
 export type LaterOfVestingNode = LaterOf<VestingNodeExpr>;
 

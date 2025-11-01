@@ -122,6 +122,7 @@ function handleSelector<T extends Schedule | VestingNode>(
   const resolved = candidates.filter(isPickedResolved) as PickedResolved<T>[];
   const hasAnyResolved = resolved.length > 0;
   const allResolved = hasAnyResolved && resolved.length === candidates.length;
+  const unresolved = candidates.length - resolved.length;
 
   // Resolve per policy
   if (policy.selectorIsSatisfied(candidates)) {
@@ -137,13 +138,16 @@ function handleSelector<T extends Schedule | VestingNode>(
       picked,
       meta: {
         type: "UNRESOLVED",
-        blockers: [
-          {
-            type: "UNRESOLVED_SELECTOR",
-            selector: policy.selector,
-            blockers: collectBlockers(candidates),
-          },
-        ],
+        blockers:
+          unresolved > 1
+            ? [
+                {
+                  type: "UNRESOLVED_SELECTOR",
+                  selector: policy.selector,
+                  blockers: collectBlockers(candidates),
+                },
+              ]
+            : [...collectBlockers(candidates)],
       },
     };
   }

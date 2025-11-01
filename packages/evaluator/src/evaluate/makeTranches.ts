@@ -6,9 +6,9 @@ import type {
   ResolvedTranche,
   Tranche,
   UnresolvedBlocker,
-  UnresolvedNode,
   UnresolvedTranche,
 } from "@vestlang/types";
+import { blockerToString } from "./blockerToString.js";
 
 export function makeImpossibleTranches(
   n: number,
@@ -16,7 +16,10 @@ export function makeImpossibleTranches(
 ): Tranche[] {
   return Array.from({ length: n }, () => ({
     amount: 0,
-    meta: { state: "IMPOSSIBLE", blockers },
+    meta: {
+      state: "IMPOSSIBLE",
+      blockers: blockers.map(blockerToString).join(", "),
+    },
   }));
 }
 
@@ -36,7 +39,7 @@ export function makeStartPlusTranche(
         unit,
         steps: index * stepLength,
       },
-      blockers,
+      blockers: blockers.map(blockerToString).join(", "),
     },
   };
 }
@@ -78,13 +81,12 @@ export function makeBeforeVestingStartTranche(
   amount: number,
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): UnresolvedTranche {
-  console.log("makeBeforeVestingStartTranche:", JSON.stringify(blockers));
   return {
     amount,
     meta: {
       state: "UNRESOLVED",
       date: { type: "BEFORE_VESTING_START" },
-      blockers,
+      blockers: blockers.map(blockerToString).join(", "),
     },
   };
 }
@@ -98,7 +100,7 @@ export function makeBeforeCliffTranche(
     meta: {
       state: "UNRESOLVED",
       date: { type: "MAYBE_BEFORE_CLIFF" },
-      blockers,
+      blockers: blockers.map(blockerToString).join(", "),
     },
   };
 }

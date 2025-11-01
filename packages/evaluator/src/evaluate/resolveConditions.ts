@@ -12,6 +12,18 @@ import type {
   AtomCondition,
 } from "@vestlang/types";
 import { addDays, addMonthsRule, eq, gt, lt } from "./time.js";
+import { ConstrainedVestingNode } from "../../../types/dist/ast.js";
+
+/* ------------------------
+ * Helpers
+ * ------------------------ */
+
+function createBlockerCondition(
+  vestingNode: VestingNode & { constraints: AtomCondition },
+): Omit<VestingNode, "type"> {
+  const { type, ...rest } = vestingNode;
+  return rest;
+}
 
 /* ------------------------
  * A Before B
@@ -31,17 +43,18 @@ import { addDays, addMonthsRule, eq, gt, lt } from "./time.js";
  * ------------------------ */
 
 /** BEFORE/AFTER with unresolved semantics + strictness */
-function compareDates(
+function resolveConstraint(
   resSubject: ResolvedNode | UnresolvedNode,
   resConstraintBase: NodeMeta,
-  condition: AtomCondition,
+  vestingNode: VestingNode & { constraints: AtomCondition },
   ctx: EvaluationContext,
 ): Blocker[] | undefined {
   const impossible = (): ImpossibleBlocker => ({
     type: "IMPOSSIBLE_CONDITION",
-    condition,
+    condition: createBlockerCondition(vestingNode),
   });
 
+  const condition = vestingNode.constraints;
   switch (condition.constraint.type) {
     case "BEFORE":
       switch (resSubject.type) {
@@ -51,13 +64,26 @@ function compareDates(
             // Unresolved if B's date has not yet occurrred
             const constraintBaseDate = resConstraintBase.date;
             if (gt(constraintBaseDate, ctx.asOf))
-              return [{ type: "UNRESOLVED_CONDITION", condition }];
+              return [
+                ...resSubject.blockers,
+                {
+                  type: "UNRESOLVED_CONDITION",
+                  condition: createBlockerCondition(vestingNode),
+                },
+              ];
 
             // Impossible if B's date has occurred
             return [impossible()];
           }
           // A and B are unresolved
-          return [...resSubject.blockers, ...resConstraintBase.blockers];
+          return [
+            ...resSubject.blockers,
+            ...resConstraintBase.blockers,
+            {
+              type: "UNRESOLVED_CONDITION",
+              condition: createBlockerCondition(vestingNode),
+            },
+          ];
 
         case "RESOLVED":
           // A and B are resolved
@@ -90,14 +116,27 @@ function compareDates(
             // Unresolved if B'd date has not yet occurred
             const constraintBaseDate = resConstraintBase.date;
             if (gt(constraintBaseDate, ctx.asOf))
-              return [{ type: "UNRESOLVED_CONDITION", condition }];
+              return [
+                ...resSubject.blockers,
+                {
+                  type: "UNRESOLVED_CONDITION",
+                  condition: createBlockerCondition(vestingNode),
+                },
+              ];
 
             // Impossible if B's date has occurred
             return [impossible()];
           }
 
           // A and B are unresolved
-          return [...resSubject.blockers, ...resConstraintBase.blockers];
+          return [
+            ...resSubject.blockers,
+            ...resConstraintBase.blockers,
+            {
+              type: "UNRESOLVED_CONDITION",
+              condition: createBlockerCondition(vestingNode),
+            },
+          ];
 
         case "RESOLVED":
           switch (resConstraintBase.type) {
@@ -142,7 +181,12 @@ export function resolveNode(
   if (!node.constraints) return resBase;
 
   // Resolve constraints
-  const blockers = resolveCondition(resBase, node.constraints, ctx);
+  const blockers = resolveConstrainedNode(
+    node as ConstrainedVestingNode,
+    resBase,
+    node.constraints,
+    ctx,
+  );
 
   // Return the resolved vesting node base if all constraints succeeded
   if (!blockers) return resBase;
@@ -208,29 +252,33 @@ function applyOffsets(
   return d;
 }
 
-function resolveCondition(
+function resolveConstrainedNode<T extends Condition>(
+  node: ConstrainedVestingNode,
   resSubject: ResolvedNode | UnresolvedNode,
-  condition: Condition,
+  condition: T,
   ctx: EvaluationContext,
 ): Blocker[] | undefined {
   switch (condition.type) {
     case "ATOM":
       const resConstraintBase = resolveNode(condition.constraint.base, ctx);
-      return compareDates(resSubject, resConstraintBase, condition, ctx);
-
+      return resolveConstraint(
+        resSubject,
+        resConstraintBase,
+        node as VestingNode & { constraints: AtomCondition },
+        ctx,
+      );
     case "AND":
-      return condition.items.reduce((acc, condition) => {
-        const results = resolveCondition(resSubject, condition, ctx);
+      return condition.items.reduce((acc, current) => {
+        const results = resolveConstrainedNode(node, resSubject, current, ctx);
         if (!results) return acc;
         acc.push(...results);
         return acc;
       }, [] as Blocker[]);
-
     case "OR":
       let anyUnblocked: boolean = false;
       const blockers: Blocker[] = [];
       for (const c of condition.items) {
-        const results = resolveCondition(resSubject, c, ctx);
+        const results = resolveConstrainedNode(node, resSubject, c, ctx);
         if (!results) {
           anyUnblocked = true;
           continue;

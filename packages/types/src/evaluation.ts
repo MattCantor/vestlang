@@ -1,4 +1,4 @@
-import { Condition, VestingBase } from "./ast.js";
+import { Condition, VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { allocation_type, vesting_day_of_month } from "./oct_types.js";
@@ -59,7 +59,7 @@ export type UnresolvedBlocker =
     }
   | {
       type: "UNRESOLVED_CONDITION";
-      condition: Condition;
+      condition: Omit<VestingNode, "type">;
     };
 
 export type ImpossibleBlocker =
@@ -70,7 +70,7 @@ export type ImpossibleBlocker =
     }
   | {
       type: "IMPOSSIBLE_CONDITION";
-      condition: Condition;
+      condition: Omit<VestingNode, "type">;
     };
 
 export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
@@ -106,7 +106,8 @@ export interface TrancheMeta {
   index?: number;
   state: NodeResolutionState;
   date?: SymbolicDate;
-  blockers?: Blocker[];
+  // blockers?: Blocker[];
+  blockers?: string;
 }
 
 export interface BaseTranche {
@@ -121,7 +122,8 @@ export interface ImpossibleTranche extends BaseTranche {
   meta: {
     state: "IMPOSSIBLE";
     date?: never;
-    blockers: Blocker[];
+    // blockers: Blocker[];
+    blockers: string;
   };
 }
 
@@ -130,7 +132,8 @@ export interface UnresolvedTranche extends BaseTranche {
   meta: {
     state: "UNRESOLVED";
     date: SymbolicDate;
-    blockers: Blocker[];
+    // blockers: Blocker[];
+    blockers: string;
   };
 }
 

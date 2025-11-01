@@ -36,7 +36,8 @@ export function evaluate(
         amount: item.amount,
         date: item.date ?? JSON.stringify(item.meta.date) ?? "None",
         state: item.meta.state,
-        blockers: item.meta.blockers?.map((b) => JSON.stringify(b)) ?? "None",
+        // blockers: item.meta.blockers?.map((b) => JSON.stringify(b)) ?? "None",
+        blockers: item.meta.blockers ?? "None",
       })),
     );
   });
