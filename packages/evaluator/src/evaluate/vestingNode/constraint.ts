@@ -2,7 +2,6 @@ import type {
   AtomCondition,
   Blocker,
   ConstraintTag,
-  EvaluationContext,
   ImpossibleBlocker,
   ImpossibleNode,
   NodeMeta,
@@ -83,13 +82,7 @@ export function evaluateConstraint(
   a: ResolvedNode | UnresolvedNode,
   b: NodeMeta,
   vestingNode: VestingNode & { constraints: AtomCondition },
-  ctx: EvaluationContext,
 ): Blocker[] | undefined {
-  console.log("resolveConstraint - resSubject:", JSON.stringify(a));
-  console.log("resolveConstraint - resConstraintBase:", JSON.stringify(b));
-  console.log("resolveConstraint - vestingNode:", JSON.stringify(vestingNode));
-  console.log("resolveConstraint - ctx:", JSON.stringify(ctx));
-
   const { constraint } = vestingNode.constraints;
   const isStrict = Boolean(constraint.strict);
 

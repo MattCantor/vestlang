@@ -28,7 +28,6 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
         resSubject,
         resConstraintBase,
         node as VestingNode & { constraints: AtomCondition },
-        ctx,
       );
     case "AND":
       return condition.items.reduce((acc, current) => {

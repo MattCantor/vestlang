@@ -4,8 +4,8 @@ VEST
     +12 months,
     EARLIER OF(
       EVENT milestone
-        BEFORE EVENT grant +84 months,
+        BEFORE EVENT grantDate +48 months,
       EVENT IPO
-        BEFORE EVENT grant +84 months
+        BEFORE EVENT grantDate +48 months
     )
   )
