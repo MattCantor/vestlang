@@ -40,7 +40,7 @@ export function evaluateCliff(
 
   // impossible cliff
   if (resCliff.type === "IMPOSSIBLE")
-    return makeImpossibleTranches(dates.length, resCliff.blockers);
+    return makeImpossibleTranches(amounts, resCliff.blockers);
 
   // unresolved cliff and no best of LATER_OF selector
   if (resCliff.type === "UNRESOLVED")

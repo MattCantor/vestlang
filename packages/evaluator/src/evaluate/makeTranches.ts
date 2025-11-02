@@ -1,26 +1,35 @@
 import type {
   Blocker,
   ImpossibleBlocker,
+  ImpossibleTranche,
   OCTDate,
   PeriodTag,
   ResolvedTranche,
-  Tranche,
   UnresolvedBlocker,
   UnresolvedTranche,
 } from "@vestlang/types";
 import { blockerToString } from "./blockerToString.js";
 
-export function makeImpossibleTranches(
-  n: number,
+export function makeImpossibleTranche(
+  amount: number,
   blockers: ImpossibleBlocker[],
-): Tranche[] {
-  return Array.from({ length: n }, () => ({
-    amount: 0,
+): ImpossibleTranche {
+  return {
+    amount,
     meta: {
       state: "IMPOSSIBLE",
       blockers: blockers.map(blockerToString).join(", "),
     },
-  }));
+  };
+}
+
+export function makeImpossibleTranches(
+  amounts: number[],
+  blockers: ImpossibleBlocker[],
+): ImpossibleTranche[] {
+  return Array.from({ length: amounts.length }, (_, i) => {
+    return makeImpossibleTranche(amounts[i], blockers);
+  });
 }
 
 export function makeStartPlusTranche(

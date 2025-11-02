@@ -32,10 +32,18 @@ export function asof(
   const normalized = normalizeProgram(ast);
   const results = normalized.map((s) => evaluateStatementAsOf(s, ctx));
   results.forEach((r) => {
-    console.log("VESTED");
-    console.table(r.vested);
-    console.log("UNVESTED");
-    console.table(r.unvested);
+    if (r.vested.length > 0) {
+      console.log("VESTED");
+      console.table(r.vested);
+    }
+    if (r.unvested.length > 0) {
+      console.log("UNVESTED");
+      console.table(r.unvested);
+    }
+    if (r.impossible.length > 0) {
+      console.log("IMPOSSIBLE");
+      console.table(r.impossible);
+    }
     console.log("UNRESOLVED");
     console.log(r.unresolved);
   });

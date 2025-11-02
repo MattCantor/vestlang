@@ -117,7 +117,7 @@ export interface BaseTranche {
 }
 
 export interface ImpossibleTranche extends BaseTranche {
-  amount: 0;
+  amount: number;
   date?: never;
   meta: {
     state: "IMPOSSIBLE";

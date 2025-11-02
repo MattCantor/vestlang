@@ -9,6 +9,7 @@ import { prepare } from "./utils.js";
 export interface VestedResult {
   vested: Tranche[];
   unvested: Tranche[];
+  impossible: Tranche[];
   unresolved: number; // quantity not yet schedulable
 }
 
@@ -26,12 +27,14 @@ export function evaluateStatementAsOf(
 
   const vested: Tranche[] = [];
   const unvested: Tranche[] = [];
+  const impossible: Tranche[] = [];
   let unresolved = 0;
 
   if (tranches.length === 0) {
     return {
       vested,
       unvested,
+      impossible,
       unresolved: statementQuantity,
     };
   }
@@ -39,19 +42,16 @@ export function evaluateStatementAsOf(
   for (const t of tranches) {
     switch (t.meta.state) {
       case "IMPOSSIBLE":
+        impossible.push(t);
+        unresolved += t.amount;
+        break;
       case "UNRESOLVED":
         unresolved += t.amount;
         break;
       case "RESOLVED":
-        (t.date! <= ctx.asOf ? vested : unvested).push({
-          date: t.date!,
-          amount: t.amount,
-          meta: {
-            state: "RESOLVED",
-          },
-        });
+        (t.date! <= ctx.asOf ? vested : unvested).push(t);
     }
   }
 
-  return { vested, unvested, unresolved };
+  return { vested, unvested, impossible, unresolved };
 }

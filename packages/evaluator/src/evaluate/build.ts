@@ -14,7 +14,7 @@ import { evaluateCliff } from "./cliff.js";
 import type { Picked, PickedResolved, ScheduleWithCliff } from "./utils.js";
 import {
   makeBeforeVestingStartTranche,
-  makeImpossibleTranches,
+  makeImpossibleTranche,
   makeResolvedTranches,
   makeStartPlusTranches,
 } from "./makeTranches.js";
@@ -37,7 +37,7 @@ export function evaluateStatement(
 
   switch (resSchedule.type) {
     case "IMPOSSIBLE":
-      return makeImpossibleTranches(1, resSchedule.blockers);
+      return [makeImpossibleTranche(statementQuantity, resSchedule.blockers)];
 
     case "UNRESOLVED":
       return [
