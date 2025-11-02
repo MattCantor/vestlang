@@ -84,7 +84,7 @@ export function evaluateConstraint(
   vestingNode: VestingNode & { constraints: AtomCondition },
 ): Blocker[] | undefined {
   const { constraint } = vestingNode.constraints;
-  const isStrict = Boolean(constraint.strict);
+  const isStrict = constraint.strict;
 
   // B can't happen
   if (b.type === "IMPOSSIBLE") {

@@ -32,11 +32,15 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
     case "AND":
       return condition.items.reduce((acc, current) => {
         const results = evaluateConstrainedVestingNode(
-          node,
+          {
+            ...node,
+            constraints: current,
+          }, // only evaluate one condition at a time
           resSubject,
           current,
           ctx,
         );
+
         if (!results) return acc;
         acc.push(...results);
         return acc;
@@ -46,7 +50,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       const blockers: Blocker[] = [];
       for (const c of condition.items) {
         const results = evaluateConstrainedVestingNode(
-          node,
+          { ...node, constraints: c }, // only evaluate one condition at a time
           resSubject,
           c,
           ctx,
