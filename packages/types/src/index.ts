@@ -24,6 +24,7 @@ export {
   VestingBaseDate,
   VestingBaseEvent,
   VestingNode,
+  ConstrainedVestingNode,
   LaterOfVestingNode,
   EarlierOfVestingNode,
   VestingNodeExpr,

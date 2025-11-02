@@ -9,7 +9,6 @@ import type {
   ScheduleExpr,
   SelectorTag,
 } from "@vestlang/types";
-import { resolveNode } from "./resolveConditions.js";
 import { lt } from "./time.js";
 import {
   isPickedResolved,
@@ -17,6 +16,7 @@ import {
   type PickedResolved,
   type PickReturn,
 } from "./utils.js";
+import { evaluateVestingNode } from "./vestingNode/index.js";
 
 /* ------------------------
  * Types & Guards
@@ -203,7 +203,7 @@ export function evaluateVestingNodeExpr(
   let candidates: PickReturn<VestingNode>[] | undefined = undefined;
   switch (expr.type) {
     case "SINGLETON":
-      const res = resolveNode(expr, ctx);
+      const res = evaluateVestingNode(expr, ctx);
       if (res.type === "RESOLVED") {
         return { type: "PICKED", picked: expr, meta: res };
       }
