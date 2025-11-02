@@ -1,4 +1,4 @@
-import { Condition, VestingNode } from "./ast.js";
+import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { allocation_type, vesting_day_of_month } from "./oct_types.js";
@@ -21,7 +21,7 @@ export type SymbolicDate =
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }
   | { type: "BEFORE_GRANT_DATE" }
   | { type: "BEFORE_VESTING_START" }
-  | { type: "MAYBE_BEFORE_CLIFF" };
+  | { type: "MAYBE_BEFORE_CLIFF"; date: OCTDate };
 
 /* ------------------------
  * False Constraints

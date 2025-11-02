@@ -44,7 +44,7 @@ export function evaluateCliff(
 
   // unresolved cliff and no best of LATER_OF selector
   if (resCliff.type === "UNRESOLVED")
-    return makeBeforeCliffTranches(amounts, resCliff.blockers);
+    return makeBeforeCliffTranches(dates, amounts, resCliff.blockers);
 
   // Resolved Cliff
   if (isPickedResolved(resCliff))
@@ -121,6 +121,6 @@ function evaluateUnresolvedCliff(
     dates,
     amounts,
     cliffDate,
-    ({ amount }) => makeBeforeCliffTranche(amount, blockers),
+    ({ date, amount }) => makeBeforeCliffTranche(date, amount, blockers),
   );
 }

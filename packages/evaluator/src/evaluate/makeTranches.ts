@@ -92,6 +92,7 @@ export function makeBeforeVestingStartTranche(
 }
 
 export function makeBeforeCliffTranche(
+  date: OCTDate,
   amount: number,
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): UnresolvedTranche {
@@ -99,17 +100,18 @@ export function makeBeforeCliffTranche(
     amount,
     meta: {
       state: "UNRESOLVED",
-      date: { type: "MAYBE_BEFORE_CLIFF" },
+      date: { type: "MAYBE_BEFORE_CLIFF", date },
       blockers: blockers.map(blockerToString).join(", "),
     },
   };
 }
 
 export function makeBeforeCliffTranches(
+  dates: OCTDate[],
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): UnresolvedTranche[] {
   return Array.from({ length: amounts.length }, (_, i) => {
-    return makeBeforeCliffTranche(amounts[i], blockers);
+    return makeBeforeCliffTranche(dates[i], amounts[i], blockers);
   });
 }
