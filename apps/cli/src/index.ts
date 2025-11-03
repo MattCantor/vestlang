@@ -3,8 +3,8 @@ import { Command, InvalidArgumentError } from "commander";
 import { inspect } from "./inspect.js";
 import { compile } from "./compile.js";
 import { asof } from "./asof.js";
-// import { expand } from "./expand.js";
 import { evaluate } from "./evaluate.js";
+import { lint } from "./lint.js";
 
 const program = new Command();
 
@@ -107,4 +107,14 @@ program
       evaluate(parts, opts);
     },
   );
+
+program
+  .command("lint")
+  .description("Lint vestlang source and report syntax/semantic issues")
+  .option("--stdin", "read input from stdin")
+  .argument("[input...]", "DSL text")
+  .action((parts: string[] = [], opts: { stdin?: boolean }) => {
+    lint(parts, opts);
+  });
+
 program.parseAsync();

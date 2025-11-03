@@ -98,6 +98,29 @@ function evaluateCliffGeneric<T>(
   return tranches;
 }
 
+export function evaluateGrantDate(
+  dates: OCTDate[],
+  amounts: number[],
+  cliffDate: OCTDate,
+): { newDates: OCTDate[]; newAmounts: number[] } {
+  const vestings = evaluateCliffGeneric<{ date: OCTDate; amount: number }>(
+    dates,
+    amounts,
+    cliffDate,
+    ({ date, amount }) => ({ date, amount }),
+  );
+
+  let newDates: OCTDate[] = [];
+  let newAmounts: number[] = [];
+
+  for (const v of vestings) {
+    newDates.push(v.date);
+    newAmounts.push(v.amount);
+  }
+
+  return { newDates, newAmounts };
+}
+
 function evaluateResolvedCliff(
   dates: OCTDate[],
   amounts: number[],

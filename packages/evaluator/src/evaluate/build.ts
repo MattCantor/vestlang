@@ -10,7 +10,7 @@ import { prepare } from "../utils.js";
 import { allocateQuantity } from "./allocation.js";
 import { evaluateScheduleExpr } from "./selectors.js";
 import { nextDate } from "./time.js";
-import { evaluateCliff } from "./cliff.js";
+import { evaluateCliff, evaluateGrantDate } from "./cliff.js";
 import type { Picked, PickedResolved, ScheduleWithCliff } from "./utils.js";
 import {
   makeBeforeVestingStartTranche,
@@ -63,7 +63,7 @@ function evaluateSchedule(
   }
 
   // Create an array of the installment amounts from the quantity applicable to this statement
-  const installmentAmounts = allocateQuantity(
+  let installmentAmounts = allocateQuantity(
     statementQuantity,
     occurrences,
     ctx.allocation_type,
@@ -82,11 +82,21 @@ function evaluateSchedule(
 
   // Generate vesting dates
   let d = resSchedule.meta.date;
-  const dates: OCTDate[] = [];
+  let dates: OCTDate[] = [];
   for (let i = 0; i < occurrences; i++) {
     d = nextDate(d, type, length, ctx);
     dates.push(d);
   }
+
+  // Treat grant date as a cliff if prior to vesting start
+  // NOTE: Consider switching this step on/off based on a ctx flag
+  const { newDates, newAmounts } = evaluateGrantDate(
+    dates,
+    installmentAmounts,
+    ctx.events["grantDate"],
+  );
+  dates = newDates;
+  installmentAmounts = newAmounts;
 
   // No cliff
   if (!vestingPeriod.cliff)
