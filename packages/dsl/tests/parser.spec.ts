@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/index";
-import { Schedule, VestingNode } from "@vestlang/types";
+import { VestingNode } from "@vestlang/types";
 
 // handy helpers
 const asJSON = (x: unknown) => JSON.parse(JSON.stringify(x));
@@ -13,7 +13,7 @@ describe("Start & basics", () => {
     expect(ast).toHaveLength(1);
   });
 
-  it("default VEST (no FROM/period) produces default vesting_start and zero-length period", () => {
+  it("No FROM/period produces null vesting_start and zero-length period", () => {
     const stmt = first(`VEST`);
     expect(stmt.amount).toEqual({
       type: "PORTION",
@@ -21,11 +21,7 @@ describe("Start & basics", () => {
       denominator: 1,
     });
     expect(stmt.expr.type).toBe("SINGLETON");
-    expect(stmt.expr.vesting_start).toEqual({
-      type: "BARE",
-      base: { type: "EVENT", value: "grantDate" },
-      offsets: [],
-    });
+    expect(stmt.expr.vesting_start).toBeNull();
     expect(stmt.expr.periodicity).toEqual({
       type: "DAYS",
       length: 0,
@@ -37,11 +33,15 @@ describe("Start & basics", () => {
     const ast = parse(`[ VEST FROM EVENT a, VEST FROM EVENT b, ]`);
     expect(ast).toHaveLength(2);
 
-    const first = ast[0].expr as Schedule;
+    const first = ast[0].expr;
+    if (first.type !== "SINGLETON")
+      throw new Error(`${first} expected to have type "SINGLETON`);
     const firstVestingStart = first.vesting_start as VestingNode;
     expect(firstVestingStart.base.value).toBe("a");
 
-    const second = ast[1].expr as Schedule;
+    const second = ast[1].expr;
+    if (second.type !== "SINGLETON")
+      throw new Error(`${second} expected to have type "SINGLETON"`);
     const secondVestingStart = second.vesting_start as VestingNode;
     expect(secondVestingStart.base.value).toBe("b");
   });
@@ -68,63 +68,18 @@ describe("Amount parsing", () => {
   });
 });
 
-describe("FROM / CLIFF coercion", () => {
-  it("coerces top-level duration in FROM to a BARE node with grantDate", () => {
-    const s = first(`VEST FROM +3 months`);
-    const start = s.expr.vesting_start;
-    expect(start).toEqual({
-      type: "BARE",
-      base: { type: "EVENT", value: "grantDate" },
-      offsets: [{ type: "DURATION", value: 3, unit: "MONTHS", sign: "PLUS" }],
-    });
-    expect(start.offsets[0]).toMatchObject({
-      type: "DURATION",
-      value: 3,
-      unit: "MONTHS",
-      sign: "PLUS",
-    });
-  });
-
-  it("recursively coerces durations inside selectors for FROM", () => {
-    const s = first(`VEST FROM EARLIER OF ( +3 months, EVENT milestone )`);
-    const start = s.expr.vesting_start;
-    expect(start.type).toBe("EARLIER_OF");
-    expect(start.items[0]).toMatchObject({
-      type: "BARE",
-      base: { type: "EVENT", value: "grantDate" },
-      offsets: [{ type: "DURATION", value: 3, unit: "MONTHS", sign: "PLUS" }],
-    });
-    expect(start.items[1]).toMatchObject({
-      type: "BARE",
-      base: { type: "EVENT", value: "milestone" },
-      offsets: [],
-    });
-  });
-
-  it("uses vestingStart when coercing durations in CLIFF", () => {
-    const s = first(`VEST CLIFF EARLIER OF ( +2 months, EVENT x )`);
-    const cliff = s.expr.periodicity.cliff;
-    expect(cliff.type).toBe("EARLIER_OF");
-    expect(cliff.items[0]).toMatchObject({
-      type: "BARE",
-      base: { type: "EVENT", value: "vestingStart" },
-      offsets: [{ type: "DURATION", value: 2, unit: "MONTHS", sign: "PLUS" }],
-    });
-  });
-});
-
 describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   it("parses a single ATOM constraint attached to a node", () => {
     const s = first(`VEST FROM EVENT a BEFORE EVENT b + 10 days`);
     const node = s.expr.vesting_start;
-    expect(node.type).toBe("CONSTRAINED");
+    expect(node.type).toBe("SINGLETON");
     expect(node.constraints).toMatchObject({
       type: "ATOM",
       constraint: {
         type: "BEFORE",
         strict: false,
         base: {
-          type: "BARE",
+          type: "SINGLETON",
           base: { type: "EVENT", value: "b" },
           offsets: [
             { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },
@@ -137,7 +92,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   it("canonicalizes offsets: sum per unit, explicit sign, drop zeros", () => {
     const s = first(`VEST FROM EVENT a + 2 months - 1 months + 10 days`);
     const start = (s as any).expr.vesting_start;
-    expect(start.type).toBe("BARE");
+    expect(start.type).toBe("SINGLETON");
     expect(start.offsets).toEqual([
       { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
       { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },
@@ -180,10 +135,6 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
 });
 
 describe("System event protections", () => {
-  it("errors if EVENT grantDate appears as user-provided Ident", () => {
-    expect(() => parse(`VEST FROM EVENT grantDate`)).toThrowError();
-  });
-
   it("errors if EVENT vestingStart appears as user-provided Ident", () => {
     expect(() => parse(`VEST FROM EVENT vestingStart`)).toThrowError();
   });
