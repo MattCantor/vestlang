@@ -87,3 +87,4 @@ VEST OVER 4 years Every 3 months ClIFF LATER OF (12 months, EARLIER OF (event mi
 
 VEST FROM EVENT a AND( BEFORE EVENT b, AFTER DATE 2025-01-01 )
 
+VEST OVER 4 years EVERY 1 month CLIFF 1 year

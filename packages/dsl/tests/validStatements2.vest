@@ -1,11 +1,3 @@
-VEST
-  OVER 48 months EVERY 3 months
-  CLIFF LATER OF(
-    +12 months,
-    EARLIER OF(
-      EVENT milestone
-        BEFORE EVENT grantDate +48 months,
-      EVENT IPO
-        BEFORE EVENT grantDate +48 months
-    )
-  )
+VEST FROM EVENT milestone
+  OVER 48 months EVERY 1 months
+  CLIFF 12 months

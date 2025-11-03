@@ -18,7 +18,7 @@
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
-[data-theme='dark'] {
+[data-theme="dark"] {
   --ifm-color-primary: #25c2a0;
   --ifm-color-primary-dark: #21af90;
   --ifm-color-primary-darker: #1fa588;
@@ -27,4 +27,68 @@
   --ifm-color-primary-lighter: #32d8b4;
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* ── VESTLANG syntax: (dark) ───────────────────── */
+.theme-code .token.verb {
+  color: #7aa2f7;
+  font-weight: 600;
+} /* VEST, FROM, OVER, EVERY, CLIFF */
+.theme-code .token.selector {
+  color: #bb9af7;
+} /* EARLIER, LATER, OF */
+.theme-code .token.constraint {
+  color: #f7768e;
+  font-style: italic;
+} /* BEFORE, AFTER, AND, OR, STRICTLY */
+.theme-code .token.anchor {
+  color: #7dcfff;
+} /* EVENT, DATE */
+.theme-code .token.duration {
+  color: #ff9e64;
+} /* 1 YEAR, 6 MONTHS */
+.theme-code .token.date {
+  color: #565f89;
+} /* 2025-07-01 */
+.theme-code .token.number {
+  color: #e0af68;
+} /* 0.25, 100 */
+.theme-code .token.ident {
+  color: #9ece6a;
+} /* event names */
+.theme-code .token.punctuation {
+  color: #565f89;
+  opacity: 0.6;
+} /* commas, parens */
+
+/* ── VESTLANG syntax: (light) ──────────────── */
+[data-theme="light"] .theme-code .token.verb {
+  color: #34548a;
+  font-weight: 600;
+}
+[data-theme="light"] .theme-code .token.selector {
+  color: #5a4a78;
+}
+[data-theme="light"] .theme-code .token.constraint {
+  color: #8c4351;
+  font-style: italic;
+}
+[data-theme="light"] .theme-code .token.anchor {
+  color: #166775;
+}
+[data-theme="light"] .theme-code .token.duration {
+  color: #b15c00;
+}
+[data-theme="light"] .theme-code .token.date {
+  color: #5c5f77;
+}
+[data-theme="light"] .theme-code .token.number {
+  color: #8f5e15;
+}
+[data-theme="light"] .theme-code .token.ident {
+  color: #485e30;
+}
+[data-theme="light"] .theme-code .token.punctuation {
+  color: #5c5f77;
+  opacity: 0.6;
 }

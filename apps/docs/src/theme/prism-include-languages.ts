@@ -22,34 +22,31 @@ export default function prismIncludeLanguages(
   const Prism = PrismObject;
 
   if (!Prism.languages.vest) {
-    const UNITS = /\b(?:YEAR|YEARS|MONTH|MONTHS|WEEK|WEEKS|DAY|DAYS)\b/i;
-    const KEYWORDS =
-      /\b(?:VEST|SCHEDULE|FROM|OVER|EVERY|EARLIER|LATER|OF|BEFORE|AFTER|EVENT|DATE|STRICTLY|AND)\b/i;
+    const DURATION = /\b(?:YEAR|YEARS|MONTH|MONTHS|WEEK|WEEKS|DAY|DAYS)\b/i;
+
+    const VERBS = /\b(?:VEST|FROM|OVER|EVERY|CLIFF)\b/i;
+    const SELECTORS = /\b(?:EARLIER|LATER|OF)\b/i;
+    const CONSTRAINTS = /\b(?:BEFORE|AFTER|STRICTLY|AND|OR)\b/i;
+    const ANCHORS = /\b(?:EVENT|DATE)\b/i;
 
     Prism.languages.vest = {
-      duration: {
-        pattern: RegExp(String.raw`\b\d+\s+` + UNITS.source),
-        inside: {
-          number: /\b\d+\b/,
-          unit: { pattern: UNITS, alias: "builtin" },
-        },
-        alias: "type",
-      },
+      verb: { pattern: VERBS },
+      selector: { pattern: SELECTORS },
+      constraint: { pattern: CONSTRAINTS },
+      anchor: { pattern: ANCHORS },
+      duration: { pattern: DURATION },
 
       // Dates YYYY-MM-DD
-      date: { pattern: /\b\d{4}-\d{2}\b/, alias: "constant" },
+      date: { pattern: /\b\d{4}-\d{2}\b/ },
 
       // Numbers (including decimals)
-      number: { pattern: /\b\d+(?:\.\d+)?\b/, alias: "number" },
+      number: { pattern: /\b\d+(?:\.\d+)?\b/ },
 
-      // Keywords (case-insensitive)
-      keyword: KEYWORDS,
+      // Identifiers (event names, etc)
+      ident: { pattern: /b\[A-Za-z_][A-Za-z0-9_-]*\b/ },
 
       // Punctuation
       punctuation: /[(),]/,
-
-      // Identifiers / event names (fallback)
-      variable: /\b[A-Za-z_][\w-]*\b/,
     };
   }
 
