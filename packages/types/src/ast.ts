@@ -74,7 +74,7 @@ export interface VestingNode {
 }
 
 export type ConstrainedVestingNode = VestingNode & {
-  contraints: Condition;
+  constraints: Condition;
 };
 
 // TODO: add to schmea
