@@ -23,7 +23,7 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
               "value": "2025-01-01",
             },
             "offsets": [],
-            "type": "BARE",
+            "type": "SINGLETON",
           },
           {
             "base": {
@@ -38,7 +38,7 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
                 "value": 1,
               },
             ],
-            "type": "BARE",
+            "type": "SINGLETON",
           },
         ],
         "type": "LATER_OF",
