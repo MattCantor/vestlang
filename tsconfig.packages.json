@@ -23,6 +23,9 @@
     },
     {
       "path": "packages/evaluator"
+    },
+    {
+      "path": "tests/integration"
     }
   ]
 }

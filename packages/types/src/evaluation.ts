@@ -19,26 +19,9 @@ export type EvaluationContextInput = Omit<
 
 export type SymbolicDate =
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }
-  | { type: "BEFORE_GRANT_DATE" }
   | { type: "BEFORE_VESTING_START" }
   | { type: "MAYBE_BEFORE_CLIFF"; date: OCTDate };
 
-/* ------------------------
- * False Constraints
- * ------------------------ */
-
-// export interface ImpossibleConstraint {
-//   type: "IMPOSSIBLE";
-//   constraint: Constraint;
-// }
-//
-// export interface UnresolvedConstraint {
-//   type: "UNRESOLVED";
-//   constraint: Constraint;
-// }
-//
-// export type UnsatisfiedConstraint = ImpossibleConstraint | UnresolvedConstraint;
-//
 /* ------------------------
  * Blockers
  * ------------------------ */

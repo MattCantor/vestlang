@@ -233,15 +233,21 @@ importers:
         specifier: ^5.9.2
         version: 5.9.2
 
-  packages/walker:
+  tests/integration:
     dependencies:
+      '@vestlang/dsl':
+        specifier: workspace:*
+        version: link:../../packages/dsl
+      '@vestlang/evaluator':
+        specifier: workspace:*
+        version: link:../../packages/evaluator
+      '@vestlang/normalizer':
+        specifier: workspace:*
+        version: link:../../packages/normalizer
       '@vestlang/types':
         specifier: workspace:*
-        version: link:../types
+        version: link:../../packages/types
     devDependencies:
-      rimraf:
-        specifier: ^6.0.1
-        version: 6.0.1
       typescript:
         specifier: ^5.9.2
         version: 5.9.2

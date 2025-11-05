@@ -42,9 +42,7 @@ describe("makeTranches", () => {
         makeVestingBaseDate("2025-01-01" as OCTDate),
       ),
     ];
-    console.log("blockers", blockers);
     const out = makeImpossibleTranches([5, 6], blockers);
-    console.log("out", out);
     expect(out).toHaveLength(2);
     expect(out[0].meta.state).toBe("IMPOSSIBLE");
     expect(out[1].meta.blockers).toBe("DATE 2025-01-01");

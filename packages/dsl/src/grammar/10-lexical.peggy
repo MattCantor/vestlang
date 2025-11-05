@@ -6,9 +6,6 @@ OrSep = _ "OR"i _ { return "OR"; }
 
 CommaSep = _ "," _
 
-Strict = "STRICTLY"i
-
 Offset = ("+" / "-")
-
 
 Integer = s:$[0-9]+ !"." { return parseInt(s, 10); }

@@ -43,7 +43,7 @@ function printCondition(node?: Condition): Doc {
     case "OR":
       const keyword = kw(node.type);
       const items = node.items.map(printCondition);
-      return printParenGroup(keyword, items);
+      return [line, printParenGroup(keyword, items)];
   }
 }
 

@@ -1,0 +1,19 @@
+{
+  "name": "@vestlang/integration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "@vestlang/evaluator": "workspace:*",
+    "@vestlang/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

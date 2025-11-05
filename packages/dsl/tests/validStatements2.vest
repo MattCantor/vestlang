@@ -1,3 +1,12 @@
-VEST FROM EVENT milestone
-  OVER 48 months EVERY 1 months
-  CLIFF 12 months
+VEST FROM EVENT X
+OR(
+
+    BEFORE EVENT A,
+
+  AND(
+
+      BEFORE EVENT B,
+
+      BEFORE EVENT C
+  )
+)

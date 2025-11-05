@@ -22,13 +22,14 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       const resConstraintBase = evaluateVestingBase(
         condition.constraint.base,
         ctx,
-        false,
       );
-      return evaluateConstraint(
+      const results = evaluateConstraint(
         resSubject,
         resConstraintBase,
         node as VestingNode & { constraints: AtomCondition },
       );
+
+      return results;
     case "AND":
       return condition.items.reduce((acc, current) => {
         const results = evaluateConstrainedVestingNode(
@@ -42,6 +43,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
         );
 
         if (!results) return acc;
+
         acc.push(...results);
         return acc;
       }, [] as Blocker[]);
@@ -55,13 +57,16 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
           c,
           ctx,
         );
-        if (!results) {
+
+        if (!results || results.length === 0) {
           anyUnblocked = true;
           continue;
         }
         blockers.push(...results);
       }
+
       if (anyUnblocked) return undefined;
+
       return blockers;
   }
 }

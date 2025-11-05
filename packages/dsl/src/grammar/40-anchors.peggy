@@ -1,3 +1,10 @@
+/* --- Lexical Helpers --- */
+
+Ident = $([A-Za-z_][A-Za-z0-9_]*)
+Strict = "STRICTLY"i { return true; }
+
+/* --- Vesting Base --- */
+
 DateLiteral
   = "DATE"i _ iso:$([0-9][0-9][0-9][0-9] "-" [0-1][0-9] "-" [0-3][0-9]) {
       return mkDate(iso);
@@ -11,9 +18,10 @@ SystemRef
   / "vesting_start"i { return "vestingStart"; }
   / "vesting-start"i { return "vestingStart"; }
 
-Ident = $([A-Za-z_][A-Za-z0-9_]*)
 
 EventRef = "EVENT"i _ name:( SystemRef / Ident ) { return mkEvent(name); }
+
+/* --- Vesting Node --- */
 
 VestingNode
   = base:(EventRef / DateLiteral)
@@ -29,6 +37,7 @@ VestingNode
       return node 
   }
 
+// A binary constraint whose subject is the enclosing VestingNode
 Constraint
   = s:Strict? _ op:("BEFORE"i / "AFTER"i) _ base:VestingNode {
     return {
@@ -41,16 +50,25 @@ Constraint
     }
   }
 
-ParenCondition
-  = "(" _ e:OrExpr _ ")" { return e; }
-
-FunctionCondition
+// Function form: AND(...), OR(...). These bind like their infix versions
+FuncBool
   = op:("AND"i / "OR"i) "(" _ head:OrExpr tail:(CommaSep OrExpr)* _ ")" {
     const OP = op.toUpperCase();
     return mkBool( OP, collect(head, tail))
   }
 
-Condition = ParenCondition / FunctionCondition / Constraint
+// Parenthesized
+Paren
+  = "(" _ e:OrExpr _ ")" { return e; }
+
+Condition = Paren / FuncBool / Constraint
+
+// AND binds tighter than OR
+AndExpr
+  = head:Condition tail:(AndSep Condition)* {
+    if (tail.length === 0) return head;
+    return mkBool("AND", collect(head, tail))
+  }
 
 OrExpr
   = head:AndExpr tail:(OrSep AndExpr)* {
@@ -58,8 +76,4 @@ OrExpr
     return mkBool("OR", collect(head, tail))
   }
 
-AndExpr
-  = head:Condition tail:(AndSep Condition)* {
-    if (tail.length === 0) return head;
-    return mkBool("AND", collect(head, tail))
-  }
+

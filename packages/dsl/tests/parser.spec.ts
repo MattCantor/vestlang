@@ -99,9 +99,9 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     ]);
   });
 
-  it("enforces SQL precedence: AND binds tighter than OR", () => {
+  it("enforces SQL precedence: AND binds tighter than OR in `A AND B OR C`", () => {
     const s = first(
-      `VEST FROM EVENT a BEFORE EVENT b AND AFTER EVENT c OR BEFORE DATE 2025-01-02`,
+      `VEST FROM EVENT X BEFORE EVENT A AND BEFORE EVENT B OR BEFORE EVENT C`,
     );
     const c = s.expr.vesting_start.constraints;
     // OR( AND( BEFORE b, AFTER c ), BEFORE date )
@@ -110,6 +110,17 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     expect(c.items[0].type).toBe("AND");
     expect(c.items[0].items.map((x: any) => x.type)).toEqual(["ATOM", "ATOM"]);
     expect(c.items[1].type).toBe("ATOM");
+  });
+
+  it("enforces SQL precedence: AND binds tighter than OR in 'A OR B AND C'", () => {
+    const s = first(
+      `VEST FROM EVENT X BEFORE EVENT A OR BEFORE EVENT B AND BEFORE EVENT C`,
+    );
+
+    const c = s.expr.vesting_start.constraints;
+    expect(c.type).toBe("OR");
+    expect(c.items).toHaveLength(2);
+    expect(c.items[1].type).toBe("AND");
   });
 
   it("Function form works: AND(...), OR(...)", () => {

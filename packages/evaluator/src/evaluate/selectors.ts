@@ -204,6 +204,7 @@ export function evaluateVestingNodeExpr(
   switch (expr.type) {
     case "SINGLETON":
       const res = evaluateVestingNode(expr, ctx);
+
       if (res.type === "RESOLVED") {
         return { type: "PICKED", picked: expr, meta: res };
       }

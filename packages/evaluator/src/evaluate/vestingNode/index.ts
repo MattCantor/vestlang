@@ -43,7 +43,7 @@ export function evaluateVestingNode(
   );
 
   // Return the resolved vesting node base if all constraints succeeded
-  if (!blockers) return resBase;
+  if (!blockers || blockers.length === 0) return resBase;
 
   // Compile and return a new Node
   if (allImpossibleBlockers(blockers)) {
