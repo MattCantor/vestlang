@@ -71,18 +71,21 @@ A duration is given by the following:
 
 An `<amount>` may be provided with a decimal, indicating a portion between 0 and 1 inclusive...
 
-```
-0.5 VEST OVER 4 years EVERY 1 month
+```vest
+1/2 VEST
+  OVER 48 months EVERY 1 months
 ```
 
 ...as a fraction, indicating a portion of the total quantity applicable to the security...
 
-```
-1/2 VEST OVER 4 years EVERY 1 month
+```vest
+1/2 VEST
+  OVER 48 months EVERY 1 months
 ```
 
 ...or as an interger, indicating an absolute number of shares.
 
-```
-100 VEST OVER 4 years EVERY 1 month
+```vest
+100 VEST
+  OVER 48 months EVERY 1 months
 ```

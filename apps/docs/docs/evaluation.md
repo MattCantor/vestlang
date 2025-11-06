@@ -54,7 +54,7 @@ The `asOf` date is used to determine whether time-limited conditions have occure
 
 For instance, consider a vesting schedule that starts if a milestone occurs before a given date in the future:
 
-```
+```vest
 VEST FROM EVENT milestone BEFORE DATE 9999-01-01
 ```
 
@@ -78,8 +78,9 @@ If this statement is evaluated with an unresolved `EVENT milestone`, then vestin
 
 A time-based vesting schedule without conditions always resolves. The example below assumes a grant date of 2025-01-01.
 
-```
-100 VEST OVER 4 years EVERY 1 year
+```vest
+100 VEST
+  OVER 48 months EVERY 12 months
 ```
 
 | Amount | Date       | State    |
@@ -114,7 +115,7 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-```
+```vest
 100 VEST FROM EVENT milestone
 ```
 
@@ -132,14 +133,12 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-```
-100 VEST FROM
-  LATER OF (
-    DATE 2025-01-01,
-    EVENT milestone2
-  )
-  OVER 4 years
-  EVERY 1 year
+```vest
+100 VEST FROM LATER OF(
+  DATE 2025-01-01,
+  EVENT milestone2
+)
+  OVER 48 months EVERY 12 months
 ```
 
 | Amount | Date                                            | State      | Blockers           |
@@ -158,10 +157,9 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-```
+```vest
 100 VEST
-  OVER 4 years
-  EVERY 1 year
+  OVER 48 months EVERY 12 months
   CLIFF EVENT milestone
 ```
 
@@ -186,8 +184,8 @@ Impossible installments have the following shape:
 }
 ```
 
-```
-100 VEST FROM EVENT milestone before DATE 2025-01-01
+```vest
+100 VEST FROM EVENT milestone BEFORE DATE 2025-01-01
 ```
 
 | Amount | State      | Blockers                                 |
@@ -206,12 +204,11 @@ By way of example, consider a 4-year quarterly vesting schedule, with a cliff at
 
 This vesting schedule is described with the following statement:
 
-```
+```vest
 100 VEST
-  OVER 4 years
-  EVERY 3 months
-  CLIFF LATER OF (
-    12 months,
+  OVER 48 months EVERY 3 months
+  CLIFF LATER OF(
+    +12 months,
     EVENT milestone
   )
 ```
@@ -242,8 +239,9 @@ Awards are often granted with a vesting start that precedes the grant date in or
 
 For instance, consider an award over 100 shares granted on 2025-01-01 with a 4-year quarterly vesting schedule commencing on 2024-01-01. All four vesting installments in calendar year 2024 are accrued and vest on the grant date.
 
-```
-100 VEST FROM DATE 2024-01-01 OVER 4 years every 3 months
+```vest
+100 VEST FROM DATE 2024-01-01
+  OVER 48 months EVERY 3 months
 ```
 
 | Amount | Date       | State    |

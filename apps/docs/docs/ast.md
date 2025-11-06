@@ -21,8 +21,9 @@ Years are converted to months and weeks are converted to days in the normalized 
 
 #### Example: Periodic Vesting Cadence With Year -> Month Conversion
 
-```
-VEST OVER 4 years EVERY 1 month
+```vest
+VEST
+  OVER 48 months EVERY 1 months
 ```
 
 ```json
@@ -39,7 +40,7 @@ VEST OVER 4 years EVERY 1 month
 
 #### Example: Omitted OVER/EVERY
 
-```
+```vest
 VEST
 ```
 
@@ -69,7 +70,7 @@ However, this means that `EVENT vestingStart` may not be used in the `FROM <vest
 
 #### Example: Omitted Vesting Start
 
-```
+```vest
 VEST
 ```
 
@@ -96,7 +97,7 @@ VEST
 
 #### Example: Vesting Start with Event
 
-```
+```vest
 VEST FROM EVENT milestone
 ```
 
@@ -133,8 +134,10 @@ By convention, a `CLIFF <duration>` is understood to refer to the resolved vesti
 
 #### Example: Simple Cliff
 
-```
-VEST OVER 4 years EVERY 1 month CLIFF 12 months
+```vest
+VEST
+  OVER 48 months EVERY 1 months
+  CLIFF 12 months
 ```
 
 ```json
@@ -183,11 +186,8 @@ Note that in this way `EARLIER OF` acts as an OR logical operator and `LATER OF`
 
 #### Example: Vesting Start With Selector
 
-```
-VEST FROM EARLIER OF (
-    DATE 2025-01-01,
-    EVENT milestone
-)
+```vest
+VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 ```
 
 ```json
@@ -226,14 +226,13 @@ VEST FROM EARLIER OF (
 
 #### Example: Cliff with Selector
 
-```
+```vest
 VEST
-    OVER 4 years
-    EVERY 1 month
-    CLIFF EARLIER OF (
-        12 months,
-        EVENT ipo
-    )
+  OVER 48 months EVERY 1 months
+  CLIFF EARLIER OF(
+    +12 months,
+    EVENT ipo
+  )
 ```
 
 ```json
@@ -363,7 +362,7 @@ Amounts specify **how much** of the grant a statement applies to. Integers imply
 
 #### Example: Omitted Amount
 
-```
+```vest
 VEST
 ```
 
@@ -379,7 +378,7 @@ VEST
 
 #### Example: Integer Amount
 
-```
+```vest
 100 VEST
 ```
 
@@ -436,17 +435,16 @@ This is expressed in vestlang DSL as follows. Note that the `12 months` duration
 
 ```vest
 VEST
-    OVER 4 years
-    EVERY 1 month
-    CLIFF LATER OF (
-        12 months,
-        EARLIER OF (
-            EVENT ipo
-                BEFORE EVENT grantDate + 7 years,
-            EVENT cic
-                BEFORE EVENT grantDate + 7 years
-        )
+  OVER 48 months EVERY 1 months
+  CLIFF LATER OF(
+    +12 months,
+    EARLIER OF(
+      EVENT ipo
+        BEFORE EVENT grantDate +84 months,
+      EVENT cic
+        BEFORE EVENT grantDate +84 months
     )
+  )
 ```
 
 ```json

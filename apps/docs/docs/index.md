@@ -9,7 +9,9 @@ sidebar_position: 0
 Example:
 
 ```vest
-VEST OVER 4 years EVERY 1 MONTH CLIFF 12 MONTHS
+VEST
+  OVER 48 months EVERY 1 months
+  CLIFF 12 months
 ```
 
 The DSL compiles into a **typed Abstract Syntax Tree (AST)**, which is then evaluated into **Open Cap Table** compatible `vesting` objects, with additional metadata.
