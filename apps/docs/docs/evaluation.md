@@ -78,10 +78,14 @@ If this statement is evaluated with an unresolved `EVENT milestone`, then vestin
 
 A time-based vesting schedule without conditions always resolves. The example below assumes a grant date of 2025-01-01.
 
+#### DSL
+
 ```vest
 100 VEST
   OVER 48 months EVERY 12 months
 ```
+
+#### Vesting Installments
 
 | Amount | Date       | State    |
 | :----- | :--------- | :------- |
@@ -115,9 +119,13 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
+#### DSL
+
 ```vest
 100 VEST FROM EVENT milestone
 ```
+
+#### Vesting Installments
 
 | Amount | Date                            | Status     | Blockers          |
 | :----- | :------------------------------ | :--------- | :---------------- |
@@ -133,6 +141,8 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
+#### DSL
+
 ```vest
 100 VEST FROM LATER OF(
   DATE 2025-01-01,
@@ -140,6 +150,8 @@ Unresolved installments contain the one of the following symbolic dates:
 )
   OVER 48 months EVERY 12 months
 ```
+
+#### Vesting Installments
 
 | Amount | Date                                            | State      | Blockers           |
 | :----- | :---------------------------------------------- | :--------- | :----------------- |
@@ -157,11 +169,15 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
+#### DSL
+
 ```vest
 100 VEST
   OVER 48 months EVERY 12 months
   CLIFF EVENT milestone
 ```
+
+#### Vesting Installments
 
 | Amount | Date                                             | State      | Blockers          |
 | :----- | :----------------------------------------------- | :--------- | :---------------- |
@@ -184,9 +200,13 @@ Impossible installments have the following shape:
 }
 ```
 
+#### DSL
+
 ```vest
 100 VEST FROM EVENT milestone BEFORE DATE 2025-01-01
 ```
+
+#### Vesting Installments
 
 | Amount | State      | Blockers                                 |
 | :----- | :--------- | :--------------------------------------- |

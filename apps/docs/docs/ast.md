@@ -21,10 +21,14 @@ Years are converted to months and weeks are converted to days in the normalized 
 
 #### Example: Periodic Vesting Cadence With Year -> Month Conversion
 
+##### DSL
+
 ```vest
 VEST
   OVER 48 months EVERY 1 months
 ```
+
+##### AST
 
 ```json
 {
@@ -40,9 +44,13 @@ VEST
 
 #### Example: Omitted OVER/EVERY
 
+##### DSL
+
 ```vest
 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -70,9 +78,13 @@ However, this means that `EVENT vestingStart` may not be used in the `FROM <vest
 
 #### Example: Omitted Vesting Start
 
+##### DSL
+
 ```vest
 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -97,9 +109,13 @@ VEST
 
 #### Example: Vesting Start with Event
 
+##### DSL
+
 ```vest
 VEST FROM EVENT milestone
 ```
+
+##### AST
 
 ```json
 {
@@ -134,11 +150,15 @@ By convention, a `CLIFF <duration>` is understood to refer to the resolved vesti
 
 #### Example: Simple Cliff
 
+##### DSL
+
 ```vest
 VEST
   OVER 48 months EVERY 1 months
   CLIFF 12 months
 ```
+
+##### AST
 
 ```json
 {
@@ -186,9 +206,13 @@ Note that in this way `EARLIER OF` acts as an OR logical operator and `LATER OF`
 
 #### Example: Vesting Start With Selector
 
+##### DSL
+
 ```vest
 VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 ```
+
+##### AST
 
 ```json
 {
@@ -224,7 +248,67 @@ VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 }
 ```
 
+#### Selector over schedules
+
+In the case of a selector in `FROM <vesting-expr>`, the selection is determined based on the resolved vesting start, regardless of the cadence of the vesting installments that folllow
+
+##### DSL
+
+```vest
+VEST EARLIER OF(
+  FROM DATE 2025-01-01
+    OVER 12 months EVERY 1 months,
+  FROM DATE 2026-01-01
+)
+```
+
+##### AST
+
+```json
+{
+  "expr": {
+    "type": "EARLIER_OF",
+    "items": [
+      {
+        "type": "SINGLETON",
+        "vesting_start": {
+          "type": "SINGLETON",
+          "base": {
+            "type": "DATE",
+            "value": "2026-01-01"
+          },
+          "offsets": []
+        },
+        "periodicity": {
+          "type": "DAYS",
+          "length": 0,
+          "occurrences": 1
+        }
+      },
+      {
+        "type": "SINGLETON",
+        "vesting_start": {
+          "type": "SINGLETON",
+          "base": {
+            "type": "DATE",
+            "value": "2025-01-01"
+          },
+          "offsets": []
+        },
+        "periodicity": {
+          "type": "MONTHS",
+          "length": 1,
+          "occurrences": 12
+        }
+      }
+    ]
+  }
+}
+```
+
 #### Example: Cliff with Selector
+
+##### DSL
 
 ```vest
 VEST
@@ -234,6 +318,8 @@ VEST
     EVENT ipo
   )
 ```
+
+##### AST
 
 ```json
 {
@@ -292,11 +378,15 @@ We again leverage the temporal aspect of vesting schedules in order to limit our
 
 In addition, conditions can be combined with `AND` and `OR` operators. We follow SQL like precedence (`AND` binds tighter than `OR`, and parentheses override precedence).
 
+##### DSL
+
 ```
 VEST FROM EVENT milestone
     STRICTLY BEFORE DATE 2025-01-01 AND
     AFTER EVENT threshold
 ```
+
+##### AST
 
 ```json
 {
@@ -362,9 +452,13 @@ Amounts specify **how much** of the grant a statement applies to. Integers imply
 
 #### Example: Omitted Amount
 
+##### DSL
+
 ```vest
 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -378,9 +472,13 @@ VEST
 
 #### Example: Integer Amount
 
+##### DSL
+
 ```vest
 100 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -393,9 +491,13 @@ VEST
 
 #### Example: Decimal Amount
 
+##### DSL
+
 ```
 0.5 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -409,9 +511,13 @@ VEST
 
 #### Example: Fraction Amount
 
+##### DSL
+
 ```
 1/2 VEST
 ```
+
+##### AST
 
 ```json
 {
@@ -433,6 +539,8 @@ The standard two-tier vesting schedule seen in the wild is a 4-year monthly vest
 
 This is expressed in vestlang DSL as follows. Note that the `12 months` duration in the cliff statement refers to the resolved vesting start, and we use the `EVENT grantDAte` system event to provide the expiration dates for the cliffs.
 
+##### DSL
+
 ```vest
 VEST
   OVER 48 months EVERY 1 months
@@ -446,6 +554,8 @@ VEST
     )
   )
 ```
+
+##### AST
 
 ```json
 {
