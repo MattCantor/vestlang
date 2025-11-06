@@ -19,8 +19,8 @@ export type EvaluationContextInput = Omit<
 
 export type SymbolicDate =
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }
-  | { type: "BEFORE_VESTING_START" }
-  | { type: "MAYBE_BEFORE_CLIFF"; date: OCTDate };
+  | { type: "UNRESOLVED_VESTING_START" }
+  | { type: "UNRESOLVED_CLIFF"; date: OCTDate };
 
 /* ------------------------
  * Blockers

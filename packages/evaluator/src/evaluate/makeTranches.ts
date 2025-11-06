@@ -94,7 +94,7 @@ export function makeBeforeVestingStartTranche(
     amount,
     meta: {
       state: "UNRESOLVED",
-      date: { type: "BEFORE_VESTING_START" },
+      date: { type: "UNRESOLVED_VESTING_START" },
       blockers: blockers.map(blockerToString).join(", "),
     },
   };
@@ -109,7 +109,7 @@ export function makeBeforeCliffTranche(
     amount,
     meta: {
       state: "UNRESOLVED",
-      date: { type: "MAYBE_BEFORE_CLIFF", date },
+      date: { type: "UNRESOLVED_CLIFF", date },
       blockers: blockers.map(blockerToString).join(", "),
     },
   };

@@ -115,7 +115,7 @@ Unresolved installments contain the one of the following symbolic dates:
 
 ```ts
 {
-  type: "BEFORE_VESTING_START";
+  type: "UNRESOLVED_VESTING_START";
 }
 ```
 
@@ -127,9 +127,9 @@ Unresolved installments contain the one of the following symbolic dates:
 
 #### Vesting Installments
 
-| Amount | Date                            | Status     | Blockers          |
-| :----- | :------------------------------ | :--------- | :---------------- |
-| 100    | `{type: BEFORE_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
+| Amount | Date                                | Status     | Blockers          |
+| :----- | :---------------------------------- | :--------- | :---------------- |
+| 100    | `{type: UNRESOLVED_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
 
 ### Start Plus
 
@@ -164,7 +164,7 @@ Unresolved installments contain the one of the following symbolic dates:
 
 ```ts
 {
-  type: "MAYBE_BEFORE_CLIFF",
+  type: "UNRESOLVED_CLIFF",
   date: OCTDate
 }
 ```
@@ -179,12 +179,12 @@ Unresolved installments contain the one of the following symbolic dates:
 
 #### Vesting Installments
 
-| Amount | Date                                             | State      | Blockers          |
-| :----- | :----------------------------------------------- | :--------- | :---------------- |
-| 25     | `{ type: MAYBE_BEFORE_CLIFF, date: 2026-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: MAYBE_BEFORE_CLIFF, date: 2027-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: MAYBE_BEFORE_CLIFF, date: 2028-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: MAYBE_BEFORE_CLIFF, date: 2029-01-01 }` | UNRESOLVED | `EVENT milestone` |
+| Amount | Date                                           | State      | Blockers          |
+| :----- | :--------------------------------------------- | :--------- | :---------------- |
+| 25     | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | `EVENT milestone` |
+| 25     | `{ type: UNRESOLVED_CLIFF, date: 2027-01-01 }` | UNRESOLVED | `EVENT milestone` |
+| 25     | `{ type: UNRESOLVED_CLIFF, date: 2028-01-01 }` | UNRESOLVED | `EVENT milestone` |
+| 25     | `{ type: UNRESOLVED_CLIFF, date: 2029-01-01 }` | UNRESOLVED | `EVENT milestone` |
 
 ## Impossible Installments
 
@@ -237,21 +237,21 @@ If this statement is evaluated at a time when `EVENT milestone` is not resolved,
 
 Nonetheless, since this is a `LATER OF` statement we know that a that a 12 month cliff will always apply:
 
-| Amount | Symbolic Date                                  | State      | Blockers        |
-| ------ | ---------------------------------------------- | ---------- | --------------- |
-| 25     | `{type: MAYBE_BEFORE_CLIFF, date: 2026-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2026-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2026-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2026-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: MAYBE_BEFORE_CLIFF, date: 2027-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2027-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2027-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2027-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: MAYBE_BEFORE_CLIFF, date: 2028-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2028-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2028-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: MAYBE_BEFORE_CLIFF, date: 2028-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: MAYBE_BEFORE_CLIFF, date: 2029-01-01}` | UNRESOLVED | EVENT milestone |
+| Amount | Symbolic Date                                | State      | Blockers        |
+| ------ | -------------------------------------------- | ---------- | --------------- |
+| 25     | `{type: UNRESOLVED_CLIFF, date: 2026-01-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-04-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-07-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-10-01}` | UNRESOLVED | EVENT milestone |
+| 7      | `{type: UNRESOLVED_CLIFF, date: 2027-01-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-04-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-07-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-10-01}` | UNRESOLVED | EVENT milestone |
+| 7      | `{type: UNRESOLVED_CLIFF, date: 2028-01-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-04-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-07-01}` | UNRESOLVED | EVENT milestone |
+| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-10-01}` | UNRESOLVED | EVENT milestone |
+| 7      | `{type: UNRESOLVED_CLIFF, date: 2029-01-01}` | UNRESOLVED | EVENT milestone |
 
 ### Vesting start before grant date
 
