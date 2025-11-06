@@ -17,6 +17,7 @@ program.name("vest").description("Vestlang CLI").version("0.1.0");
 // vestlang inspect [input...] [--stdin]
 program
   .command("inspect")
+  .description("Produce raw AST from statement")
   .argument("[input...]", "DSL text")
   .option("--stdin", "read input from stdin")
   .action((parts: string[] = [], opts: { stdin?: boolean }) => {
@@ -30,6 +31,7 @@ program
 // vestlang compile [input...] [--stdin]
 program
   .command("compile")
+  .description("Produce normalized AST from statement")
   .argument("[input...]", "DSL text")
   .option("--stdin", "read input from stdin")
   .action((parts: string[] = [], opts: { stdin?: boolean }) => {

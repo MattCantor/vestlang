@@ -46,14 +46,8 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: "img/vestlang-icon.png",
     navbar: {
       title: "vestlang",
-      logo: {
-        alt: "vestlang logo",
-        src: "img/vestlang-icon.png",
-        srcDark: "img/vestlang-icon.png",
-      },
     },
     prism: {
       theme: prismThemes.github,

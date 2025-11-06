@@ -1,105 +1,13 @@
 ---
-title: DSL Grammar and AST
+title: Abstract Syntax Tree
 sidebar_position: 2
 ---
-
-## DSL Recipe
-
-The DSL accepts the following recipe:
-
-```
-[ amount ] VEST
-    [ FROM <vesting-expr> [ OVER <duration> EVERY <duration> ] ]
-    [ CLIFF <vesting-expr> ]
-```
-
-:::tip
-Keywords are case-insensitive
-:::
-
-### Vesting Expressions
-
-A vesting-expr is either a singleton vesting node (described below), or a selector over vesting expressions:
-
-```
-( EARLIER OF | LATER OF ) (
-    <vesting-expr>,
-    <vesting-expr>
-    [, <vesting-expr>...]
-)
-```
-
-A singleton vesting node is a date literal or an event, with optional conditions.
-
-```
-( DATE <iso> | EVENT <string> ) [condition]
-```
-
-| Node  | Pattern                                         |
-| :---- | :---------------------------------------------- |
-| Date  | ([0-9][0-9][0-9] "-" [0-1][0-9] "-" [0-3][0-9]) |
-| Event | ([A-Za-z\_][A-Za-z0-9_]\*)                      |
-
-### Conditions
-
-A singleton condition is described as follows:
-
-```
-[ ( BEFORE | AFTER )
-    ( DATE <iso> | EVENT <string> ) [ ( + | - ) <duration> ] ]
-```
-
-Singleton conditions may be chained with `AND` and `OR` operators...
-
-```
-<condition> AND <condition> OR <condition>
-```
-
-...or grouped with parentheses.
-
-```
-(AND | OR) (
-    <condition>,
-    <condition>,
-    [, condition...]
-)
-```
-
-### Duration
-
-A duration is given by the following:
-
-```
-<number> (year|years|month|months|week|weeks|day|days)
-```
-
-### Amount
-
-An amount can be provided with a decimal, indicating a portion between 0 and 1 inclusive...
-
-```
-0.5 VEST OVER 4 years EVERY 1 month
-```
-
-...as a fraction, indicating a portion of the total quantity applicable to the security...
-
-```
-1/2 VEST OVER 4 years EVERY 1 month
-```
-
-...or as an interger, indicating an absolute number of shares.
-
-```
-100 VEST OVER 4 years EVERY 1 month
-```
-
-## Abstract Syntax Tree
 
 The DSL compiles into an abstract syntax tree describing the following:
 
 ### Periodic Vesting Cadence
 
-The fundamental component of a vesting schedule is a periodic sequence of vesting installments. In order to derive this periodic sequence one needs a **number of installments** and the **duration of the step between each installment**.
+The fundamental component of a vesting schedule is a periodic sequence of vesting installments. This periodic sequence one is described by a **number of installments** and the **duration of the step between each installment**.
 
 The **duration of the step between each installment** is given by `EVERY <duration>` in the grammar.
 
@@ -151,7 +59,7 @@ VEST
 
 Each periodic sequence of vesting installments requires a vesting start date from which to calculate the series of installments.
 
-The vesting-start is given by `FROM <vesting-expr>`, as described [above](#vesting-expressions). The vesting start may be omitted, in which case it is assumed to be the grant date of the security.
+The vesting-start is given by `FROM <vesting-expr>` in the grammar. The vesting start may be omitted, in which case it is assumed to be the grant date of the security.
 
 :::warning
 `EVENT vestingStart` is a system event that is derived during the normalization process. This is necessary so that the cliff can refer back to the resolved vesting start.
@@ -220,7 +128,7 @@ Another common feature of vesting schedules is the concept of a "cliff". When a 
 A cliff only applies in the context of a periodic sequence of vesting installments.
 
 :::note
-By convention, a duration within a Cliff is understood to refer to the resolved vesting start.
+By convention, a `CLIFF <duration>` is understood to refer to the resolved vesting start.
 :::
 
 #### Example: Simple Cliff
