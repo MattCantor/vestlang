@@ -1,6 +1,6 @@
 # Vestlang
 
-> **A domain-specific language (DSL) for modeling vesting schedules**
+> **A domain-specific language for modeling vesting schedules**
 
 [Docs](https://mattcantor.github.io/vestlang/)
 

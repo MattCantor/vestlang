@@ -3,25 +3,26 @@ title: Evaluation
 sidebar_position: 3
 ---
 
-## Evaluator: From AST to Tranches
-
-Goal: turn a normalized vestlang AST into a sequence of **tranches** (installments) that are either **resolved** (with a concrete ISO date), **unresolved** (with a symbolic date and blockers), or **impossible** (with blockers).
-
-- Input: a normalized `Program` (array of `Statements`s) and an `EvaluationContextInput`.
-- Output: `Tranche[]` per statement (or `Tranche[][]` for a whole `Program`)
+Evaluation converts the AST into a sequence of vesting installments that are either **resolved** (with a concrete ISO date), **unresolved** (with a symbolic date and blockers), or **impossible** (with blockers).
 
 The evaluator:
 
-1. Chooses (or fails to choose) a **vesting start** from a `ScheduleExpr` (handling `EARLIER OF` / `LATER OF`).
-2. Builds the periodic **dates** (or symbolic dates) from the vesting period (`OVER`/`EVERY`).
-3. Applies the **grant date catch up** (treating grant date as a "soft cliff", see below).
-4. Applies an explicit **CLIFF** if present (including partial knowledge for `LATER OF` cliffs).
-5. **Allocates** the statement's amount across installments using the configured allocation mode.
-6. Emits **Tranches** with metadata.
+1. Attempts to resolve a **vesting start** date
+2. Builds the periodic **dates** (or symbolic dates) for the vesting period
+3. Treats the grant date as a "soft cliff" if any vesting installments precede the grant date (see below)
+4. Applies any explicit **CLIFF** if present (including partial knowledge for `LATER OF` cliffs, see below)
+5. **Allocates** the statement's amount across installments using the configured allocation mode
+6. Emits vesting installments with metadata.
+
+:::note
+The shape and content of all metadata described below should be viewed as a bogey intended for discussion. All comments welcome!
+:::
 
 ---
 
 ## Evaluation context
+
+The following evaluation context is supplied the evaluator:
 
 ```ts
 {
@@ -35,7 +36,9 @@ The evaluator:
 
 ### Events
 
-The evaluation context is supplied when running the evaluator, including the grant date of the security and the quantity of shares. If the vesting start is resolved through the course of the evaluation, `EVENT vestingStart` is added to the `events` record.
+The grant date of the security (`events[grantDate]`) and the quantity of shares (`grantQuantity`) are required.
+
+If the vesting start is resolved through the course of the evaluation, `EVENT vestingStart` is added to the `events` record.
 
 ### Vesting Day of Month
 
@@ -55,7 +58,7 @@ For instance, consider a vesting schedule that starts if a milestone occurs befo
 VEST FROM EVENT milestone BEFORE DATE 9999-01-01
 ```
 
-If this is evaluated with an unresolved `EVENT milestone`, then the returned tranche will be `UNERESOLVED` because the event may occur, and the deadline hasn't yet elapsed.
+If this statement is evaluated with an unresolved `EVENT milestone`, then vesting start will be unresolved. The returned tranche will be `UNRERESOLVED` rather than `IMPOSSIBLE` because the milestone event may occur in the future and the deadline has not yet elapsed.
 
 ---
 
@@ -197,17 +200,25 @@ Impossible installments have the following shape:
 
 ### Partial Knowledge for LATER OF selectors
 
-In the case of a `LATER OF` selector, if some but not all items are resolved, we return the latest of the resolved items in order to avoid losing relevant information.
+In the case of a `LATER OF` selector, if some but not all items are resolved, we preserve the information gleaned from the resolved items.
 
-By way of example, consider a 4-year quarterly vesting schedule, with a cliff at the later of 12 months from the vesting start and a milestone event. The grant is made on 2025-01-01 over 100 shares
+By way of example, consider a 4-year quarterly vesting schedule, with a cliff at the later of 12 months from the vesting start and a milestone event. The grant is made on 2025-01-01 over 100 shares.
 
 This vesting schedule is described with the following statement:
 
 ```
-100 VEST OVER 4 years EVERY 3 months CLIFF LATER OF (12 months, EVENT milestone)
+100 VEST
+  OVER 4 years
+  EVERY 3 months
+  CLIFF LATER OF (
+    12 months,
+    EVENT milestone
+  )
 ```
 
-If `EVENT milestone` is not resolved, we can still indicate that a 12 month cliff will always apply:
+If this statement is evaluated at a time when `EVENT milestone` is not resolved, the vesting start will be unresolved.
+
+Nonetheless, since this is a `LATER OF` statement we know that a that a 12 month cliff will always apply:
 
 | Amount | Symbolic Date                                  | State      | Blockers        |
 | ------ | ---------------------------------------------- | ---------- | --------------- |
@@ -227,6 +238,64 @@ If `EVENT milestone` is not resolved, we can still indicate that a 12 month clif
 
 ### Vesting start before grant date
 
+Awards are often granted with a vesting start that precedes the grant date in order to provide vesting credit for services that have already been provided. In these situations the evaluator accrues vesting amounts until the grant date.
+
+For instance, consider an award over 100 shares granted on 2025-01-01 with a 4-year quarterly vesting schedule commencing on 2024-01-01. All four vesting installments in calendar year 2024 are accrued and vest on the grant date.
+
 ```
-VEST FROM DATE 2024-01-01 OVER 4 years every 3 months
+100 VEST FROM DATE 2024-01-01 OVER 4 years every 3 months
+```
+
+| Amount | Date       | State    |
+| :----- | :--------- | :------- |
+| 25     | 2025-01-01 | RESOLVED |
+| 6      | 2025-04-01 | RESOLVED |
+| 6      | 2025-07-01 | RESOLVED |
+| 6      | 2025-10-01 | RESOLVED |
+| 7      | 2026-01-01 | RESOLVED |
+| 6      | 2026-04-01 | RESOLVED |
+| 6      | 2026-07-01 | RESOLVED |
+| 6      | 2026-10-01 | RESOLVED |
+| 7      | 2027-01-01 | RESOLVED |
+| 6      | 2027-04-01 | RESOLVED |
+| 6      | 2027-07-01 | RESOLVED |
+| 6      | 2027-10-01 | RESOLVED |
+| 7      | 2028-01-01 | RESOLVED |
+
+## Blockers
+
+The `blockers` included in the resolved and unresolved vesting installments above are partial vestlang DSL statemens, representing the portion of the statement that has not yet resolved.
+
+Within the evaluator, this is done via interpretating the following internal blocker shapes. These blockers could be returned with each vesting installment directly, rather than the interpreted DSL string:
+
+```ts
+type UnresolvedBlocker =
+  | {
+      type: "EVENT_NOT_YET_OCCURRED";
+      event: string;
+    }
+  | {
+      type: "UNRESOLVED_SELECTOR";
+      selector: "EARLIER_OF" | "LATER_OF";
+      blockers: Blocker[];
+    }
+  | {
+      type: "DATE_NOT_YET_OCCURRED";
+      date: OCTDate;
+    }
+  | {
+      type: "UNRESOLVED_CONDITION";
+      condition: Omit<VestingNode, "type">;
+    };
+
+type ImpossibleBlocker =
+  | {
+      type: "IMPOSSIBLE_SELECTOR";
+      selector: "EARLIER_OF" | "LATER_OF";
+      blockers: ImpossibleBlocker[];
+    }
+  | {
+      type: "IMPOSSIBLE_CONDITION";
+      condition: Omit<VestingNode, "type">;
+    };
 ```
