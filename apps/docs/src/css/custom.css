@@ -31,11 +31,11 @@
 
 /* ── VESTLANG syntax: (dark) ───────────────────── */
 pre.language-vest span.token.verb {
-  color: #7aa2f7 !important;
+  color: #7dcfff !important;
   font-weight: 600;
 } /* VEST, FROM, OVER, EVERY, CLIFF */
 pre.language-vest span.token.selector {
-  color: #bb9af7 !important;
+  color: #ff9e64 !important;
 } /* EARLIER, LATER, OF */
 pre.language-vest span.token.constraint {
   color: #f7768e !important;
@@ -45,19 +45,19 @@ pre.language-vest span.token.anchor {
   color: #7dcfff !important;
 } /* EVENT, DATE */
 pre.language-vest span.token.duration {
-  color: #ff9e64 !important;
+  color: #bb9af7 !important;
 } /* 1 YEAR, 6 MONTHS */
 pre.language-vest span.token.date {
   color: #565f89 !important;
 } /* 2025-07-01 */
 pre.language-vest span.token.number {
-  color: #e0af68 !important;
+  color: #565f89 !important;
 } /* 0.25, 100 */
 pre.language-vest span.token.ident {
-  color: #9ece6a !important;
+  color: #565f89 !important;
 } /* event names */
 pre.language-vest span.token.punctuation {
-  color: #565f89 !important;
+  color: #2ac3de !important;
   opacity: 0.6;
 } /* commas, parens */
 

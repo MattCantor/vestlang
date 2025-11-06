@@ -1,3 +1,6 @@
 VEST
   OVER 48 months EVERY 3 months
-  CLIFF 12 months
+  CLIFF EARLIER OF(
+    +12 months,
+    EVENT ipo
+  )

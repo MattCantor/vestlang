@@ -37,16 +37,16 @@ export default function prismIncludeLanguages(
       duration: { pattern: DURATION },
 
       // Dates YYYY-MM-DD
-      date: { pattern: /\b\d{4}-\d{2}\b/ },
+      date: { pattern: /\b\d{4}-\d{2}-\d{2}\b/ },
 
       // Numbers (including decimals)
       number: { pattern: /\b\d+(?:\.\d+)?\b/ },
 
       // Identifiers (event names, etc)
-      ident: { pattern: /b\[A-Za-z_][A-Za-z0-9_-]*\b/ },
+      ident: { pattern: /\b[A-Za-z_][A-Za-z0-9_-]*\b/ },
 
       // Punctuation
-      punctuation: /[(),]/,
+      punctuation: /[(),+-]/,
     };
   }
 
