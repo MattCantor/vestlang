@@ -85,9 +85,15 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
+      '@vestlang/evaluator':
+        specifier: workspace:*
+        version: link:../../packages/evaluator
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       clsx:
         specifier: ^2.0.0
         version: 2.1.1
