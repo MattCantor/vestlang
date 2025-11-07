@@ -61,8 +61,8 @@ describe("evaluateCliff integration", () => {
 
     const amounts = [2, 3, 5];
     const out = evaluateCliff(picked as any, dates, amounts, ctx);
-    expect(out).toHaveLength(3);
-    expect(out[0]).toMatchObject({
+    expect(out.installments).toHaveLength(3);
+    expect(out.installments[0]).toMatchObject({
       date: "2024-02-01" as OCTDate,
       amount: 2,
       meta: { state: "RESOLVED" },

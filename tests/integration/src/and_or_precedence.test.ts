@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateStatement } from "@vestlang/evaluator";
-import type { EvaluationContextInput, OCTDate, Tranche } from "@vestlang/types";
+import type {
+  EvaluationContextInput,
+  OCTDate,
+  Installment,
+} from "@vestlang/types";
 
 /* ------------------------
  * Helpers
@@ -51,19 +55,19 @@ const evaluate = (stmt: string, events: Record<string, OCTDate>) => {
   const rawProgram = parse(statement);
   const program = normalizeProgram(rawProgram);
   const expr = program[0];
-  const result = evaluateStatement(expr, ctx);
+  const result = evaluateStatement(expr, ctx).installments;
   return result;
 };
 
 const base = "VEST FROM EVENT X ";
 
-const expectedFalse = (result: Tranche[]) => {
+const expectedFalse = (result: Installment[]) => {
   expect(result.length).toBe(1);
   expect(result[0].amount).toBe(100);
   expect(result[0].meta.state).toBe("IMPOSSIBLE");
 };
 
-const expectedTrue = (result: Tranche[]) => {
+const expectedTrue = (result: Installment[]) => {
   expect(result.length).toBe(1);
   expect(result[0].amount).toBe(100);
   expect(result[0].meta.state).toBe("RESOLVED");

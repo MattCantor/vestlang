@@ -44,8 +44,8 @@ describe("evaluateStatement - end to end", () => {
 
     const ctx_input = { ...baseCtx() };
     const out = evaluateStatement(stmt, ctx_input);
-    expect(out).toHaveLength(1);
-    expect(out[0].meta.state).toBe("IMPOSSIBLE");
+    expect(out.installments).toHaveLength(1);
+    expect(out.installments[0].meta.state).toBe("IMPOSSIBLE");
   });
 
   it("UNRESOLVED vesting_start → BEFORE_VESTING_START tranche", () => {
@@ -67,8 +67,10 @@ describe("evaluateStatement - end to end", () => {
       ...baseCtx({ events: { grantDate: "2025-01-01" as OCTDate } }),
     };
     const out = evaluateStatement(stmt, ctx_input);
-    expect(out).toHaveLength(1);
-    expect((out[0] as any).meta.date.type).toBe("BEFORE_VESTING_START");
+    expect(out.installments).toHaveLength(1);
+    expect((out.installments[0] as any).meta.symbolicDate.type).toBe(
+      "UNRESOLVED_VESTING_START",
+    );
   });
 
   it("Resolved path generates tranches, applies grant-date catch-up, then cliff", () => {
@@ -103,7 +105,7 @@ describe("evaluateStatement - end to end", () => {
     });
     const out = evaluateStatement(stmt, ctx_input);
     // 3 tranches total, with catch-up at 2024-01-15 collapsed into first vest after start (which is 2024-02-01)
-    expect(out.length).toBe(3);
-    expect(out[0]).toMatchObject({ meta: { state: "RESOLVED" } });
+    expect(out.installments.length).toBe(3);
+    expect(out.installments[0]).toMatchObject({ meta: { state: "RESOLVED" } });
   });
 });
