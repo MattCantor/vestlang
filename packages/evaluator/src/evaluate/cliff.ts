@@ -106,7 +106,7 @@ function evaluateCliffGeneric<T>(
     }
 
     // If the cliff has not yet been resolved, create a cliff installment if the cliff date precedes the next date
-    if (!cliffResolved && lt(cliffDate, date)) {
+    if (!cliffResolved && lt(cliffDate, date) && aggregate > 0) {
       installments.push(fn({ date: cliffDate, amount: aggregate }));
       cliffResolved = true;
     }
