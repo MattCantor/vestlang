@@ -135,7 +135,7 @@ export type Installment =
  * Evaluated Schedule
  * ------------------------ */
 
-export interface EvaluatedSchedule<T extends Installment> {
+export interface EvaluatedSchedule<T extends Installment = Installment> {
   installments: T[];
   blockers: Blocker[];
 }

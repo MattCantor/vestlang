@@ -5,8 +5,6 @@ import type {
   EvaluationContextInput,
   Schedule,
   Installment,
-  ResolvedInstallment,
-  UnresolvedInstallment,
 } from "@vestlang/types";
 import { prepare } from "../utils.js";
 import { allocateQuantity } from "./allocation.js";
@@ -34,7 +32,7 @@ import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
 export function evaluateStatement(
   stmt: Statement,
   ctx_input: EvaluationContextInput,
-): EvaluatedSchedule<Installment> {
+): EvaluatedSchedule {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
   const resSchedule = evaluateScheduleExpr(stmt.expr, ctx);
 
@@ -57,7 +55,7 @@ function evaluateSchedule(
   resSchedule: Picked<Schedule>,
   statementQuantity: number,
   ctx: EvaluationContext,
-): EvaluatedSchedule<Installment> {
+): EvaluatedSchedule {
   const pickedSchedule = resSchedule.picked;
   const vestingPeriod = pickedSchedule.periodicity;
   const { type, length, occurrences } = vestingPeriod;
