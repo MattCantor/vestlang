@@ -82,6 +82,7 @@ function evaluateCliffGeneric<T>(
 ): T[] {
   const installments: T[] = [];
   let aggregate = 0;
+  let cliffResolved = false;
 
   for (let i = 0; i < dates.length; i++) {
     const date = dates[i];
@@ -90,12 +91,24 @@ function evaluateCliffGeneric<T>(
     const isBefore = lt(date, cliffDate);
     const isAt = eq(date, cliffDate);
 
-    aggregate += amt;
-
-    if (isBefore) continue;
-    if (isAt) {
-      installments.push(fn({ date, amount: aggregate }));
+    // only aggregate for dates before the cliff
+    if (isBefore) {
+      aggregate += amt;
       continue;
+    }
+
+    // aggregate and create cliff installment when date === cliffDate
+    if (isAt) {
+      aggregate += amt;
+      installments.push(fn({ date, amount: aggregate }));
+      cliffResolved = true;
+      continue;
+    }
+
+    // If the cliff has not yet been resolved, create a cliff installment if the cliff date precedes the next date
+    if (!cliffResolved && lt(cliffDate, date)) {
+      installments.push(fn({ date: cliffDate, amount: aggregate }));
+      cliffResolved = true;
     }
     installments.push(fn({ date, amount: amt }));
   }
