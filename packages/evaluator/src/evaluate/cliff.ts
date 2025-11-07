@@ -1,9 +1,10 @@
 import type {
   Blocker,
   EvaluationContext,
+  ImpossibleInstallment,
   OCTDate,
-  ResolvedTranche,
-  UnresolvedTranche,
+  ResolvedInstallment,
+  UnresolvedInstallment,
   VestingNode,
 } from "@vestlang/types";
 import {
@@ -16,19 +17,23 @@ import {
 import { eq, lt } from "./time.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
 import {
-  makeBeforeCliffTranche,
-  makeBeforeCliffTranches,
-  makeImpossibleTranches,
-  makeResolvedTranche,
-  makeStartPlusTranches,
+  makeUnresolvedCliffSchedule,
+  makeImpossibleSchedule,
+  makeResolvedInstallment,
+  makeStartPlusSchedule,
+  makeUnresolvedCliffInstallment,
 } from "./makeTranches.js";
+import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
 
 export function evaluateCliff(
   resSchedule: PickedResolved<ScheduleWithCliff>,
   dates: OCTDate[],
   amounts: number[],
   ctx: EvaluationContext,
-) {
+):
+  | EvaluatedSchedule<ImpossibleInstallment>
+  | EvaluatedSchedule<ResolvedInstallment>
+  | EvaluatedSchedule<UnresolvedInstallment> {
   // Prepare ctx and check if the cliff is resolved
   const overlayCtx: EvaluationContext = {
     ...ctx,
@@ -40,11 +45,11 @@ export function evaluateCliff(
 
   // impossible cliff
   if (resCliff.type === "IMPOSSIBLE")
-    return makeImpossibleTranches(amounts, resCliff.blockers);
+    return makeImpossibleSchedule(amounts, resCliff.blockers);
 
   // unresolved cliff and no best of LATER_OF selector
   if (resCliff.type === "UNRESOLVED")
-    return makeBeforeCliffTranches(dates, amounts, resCliff.blockers);
+    return makeUnresolvedCliffSchedule(dates, amounts, resCliff.blockers);
 
   // Resolved Cliff
   if (isPickedResolved(resCliff))
@@ -61,7 +66,7 @@ export function evaluateCliff(
 
   // Unresolved Cliff and no best of LATER_OF selector
   // NOTE: consider throwing an error here.  cliffRes should not return Picked with an unresolved node unless cliff.type is LATER_OF
-  return makeStartPlusTranches(
+  return makeStartPlusSchedule(
     amounts,
     vestingPeriod.type,
     vestingPeriod.length,
@@ -75,7 +80,7 @@ function evaluateCliffGeneric<T>(
   cliffDate: OCTDate,
   fn: (x: { date: OCTDate; amount: number }) => T,
 ): T[] {
-  const tranches: T[] = [];
+  const installments: T[] = [];
   let aggregate = 0;
 
   for (let i = 0; i < dates.length; i++) {
@@ -89,13 +94,13 @@ function evaluateCliffGeneric<T>(
 
     if (isBefore) continue;
     if (isAt) {
-      tranches.push(fn({ date, amount: aggregate }));
+      installments.push(fn({ date, amount: aggregate }));
       continue;
     }
-    tranches.push(fn({ date, amount: amt }));
+    installments.push(fn({ date, amount: amt }));
   }
 
-  return tranches;
+  return installments;
 }
 
 export function evaluateGrantDate(
@@ -125,13 +130,15 @@ function evaluateResolvedCliff(
   dates: OCTDate[],
   amounts: number[],
   cliffDate: OCTDate,
-): ResolvedTranche[] {
-  return evaluateCliffGeneric<ResolvedTranche>(
+): EvaluatedSchedule<ResolvedInstallment> {
+  const installments = evaluateCliffGeneric<ResolvedInstallment>(
     dates,
     amounts,
     cliffDate,
-    ({ date, amount }) => makeResolvedTranche(date, amount),
+    ({ date, amount }) => makeResolvedInstallment(date, amount),
   );
+
+  return { installments, blockers: [] };
 }
 
 function evaluateUnresolvedCliff(
@@ -139,11 +146,14 @@ function evaluateUnresolvedCliff(
   amounts: number[],
   cliffDate: OCTDate,
   blockers: Blocker[],
-): UnresolvedTranche[] {
-  return evaluateCliffGeneric<UnresolvedTranche>(
+): EvaluatedSchedule<UnresolvedInstallment> {
+  const installments = evaluateCliffGeneric<UnresolvedInstallment>(
     dates,
     amounts,
     cliffDate,
-    ({ date, amount }) => makeBeforeCliffTranche(date, amount, blockers),
+    ({ date, amount }) =>
+      makeUnresolvedCliffInstallment(date, amount, blockers),
   );
+
+  return { installments, blockers };
 }

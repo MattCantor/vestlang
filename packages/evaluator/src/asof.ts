@@ -1,15 +1,15 @@
 import {
   EvaluationContextInput,
-  Statement as NormalizedStatement,
-  Tranche,
+  Statement,
+  Installment,
 } from "@vestlang/types";
 import { evaluateStatement } from "./evaluate/index.js";
 import { prepare } from "./utils.js";
 
 export interface VestedResult {
-  vested: Tranche[];
-  unvested: Tranche[];
-  impossible: Tranche[];
+  vested: Installment[];
+  unvested: Installment[];
+  impossible: Installment[];
   unresolved: number; // quantity not yet schedulable
 }
 
@@ -18,19 +18,19 @@ export interface VestedResult {
  * Expands the schedule, converts amount -> quantity, and splits tranches
  */
 export function evaluateStatementAsOf(
-  stmt: NormalizedStatement,
+  stmt: Statement,
   ctx_input: EvaluationContextInput,
 ): VestedResult {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
 
-  const tranches = evaluateStatement(stmt, ctx_input);
+  const installments = evaluateStatement(stmt, ctx_input).installments;
 
-  const vested: Tranche[] = [];
-  const unvested: Tranche[] = [];
-  const impossible: Tranche[] = [];
+  const vested: Installment[] = [];
+  const unvested: Installment[] = [];
+  const impossible: Installment[] = [];
   let unresolved = 0;
 
-  if (tranches.length === 0) {
+  if (installments.length === 0) {
     return {
       vested,
       unvested,
@@ -39,7 +39,7 @@ export function evaluateStatementAsOf(
     };
   }
 
-  for (const t of tranches) {
+  for (const t of installments) {
     switch (t.meta.state) {
       case "IMPOSSIBLE":
         impossible.push(t);

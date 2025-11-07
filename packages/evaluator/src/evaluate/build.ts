@@ -3,8 +3,10 @@ import type {
   OCTDate,
   EvaluationContext,
   EvaluationContextInput,
-  Tranche,
   Schedule,
+  Installment,
+  ResolvedInstallment,
+  UnresolvedInstallment,
 } from "@vestlang/types";
 import { prepare } from "../utils.js";
 import { allocateQuantity } from "./allocation.js";
@@ -13,11 +15,12 @@ import { nextDate } from "./time.js";
 import { evaluateCliff, evaluateGrantDate } from "./cliff.js";
 import type { Picked, PickedResolved, ScheduleWithCliff } from "./utils.js";
 import {
-  makeBeforeVestingStartTranche,
-  makeImpossibleTranche,
-  makeResolvedTranches,
-  makeStartPlusTranches,
+  makeUnresolvedVestingStartSchedule,
+  makeImpossibleSchedule,
+  makeResolvedSchedule,
+  makeStartPlusSchedule,
 } from "./makeTranches.js";
+import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
 
 /* ------------------------
  * Helpers
@@ -31,18 +34,20 @@ import {
 export function evaluateStatement(
   stmt: Statement,
   ctx_input: EvaluationContextInput,
-): Tranche[] {
+): EvaluatedSchedule<Installment> {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
   const resSchedule = evaluateScheduleExpr(stmt.expr, ctx);
 
   switch (resSchedule.type) {
     case "IMPOSSIBLE":
-      return [makeImpossibleTranche(statementQuantity, resSchedule.blockers)];
+      return makeImpossibleSchedule([statementQuantity], resSchedule.blockers);
 
     case "UNRESOLVED":
-      return [
-        makeBeforeVestingStartTranche(ctx.grantQuantity, resSchedule.blockers),
-      ];
+      return makeUnresolvedVestingStartSchedule(
+        [statementQuantity],
+        resSchedule.blockers,
+      );
+
     case "PICKED":
       return evaluateSchedule(resSchedule, statementQuantity, ctx);
   }
@@ -52,14 +57,16 @@ function evaluateSchedule(
   resSchedule: Picked<Schedule>,
   statementQuantity: number,
   ctx: EvaluationContext,
-): Tranche[] {
+): EvaluatedSchedule<Installment> {
   const pickedSchedule = resSchedule.picked;
   const vestingPeriod = pickedSchedule.periodicity;
   const { type, length, occurrences } = vestingPeriod;
 
   // Return [] if there are no installments
   if (occurrences < 1) {
-    return [];
+    throw new Error(
+      `Expected ${JSON.stringify(resSchedule.picked)} to have at least one installment.`,
+    );
   }
 
   // Create an array of the installment amounts from the quantity applicable to this statement
@@ -71,7 +78,7 @@ function evaluateSchedule(
 
   // Unrsolved start
   if (resSchedule.meta.type === "UNRESOLVED")
-    return makeStartPlusTranches(
+    return makeStartPlusSchedule(
       installmentAmounts,
       type,
       length,
@@ -100,7 +107,7 @@ function evaluateSchedule(
 
   // No cliff
   if (!vestingPeriod.cliff)
-    return makeResolvedTranches(dates, installmentAmounts);
+    return makeResolvedSchedule(dates, installmentAmounts);
 
   // With cliff
   return evaluateCliff(

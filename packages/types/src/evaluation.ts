@@ -82,51 +82,60 @@ export type ImpossibleNode = {
 export type NodeMeta = ResolvedNode | UnresolvedNode | ImpossibleNode;
 
 /* ------------------------
- * Tranche
+ * Installments
  * ------------------------ */
 
-export interface TrancheMeta {
+export interface InstallmentMeta {
   index?: number;
   state: NodeResolutionState;
-  date?: SymbolicDate;
-  // blockers?: Blocker[];
-  blockers?: string;
+  symbolicDate?: SymbolicDate;
+  unresolved?: string;
 }
 
-export interface BaseTranche {
+export interface BaseInstallment {
   amount: number;
   date?: OCTDate;
-  meta: TrancheMeta;
+  meta: InstallmentMeta;
 }
 
-export interface ImpossibleTranche extends BaseTranche {
+export interface ImpossibleInstallment extends BaseInstallment {
   amount: number;
   date?: never;
   meta: {
     state: "IMPOSSIBLE";
-    date?: never;
-    // blockers: Blocker[];
-    blockers: string;
+    symbolicDate?: never;
+    unresolved: string;
   };
 }
 
-export interface UnresolvedTranche extends BaseTranche {
+export interface UnresolvedInstallment extends BaseInstallment {
   date?: never;
   meta: {
     state: "UNRESOLVED";
-    date: SymbolicDate;
-    // blockers: Blocker[];
-    blockers: string;
+    symbolicDate: SymbolicDate;
+    unresolved: string;
   };
 }
 
-export interface ResolvedTranche extends BaseTranche {
+export interface ResolvedInstallment extends BaseInstallment {
   date: OCTDate;
   meta: {
     state: "RESOLVED";
-    date?: never;
-    blockers?: never;
+    symbolicDate?: never;
+    unresolved?: never;
   };
 }
 
-export type Tranche = ImpossibleTranche | UnresolvedTranche | ResolvedTranche;
+export type Installment =
+  | ImpossibleInstallment
+  | UnresolvedInstallment
+  | ResolvedInstallment;
+
+/* ------------------------
+ * Evaluated Schedule
+ * ------------------------ */
+
+export interface EvaluatedSchedule<T extends Installment> {
+  installments: T[];
+  blockers: Blocker[];
+}

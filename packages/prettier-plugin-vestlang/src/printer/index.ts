@@ -5,7 +5,7 @@ import { group, hardline, indent, join, softline } from "../builders.js";
 
 export const printer: Printer = {
   print(path: AstPath): Doc {
-    const node = path.node as RawProgram | RawStatement | RawScheduleExpr | any;
+    const node = path.node as RawStatement | RawStatement[];
 
     if (Array.isArray(node)) {
       // Program = Statement[]

@@ -33,12 +33,18 @@ export function evaluate(
   const results = normalized.map((s) => evaluateStatement(s, ctx));
   results.forEach((r) => {
     console.table(
-      r.map((item) => ({
+      r.installments.map((item) => ({
         amount: item.amount,
-        date: item.date ?? JSON.stringify(item.meta.date) ?? "None",
+        date: item.date ?? JSON.stringify(item.meta.symbolicDate),
         state: item.meta.state,
-        blockers: item.meta.blockers ?? "None",
+        unresolved: item.meta.unresolved,
       })),
     );
+    if (r.blockers.length > 0) {
+      console.log();
+      console.log("Blockers");
+      r.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
+      console.log();
+    }
   });
 }

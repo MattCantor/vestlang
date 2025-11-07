@@ -1,73 +1,24 @@
 import type {
   Blocker,
   ImpossibleBlocker,
-  ImpossibleTranche,
+  ImpossibleInstallment,
   OCTDate,
   PeriodTag,
-  ResolvedTranche,
+  ResolvedInstallment,
   UnresolvedBlocker,
-  UnresolvedTranche,
+  UnresolvedInstallment,
 } from "@vestlang/types";
 import { blockerToString } from "./blockerToString.js";
+import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
 
-export function makeImpossibleTranche(
-  amount: number,
-  blockers: ImpossibleBlocker[],
-): ImpossibleTranche {
-  return {
-    amount,
-    meta: {
-      state: "IMPOSSIBLE",
-      blockers: blockers.map(blockerToString).join(", "),
-    },
-  };
-}
+/* ------------------------
+ * Resolved
+ * ------------------------ */
 
-export function makeImpossibleTranches(
-  amounts: number[],
-  blockers: ImpossibleBlocker[],
-): ImpossibleTranche[] {
-  return Array.from({ length: amounts.length }, (_, i) => {
-    return makeImpossibleTranche(amounts[i], blockers);
-  });
-}
-
-export function makeStartPlusTranche(
-  index: number,
-  amount: number,
-  unit: PeriodTag,
-  stepLength: number,
-  blockers: Blocker[],
-): UnresolvedTranche {
-  return {
-    amount,
-    meta: {
-      state: "UNRESOLVED",
-      date: {
-        type: "START_PLUS",
-        unit,
-        steps: index * stepLength,
-      },
-      blockers: blockers.map(blockerToString).join(", "),
-    },
-  };
-}
-
-export function makeStartPlusTranches(
-  amounts: number[],
-  unit: PeriodTag,
-  steplength: number,
-  blockers: Blocker[],
-): UnresolvedTranche[] {
-  return Array.from({ length: amounts.length }, (_, i) => {
-    return makeStartPlusTranche(i, amounts[i], unit, steplength, blockers);
-  });
-}
-
-export function makeResolvedTranche(
+export function makeResolvedInstallment(
   date: OCTDate,
   amount: number,
-): ResolvedTranche {
+): ResolvedInstallment {
   return {
     amount,
     date,
@@ -75,52 +26,151 @@ export function makeResolvedTranche(
   };
 }
 
-export function makeResolvedTranches(
+export function makeResolvedSchedule(
   dates: OCTDate[],
   amounts: number[],
-): ResolvedTranche[] {
-  const tranches: ResolvedTranche[] = [];
+): EvaluatedSchedule<ResolvedInstallment> {
+  const installments: ResolvedInstallment[] = [];
   dates.forEach((date, i) =>
-    tranches.push(makeResolvedTranche(date, amounts[i])),
+    installments.push(makeResolvedInstallment(date, amounts[i])),
   );
-  return tranches;
+  return { installments, blockers: [] };
 }
 
-export function makeBeforeVestingStartTranche(
+/* ------------------------
+ * Impossible
+ * ------------------------ */
+
+function makeImpossibleInstallment(
   amount: number,
-  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): UnresolvedTranche {
+  blockers: ImpossibleBlocker[],
+): ImpossibleInstallment {
   return {
     amount,
     meta: {
-      state: "UNRESOLVED",
-      date: { type: "UNRESOLVED_VESTING_START" },
-      blockers: blockers.map(blockerToString).join(", "),
+      state: "IMPOSSIBLE",
+      unresolved: blockers.map(blockerToString).join(", "),
     },
   };
 }
 
-export function makeBeforeCliffTranche(
+export function makeImpossibleSchedule(
+  amounts: number[],
+  blockers: ImpossibleBlocker[],
+): EvaluatedSchedule<ImpossibleInstallment> {
+  const installments = Array.from({ length: amounts.length }, (_, i) => {
+    return makeImpossibleInstallment(amounts[i], blockers);
+  });
+
+  return {
+    installments,
+    blockers,
+  };
+}
+
+/* ------------------------
+ * Start Plus
+ * ------------------------ */
+
+function makeStartPlusInstallment(
+  index: number,
+  amount: number,
+  unit: PeriodTag,
+  stepLength: number,
+  blockers: Blocker[],
+): UnresolvedInstallment {
+  return {
+    amount,
+    meta: {
+      state: "UNRESOLVED",
+      symbolicDate: {
+        type: "START_PLUS",
+        unit,
+        steps: index * stepLength,
+      },
+      unresolved: blockers.map(blockerToString).join(", "),
+    },
+  };
+}
+
+export function makeStartPlusSchedule(
+  amounts: number[],
+  unit: PeriodTag,
+  steplength: number,
+  blockers: Blocker[],
+): EvaluatedSchedule<UnresolvedInstallment> {
+  const installments = Array.from({ length: amounts.length }, (_, i) => {
+    return makeStartPlusInstallment(i, amounts[i], unit, steplength, blockers);
+  });
+
+  return {
+    installments,
+    blockers,
+  };
+}
+
+/* ------------------------
+ * Unresolved Vesting Start
+ * ------------------------ */
+
+function makeUnresolvedVestingStartInstallment(
+  amount: number,
+  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
+): UnresolvedInstallment {
+  return {
+    amount,
+    meta: {
+      state: "UNRESOLVED",
+      symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+      unresolved: blockers.map(blockerToString).join(", "),
+    },
+  };
+}
+
+export function makeUnresolvedVestingStartSchedule(
+  amounts: number[],
+  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
+): EvaluatedSchedule<UnresolvedInstallment> {
+  const installments = Array.from({ length: amounts.length }, (_, i) => {
+    return makeUnresolvedVestingStartInstallment(amounts[i], blockers);
+  });
+
+  return {
+    installments,
+    blockers,
+  };
+}
+
+/* ------------------------
+ * Unresolved Cliff
+ * ------------------------ */
+
+export function makeUnresolvedCliffInstallment(
   date: OCTDate,
   amount: number,
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): UnresolvedTranche {
+): UnresolvedInstallment {
   return {
     amount,
     meta: {
       state: "UNRESOLVED",
-      date: { type: "UNRESOLVED_CLIFF", date },
-      blockers: blockers.map(blockerToString).join(", "),
+      symbolicDate: { type: "UNRESOLVED_CLIFF", date },
+      unresolved: blockers.map(blockerToString).join(", "),
     },
   };
 }
 
-export function makeBeforeCliffTranches(
+export function makeUnresolvedCliffSchedule(
   dates: OCTDate[],
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): UnresolvedTranche[] {
-  return Array.from({ length: amounts.length }, (_, i) => {
-    return makeBeforeCliffTranche(dates[i], amounts[i], blockers);
+): EvaluatedSchedule<UnresolvedInstallment> {
+  const installments = Array.from({ length: amounts.length }, (_, i) => {
+    return makeUnresolvedCliffInstallment(dates[i], amounts[i], blockers);
   });
+
+  return {
+    installments,
+    blockers,
+  };
 }

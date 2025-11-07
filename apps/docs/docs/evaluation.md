@@ -62,15 +62,20 @@ If this statement is evaluated with an unresolved `EVENT milestone`, then vestin
 
 ---
 
-## Resolved Installments
+## Resolved Schedule
+
+A schedule of resolved installments has the folllowing shape:
 
 ```ts
 {
-  amount: number,
-  date: OCTDate,
-  meta: {
-    state: "RESOLVED"
-  }
+  installments: {
+    amount: number,
+    date: OCTDate,
+    meta: {
+      state: "RESOLVED"
+    }
+  },
+  blockers: [] // empty array when installments are resolved
 }
 ```
 
@@ -94,24 +99,54 @@ A time-based vesting schedule without conditions always resolves. The example be
 | 25     | 2028-01-01 | RESOLVED |
 | 25     | 2029-01-01 | RESOLVED |
 
-## Unresolved Installments
+## Unresolved Schedule
 
-Unrsolved installments have the following shape:
+A schedule of unrsolved installments has the following shape:
 
 ```ts
 {
-  amount: number,
-  meta: {
-    state: "UNRESOLVED",
-    date: SymbolicDate,
-    blockers: string[]
-  }
+  installments: {
+    amount: number,
+    meta: {
+      state: "UNRESOLVED",
+      date: SymbolicDate,
+      unresolved: string[] // the unresolved portion of the DSL statement
+    }
+  },
+  blockers: Blocker[]
 }
 ```
 
+### Blockers
+
+Unresolved installments include one of the following blockers:
+
+```ts
+type UnresolvedBlocker =
+  | {
+      type: "EVENT_NOT_YET_OCCURRED";
+      event: string;
+    }
+  | {
+      type: "UNRESOLVED_SELECTOR";
+      selector: "EARLIER_OF" | "LATER_OF";
+      blockers: Blocker[];
+    }
+  | {
+      type: "DATE_NOT_YET_OCCURRED";
+      date: OCTDate;
+    }
+  | {
+      type: "UNRESOLVED_CONDITION";
+      condition: Omit<VestingNode, "type">;
+    };
+```
+
+### Symbolic Dates
+
 Unresolved installments contain the one of the following symbolic dates:
 
-### Before Vesting Date
+#### Before Vesting Date
 
 ```ts
 {
@@ -119,19 +154,30 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-#### DSL
+##### DSL
 
 ```vest
 100 VEST FROM EVENT milestone
 ```
 
-#### Vesting Installments
+##### Vesting Installments
 
-| Amount | Date                                | Status     | Blockers          |
+###### Installments
+
+| Amount | Date                                | Status     | Unresolved        |
 | :----- | :---------------------------------- | :--------- | :---------------- |
 | 100    | `{type: UNRESOLVED_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
 
-### Start Plus
+###### Blockers
+
+```json
+{
+  "type": "EVENT_NOT_YET_OCCURRED",
+  "event": "milestone"
+}
+```
+
+#### Start Plus
 
 ```ts
 {
@@ -141,7 +187,7 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-#### DSL
+##### DSL
 
 ```vest
 100 VEST FROM LATER OF(
@@ -151,16 +197,27 @@ Unresolved installments contain the one of the following symbolic dates:
   OVER 48 months EVERY 12 months
 ```
 
-#### Vesting Installments
+##### Vesting Installments
 
-| Amount | Date                                            | State      | Blockers           |
+###### Installments
+
+| Amount | Date                                            | State      | Unresolved         |
 | :----- | :---------------------------------------------- | :--------- | :----------------- |
 | 25     | `{ type: START_PLUS, unit: MONTHS, steps: 0 }`  | UNRESOLVED | `EVENT milestone2` |
 | 25     | `{ type: START_PLUS, unit: MONTHS, steps: 12 }` | UNRESOLVED | `EVENT milestone2` |
 | 25     | `{ type: START_PLUS, unit: MONTHS, steps: 24 }` | UNRESOLVED | `EVENT milestone2` |
 | 25     | `{ type: START_PLUS, unit: MONTHS, steps: 36 }` | UNRESOLVED | `EVENT milestone2` |
 
-### Maybe Before Cliff
+###### Blockers
+
+```json
+{
+  "type": "EVENT_NOT_YET_OCCURRED",
+  "event": "milestone2"
+}
+```
+
+#### Maybe Before Cliff
 
 ```ts
 {
@@ -169,7 +226,7 @@ Unresolved installments contain the one of the following symbolic dates:
 }
 ```
 
-#### DSL
+##### DSL
 
 ```vest
 100 VEST
@@ -177,14 +234,25 @@ Unresolved installments contain the one of the following symbolic dates:
   CLIFF EVENT milestone
 ```
 
-#### Vesting Installments
+##### Vesting Installments
 
-| Amount | Date                                           | State      | Blockers          |
+###### Installments
+
+| Amount | Date                                           | State      | Unresolved        |
 | :----- | :--------------------------------------------- | :--------- | :---------------- |
 | 25     | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | `EVENT milestone` |
 | 25     | `{ type: UNRESOLVED_CLIFF, date: 2027-01-01 }` | UNRESOLVED | `EVENT milestone` |
 | 25     | `{ type: UNRESOLVED_CLIFF, date: 2028-01-01 }` | UNRESOLVED | `EVENT milestone` |
 | 25     | `{ type: UNRESOLVED_CLIFF, date: 2029-01-01 }` | UNRESOLVED | `EVENT milestone` |
+
+###### Blockers
+
+```json
+{
+  "type": "EVENT_NOT_YET_OCCURRED",
+  "event": "milestone"
+}
+```
 
 ## Impossible Installments
 
@@ -195,9 +263,26 @@ Impossible installments have the following shape:
   amount: number,
   meta: {
     state: "IMPOSSIBLE",
-    blockers: string[]
+    blockers: string[] // the impossible portion of the DSL statement
   }
 }
+```
+
+#### Blockers
+
+Impossible installments include one of the following blockers:
+
+```ts
+type ImpossibleBlocker =
+  | {
+      type: "IMPOSSIBLE_SELECTOR";
+      selector: "EARLIER_OF" | "LATER_OF";
+      blockers: ImpossibleBlocker[];
+    }
+  | {
+      type: "IMPOSSIBLE_CONDITION";
+      condition: Omit<VestingNode, "type">;
+    };
 ```
 
 #### DSL
@@ -208,9 +293,41 @@ Impossible installments have the following shape:
 
 #### Vesting Installments
 
-| Amount | State      | Blockers                                 |
+##### Installments
+
+| Amount | State      | Unresolved                               |
 | :----- | :--------- | :--------------------------------------- |
 | 100    | IMPOSSIBLE | `EVENT milestone BEFORE DATE 2025-01-01` |
+
+##### Blockers
+
+```json
+{
+  "type": "IMPOSSIBLE_CONDITION",
+  "condition": {
+    "base": {
+      "type": "EVENT",
+      "value": "milestone"
+    },
+    "offsets": [],
+    "constraints": {
+      "type": "ATOM",
+      "constraint": {
+        "type": "BEFORE",
+        "base": {
+          "type": "SINGLETON",
+          "base": {
+            "type": "DATE",
+            "value": "2025-01-01"
+          },
+          "offsets": []
+        },
+        "strict": false
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -237,7 +354,7 @@ If this statement is evaluated at a time when `EVENT milestone` is not resolved,
 
 Nonetheless, since this is a `LATER OF` statement we know that a that a 12 month cliff will always apply:
 
-| Amount | Symbolic Date                                | State      | Blockers        |
+| Amount | Symbolic Date                                | State      | Unresolved      |
 | ------ | -------------------------------------------- | ---------- | --------------- |
 | 25     | `{type: UNRESOLVED_CLIFF, date: 2026-01-01}` | UNRESOLVED | EVENT milestone |
 | 6      | `{type: UNRESOLVED_CLIFF, date: 2026-04-01}` | UNRESOLVED | EVENT milestone |
@@ -279,41 +396,3 @@ For instance, consider an award over 100 shares granted on 2025-01-01 with a 4-y
 | 6      | 2027-07-01 | RESOLVED |
 | 6      | 2027-10-01 | RESOLVED |
 | 7      | 2028-01-01 | RESOLVED |
-
-## Blockers
-
-The `blockers` included in the resolved and unresolved vesting installments above are partial vestlang DSL statemens, representing the portion of the statement that has not yet resolved.
-
-Within the evaluator, this is done via interpretating the following internal blocker shapes. These blockers could be returned with each vesting installment directly, rather than the interpreted DSL string:
-
-```ts
-type UnresolvedBlocker =
-  | {
-      type: "EVENT_NOT_YET_OCCURRED";
-      event: string;
-    }
-  | {
-      type: "UNRESOLVED_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
-      blockers: Blocker[];
-    }
-  | {
-      type: "DATE_NOT_YET_OCCURRED";
-      date: OCTDate;
-    }
-  | {
-      type: "UNRESOLVED_CONDITION";
-      condition: Omit<VestingNode, "type">;
-    };
-
-type ImpossibleBlocker =
-  | {
-      type: "IMPOSSIBLE_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
-      blockers: ImpossibleBlocker[];
-    }
-  | {
-      type: "IMPOSSIBLE_CONDITION";
-      condition: Omit<VestingNode, "type">;
-    };
-```
