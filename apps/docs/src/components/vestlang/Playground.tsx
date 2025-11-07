@@ -16,6 +16,7 @@ import type {
   Installment,
   OCTDate,
 } from "@vestlang/types";
+import { InstallmentsTable } from "./installmentsTable";
 
 function toISODate(d: Date): OCTDate {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -261,15 +262,9 @@ export default function Playground(): ReactNode {
           {schedule && (
             <>
               <h3 style={{ marginBottom: 4 }}>Installments</h3>
-              <pre
-                style={{
-                  background: "var(--ifm-pre-background)",
-                  padding: 12,
-                  overflow: "auto",
-                }}
-              >
-                {JSON.stringify(schedule, null, 2)}
-              </pre>
+              {schedule.map((s, index) => (
+                <InstallmentsTable key={index} installments={s.installments} />
+              ))}
             </>
           )}
         </div>
