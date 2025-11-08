@@ -1,13 +1,13 @@
-import { EvaluatedSchedule, Installment } from "@vestlang/types";
+import { EvaluatedSchedule } from "@vestlang/types";
 
 export function InstallmentsTable({
   installments,
 }: {
-  installments: EvaluatedSchedule<Installment>["installments"];
+  installments: EvaluatedSchedule["installments"];
 }) {
   return (
-    <div className="installmentsTable__wrapper">
-      <table className="installmentsTable">
+    <div>
+      <table>
         <thead>
           <tr>
             <th>Amount</th>

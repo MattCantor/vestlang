@@ -1,6 +1,3 @@
 VEST
   OVER 48 months EVERY 3 months
-  CLIFF LATER OF(
-    EVENT A,
-    EVENT milestone
-  )
+  CLIFF EVENT milestone
