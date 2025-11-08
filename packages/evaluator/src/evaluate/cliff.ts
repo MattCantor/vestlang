@@ -94,6 +94,10 @@ function evaluateCliffGeneric<T>(
     // only aggregate for dates before the cliff
     if (isBefore) {
       aggregate += amt;
+      // create an installment for the cliff date if this is the last date and we're still before the cliff
+      if (i === dates.length - 1) {
+        installments.push(fn({ date: cliffDate, amount: aggregate }));
+      }
       continue;
     }
 
