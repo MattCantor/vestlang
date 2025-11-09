@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunk_vestlang_docs=self.webpackChunk_vestlang_docs||[]).push([[647],{8829:(e,s,r)=>{r.r(s),r.d(s,{default:()=>d});r(9430);var a=r(851),c=r(5473),n=r(7846),t=r(362),u=r(3109),l=r(5270);function d(e){return(0,l.jsx)(n.e3,{className:(0,a.A)(c.G.wrapper.docsPages),children:(0,l.jsx)(u.A,{children:(0,t.v)(e.route.routes)})})}}}]);
