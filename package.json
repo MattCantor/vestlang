@@ -2,7 +2,10 @@
   "name": "vestlang",
   "private": true,
   "packageManager": "pnpm@10.17.1",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",

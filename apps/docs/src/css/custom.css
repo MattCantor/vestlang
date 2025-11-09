@@ -15,8 +15,18 @@
   --ifm-color-primary-lightest: #3cad6e;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
-}
+  --background: var(--ifm-background-color);
+  --foreground: var(--ifm-font-color-base);
+  --card: var(--surface);
+  --card-foreground: var(--ifm-font-color-base);
+  --input: var(--ifm-color-emphasis-200);
+  --border: var(--ifm-toc-border-color);
+  --ring: var(--ifm-color-primary);
+  --ring-offset: var(--ifm-background-color);
 
+  --muted-foreground: var(--ifm-color-emphasis-700);
+  --destructive: #ef4444;
+}
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme="dark"] {
   --ifm-color-primary: #25c2a0;
@@ -27,6 +37,11 @@
   --ifm-color-primary-lighter: #32d8b4;
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --input: color-mixin9in oklab, var(--ifm-color-emphasis-200) 35%, white 0%)
+  --border: var(--ifm-color-emphasis-300)
+  --ring: var(--ifm-color-primary)
+  --ring-offset: var(--ifm-background-color)
+;
 }
 
 /* ── VESTLANG syntax: (dark) ───────────────────── */
@@ -92,3 +107,5 @@ pre.language-vest span.token.punctuation {
   color: #5c5f77 !important;
   opacity: 0.6;
 }
+
+@import "tailwindcss";

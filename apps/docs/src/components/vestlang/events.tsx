@@ -1,136 +1,61 @@
 import { OCTDate } from "@vestlang/types";
 import { Dispatch, SetStateAction } from "react";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
 
 export default function Events({
   events,
-  eventName,
-  setEventName,
-  eventDate,
-  setEventDate,
   setEvents,
 }: {
   events: Record<string, OCTDate>;
-  eventName: string;
-  setEventName: Dispatch<SetStateAction<string>>;
-  eventDate: OCTDate;
-  setEventDate: Dispatch<SetStateAction<OCTDate>>;
   setEvents: Dispatch<SetStateAction<Record<string, OCTDate>>>;
 }) {
-  const onAddEvent = () => {
-    const name = eventName.trim();
-    const date = eventDate as OCTDate;
-    if (!name) return;
-    setEvents((prev: Record<string, OCTDate>) => ({ ...prev, [name]: date }));
-    setEventName("");
-  };
-
-  const onRemoveEvent = (name: string) => {
-    setEvents((prev: Record<string, OCTDate>) => {
-      const { [name]: _, ...rest } = prev;
-      return rest;
-    });
+  const onChangeEvent = (name: string, date: OCTDate) => {
+    setEvents((prev: Record<string, OCTDate>) => ({
+      ...prev,
+      [name]: date,
+    }));
   };
 
   return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ fontWeight: 600 }}>Events (name - YYYY-MM-DD)</div>
-
-      <div
-        style={{
-          display: "grid",
-          gap: 8,
-          gridTemplateColumns: "1fr 180px 120px",
-        }}
-      >
-        <input
-          type="text"
-          placeholder="e.g., milestone"
-          value={eventName}
-          onChange={(e) => setEventName(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <input
-          type="date"
-          value={eventDate}
-          onChange={(e) => setEventDate(e.target.value)}
-          style={{ padding: 8 }}
-        />
-        <button
-          onClick={onAddEvent}
-          disabled={!eventName.trim()}
-          style={{ padding: 8 }}
-        >
-          Add event
-        </button>
-      </div>
-
+    <div className="space-y-3">
       {Object.keys(events).length > 0 ? (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: 8,
-                  borderBottom: "1px solid var(--ifm-toc-border-color)",
-                }}
-              >
-                Name
-              </th>
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: 8,
-                  borderBottom: "1px solid var(--ifm-toc-border-color)",
-                }}
-              >
-                Date (YYYY-MM-DD)
-              </th>
-              <th
-                style={{
-                  width: 80,
-                  borderBottom: "1px solid var(--ifm-toc-border-color)",
-                }}
-              />
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(events).map(
-              ([name, date]: [string, OCTDate], index) => (
-                <tr key={`${name}-${index}`}>
-                  <td
-                    style={{
-                      padding: 8,
-                      borderBottom: "1px solid var(--ifm-toc-border-color)",
-                    }}
-                  >
-                    {name}
-                  </td>
-                  <td
-                    style={{
-                      padding: 8,
-                      borderBottom: "1px solid var(--ifm-toc-border-color)",
-                    }}
-                  >
-                    {date}
-                  </td>
-                  <td
-                    style={{
-                      padding: 8,
-                      textAlign: "right",
-                      borderBottom: "1px solid var(--ifm-toc-border-color)",
-                    }}
-                  >
-                    <button onClick={() => onRemoveEvent(name)}>Remove</button>
-                  </td>
+        <>
+          <Label className="text-sm font-medium">Events</Label>
+          <div className="overlow-x-auto">
+            <table className="w-auto min-w-max border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[color:var(--ifm-toc-border-color)]">
+                  <th className="text-left font-semibold py-2 pr-3">Name</th>
+                  <th className="text-left font-semibold py-2">Date</th>
                 </tr>
-              ),
-            )}
-          </tbody>
-        </table>
-      ) : (
-        <div style={{ opacity: 0.7 }}>No custom events added yet.</div>
-      )}
+              </thead>
+              <tbody>
+                {Object.entries(events).map(
+                  ([name, date]: [string, OCTDate], index) => (
+                    <tr
+                      key={`${name}-${index}`}
+                      className="border-b border-[color:var(--ifm-toc-border-color)] hover:bg-black/5 dark:hover:bg-white/5"
+                    >
+                      <td className="py-2 pr-3 whitespace-nowrap">{name}</td>
+                      <td className="py-2 pr-3">
+                        <Input
+                          type="date"
+                          value={date}
+                          onChange={(e) =>
+                            onChangeEvent(name, e.target.value as OCTDate)
+                          }
+                          className="min-w-[10rem]"
+                        />
+                      </td>
+                    </tr>
+                  ),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
