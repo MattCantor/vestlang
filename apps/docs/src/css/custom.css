@@ -37,11 +37,10 @@
   --ifm-color-primary-lighter: #32d8b4;
   --ifm-color-primary-lightest: #4fddbf;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-  --input: color-mixin9in oklab, var(--ifm-color-emphasis-200) 35%, white 0%)
-  --border: var(--ifm-color-emphasis-300)
-  --ring: var(--ifm-color-primary)
-  --ring-offset: var(--ifm-background-color)
-;
+  --input: var(--ifm-color-emphasis-200);
+  --border: var(--ifm-color-emphasis-300);
+  --ring: var(--ifm-color-primary);
+  --ring-offset: var(--ifm-background-color);
 }
 
 /* ── VESTLANG syntax: (dark) ───────────────────── */
