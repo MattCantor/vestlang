@@ -20,7 +20,7 @@ export default function PlaygroundResults({
         {schedules.map((s: EvaluatedSchedule, index: number) => (
           <>
             <InstallmentsTable key={index} installments={s.installments} />
-            {s.blockers.length > 0 ? JSON.stringify(s.blockers) : null}
+            {s.blockers.length > 0 ? JSON.stringify(s.blockers, null, 2) : null}
           </>
         ))}
       </TabsContent>

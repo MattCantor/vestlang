@@ -8,8 +8,8 @@ export default function Events({
   events,
   setEvents,
 }: {
-  events: Record<string, OCTDate>;
-  setEvents: Dispatch<SetStateAction<Record<string, OCTDate>>>;
+  events: Record<string, OCTDate | undefined>;
+  setEvents: Dispatch<SetStateAction<Record<string, OCTDate | undefined>>>;
 }) {
   const onChangeEvent = (name: string, date: OCTDate) => {
     setEvents((prev: Record<string, OCTDate>) => ({

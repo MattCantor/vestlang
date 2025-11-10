@@ -32,7 +32,7 @@ import { toISODate } from "./helpers";
 export default function Playground(): ReactNode {
   const [quantity, setQuantity] = useState<number>(100);
   const [grantDate, setGrantDate] = useState<Date>(new Date());
-  const [events, setEvents] = useState<Record<string, OCTDate>>({});
+  const [events, setEvents] = useState<Record<string, OCTDate | undefined>>({});
   const [dsl, setDsl] = useState<string>("");
   const [ast, setAst] = useState<Program | null>(null);
   const [schedules, setSchedules] = useState<EvaluatedSchedule[] | null>(null);
@@ -72,10 +72,10 @@ export default function Playground(): ReactNode {
       // - Keep only keys that exist in astEvents
       // - Preserve their prior date if present
       // - Add missing keys with todayISO
-      const nextEvents: Record<string, OCTDate> = {};
+      const nextEvents: Record<string, OCTDate | undefined> = {};
       for (const k of astEvents) {
         if (k === "grantDate" || k === "vestingStart") continue;
-        nextEvents[k] = events[k] ?? todayISO;
+        nextEvents[k] = events[k] ?? undefined;
       }
 
       // Update state
