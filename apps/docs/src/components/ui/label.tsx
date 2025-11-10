@@ -8,13 +8,8 @@ export function Label({
 }: React.ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root
-      date-slot="label"
-      className={clsx(
-        "flex items-center gap-2 text-sm leading-none font-medium select-none",
-        "peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
-        "group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50",
-        className,
-      )}
+      data-slot="label"
+      className={clsx("ui-label", className)}
       {...props}
     />
   );

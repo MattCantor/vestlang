@@ -16,7 +16,7 @@ export default function PlaygroundResults({
         <TabsTrigger value="Installments">Installments</TabsTrigger>
         <TabsTrigger value="AST">AST</TabsTrigger>
       </TabsList>
-      <TabsContent value="Installments" className="mt-4">
+      <TabsContent value="Installments" className="ui-mt-4">
         {schedules.map((s: EvaluatedSchedule, index: number) => (
           <>
             <InstallmentsTable key={index} installments={s.installments} />
@@ -25,7 +25,17 @@ export default function PlaygroundResults({
         ))}
       </TabsContent>
       <TabsContent value="AST">
-        <pre className="text-xs leading-relaxed overflow-auto max-h-[60vh] rounded-md p-3 bg-[color:var(--ifm-pre-background)]">
+        <pre
+          style={{
+            fontSize: "0.75rem",
+            lineHeight: 1.5,
+            overflow: "auto",
+            maxHeight: "60vh",
+            borderRadius: "var(--ui-radius)",
+            padding: "0.75rem",
+            background: "var(--ifm-pre-background)",
+          }}
+        >
           {JSON.stringify(ast, null, 2)}
         </pre>
       </TabsContent>

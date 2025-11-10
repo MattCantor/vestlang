@@ -56,8 +56,6 @@ const config: Config = {
       additionalLanguages: ["bash", "json", "typescript"],
     },
   } satisfies Preset.ThemeConfig,
-
-  plugins: [tailwindPlugin],
 };
 
 export default config;

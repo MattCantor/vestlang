@@ -38,10 +38,6 @@ export default function Playground(): ReactNode {
   const [schedules, setSchedules] = useState<EvaluatedSchedule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // local inputs for adding an event row
-  // const [eventName, setEventName] = useState<string>("");
-  // const [eventDate, setEventDate] = useState<OCTDate>(toISODate(new Date())); // YYYY-MM-DD
-
   const todayISO = useMemo(() => toISODate(new Date()), []);
 
   const getVestingEvents = (ast: Program): string[] => {
@@ -78,7 +74,7 @@ export default function Playground(): ReactNode {
       // - Add missing keys with todayISO
       const nextEvents: Record<string, OCTDate> = {};
       for (const k of astEvents) {
-        if (k === "grantDate") continue;
+        if (k === "grantDate" || k === "vestingStart") continue;
         nextEvents[k] = events[k] ?? todayISO;
       }
 
@@ -118,24 +114,22 @@ export default function Playground(): ReactNode {
   return (
     <BrowserOnly>
       {() => (
-        <div className="min-h-screen flex justify-center bg-gradient-to-br from-background to-muted/20 p-4">
-          <Card className="w-full max-w-2xl shadow-xl">
-            <CardHeader className="border-b bg-card">
-              <CardTitle className="text-2xl font-semibold">
+        <div className="ui-minh-screen ui-flex ui-center ui-bg-grad ui-p-4">
+          <Card className="ui-w-full ui-maxw-2xl ui-shadow-xl">
+            <CardHeader className="ui-border-b ui-bg-card">
+              <CardTitle className="ui-text-2xl ui-font-semibold">
                 Vestlang Playground
               </CardTitle>
               <CardDescription>
                 Enter grant details and DSL statement
               </CardDescription>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6 mb-8">
-                <div className="flex flex-col gap-4 max-w-lg mx-auto">
+            <CardContent className="ui-pt-6">
+              <div className="ui-spacey-6 ui-mb-8">
+                <div className="ui-col ui-gap-4 ui-maxw-lg ui-mx-auto">
                   {/* Quantity */}
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity" className="text-sm font-medium">
-                      Quantity
-                    </Label>
+                  <div className="ui-spacey-2">
+                    <Label htmlFor="quantity">Quantity</Label>
                     <Input
                       id="quantity"
                       type="number"
@@ -144,21 +138,19 @@ export default function Playground(): ReactNode {
                       onChange={(e) =>
                         setQuantity(Number(e.target.value) || 100)
                       }
-                      className="w-full"
+                      className="ui-w-full"
                     />
                   </div>
 
                   {/* Grant Date */}
-                  <div className="space-y-2">
-                    <Label htmlFor="grantDate" className="text-sm font-medium">
-                      Grant Date
-                    </Label>
+                  <div className="ui-spacey-2">
+                    <Label htmlFor="grantDate">Grant Date</Label>
                     <Input
                       id="grantDate"
                       type="date"
                       value={toISODate(grantDate)}
                       onChange={(e) => setGrantDate(new Date(e.target.value))}
-                      className="w-full"
+                      className="ui-w-full"
                     />
                   </div>
 
@@ -166,25 +158,27 @@ export default function Playground(): ReactNode {
                   <Events events={events} setEvents={setEvents} />
 
                   {/* --- DSL input --- */}
-                  <div className="space-y-2">
-                    <Label htmlFor="dsl" className="text-sm font-medium">
-                      DSL Input
-                    </Label>
+                  <div className="ui-spacey-2">
+                    <Label htmlFor="dsl">DSL Input</Label>
                     <Textarea
                       id="dsl"
                       value={dsl}
                       onChange={(e) => setDsl(e.target.value)}
-                      rows={3}
-                      className="w-full"
+                      rows={5}
+                      className="ui-w-full"
                     />
                   </div>
 
                   {/* --- DSL Error --- */}
                   {error && dsl !== "" && (
-                    <div>
-                      <strong>Error:</strong>
+                    <pre
+                      style={{
+                        color: "var(--ifm-color-danger-dark)",
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
                       {error}
-                    </div>
+                    </pre>
                   )}
                 </div>
               </div>

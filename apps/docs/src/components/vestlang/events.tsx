@@ -2,6 +2,7 @@ import { OCTDate } from "@vestlang/types";
 import { Dispatch, SetStateAction } from "react";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
+import clsx from "clsx";
 
 export default function Events({
   events,
@@ -18,16 +19,16 @@ export default function Events({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="ui-spacey-3">
       {Object.keys(events).length > 0 ? (
         <>
-          <Label className="text-sm font-medium">Events</Label>
-          <div className="overlow-x-auto">
-            <table className="w-auto min-w-max border-collapse text-sm">
+          <Label>Events</Label>
+          <div className="ui-ox-auto">
+            <table className={clsx("ui-table", "ui-w-auto", "ui-minw-max")}>
               <thead>
-                <tr className="border-b border-[color:var(--ifm-toc-border-color)]">
-                  <th className="text-left font-semibold py-2 pr-3">Name</th>
-                  <th className="text-left font-semibold py-2">Date</th>
+                <tr className="ui-tr--bordered">
+                  <th className="ui-th">Name</th>
+                  <th className="ui-th">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -35,17 +36,17 @@ export default function Events({
                   ([name, date]: [string, OCTDate], index) => (
                     <tr
                       key={`${name}-${index}`}
-                      className="border-b border-[color:var(--ifm-toc-border-color)] hover:bg-black/5 dark:hover:bg-white/5"
+                      className="ui-tr--bordered ui-tr--hover"
                     >
-                      <td className="py-2 pr-3 whitespace-nowrap">{name}</td>
-                      <td className="py-2 pr-3">
+                      <td className="ui-td">{name}</td>
+                      <td className="ui-td">
                         <Input
                           type="date"
                           value={date}
                           onChange={(e) =>
                             onChangeEvent(name, e.target.value as OCTDate)
                           }
-                          className="min-w-[10rem]"
+                          className="ui-minw-10rem"
                         />
                       </td>
                     </tr>
