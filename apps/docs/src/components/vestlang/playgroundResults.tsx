@@ -20,7 +20,21 @@ export default function PlaygroundResults({
         {schedules.map((s: EvaluatedSchedule, index: number) => (
           <>
             <InstallmentsTable key={index} installments={s.installments} />
-            {s.blockers.length > 0 ? JSON.stringify(s.blockers, null, 2) : null}
+            {s.blockers.length > 0 ? (
+              <pre
+                style={{
+                  fontSize: "0.75rem",
+                  lineHeight: 1.5,
+                  overflow: "auto",
+                  maxHeight: "60vh",
+                  borderRadius: "var(--ui-radius)",
+                  padding: "0.75rem",
+                  background: "var(--ifm-pre-background)",
+                }}
+              >
+                {JSON.stringify(s.blockers, null, 2)}
+              </pre>
+            ) : null}
           </>
         ))}
       </TabsContent>

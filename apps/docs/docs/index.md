@@ -20,6 +20,8 @@ An overview of the DSL grammar is available [here](./dsl_grammar.md). An overvie
 
 See [here](./evaluation.md) for additional detail regarding the evaluated `vesting` objects and additional metadata.
 
+Try it out in the [playground](./playground.mdx)!
+
 ---
 
 ## Vestlang as OCT vesting templating schema
