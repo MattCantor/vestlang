@@ -25,7 +25,7 @@ export default function Playground(): ReactNode {
   const [grantDate, setGrantDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<Record<string, OCTDate | undefined>>({});
   const [dsl, setDsl] = useState<string>(
-    "VEST OVER 4 years EVERY 3 months CLIFF EVENT milestone",
+    "VEST OVER 4 years EVERY 3 months CLIFF 12 months",
   );
   const [ast, setAst] = useState<Program | null>(null);
   const [schedules, setSchedules] = useState<EvaluatedSchedule[] | null>(null);
