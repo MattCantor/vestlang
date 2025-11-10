@@ -11,48 +11,61 @@ export default function PlaygroundResults({
   ast: Program;
 }): ReactNode {
   return (
-    <Tabs defaultValue="Installments">
-      <TabsList>
-        <TabsTrigger value="Installments">Installments</TabsTrigger>
-        <TabsTrigger value="AST">AST</TabsTrigger>
-      </TabsList>
-      <TabsContent value="Installments" className="ui-mt-4">
-        {schedules.map((s: EvaluatedSchedule, index: number) => (
-          <>
-            <InstallmentsTable key={index} installments={s.installments} />
-            {s.blockers.length > 0 ? (
+    <div className="card">
+      <div className="card__header">
+        <h3 style={{ marginBottom: 0 }}>Results</h3>
+      </div>
+      <div className="card__body">
+        <Tabs defaultValue="Installments">
+          <TabsList>
+            <TabsTrigger value="Installments">Installments</TabsTrigger>
+            <TabsTrigger value="AST">AST</TabsTrigger>
+          </TabsList>
+          <TabsContent value="Installments" className="ui-mt-4">
+            {schedules.map((s: EvaluatedSchedule, index: number) => (
+              <>
+                <InstallmentsTable key={index} installments={s.installments} />
+                {s.blockers.length > 0 ? (
+                  <pre
+                    style={{
+                      fontSize: "0.75rem",
+                      lineHeight: 1.6,
+                      overflow: "auto",
+                      maxHeight: "60vh",
+                      borderRadius: "var(--ifm-code-border-radius)",
+                      padding: "0.75rem",
+                      background: "var(--ifm-code-background)",
+                    }}
+                  >
+                    {JSON.stringify(s.blockers, null, 2)}
+                  </pre>
+                ) : null}
+              </>
+            ))}
+          </TabsContent>
+          <TabsContent value="AST">
+            <div
+              style={{
+                background: "var(--ifm-code-background)",
+                borderRadius: "var(--ifm-code-border-radius)",
+                padding: "1rem",
+              }}
+            >
               <pre
                 style={{
                   fontSize: "0.75rem",
-                  lineHeight: 1.5,
+                  lineHeight: 1.6,
                   overflow: "auto",
                   maxHeight: "60vh",
-                  borderRadius: "var(--ui-radius)",
-                  padding: "0.75rem",
-                  background: "var(--ifm-pre-background)",
+                  margin: 0,
                 }}
               >
-                {JSON.stringify(s.blockers, null, 2)}
+                {JSON.stringify(ast, null, 2)}
               </pre>
-            ) : null}
-          </>
-        ))}
-      </TabsContent>
-      <TabsContent value="AST">
-        <pre
-          style={{
-            fontSize: "0.75rem",
-            lineHeight: 1.5,
-            overflow: "auto",
-            maxHeight: "60vh",
-            borderRadius: "var(--ui-radius)",
-            padding: "0.75rem",
-            background: "var(--ifm-pre-background)",
-          }}
-        >
-          {JSON.stringify(ast, null, 2)}
-        </pre>
-      </TabsContent>
-    </Tabs>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
   );
 }

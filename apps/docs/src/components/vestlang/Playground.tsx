@@ -15,49 +15,23 @@ import type {
   EvaluationContext,
   OCTDate,
 } from "@vestlang/types";
-import Events from "./events";
 import PlaygroundResults from "./playgroundResults";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
-import { Label } from "../ui/label";
-import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import { toISODate } from "./helpers";
+import { getVestingEvents, toISODate } from "./helpers";
+import { GrantConfiguration } from "./grant-configuration";
+import { DSLInput } from "./dsl-input";
 
 export default function Playground(): ReactNode {
   const [quantity, setQuantity] = useState<number>(100);
   const [grantDate, setGrantDate] = useState<Date>(new Date());
   const [events, setEvents] = useState<Record<string, OCTDate | undefined>>({});
-  const [dsl, setDsl] = useState<string>("");
+  const [dsl, setDsl] = useState<string>(
+    "VEST OVER 4 years EVERY 3 months CLIFF EVENT milestone",
+  );
   const [ast, setAst] = useState<Program | null>(null);
   const [schedules, setSchedules] = useState<EvaluatedSchedule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const todayISO = useMemo(() => toISODate(new Date()), []);
-
-  const getVestingEvents = (ast: Program): string[] => {
-    const vestingEvents: string[] = [];
-    const visit = (node: unknown): void => {
-      if (Array.isArray(node)) {
-        for (const item of node) visit(item);
-        return;
-      }
-      if (node && typeof node === "object") {
-        const rec = node as Record<string, unknown>;
-        if (rec.type === "EVENT" && typeof rec.value === "string") {
-          vestingEvents.push(rec.value);
-        }
-        for (const v of Object.values(rec)) visit(v);
-      }
-    };
-    visit(ast);
-    return vestingEvents;
-  };
 
   const run = useCallback(() => {
     try {
@@ -114,80 +88,67 @@ export default function Playground(): ReactNode {
   return (
     <BrowserOnly>
       {() => (
-        <div className="ui-minh-screen ui-flex ui-center ui-bg-grad ui-p-4">
-          <Card className="ui-w-full ui-maxw-2xl ui-shadow-xl">
-            <CardHeader className="ui-border-b ui-bg-card">
-              <CardTitle className="ui-text-2xl ui-font-semibold">
-                Vestlang Playground
-              </CardTitle>
-              <CardDescription>
-                Enter grant details and DSL statement
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="ui-pt-6">
-              <div className="ui-spacey-6 ui-mb-8">
-                <div className="ui-col ui-gap-4 ui-maxw-lg ui-mx-auto">
-                  {/* Quantity */}
-                  <div className="ui-spacey-2">
-                    <Label htmlFor="quantity">Quantity</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      min={0}
-                      value={Number.isFinite(quantity) ? quantity : 100}
-                      onChange={(e) =>
-                        setQuantity(Number(e.target.value) || 100)
-                      }
-                      className="ui-w-full"
-                    />
-                  </div>
+        <div
+          className="padding--md"
+          style={{
+            background: "var(--ifm-background-surface-color)",
+          }}
+        >
+          <div style={{ maxWidth: "auto", margin: "0 auto" }}>
+            <div className="card shadow--md">
+              <div
+                className="card__header"
+                style={{
+                  background: "var(--ifm-color-emphasis-200)",
+                  borderBottom: "1px solid var(--ifm-color-emphasis-300)",
+                }}
+              >
+                <h1
+                  style={{
+                    marginBottom: "0.5rem",
+                    color: "var(--ifm-font-color-base)",
+                  }}
+                >
+                  Vestlang Playground
+                </h1>
+                <p
+                  style={{
+                    color: "var(--ifm-color-emphasis-700)",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  Configure your vesting schedule and see results in real-time
+                </p>
+              </div>
+              <div className="card__body">
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr",
+                    gap: "2rem",
+                  }}
+                >
+                  <GrantConfiguration
+                    quantity={quantity}
+                    setQuantity={setQuantity}
+                    grantDate={grantDate}
+                    setGrantDate={setGrantDate}
+                    events={events}
+                    setEvents={setEvents}
+                  />
 
-                  {/* Grant Date */}
-                  <div className="ui-spacey-2">
-                    <Label htmlFor="grantDate">Grant Date</Label>
-                    <Input
-                      id="grantDate"
-                      type="date"
-                      value={toISODate(grantDate)}
-                      onChange={(e) => setGrantDate(new Date(e.target.value))}
-                      className="ui-w-full"
-                    />
-                  </div>
+                  {/* DSL Input */}
+                  <DSLInput dsl={dsl} setDsl={setDsl} error={error} />
 
-                  {/* --- Events editor --- */}
-                  <Events events={events} setEvents={setEvents} />
+                  {/* Results */}
 
-                  {/* --- DSL input --- */}
-                  <div className="ui-spacey-2">
-                    <Label htmlFor="dsl">DSL Input</Label>
-                    <Textarea
-                      id="dsl"
-                      value={dsl}
-                      onChange={(e) => setDsl(e.target.value)}
-                      rows={5}
-                      className="ui-w-full"
-                    />
-                  </div>
-
-                  {/* --- DSL Error --- */}
-                  {error && dsl !== "" && (
-                    <pre
-                      style={{
-                        color: "var(--ifm-color-danger-dark)",
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {error}
-                    </pre>
+                  {schedules && ast && (
+                    <PlaygroundResults schedules={schedules} ast={ast} />
                   )}
                 </div>
               </div>
-              {/* --- Results --- */}
-              {schedules && ast && (
-                <PlaygroundResults schedules={schedules} ast={ast} />
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       )}
     </BrowserOnly>

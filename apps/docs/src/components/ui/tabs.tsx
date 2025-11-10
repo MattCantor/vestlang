@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import clsx from "clsx";
 
 function Tabs({
   className,
@@ -17,7 +16,13 @@ function TabsList({
 }: React.ComponentProps<typeof TabsPrimitive.List>) {
   return (
     <TabsPrimitive.List
-      className={clsx("ui-tabs__list", className)}
+      className={className}
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "0.5rem",
+        borderBottom: "1px solid var(--ifm-toc-border-color)",
+      }}
       {...props}
     />
   );
@@ -29,7 +34,18 @@ function TabsTrigger({
 }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
   return (
     <TabsPrimitive.Trigger
-      className={clsx("ui-tabs__trigger", className)}
+      className={className}
+      style={{
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.5rem 0.75rem",
+        fontSize: "0.875rem",
+        color: "var(--ifm-color-emphasis-700)",
+        borderRadius: "0.375rem 0.375rem 0 0",
+        outline: "none",
+      }}
       {...props}
     />
   );
@@ -42,7 +58,11 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={clsx("ui-tabs__content", className)}
+      className={className}
+      style={{
+        padding: "1rem 0",
+        outline: "none",
+      }}
       {...props}
     />
   );
