@@ -1,0 +1,35 @@
+{
+  "name": "vestlang",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "A domain-specific language for modeling vesting schedules",
+  "keywords": ["vestlang", "vesting", "equity", "options", "schedule", "dsl", "stock"],
+  "engines": { "node": ">=18" },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "@vestlang/evaluator": "workspace:*",
+    "@vestlang/linter": "workspace:*",
+    "@vestlang/types": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

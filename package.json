@@ -6,18 +6,30 @@
     "packages/*",
     "apps/*"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_USERNAME/vestlang.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/vestlang/issues"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/vestlang#readme",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
     "test": "turbo test",
     "lint": "turbo lint",
     "clean": "turbo run clean && rimraf node_modules",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "dependencies": {
     "@vestlang/prettier-plugin-vestlang": "workspace:*"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@types/node": "^24.5.2",
     "peggy": "^5.0.6",
     "prettier": "^3.6.2",
