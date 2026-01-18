@@ -8,12 +8,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR_USERNAME/vestlang.git"
+    "url": "git+https://github.com/MattCantor/vestlang.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_USERNAME/vestlang/issues"
+    "url": "https://github.com/MattCantor/vestlang/issues"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/vestlang#readme",
+  "homepage": "https://github.com/MattCantor/vestlang#readme",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
@@ -23,7 +23,7 @@
     "format": "prettier --write .",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "release": "changeset publish"
   },
   "dependencies": {
     "@vestlang/prettier-plugin-vestlang": "workspace:*"

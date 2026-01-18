@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@vestlang/cli", "@vestlang/docs"]
+  "ignore": ["@vestlang/cli", "@vestlang/docs", "@vestlang/ast", "@vestlang/prettier-plugin-vestlang"]
 }

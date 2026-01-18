@@ -5,6 +5,15 @@
   "license": "MIT",
   "description": "A domain-specific language for modeling vesting schedules",
   "keywords": ["vestlang", "vesting", "equity", "options", "schedule", "dsl", "stock"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MattCantor/vestlang.git",
+    "directory": "packages/vestlang"
+  },
+  "bugs": {
+    "url": "https://github.com/MattCantor/vestlang/issues"
+  },
+  "homepage": "https://github.com/MattCantor/vestlang#readme",
   "engines": { "node": ">=18" },
   "sideEffects": false,
   "exports": {
