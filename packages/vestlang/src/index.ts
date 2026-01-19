@@ -12,6 +12,9 @@ export type { VestedResult } from "@vestlang/evaluator";
 export { lintProgram, lintText } from "@vestlang/linter";
 export type { LintOptions, LintResult, Diagnostic } from "@vestlang/linter";
 
+// Stringify
+export { stringify, stringifyStatement, stringifyProgram } from "@vestlang/stringify";
+
 // Types (re-export commonly used types)
 export type {
   Program,

@@ -1,6 +1,6 @@
 {
   "name": "@mattcantor/vestlang",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "description": "A domain-specific language for modeling vesting schedules",
@@ -35,6 +35,7 @@
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/linter": "workspace:*",
+    "@vestlang/stringify": "workspace:*",
     "@vestlang/types": "workspace:*",
     "rimraf": "^6.0.1",
     "tsup": "^8.0.0",
