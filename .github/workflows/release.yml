@@ -3,6 +3,9 @@ name: Release
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/vestlang/package.json'
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -11,9 +14,8 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      id-token: write
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +24,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: "https://registry.npmjs.org"
+          registry-url: "https://npm.pkg.github.com"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -34,10 +36,9 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Create Release Pull Request or Publish
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release
+      - name: Publish to GitHub Packages
+        run: |
+          cd packages/vestlang
+          npm publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_CONFIG_PROVENANCE: true
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

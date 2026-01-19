@@ -1,5 +1,5 @@
 {
-  "name": "vestlang",
+  "name": "@mattcantor/vestlang",
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
@@ -24,21 +24,23 @@
   },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/linter": "workspace:*",
-    "@vestlang/types": "workspace:*"
-  },
-  "devDependencies": {
+    "@vestlang/types": "workspace:*",
     "rimraf": "^6.0.1",
+    "tsup": "^8.0.0",
     "typescript": "^5.9.2"
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   }
 }
