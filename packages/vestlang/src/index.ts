@@ -23,5 +23,9 @@ export type {
   EvaluationContextInput,
   EvaluatedSchedule,
   Installment,
+  ResolvedInstallment,
+  UnresolvedInstallment,
+  ImpossibleInstallment,
   Blocker,
+  OCTDate,
 } from "@vestlang/types";
