@@ -1,10 +1,18 @@
 {
   "name": "@mattcantor/vestlang",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "license": "MIT",
   "description": "A domain-specific language for modeling vesting schedules",
-  "keywords": ["vestlang", "vesting", "equity", "options", "schedule", "dsl", "stock"],
+  "keywords": [
+    "vestlang",
+    "vesting",
+    "equity",
+    "options",
+    "schedule",
+    "dsl",
+    "stock"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/MattCantor/vestlang.git",
@@ -14,7 +22,9 @@
     "url": "https://github.com/MattCantor/vestlang/issues"
   },
   "homepage": "https://github.com/MattCantor/vestlang#readme",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "sideEffects": false,
   "exports": {
     ".": {
@@ -22,7 +32,11 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "clean": "rimraf dist"

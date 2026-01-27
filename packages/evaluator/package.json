@@ -1,6 +1,6 @@
 {
   "name": "@vestlang/evaluator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "exports": {
     ".": {
@@ -8,7 +8,9 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "rimraf dist && tsc -p tsconfig.json",
     "test": "vitest",
