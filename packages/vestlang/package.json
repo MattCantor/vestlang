@@ -1,6 +1,6 @@
 {
   "name": "@mattcantor/vestlang",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "license": "MIT",
   "description": "A domain-specific language for modeling vesting schedules",
@@ -42,15 +42,15 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
     "@vestlang/dsl": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/stringify": "workspace:*",
     "@vestlang/types": "workspace:*",
-    "date-fns": "^4.1.0"
-  },
-  "devDependencies": {
     "rimraf": "^6.0.1",
     "tsup": "^8.0.0",
     "typescript": "^5.9.2"
