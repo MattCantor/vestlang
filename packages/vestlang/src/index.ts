@@ -18,6 +18,7 @@ export { stringify, stringifyStatement, stringifyProgram } from "@vestlang/strin
 // Types (re-export commonly used types)
 export type {
   Program,
+  RawProgram,
   Statement,
   Schedule,
   EvaluationContextInput,
