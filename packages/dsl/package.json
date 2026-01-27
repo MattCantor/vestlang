@@ -4,11 +4,12 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "types": "./dist/index.d.ts",
+  "files": ["dist"],
   "scripts": {
     "build": "rimraf dist src/generated && peggy --format es --dts -o src/generated/grammar.js src/grammar/*.peggy && tsc -p tsconfig.build.json",
     "dev": "peggy --format es --dts -w -o src/generated/grammar.js src/grammar/*.peggy",
@@ -23,6 +24,6 @@
     "rimraf": "^6.0.1"
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   }
 }

@@ -1,4 +1,4 @@
-import { RuleModule } from "../types";
+import { RuleModule } from "../types.js";
 
 const meta = {
   id: "no-vestingStart-in-from-statement",
