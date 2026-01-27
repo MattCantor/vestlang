@@ -278,10 +278,6 @@ importers:
 
   packages/vestlang:
     dependencies:
-      date-fns:
-        specifier: ^4.1.0
-        version: 4.1.0
-    devDependencies:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
@@ -300,6 +296,10 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
+    devDependencies:
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
