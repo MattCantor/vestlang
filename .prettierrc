@@ -24,6 +24,12 @@
       }
     },
     {
+      "files": ["**/*.md"],
+      "options": {
+        "embeddedLanguageFormatting": "off"
+      }
+    },
+    {
       "files": ["**/*.jsonc"],
       "options": {
         "parser": "json"
