@@ -162,11 +162,31 @@ Shares vest monthly over four years with no cliff, commencing on the grant date.
 | 2      | 2028-12-01 |
 | 3      | 2029-01-01 |
 
+#### AST
+
+```json
+{
+    "amount": {
+      "type": "PORTION",
+      "numerator": 1,
+      "denominator": 1
+    },
+    "expr": {
+      "type": "SINGLETON",
+      "vesting_start": null,
+      "periodicity": {
+        "type": "MONTHS",
+        "length": 1,
+        "occurrences": 48
+      }
+    }
+  }
+```
+
 #### Vestlang
 
 ```vest
-100 VEST
-  OVER 48 months EVERY 1 months
+VEST OVER 48 months EVERY 1 months
 ```
 
 ### 4-Year Quarterly Vesting with 1-Year Cliff
