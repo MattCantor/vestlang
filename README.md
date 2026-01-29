@@ -51,6 +51,16 @@ node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 -e ipo=2026-06-15 \
 
 The following examples assume a grant date of **2025-01-01** and a grant quantity of **100 shares**.
 
+**Contents:**
+- [Immediate Vesting on the Grant Date](#immediate-vesting-on-the-grant-date)
+- [4-Year Monthly Vesting](#4-year-monthly-vesting)
+- [4-Year Quarterly Vesting with 1-Year Cliff](#4-year-quarterly-vesting-with-1-year-cliff)
+- [Milestone-Based Vesting](#milestone-based-vesting)
+- [Backdated Vesting Start](#backdated-vesting-start)
+- [Bespoke Vesting](#bespoke-vesting)
+- [Bespoke Vesting with Variable Cadence](#bespoke-vesting-with-variable-cadence)
+- [Two-Tier Vesting](#two-tier-vesting)
+
 ```ts
 const ctx: EvaluationContext = {
   events: { grantDate: "2025-01-01" },
@@ -300,9 +310,9 @@ Awards granted with a vesting start that precedes the grant date, providing cred
   OVER 4 years EVERY 3 months
 ```
 
-### Back-Weighted Vesting (Amazon-style)
+### Bespoke Vesting
 
-A back-weighted schedule where more shares vest in later years. This example uses Amazon's 5/15/40/40 pattern over 4 years.
+A custom schedule where different portions vest at different times. This example uses a 5/15/40/40 pattern over 4 years.
 
 | Amount | Date       |
 | :----- | :--------- |
