@@ -38,6 +38,7 @@ node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 -e ipo=2026-06-15 \
 ```
 
 **Flags:**
+
 - `-q, --quantity <number>` — total shares granted
 - `-g, --grantDate <YYYY-MM-DD>` — grant date
 - `-e, --event <NAME=YYYY-MM-DD>` — supply an event (repeatable)
@@ -49,9 +50,6 @@ node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 -e ipo=2026-06-15 \
 
 ## Examples
 
-The following examples assume a grant date of **2025-01-01** and a grant quantity of **100 shares**.
-
-**Contents:**
 - [Immediate Vesting on the Grant Date](#immediate-vesting-on-the-grant-date)
 - [4-Year Monthly Vesting](#4-year-monthly-vesting)
 - [4-Year Quarterly Vesting with 1-Year Cliff](#4-year-quarterly-vesting-with-1-year-cliff)
@@ -60,6 +58,9 @@ The following examples assume a grant date of **2025-01-01** and a grant quantit
 - [Bespoke Vesting](#bespoke-vesting)
 - [Bespoke Vesting with Variable Cadence](#bespoke-vesting-with-variable-cadence)
 - [Two-Tier Vesting](#two-tier-vesting)
+- [Conditional Vesting Start with AND](#conditional-vesting-start-with-and)
+
+The following examples assume a grant date of **2025-01-01** and a grant quantity of **100 shares**.
 
 ```ts
 const ctx: EvaluationContext = {
@@ -361,32 +362,32 @@ A custom schedule where different tranches vest at different cadences. This exam
 
 **Monthly tranche (50%):**
 
-| Amount | Date |
-| :----- | :--------- |
-| 2 | 2025-02-01 |
-| 2 | '2025-03-01 |
-| 2 | 2025-04-01 |
-| 2 | 2025-05-01 |
-| 2 | 2025-06-01 |
-| 2 | 2025-07-01 |
-| 2 | 2025-08-01 |
-| 2 | 2025-09-01 |
-| 2 | 2025-10-01 |
-| 2 | 2025-11-01 |
-| 2 | 2025-12-01 |
-| 3 | 2026-01-01 |
-| 2 | 2026-02-01 |
-| 2 | 2026-03-01 |
-| 2 | 2026-04-01 |
-| 2 | 2026-05-01 |
-| 2 | 2026-06-01 |
-| 2 | 2026-07-01 |
-| 2 | 2026-08-01 |
-| 2 | 2026-09-01 |
-| 2 | 2026-10-01 |
-| 2 | 2026-11-01 |
-| 2 | 2026-12-01 |
-| 3 | 2027-01-01 |
+| Amount | Date        |
+| :----- | :---------- |
+| 2      | 2025-02-01  |
+| 2      | '2025-03-01 |
+| 2      | 2025-04-01  |
+| 2      | 2025-05-01  |
+| 2      | 2025-06-01  |
+| 2      | 2025-07-01  |
+| 2      | 2025-08-01  |
+| 2      | 2025-09-01  |
+| 2      | 2025-10-01  |
+| 2      | 2025-11-01  |
+| 2      | 2025-12-01  |
+| 3      | 2026-01-01  |
+| 2      | 2026-02-01  |
+| 2      | 2026-03-01  |
+| 2      | 2026-04-01  |
+| 2      | 2026-05-01  |
+| 2      | 2026-06-01  |
+| 2      | 2026-07-01  |
+| 2      | 2026-08-01  |
+| 2      | 2026-09-01  |
+| 2      | 2026-10-01  |
+| 2      | 2026-11-01  |
+| 2      | 2026-12-01  |
+| 3      | 2027-01-01  |
 
 **Quarterly tranche (50%):**
 
@@ -462,21 +463,21 @@ A custom schedule where different tranches vest at different cadences. This exam
 
 A 4-year quarterly vesting schedule with two cliff conditions: a standard 1-year time-based cliff, plus an event-based cliff requiring either an IPO or change in control (CIC) before the 7th anniversary of the grant date.
 
-| Amount | Date |
-| :----- | :----------- |
-| 25 | {"type":"UNRESOLVED_CLIFF","date":"2026-01-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2026-04-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2026-07-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2026-10-01"} |
-| 7 | {"type":"UNRESOLVED_CLIFF","date":"2027-01-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2027-04-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2027-07-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2027-10-01"} |
-| 7 | {"type":"UNRESOLVED_CLIFF","date":"2028-01-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2028-04-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2028-07-01"} |
-| 6 | {"type":"UNRESOLVED_CLIFF","date":"2028-10-01"} |
-| 7 | {"type":"UNRESOLVED_CLIFF","date":"2029-01-01"} |
+| Amount | Date                                            |
+| :----- | :---------------------------------------------- |
+| 25     | {"type":"UNRESOLVED_CLIFF","date":"2026-01-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-04-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-07-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-10-01"} |
+| 7      | {"type":"UNRESOLVED_CLIFF","date":"2027-01-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-04-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-07-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-10-01"} |
+| 7      | {"type":"UNRESOLVED_CLIFF","date":"2028-01-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-04-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-07-01"} |
+| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-10-01"} |
+| 7      | {"type":"UNRESOLVED_CLIFF","date":"2029-01-01"} |
 
 The time-based cliff is applied (first 12 months accumulate to 25 shares), but installments remain unresolved until the IPO or CIC event occurs.
 
@@ -609,3 +610,89 @@ When the IPO occurs within the 7-year window (e.g., `ipo=2026-06-15`), the cliff
 | 6      | 2028-07-01 |
 | 6      | 2028-10-01 |
 | 7      | 2029-01-01 |
+
+### Conditional Vesting Start with AND
+
+Vesting start contingent on a milestone that must occur within a specific window — after a threshold event AND before a deadline.
+
+| Amount | Date                               |
+| :----- | :--------------------------------- |
+| 100    | `{type: UNRESOLVED_VESTING_START}` |
+
+#### AST
+
+```json
+{
+    "amount": {
+      "type": "PORTION",
+      "numerator": 1,
+      "denominator": 1
+    },
+    "expr": {
+      "type": "SINGLETON",
+      "vesting_start": {
+        "type": "SINGLETON",
+        "base": {
+          "type": "EVENT",
+          "value": "milestone"
+        },
+        "offsets": [],
+        "constraints": {
+          "type": "AND",
+          "items": [
+            {
+              "type": "ATOM",
+              "constraint": {
+                "type": "AFTER",
+                "base": {
+                  "type": "SINGLETON",
+                  "base": {
+                    "type": "EVENT",
+                    "value": "threshold"
+                  },
+                  "offsets": []
+                },
+                "strict": false
+              }
+            },
+            {
+              "type": "ATOM",
+              "constraint": {
+                "type": "BEFORE",
+                "base": {
+                  "type": "SINGLETON",
+                  "base": {
+                    "type": "DATE",
+                    "value": "2027-01-01"
+                  },
+                  "offsets": []
+                },
+                "strict": false
+              }
+            }
+          ]
+        }
+      },
+      "periodicity": {
+        "type": "DAYS",
+        "length": 0,
+        "occurrences": 1
+      }
+    }
+  }
+```
+
+#### Vestlang
+
+```vest
+VEST FROM EVENT milestone
+  AFTER EVENT threshold AND BEFORE DATE 2027-01-01
+```
+
+#### With Events Resolved
+
+When the milestone occurs after the threshold and before the deadline (e.g., `threshold=2025-06-01`, `milestone=2025-09-15`), vesting resolves to the milestone date.
+
+| Amount | Date       |
+| :----- | :--------- |
+| 100    | 2025-09-15 |
