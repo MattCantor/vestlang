@@ -34,9 +34,9 @@ For complex vesting arrangements (milestone-based, conditional, etc.), platforms
 ### Included
 
 - Concrete vesting commencement dates
-- Total vesting duration
-- Vesting frequency (e.g., monthly, daily)
-- Optional cliff period
+- Number of vesting occurrences
+- Vesting period (e.g., monthly, daily)
+- Optional cliff
 - Quantity or fractional amounts
 - Multi-tranche programs
 
@@ -98,15 +98,15 @@ type AllocationMethod =
 
 interface VestingSchedule {
   /** The date vesting begins */
-  startDate: string; // ISO 8601 date (YYYY-MM-DD)
+  vestingStartDate: string; // ISO 8601 date (YYYY-MM-DD)
 
-  /** Total vesting duration */
-  totalDuration: Duration;
+  /** Number of vesting installments */
+  occurrences: number;
 
-  /** How often vesting occurs */
-  vestingFrequency: Duration;
+  /** Time between each vesting event */
+  period: Duration;
 
-  /** Optional cliff period - no vesting until cliff is reached */
+  /** Optional cliff - no vesting until cliff is reached */
   cliff?: Duration;
 
   /** How to allocate fractional amounts across installments (default: CUMULATIVE_ROUND_DOWN) */
@@ -137,9 +137,9 @@ type VestingProgram = VestingStatement[];
 const grant: VestingStatement = {
   amount: { type: "QUANTITY", value: 10000 },
   schedule: {
-    startDate: "2025-01-01",
-    totalDuration: { value: 48, unit: "MONTHS" },
-    vestingFrequency: { value: 1, unit: "MONTHS" },
+    vestingStartDate: "2025-01-01",
+    occurrences: 48,
+    period: { value: 1, unit: "MONTHS" },
     cliff: { value: 12, unit: "MONTHS" },
   },
 };
@@ -153,9 +153,9 @@ const grant: VestingStatement = {
 const grant: VestingStatement = {
   amount: { type: "FRACTION", numerator: 1, denominator: 1 },
   schedule: {
-    startDate: "2025-01-01",
-    totalDuration: { value: 24, unit: "MONTHS" },
-    vestingFrequency: { value: 3, unit: "MONTHS" },
+    vestingStartDate: "2025-01-01",
+    occurrences: 8,
+    period: { value: 3, unit: "MONTHS" },
   },
 };
 ```
@@ -169,17 +169,17 @@ const program: VestingProgram = [
   {
     amount: { type: "FRACTION", numerator: 1, denominator: 4 },
     schedule: {
-      startDate: "2025-01-01",
-      totalDuration: { value: 0, unit: "DAYS" },
-      vestingFrequency: { value: 0, unit: "DAYS" },
+      vestingStartDate: "2025-01-01",
+      occurrences: 1,
+      period: { value: 0, unit: "DAYS" },
     },
   },
   {
     amount: { type: "FRACTION", numerator: 3, denominator: 4 },
     schedule: {
-      startDate: "2025-01-01",
-      totalDuration: { value: 36, unit: "MONTHS" },
-      vestingFrequency: { value: 1, unit: "MONTHS" },
+      vestingStartDate: "2025-01-01",
+      occurrences: 36,
+      period: { value: 1, unit: "MONTHS" },
       cliff: { value: 12, unit: "MONTHS" },
     },
   },
@@ -194,9 +194,9 @@ const program: VestingProgram = [
 const grant: VestingStatement = {
   amount: { type: "QUANTITY", value: 5000 },
   schedule: {
-    startDate: "2025-06-15",
-    totalDuration: { value: 24, unit: "MONTHS" },
-    vestingFrequency: { value: 1, unit: "MONTHS" },
+    vestingStartDate: "2025-06-15",
+    occurrences: 24,
+    period: { value: 1, unit: "MONTHS" },
     cliff: { value: 3, unit: "MONTHS" },
   },
 };
@@ -206,26 +206,26 @@ const grant: VestingStatement = {
 
 ## Open Questions
 
-### Duration vs. Installments
+### Occurrences vs. Duration
 
-The current spec defines a vesting schedule using **duration + frequency**, from which the number of installments is derived:
+The spec defines a vesting schedule using **occurrences + period**, from which total duration is derived:
+
+```typescript
+{
+  occurrences: 48,
+  period: { value: 1, unit: "MONTHS" },
+}
+// Implies: 48 months total duration
+```
+
+An alternative approach would be **duration + period**, from which occurrences is derived:
 
 ```typescript
 {
   totalDuration: { value: 48, unit: "MONTHS" },
-  vestingFrequency: { value: 1, unit: "MONTHS" },
+  period: { value: 1, unit: "MONTHS" },
 }
-// Implies: 48 installments
-```
-
-An alternative approach would be **frequency + installments**, from which duration is derived:
-
-```typescript
-{
-  vestingFrequency: { value: 1, unit: "MONTHS" },
-  installments: 48,
-}
-// Implies: 48 months total duration
+// Implies: 48 occurrences
 ```
 
 Both representations are equivalent for regular schedules. The question is which feels more natural to implementers and maps better to how platforms already model vesting internally.
@@ -234,13 +234,13 @@ Both representations are equivalent for regular schedules. The question is which
 
 ### Immediate Vesting
 
-Immediate (day-one) vesting is encoded using zero values for duration and frequency:
+Immediate (day-one) vesting is encoded as a single occurrence:
 
 ```typescript
 {
-  startDate: "2025-01-01",
-  totalDuration: { value: 0, unit: "DAYS" },
-  vestingFrequency: { value: 0, unit: "DAYS" },
+  vestingStartDate: "2025-01-01",
+  occurrences: 1,
+  period: { value: 0, unit: "DAYS" },
 }
 ```
 
