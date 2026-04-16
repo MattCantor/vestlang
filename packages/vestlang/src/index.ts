@@ -15,6 +15,18 @@ export type { LintOptions, LintResult, Diagnostic } from "@vestlang/linter";
 // Stringify
 export { stringify, stringifyStatement, stringifyProgram } from "@vestlang/stringify";
 
+// Inferrer (inverse of evaluate)
+export { inferSchedule } from "@vestlang/inferrer";
+export type {
+  InferInput,
+  InferResult,
+  TrancheInput,
+  Component,
+  UniformComponent,
+  SingleTrancheComponent,
+  CliffUniformComponent,
+} from "@vestlang/inferrer";
+
 // Types (re-export commonly used types)
 export type {
   Program,

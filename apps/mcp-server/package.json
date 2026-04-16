@@ -16,6 +16,7 @@
     "@modelcontextprotocol/sdk": "^1.17.0",
     "@vestlang/dsl": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
+    "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/stringify": "workspace:*",

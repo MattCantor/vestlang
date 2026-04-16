@@ -6,6 +6,7 @@ import {
   evaluateStatement,
   evaluateStatementAsOf,
 } from "@vestlang/evaluator";
+import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/stringify";
 import type {
@@ -36,6 +37,11 @@ Typical workflows:
   AST, then explain it to the user.
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
   a grant_date, grant_quantity, and any named events that the DSL references.
+- Tranche array → vestlang: call vestlang_infer_schedule on an array of
+  {date, amount} pairs to get the best-fit DSL (matching-pursuit
+  decomposition). Note that the returned diagnostics.vestingDayOfMonth and
+  diagnostics.allocationType are not encoded in the DSL — pass them back as
+  EvaluationContext when evaluating the returned DSL.
 
 Dates are YYYY-MM-DD. Statements that reference named events (e.g.
 EVENT "ipo") require those events to appear in the events map — otherwise
@@ -296,6 +302,57 @@ export function createServer(): McpServer {
         return toolError(
           `Stringify failed: ${msg}. Pass a Statement or Program from vestlang_compile.`,
         );
+      }
+    },
+  );
+
+  /* infer_schedule: {date, amount}[] → DSL via matching-pursuit decomposition */
+  server.registerTool(
+    "vestlang_infer_schedule",
+    {
+      title: "Infer vestlang from tranche array",
+      description:
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Uses matching-pursuit decomposition — greedy extraction of uniform-periodic components, then a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth and allocationType, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth and diagnostics.allocationType are NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass these values back as EvaluationContext, or they will get a slightly different schedule.",
+      inputSchema: z
+        .object({
+          tranches: z
+            .array(
+              z
+                .object({
+                  date: ISO_DATE,
+                  amount: z.number().describe("Tranche amount (not cumulative)"),
+                })
+                .strict(),
+            )
+            .min(1, "tranches must contain at least one entry")
+            .describe(
+              "Array of {date, amount} vesting tranches. Same-date tranches are summed.",
+            ),
+          grant_date: ISO_DATE.optional().describe(
+            "Optional grant date anchor. If omitted, defaults to the first tranche date.",
+          ),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ tranches, grant_date }) => {
+      try {
+        const result = inferSchedule({
+          tranches: tranches.map((t) => ({
+            date: t.date as OCTDate,
+            amount: t.amount,
+          })),
+          grantDate: grant_date as OCTDate | undefined,
+        });
+        return jsonResult(result);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return toolError(`Inference failed: ${msg}.`);
       }
     },
   );
