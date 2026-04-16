@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vestlang": {
+      "command": "node",
+      "args": ["apps/mcp-server/dist/index.js"]
+    }
+  }
+}
