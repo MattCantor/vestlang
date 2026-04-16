@@ -64,9 +64,17 @@ describe("FROM clause", () => {
     expect(result).toBe("VEST FROM DATE 2025-01-15");
   });
 
-  it("includes FROM with offsets", () => {
+  it("sugars FROM EVENT grantDate +N to bare FROM N", () => {
+    // Grammar accepts `FROM 1 months` as sugar for `FROM EVENT grantDate
+    // + 1 month`; normalizer expands the sugar to the full form. The
+    // stringifier compresses back to the sugared form for readability.
     const result = roundTrip("VEST FROM EVENT grantDate + 1 month");
-    expect(result).toBe("VEST FROM EVENT grantDate +1 months");
+    expect(result).toBe("VEST FROM 1 months");
+  });
+
+  it("round-trips the bare FROM duration sugar", () => {
+    const result = roundTrip("VEST FROM 6 months");
+    expect(result).toBe("VEST FROM 6 months");
   });
 
   it("includes FROM with negative offset", () => {
@@ -106,10 +114,19 @@ describe("periodicity", () => {
  * ------------------------ */
 
 describe("cliff", () => {
-  it("stringifies cliff with duration (normalized to vestingStart + offset)", () => {
+  it("sugars CLIFF EVENT vestingStart +N back to bare CLIFF N", () => {
+    // Grammar accepts `CLIFF 12 months` as sugar for `CLIFF EVENT
+    // vestingStart + 12 months`; normalizer expands, stringifier
+    // compresses.
     const result = roundTrip("VEST CLIFF 12 months");
-    // Duration cliffs are normalized to EVENT vestingStart + offset
-    expect(result).toBe("VEST CLIFF EVENT vestingStart +12 months");
+    expect(result).toBe("VEST CLIFF 12 months");
+  });
+
+  it("round-trips the bare CLIFF duration sugar idempotently", () => {
+    const first = roundTrip("VEST CLIFF 6 months");
+    const second = roundTrip(first);
+    expect(first).toBe("VEST CLIFF 6 months");
+    expect(second).toBe(first);
   });
 
   it("stringifies cliff with explicit vesting node", () => {
@@ -214,7 +231,7 @@ describe("complex examples", () => {
         OVER 48 months EVERY 1 month
         CLIFF 12 months
     `);
-    expect(result).toBe("VEST FROM EVENT grant OVER 48 months EVERY 1 months CLIFF EVENT vestingStart +12 months");
+    expect(result).toBe("VEST FROM EVENT grant OVER 48 months EVERY 1 months CLIFF 12 months");
   });
 
   it("stringifies vesting with constraints and offset", () => {
@@ -237,7 +254,7 @@ describe("program (multiple statements)", () => {
       1/4 VEST CLIFF 12 months,
       3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month
     ]`);
-    expect(result).toBe("[ 1/4 VEST CLIFF EVENT vestingStart +12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 months ]");
+    expect(result).toBe("[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 months ]");
   });
 });
 

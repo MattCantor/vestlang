@@ -4,10 +4,11 @@ import type {
   Schedule,
   ScheduleExpr,
   Statement,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { kw, parenGroup } from "./utils.js";
-import { stringifyVestingNodeExpr } from "./vesting-node.js";
+import { stringifyDuration, stringifyVestingNodeExpr } from "./vesting-node.js";
 
 /**
  * Stringify a Statement.
@@ -48,10 +49,15 @@ function stringifyScheduleExpr(e: ScheduleExpr): string {
 function stringifySchedule(s: Schedule): string {
   const parts: string[] = [];
 
-  // FROM clause (omit if default grantDate with no offsets/constraints)
+  // FROM clause
+  //   - Omit entirely if default grantDate with no offsets/constraints.
+  //   - Sugar `EVENT grantDate +N months` → bare duration (`FROM N months`),
+  //     since the grammar's `FROM Duration` form normalizes to exactly this
+  //     shape.
   if (!isDefaultVestingStart(s.vesting_start)) {
+    const sugared = sugaredAnchorDuration(s.vesting_start, "grantDate");
     parts.push(kw("FROM"));
-    parts.push(stringifyVestingNodeExpr(s.vesting_start));
+    parts.push(sugared ?? stringifyVestingNodeExpr(s.vesting_start));
   }
 
   // Periodicity (OVER/EVERY)
@@ -61,9 +67,13 @@ function stringifySchedule(s: Schedule): string {
   }
 
   // CLIFF
+  //   - Sugar `EVENT vestingStart +N months` → bare duration (`CLIFF N
+  //     months`), since the grammar's `CLIFF Duration` form normalizes to
+  //     exactly this shape.
   if (s.periodicity.cliff) {
+    const sugared = sugaredAnchorDuration(s.periodicity.cliff, "vestingStart");
     parts.push(kw("CLIFF"));
-    parts.push(stringifyVestingNodeExpr(s.periodicity.cliff));
+    parts.push(sugared ?? stringifyVestingNodeExpr(s.periodicity.cliff));
   }
 
   return parts.join(" ");
@@ -79,6 +89,31 @@ function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
   if (vs.offsets && vs.offsets.length > 0) return false;
   if (vs.constraints) return false;
   return true;
+}
+
+/**
+ * If `node` is exactly `{ base: EVENT <systemEvent>, offsets: [duration],
+ * no constraints }`, return the bare-duration DSL text. Otherwise return
+ * null so the caller falls back to the full form.
+ *
+ * This mirrors the grammar's sugar forms: `FROM 6 months` is parsed as
+ * `FROM EVENT grantDate + 6 months`, and `CLIFF 6 months` as `CLIFF EVENT
+ * vestingStart + 6 months`. Round-tripping without this collapse is still
+ * correct (identical AST after re-parse) but verbose and confusing for
+ * human readers.
+ */
+function sugaredAnchorDuration(
+  node: VestingNodeExpr,
+  systemEvent: "grantDate" | "vestingStart",
+): string | null {
+  if (node.type !== "SINGLETON") return null;
+  if (node.base.type !== "EVENT") return null;
+  if (node.base.value !== systemEvent) return null;
+  if (node.constraints) return null;
+  if (!node.offsets || node.offsets.length !== 1) return null;
+  const offset = node.offsets[0];
+  if (offset.sign !== "PLUS") return null;
+  return stringifyDuration(offset).slice(1); // drop the leading '+'
 }
 
 /**
