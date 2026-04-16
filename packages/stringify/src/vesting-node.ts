@@ -7,7 +7,7 @@ import type {
   VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
-import { kw, parenGroup } from "./utils.js";
+import { kw, parenGroup, unitFor } from "./utils.js";
 
 /**
  * Stringify a VestingNodeExpr (SINGLETON, LATER_OF, or EARLIER_OF).
@@ -46,7 +46,7 @@ export function stringifyVestingNode(node: VestingNode): string {
  */
 export function stringifyDuration(d: Duration): string {
   const sign = d.sign === "MINUS" ? "-" : "+";
-  return `${sign}${d.value} ${d.unit.toLowerCase()}`;
+  return `${sign}${d.value} ${unitFor(d.value, d.unit)}`;
 }
 
 /**

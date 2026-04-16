@@ -7,7 +7,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { kw, parenGroup } from "./utils.js";
+import { kw, parenGroup, unitFor } from "./utils.js";
 import { stringifyDuration, stringifyVestingNodeExpr } from "./vesting-node.js";
 
 /**
@@ -122,8 +122,7 @@ function sugaredAnchorDuration(
 function stringifyPeriodicity(p: VestingPeriod): string {
   if (p.length === 0) return "";
   const total = p.length * p.occurrences;
-  const unit = p.type.toLowerCase();
-  return `${kw("OVER")} ${total} ${unit} ${kw("EVERY")} ${p.length} ${unit}`;
+  return `${kw("OVER")} ${total} ${unitFor(total, p.type)} ${kw("EVERY")} ${p.length} ${unitFor(p.length, p.type)}`;
 }
 
 /**

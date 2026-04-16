@@ -65,11 +65,11 @@ describe("FROM clause", () => {
   });
 
   it("sugars FROM EVENT grantDate +N to bare FROM N", () => {
-    // Grammar accepts `FROM 1 months` as sugar for `FROM EVENT grantDate
+    // Grammar accepts `FROM 1 month` as sugar for `FROM EVENT grantDate
     // + 1 month`; normalizer expands the sugar to the full form. The
     // stringifier compresses back to the sugared form for readability.
     const result = roundTrip("VEST FROM EVENT grantDate + 1 month");
-    expect(result).toBe("VEST FROM 1 months");
+    expect(result).toBe("VEST FROM 1 month");
   });
 
   it("round-trips the bare FROM duration sugar", () => {
@@ -95,17 +95,30 @@ describe("FROM clause", () => {
 describe("periodicity", () => {
   it("stringifies OVER/EVERY in months", () => {
     const result = roundTrip("VEST OVER 48 months EVERY 1 month");
-    expect(result).toBe("VEST OVER 48 months EVERY 1 months");
+    expect(result).toBe("VEST OVER 48 months EVERY 1 month");
   });
 
   it("stringifies OVER/EVERY in days", () => {
     const result = roundTrip("VEST OVER 365 days EVERY 1 day");
-    expect(result).toBe("VEST OVER 365 days EVERY 1 days");
+    expect(result).toBe("VEST OVER 365 days EVERY 1 day");
   });
 
   it("stringifies periodic vesting with 3 month intervals", () => {
     const result = roundTrip("VEST OVER 12 months EVERY 3 months");
     expect(result).toBe("VEST OVER 12 months EVERY 3 months");
+  });
+
+  it("uses singular unit when count is exactly 1", () => {
+    // Pluralization: "1 month" not "1 months", "1 day" not "1 days".
+    // Covers OVER/EVERY totals, duration offsets in FROM, and cliffs.
+    expect(roundTrip("VEST OVER 1 month EVERY 1 month")).toBe(
+      "VEST OVER 1 month EVERY 1 month",
+    );
+    expect(roundTrip("VEST FROM 1 month")).toBe("VEST FROM 1 month");
+    expect(roundTrip("VEST CLIFF 1 month")).toBe("VEST CLIFF 1 month");
+    expect(roundTrip("VEST FROM EVENT start + 1 day")).toBe(
+      "VEST FROM EVENT start +1 day",
+    );
   });
 });
 
@@ -216,7 +229,7 @@ describe("schedule selectors", () => {
         FROM EVENT b OVER 24 months EVERY 1 month
       )
     `);
-    expect(result).toBe("VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 months, FROM EVENT b OVER 24 months EVERY 1 months)");
+    expect(result).toBe("VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)");
   });
 });
 
@@ -231,7 +244,7 @@ describe("complex examples", () => {
         OVER 48 months EVERY 1 month
         CLIFF 12 months
     `);
-    expect(result).toBe("VEST FROM EVENT grant OVER 48 months EVERY 1 months CLIFF 12 months");
+    expect(result).toBe("VEST FROM EVENT grant OVER 48 months EVERY 1 month CLIFF 12 months");
   });
 
   it("stringifies vesting with constraints and offset", () => {
@@ -240,7 +253,7 @@ describe("complex examples", () => {
         BEFORE EVENT deadline
         OVER 24 months EVERY 1 month
     `);
-    expect(result).toBe("VEST FROM EVENT start +1 months BEFORE EVENT deadline OVER 24 months EVERY 1 months");
+    expect(result).toBe("VEST FROM EVENT start +1 month BEFORE EVENT deadline OVER 24 months EVERY 1 month");
   });
 });
 
@@ -254,7 +267,7 @@ describe("program (multiple statements)", () => {
       1/4 VEST CLIFF 12 months,
       3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month
     ]`);
-    expect(result).toBe("[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 months ]");
+    expect(result).toBe("[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]");
   });
 });
 

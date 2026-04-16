@@ -55,7 +55,7 @@ describe("inferSchedule — pure uniform", () => {
     expect(uniform.cadence).toEqual({ unit: "MONTHS", length: 1 });
 
     expect(result.dsl).toContain("48000 VEST");
-    expect(result.dsl).toMatch(/OVER 48 months EVERY 1 months/i);
+    expect(result.dsl).toMatch(/OVER 48 months EVERY 1 month/i);
     expect(result.dsl).toContain("FROM DATE 2024-01-01");
   });
 
