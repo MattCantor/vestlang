@@ -15,6 +15,14 @@ import type {
   Statement,
 } from "@vestlang/types";
 import { registerResources } from "./resources.js";
+import { computeSummary, filterByWindow } from "./summary.js";
+import {
+  addPeriod,
+  dateDiff,
+  resolveOffset,
+  resolveVestingDay,
+  type PeriodUnit,
+} from "./date-math.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
 exposes the full vestlang pipeline (parse, compile, evaluate, lint, stringify)
@@ -367,7 +375,62 @@ export function createServer(): McpServer {
           unvested: r.unvested,
           impossible: r.impossible,
           unresolved: r.unresolved,
+          summary: computeSummary(r, ctx.grantQuantity),
         })),
+      });
+    },
+  );
+
+  /* vested_between: DSL + context + window → installments within [from, to] */
+  server.registerTool(
+    "vestlang_vested_between",
+    {
+      title: "Vested shares in a date window",
+      description:
+        "Return the RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested.",
+      inputSchema: z
+        .object({
+          dsl: DSL_INPUT,
+          ...EVAL_CONTEXT_FIELDS,
+          from: ISO_DATE.describe("Window start, inclusive (YYYY-MM-DD)"),
+          to: ISO_DATE.describe("Window end, inclusive (YYYY-MM-DD)"),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      if (params.from > params.to) {
+        return toolError(
+          `Invalid window: from (${params.from}) is after to (${params.to})`,
+        );
+      }
+      const parsed = parseWithDiagnostics(params.dsl);
+      if (!parsed.ok) return jsonResult({ error: parsed.error });
+      const ctx = buildContext({ ...params, as_of: params.to });
+      const results = parsed.program.map((stmt) =>
+        evaluateStatementAsOf(stmt, ctx),
+      );
+      return jsonResult({
+        from: params.from as OCTDate,
+        to: params.to as OCTDate,
+        statements: results.map((r, i) => {
+          const { installments, total } = filterByWindow(
+            r.vested,
+            params.from as OCTDate,
+            params.to as OCTDate,
+          );
+          return {
+            index: i,
+            vested_in_window: total,
+            tranches_in_window: installments.length,
+            installments,
+          };
+        }),
       });
     },
   );
@@ -393,6 +456,138 @@ export function createServer(): McpServer {
         ok: diagnostics.length === 0,
         diagnostics,
       });
+    },
+  );
+
+  /* ------------------------
+   * Date-math tools
+   * ------------------------ */
+
+  const PERIOD_UNIT = z.enum(["days", "weeks", "months", "years"]);
+
+  server.registerTool(
+    "vestlang_add_period",
+    {
+      title: "Add a period to a date",
+      description:
+        "Return date + (length × unit), applying the vesting_day_of_month rule for month/year arithmetic (handles month-end, leap years, day-29/30/31 clamping). Use negative length to subtract. Units: days, weeks, months, years.",
+      inputSchema: z
+        .object({
+          date: ISO_DATE.describe("Starting date (YYYY-MM-DD)"),
+          length: z.number().int("length must be a whole number"),
+          unit: PERIOD_UNIT,
+          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
+            "Only applies to months/years. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+          ),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ date, length, unit, vesting_day_of_month: rule }) => {
+      const result = addPeriod(
+        date as OCTDate,
+        length,
+        unit as PeriodUnit,
+        rule ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      );
+      return jsonResult({ date: result });
+    },
+  );
+
+  server.registerTool(
+    "vestlang_date_diff",
+    {
+      title: "Difference between two dates",
+      description:
+        "Count the calendar days or whole calendar months between two dates. For months, also returns remainder_days (days from the anchor month-boundary to 'to'). Direction is signed: if 'to' is before 'from', the diff is negative.",
+      inputSchema: z
+        .object({
+          from: ISO_DATE,
+          to: ISO_DATE,
+          unit: z.enum(["days", "months"]),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ from, to, unit }) => {
+      const result = dateDiff(from as OCTDate, to as OCTDate, unit);
+      return jsonResult(result);
+    },
+  );
+
+  server.registerTool(
+    "vestlang_resolve_offset",
+    {
+      title: "Resolve an offset expression to a date",
+      description:
+        "Resolve a vestlang offset expression (e.g. 'EVENT ipo + 6 months', '+3 months', 'DATE 2025-01-01 - 2 days', 'EARLIER OF (EVENT a, EVENT b)') to a concrete date. Requires grant_date (used for expressions that reference the grant anchor). Named events used in the expression must be in the events map.",
+      inputSchema: z
+        .object({
+          expr: z
+            .string()
+            .min(1)
+            .describe(
+              "Offset expression as it would appear after 'VEST FROM' in the DSL.",
+            ),
+          grant_date: ISO_DATE,
+          events: z.record(z.string().min(1), ISO_DATE).optional(),
+          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional(),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ expr, grant_date, events, vesting_day_of_month: rule }) => {
+      const events_oct: Record<string, OCTDate> = {};
+      for (const [k, v] of Object.entries(events ?? {})) {
+        events_oct[k] = v as OCTDate;
+      }
+      const result = resolveOffset({
+        expr,
+        grant_date: grant_date as OCTDate,
+        events: events_oct,
+        vesting_day_of_month: rule,
+      });
+      return jsonResult(result);
+    },
+  );
+
+  server.registerTool(
+    "vestlang_resolve_vesting_day",
+    {
+      title: "Normalize a date under a vesting_day_of_month rule",
+      description:
+        "Apply a vesting_day_of_month rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does 29_OR_LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
+      inputSchema: z
+        .object({
+          date: ISO_DATE,
+          rule: VESTING_DAY_OF_MONTH,
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ date, rule }) => {
+      const result = resolveVestingDay(date as OCTDate, rule);
+      return jsonResult({ date: result });
     },
   );
 

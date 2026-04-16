@@ -61,6 +61,15 @@ const RESOURCES: ResourceSpec[] = [
     mimeType: "text/plain",
     path: "packages/dsl/tests/validStatements.vest",
   },
+  {
+    name: "common-queries",
+    uri: "vestlang://examples/common-queries",
+    title: "Common Queries and Summary Fields",
+    description:
+      "Reference for the summary object on vestlang_evaluate_as_of, the vestlang_vested_between window tool, and the date-math tools. Fetch this when answering aggregation or date-arithmetic questions to avoid re-deriving numbers from installment arrays.",
+    mimeType: "text/markdown",
+    path: "apps/docs/docs/common_queries.md",
+  },
 ];
 
 export function registerResources(server: McpServer): void {
