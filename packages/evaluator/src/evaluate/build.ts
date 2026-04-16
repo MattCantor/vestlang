@@ -85,12 +85,16 @@ function evaluateSchedule(
 
   // Resolved start
 
-  // Generate vesting dates
-  let d = resSchedule.meta.date;
+  // Generate vesting dates from the original vesting start, not iteratively.
+  // Iterating `d = nextDate(d, ...)` causes the seed day to drift whenever a
+  // short month clamps it to an earlier day (e.g. 31 → 29 at Feb) — that
+  // drift then pollutes every subsequent tranche. Computing each date from
+  // the original start preserves the intent of vesting_day_of_month policies
+  // like VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.
+  const start = resSchedule.meta.date;
   let dates: OCTDate[] = [];
-  for (let i = 0; i < occurrences; i++) {
-    d = nextDate(d, type, length, ctx);
-    dates.push(d);
+  for (let i = 1; i <= occurrences; i++) {
+    dates.push(nextDate(start, type, length * i, ctx));
   }
 
   // Treat grant date as a cliff if prior to vesting start
