@@ -374,3 +374,55 @@ describe("inferSchedule — round-trip", () => {
     });
   }
 });
+
+describe("inferSchedule — rounded trains", () => {
+  // A total that does not divide evenly across its occurrences yields
+  // per-tranche amounts that differ by 1 under CUMULATIVE_ROUNDING. The
+  // fingerprint-aware decomposer must recognize such a jittery run as a single
+  // UNIFORM — preserving the exact total — rather than fragmenting it into
+  // pulses.
+  const cases: Array<{ total: number; over: number }> = [
+    { total: 10000, over: 48 },
+    { total: 100, over: 3 },
+    { total: 10000, over: 7 },
+    { total: 5000, over: 36 },
+    { total: 333, over: 12 },
+  ];
+
+  for (const c of cases) {
+    it(`folds ${c.total} over ${c.over} months into one UNIFORM`, () => {
+      const ctx: EvaluationContextInput = {
+        events: { grantDate: d("2024-01-01") },
+        grantQuantity: c.total,
+        asOf: d("2031-01-01"),
+        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        allocation_type: "CUMULATIVE_ROUNDING",
+      };
+      const stmt = normalizeProgram(
+        parse(
+          `${c.total} VEST FROM DATE 2024-01-01 OVER ${c.over} months EVERY 1 month`,
+        ),
+      )[0];
+      const tranches: TrancheInput[] = evaluateStatement(stmt, ctx)
+        .installments.filter(
+          (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
+        )
+        .map((i) => ({ date: i.date, amount: i.amount }));
+
+      // Sanity: the run really is jittery (amounts are not all equal).
+      expect(new Set(tranches.map((t) => t.amount)).size).toBeGreaterThan(1);
+
+      const result = inferSchedule({ tranches });
+
+      expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+      expect(result.decomposition.uniforms.length).toBe(1);
+      expect(result.decomposition.singles.length).toBe(0);
+      expect(result.decomposition.cliffFolds).toBe(0);
+
+      const u = result.decomposition.uniforms[0];
+      expect(u.occurrences).toBe(c.over);
+      expect(u.total).toBe(c.total);
+      expect(u.cadence).toEqual({ unit: "MONTHS", length: 1 });
+    });
+  }
+});
