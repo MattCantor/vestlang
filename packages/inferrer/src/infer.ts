@@ -54,7 +54,7 @@ function runOne(
   grantDate: OCTDate,
   asOf: OCTDate,
 ): Attempt {
-  const { components, cadencesTried } = decompose(sorted, policy);
+  const { components, cadencesTried } = decompose(sorted, policy, allocationType);
   const { components: folded, foldCount } = foldCliffs(components, policy);
   const program: Program = folded.map((c) => buildStatement(c, policy));
 
@@ -92,12 +92,20 @@ export function inferSchedule(input: InferInput): InferResult {
   let best: Attempt | null = null;
   const notes: string[] = [];
 
-  // Try every (policy, allocation) combination. Pick the one with lowest
-  // residual, breaking ties on decomposition simplicity (fewest program
-  // statements). A 32 × 6 = 192-way search, but each attempt bails fast
-  // when the grid walks don't align — so it's cheap.
-  for (const policy of POLICY_CANDIDATES) {
-    for (const alloc of ALLOCATION_CANDIDATES) {
+  // Each dimension is either fixed to a provided hint or searched over all
+  // candidates. Both-hinted is a 1×1 search; neither is the full 32×6; partial
+  // narrows one dimension. The winner-selection and explicit-list fallback below
+  // are identical regardless of how many attempts there are — a wrong hint simply
+  // yields no clean fit and falls back, rather than being silently widened.
+  const policies: readonly vesting_day_of_month[] = input.policy
+    ? [input.policy]
+    : POLICY_CANDIDATES;
+  const allocations: readonly allocation_type[] = input.allocationType
+    ? [input.allocationType]
+    : ALLOCATION_CANDIDATES;
+
+  for (const policy of policies) {
+    for (const alloc of allocations) {
       const attempt = runOne(
         sorted,
         policy,

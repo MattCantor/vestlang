@@ -13,6 +13,19 @@ export interface TrancheInput {
 export interface InferInput {
   tranches: TrancheInput[];
   grantDate?: OCTDate;
+  /** Optional provenance hints. When provided, that dimension is fixed instead of
+   * searched (both → 1×1, partial → narrowed, neither → full 32×6 search).
+   *
+   * A hint is trusted as ground truth and EXCLUDES other conventions from the
+   * search. If a hint is wrong but still admits a residual-0 fit, the result is a
+   * valid decomposition under the wrong convention — which may be less sparse than
+   * a full search would find. (We deliberately do not second-guess a fitting
+   * decomposition; residual is the only correctness signal, and once two
+   * conventions both reproduce the installments, neither is "wrong" — the data
+   * doesn't record which one made it.) Provide hints only when you know the
+   * provenance. */
+  policy?: vesting_day_of_month;
+  allocationType?: allocation_type;
 }
 
 export interface UniformComponent {
@@ -21,6 +34,10 @@ export interface UniformComponent {
   cadence: { unit: PeriodTag; length: number };
   occurrences: number;
   perTrancheAmount: number;
+  /** Exact total shares for the train. For jittery (rounded) trains the per-tranche
+   * amounts are unequal, so total !== perTrancheAmount * occurrences; this field
+   * preserves the true total for faithful reconstruction. */
+  total: number;
 }
 
 export interface SingleTrancheComponent {
