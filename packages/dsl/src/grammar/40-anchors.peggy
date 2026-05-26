@@ -21,10 +21,14 @@ SystemRef
 
 EventRef = "EVENT"i _ name:( SystemRef / Ident ) { return mkEvent(name); }
 
+// Bareword system references (grantDate / vestingStart and their variants)
+// may be used as anchors without the `EVENT` keyword.
+SystemRefEvent = name:SystemRef { return mkEvent(name); }
+
 /* --- Vesting Node --- */
 
 VestingNode
-  = base:(EventRef / DateLiteral)
+  = base:(EventRef / SystemRefEvent / DateLiteral)
     offsets:(_ Duration)*
     constraints:(_ OrExpr)? {
       const offs = offsets.map(o => o[1])
