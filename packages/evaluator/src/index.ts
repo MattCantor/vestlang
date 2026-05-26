@@ -10,3 +10,4 @@ export {
   gt,
   eq,
 } from "./evaluate/time.js";
+export { allocateQuantity } from "./evaluate/allocation.js";

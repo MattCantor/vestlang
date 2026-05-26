@@ -38,7 +38,7 @@ function buildUniform(
   c: UniformComponent,
   policy: vesting_day_of_month,
 ): Statement {
-  const total = c.perTrancheAmount * c.occurrences;
+  const total = c.total;
   const vestingStart = backOnePeriod(c.startDate, c.cadence, policy);
   const periodicity: VestingPeriod = {
     type: c.cadence.unit,
