@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      # OIDC for npm Trusted Publishing — no NPM_TOKEN secret needed.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +24,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          registry-url: "https://npm.pkg.github.com"
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -36,9 +37,21 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Publish to GitHub Packages
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1; node 22 ships an older npm.
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
+
+      # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
+      # registry credential, per the trusted publisher configured on npmjs.com.
+      # Idempotent: the path filter fires on any package.json edit, so skip when
+      # this version is already on the registry (avoids a failing re-publish).
+      - name: Publish to npm (Trusted Publishing, OIDC)
+        working-directory: packages/vestlang
         run: |
-          cd packages/vestlang
-          npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already published — skipping."
+          else
+            npm publish --access public
+          fi
