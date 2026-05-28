@@ -8,8 +8,6 @@ A domain-specific language for modeling vesting schedules.
 npm install @nathamcrewott/vestlang
 ```
 
-Published to public npm — no registry configuration needed.
-
 ## Usage
 
 ```typescript

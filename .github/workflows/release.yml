@@ -17,6 +17,10 @@ jobs:
       contents: read
       # OIDC for npm Trusted Publishing — no NPM_TOKEN secret needed.
       id-token: write
+    env:
+      # Run the JS actions on Node 24 now — GitHub is removing the Node 20 runtime
+      # (forced default 2026-06-02). Keeps the proven action versions; just the runtime.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - uses: actions/checkout@v4
 

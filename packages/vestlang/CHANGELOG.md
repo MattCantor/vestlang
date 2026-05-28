@@ -1,5 +1,11 @@
 # @nathamcrewott/vestlang
 
+## 0.3.3
+
+### Patch Changes
+
+- Tidy the README install section — drop the now-irrelevant "no registry configuration needed" note (a leftover from the GitHub Packages era).
+
 ## 0.3.2
 
 ### Patch Changes
