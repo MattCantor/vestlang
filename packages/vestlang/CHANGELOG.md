@@ -1,5 +1,11 @@
 # @nathamcrewott/vestlang
 
+## 0.3.2
+
+### Patch Changes
+
+- Sync the README API/Types sections with the 0.3.x exports: document `inferSchedule`, `stringify`/`stringifyProgram`/`stringifyStatement`, and the previously-undocumented types (inferrer types, lint types, installment states, `OCTDate`, `RawProgram`, `VestedResult`).
+
 ## 0.3.1
 
 ### Patch Changes

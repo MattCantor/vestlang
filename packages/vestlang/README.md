@@ -32,17 +32,27 @@ console.log(schedule.installments);
 
 ### Parsing
 
-- `parse(source: string)` - Parse vestlang source into an AST
+- `parse(source: string)` - Parse vestlang source into a raw AST
 
 ### Normalization
 
-- `normalizeProgram(program)` - Normalize a parsed program for deterministic shape
+- `normalizeProgram(program)` - Normalize a parsed program into its canonical, deterministic shape
 
 ### Evaluation
 
 - `evaluateStatement(statement, context)` - Evaluate a single statement
 - `evaluateProgram(program, context)` - Evaluate an entire program
 - `evaluateStatementAsOf(statement, context)` - Evaluate a statement as of a specific date
+
+### Inference (the inverse of evaluation)
+
+- `inferSchedule(input)` - Reconstruct a vestlang program from observed `{ date, amount }` vesting tranches via matching-pursuit decomposition. Returns `{ dsl, program, decomposition, diagnostics }`, where `diagnostics` reports the residual error and any fallbacks taken.
+
+### Stringify
+
+- `stringify(node)` - Render an AST node back to vestlang DSL source
+- `stringifyProgram(program)` - Render a whole program to DSL source
+- `stringifyStatement(statement)` - Render a single statement to DSL source
 
 ### Linting
 
@@ -53,13 +63,35 @@ console.log(schedule.installments);
 
 The package exports commonly used types:
 
-- `Program` - A list of statements
+**Programs & statements**
+
+- `Program` - A normalized list of statements
+- `RawProgram` - A parsed-but-not-yet-normalized program (the output of `parse`)
 - `Statement` - A single vesting statement
 - `Schedule` - A vesting schedule
+
+**Evaluation**
+
 - `EvaluationContextInput` - Input context for evaluation
 - `EvaluatedSchedule` - Result of evaluating a schedule
 - `Installment` - A single vesting installment
+- `ResolvedInstallment` / `UnresolvedInstallment` / `ImpossibleInstallment` - The installment states
+- `VestedResult` - Vested/unvested quantities produced by evaluation
 - `Blocker` - A blocking condition preventing vesting
+- `OCTDate` - An ISO `YYYY-MM-DD` date string
+
+**Linting**
+
+- `Diagnostic` - A single lint finding
+- `LintResult` - The result of a lint run
+- `LintOptions` - Lint configuration
+
+**Inference**
+
+- `InferInput` - Input to `inferSchedule` (`tranches`, plus optional `grantDate` / policy hints)
+- `InferResult` - Output of `inferSchedule` (`dsl`, `program`, `decomposition`, `diagnostics`)
+- `TrancheInput` - A single observed `{ date, amount }` tranche
+- `Component` - A decomposition component: `UniformComponent` | `SingleTrancheComponent` | `CliffUniformComponent`
 
 ## License
 
