@@ -1,4 +1,10 @@
-# @mattcantor/vestlang
+# @nathamcrewott/vestlang
+
+## 0.3.0
+
+### Minor Changes
+
+- Bundle the post-0.2.3 fixes and features into the published facade: evaluator seed-day drift fix (correct tranche dates for day-29/30/31-seeded monthly schedules), CLIFF grantDate guard repair, bareword system-event anchors, stringify sugar, and the new schedule inferrer (`inferSchedule`).
 
 ## 0.2.2
 

@@ -1,6 +1,6 @@
 {
-  "name": "@mattcantor/vestlang",
-  "version": "0.2.3",
+  "name": "@nathamcrewott/vestlang",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "description": "A domain-specific language for modeling vesting schedules",
@@ -57,6 +57,7 @@
     "typescript": "^5.9.2"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }
