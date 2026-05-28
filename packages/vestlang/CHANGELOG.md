@@ -1,5 +1,11 @@
 # @nathamcrewott/vestlang
 
+## 0.3.1
+
+### Patch Changes
+
+- Fix the bundled README: correct the package name and switch the install instructions to public npm (previously referenced the old `@mattcantor` name and GitHub Packages).
+
 ## 0.3.0
 
 ### Minor Changes

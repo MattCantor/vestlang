@@ -1,26 +1,19 @@
-# @mattcantor/vestlang
+# @nathamcrewott/vestlang
 
 A domain-specific language for modeling vesting schedules.
 
 ## Installation
 
-This package is hosted on GitHub Packages. To install, first configure npm to use GitHub Packages for the `@mattcantor` scope:
-
 ```bash
-# Create or edit ~/.npmrc and add:
-@mattcantor:registry=https://npm.pkg.github.com
+npm install @nathamcrewott/vestlang
 ```
 
-Then install the package:
-
-```bash
-npm install @mattcantor/vestlang
-```
+Published to public npm — no registry configuration needed.
 
 ## Usage
 
 ```typescript
-import { parse, normalizeProgram, evaluateStatement } from "@mattcantor/vestlang";
+import { parse, normalizeProgram, evaluateStatement } from "@nathamcrewott/vestlang";
 
 const source = "VEST FROM EVENT grant OVER 4 years EVERY 1 month CLIFF 1 year";
 const program = normalizeProgram(parse(source));
