@@ -426,3 +426,118 @@ describe("inferSchedule — rounded trains", () => {
     });
   }
 });
+
+/* ------------------------
+ * Data-adaptive cadence (estimateCadences + per-residual re-estimation)
+ * ------------------------ */
+
+/** `n` tranches starting at (startY, startM) stepping `step` calendar months. */
+function everyMonths(
+  startY: number,
+  startM: number,
+  step: number,
+  n: number,
+  amount: number,
+  day = 1,
+): TrancheInput[] {
+  const out: TrancheInput[] = [];
+  let y = startY;
+  let m = startM;
+  for (let i = 0; i < n; i++) {
+    out.push({
+      date: d(
+        `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+      ),
+      amount,
+    });
+    m += step;
+    while (m > 12) {
+      m -= 12;
+      y++;
+    }
+  }
+  return out;
+}
+
+/** `n` tranches starting at `startISO` stepping `step` days. */
+function everyDays(
+  startISO: string,
+  step: number,
+  n: number,
+  amount: number,
+): TrancheInput[] {
+  const base = new Date(`${startISO}T00:00:00Z`).getTime();
+  const out: TrancheInput[] = [];
+  for (let i = 0; i < n; i++) {
+    const dt = new Date(base + i * step * 86_400_000);
+    out.push({
+      date: d(
+        `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`,
+      ),
+      amount,
+    });
+  }
+  return out;
+}
+
+describe("inferSchedule — data-adaptive cadence", () => {
+  it("every-2-month (out of vocabulary) → one UNIFORM at 2-month cadence", () => {
+    const result = inferSchedule({
+      tranches: everyMonths(2024, 1, 2, 12, 2000),
+    });
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.uniforms.length).toBe(1);
+    expect(result.decomposition.singles.length).toBe(0);
+    expect(result.decomposition.uniforms[0].cadence).toEqual({
+      unit: "MONTHS",
+      length: 2,
+    });
+    expect(result.decomposition.uniforms[0].occurrences).toBe(12);
+    expect(result.dsl).toMatch(/EVERY 2 months/i);
+  });
+
+  it("every-5-month (out of vocabulary) → one UNIFORM at 5-month cadence", () => {
+    const result = inferSchedule({
+      tranches: everyMonths(2024, 1, 5, 10, 3000),
+    });
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.uniforms.length).toBe(1);
+    expect(result.decomposition.uniforms[0].cadence).toEqual({
+      unit: "MONTHS",
+      length: 5,
+    });
+    expect(result.decomposition.uniforms[0].occurrences).toBe(10);
+    expect(result.dsl).toMatch(/EVERY 5 months/i);
+  });
+
+  it("monthly train + every-5-month bonus → two UNIFORMs (per-residual re-estimation)", () => {
+    // The bonus train sits off the monthly grid (day 15). At the root the
+    // 5-month period is invisible — monthly fills every month — so it only
+    // surfaces in the residual after the monthly train is peeled off. A single
+    // up-front estimate plus the priors would leave the bonus as four singles.
+    const tranches: TrancheInput[] = [
+      ...monthly("2024-01-01", 24, 1000),
+      ...everyMonths(2024, 5, 5, 4, 2000, 15),
+    ];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.uniforms.length).toBe(2);
+    expect(result.decomposition.singles.length).toBe(0);
+    const cadences = result.decomposition.uniforms.map((u) => u.cadence);
+    expect(cadences).toContainEqual({ unit: "MONTHS", length: 1 });
+    expect(cadences).toContainEqual({ unit: "MONTHS", length: 5 });
+  });
+
+  it("flat biweekly → explicit singles (pinned: issue #3, DAYS allocation round-trip)", () => {
+    // The estimator identifies the 14-day period, but a DAYS uniform does not
+    // round-trip to equal amounts under the evaluator's elapsed-time allocation
+    // (leap-year sensitive), so the faithful decomposition is one pulse per
+    // date. Pins current behavior until issue #3 is resolved.
+    const result = inferSchedule({
+      tranches: everyDays("2024-01-01", 14, 26, 500),
+    });
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.uniforms.length).toBe(0);
+    expect(result.decomposition.singles.length).toBe(26);
+  });
+});
