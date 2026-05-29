@@ -1,0 +1,96 @@
+/* talk.css — styling for "Vesting Schedules as Radio Astronomy"
+   Layered on top of the reveal.js `moon` theme. Keep it light; the moon theme
+   already sets the palette (dark teal bg, pale text, blue accents). */
+
+:root {
+  --vl-accent: #268bd2;   /* moon's link blue */
+  --vl-muted: #93a1a1;    /* moon's muted text */
+  --vl-warn: #b58900;     /* moon's bold/yellow */
+}
+
+.reveal .subtitle {
+  font-size: 0.55em;
+  color: var(--vl-muted);
+  line-height: 1.4;
+  margin-top: 0.4em;
+}
+
+.reveal .byline {
+  font-size: 0.4em;
+  color: var(--vl-muted);
+  margin-top: 1.6em;
+  letter-spacing: 0.05em;
+}
+
+/* ---- animation placeholders (replaced by real A1/A2/A3 in a later pass) ---- */
+.reveal .vl-anim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  margin: 0.4em auto 0.6em;
+  padding: 1em;
+  border: 2px dashed rgba(38, 139, 210, 0.5);
+  border-radius: 10px;
+  background: rgba(7, 54, 66, 0.35);
+  color: var(--vl-muted);
+  font-size: 0.6em;
+  text-align: center;
+}
+
+.reveal .vl-anim .vl-anim__tag {
+  display: inline-block;
+  margin-bottom: 0.5em;
+  padding: 0.15em 0.6em;
+  border-radius: 999px;
+  background: var(--vl-accent);
+  color: #002b36;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-size: 0.8em;
+}
+
+.reveal .vl-anim .vl-anim__caption {
+  display: block;
+  margin-top: 0.4em;
+  color: var(--vl-muted);
+  font-style: italic;
+}
+
+.reveal .vl-anim .vl-anim__body {
+  opacity: 0.75;
+}
+
+/* ---- two-column "no free lunch" centerpiece ---- */
+.reveal .two-col {
+  display: flex;
+  gap: 1.4em;
+  align-items: stretch;
+  text-align: left;
+}
+.reveal .two-col .col {
+  flex: 1;
+  padding: 0.6em 0.9em;
+  border-radius: 10px;
+  background: rgba(7, 54, 66, 0.35);
+}
+.reveal .two-col .col h3 {
+  font-size: 0.8em;
+  color: var(--vl-accent);
+  margin-bottom: 0.1em;
+}
+.reveal .two-col .col em {
+  display: block;
+  color: var(--vl-muted);
+  font-size: 0.55em;
+  margin-bottom: 0.6em;
+}
+.reveal .two-col .col li {
+  font-size: 0.62em;
+  line-height: 1.35;
+}
+
+.reveal blockquote {
+  font-size: 0.62em;
+  width: 100%;
+}
