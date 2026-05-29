@@ -8,8 +8,8 @@ import { allocateQuantity } from "@vestlang/evaluator";
 import {
   type Cadence,
   cadenceKey,
+  estimateCadences,
   minimalCtx,
-  rankCadences,
   walk,
 } from "./cadence.js";
 import type {
@@ -25,7 +25,8 @@ const EPSILON = 1e-6;
 /** Max branches explored per decision node. Realistic schedules need few; this
  * caps pathological blow-up while staying optimal on clean inputs. */
 const MAX_BRANCH = 16;
-/** Hard cap on cadences considered, ranked by gap frequency. */
+/** Hard cap on candidate cadences considered per residual, in estimator rank
+ * order (data-derived modes first, then priors). */
 const TOP_CADENCES = 5;
 
 function toResidual(tranches: TrancheInput[]): Residual {
@@ -207,11 +208,19 @@ export function decompose(
   const ctx = minimalCtx(policy);
   const root = toResidual(tranches);
 
-  const ranked = rankCadences(occupiedDates(root)).slice(0, TOP_CADENCES);
-  const cadencesTried = ranked.map(cadenceKey);
+  // Per-residual cadence estimate (CLEAN-style): re-derive the candidate
+  // dictionary from the *current* residual so a secondary cadence emerges once
+  // the dominant train is peeled off. Records every cadence considered, so the
+  // reported `cadencesTried` is the union across all passes.
+  const triedKeys = new Set<string>();
+  const estimate = (dates: OCTDate[]): Cadence[] => {
+    const ranked = estimateCadences(dates).slice(0, TOP_CADENCES);
+    for (const c of ranked) triedKeys.add(cadenceKey(c));
+    return ranked;
+  };
 
   // Greedy seed for an initial upper bound (also a valid answer if search is capped).
-  const seed = greedyCover(root, ranked, ctx, mode);
+  const seed = greedyCover(root, estimate, ctx, mode);
   let best: Component[] = seed;
   let bestCost = seed.length;
 
@@ -236,10 +245,14 @@ export function decompose(
     }
 
     const target = dates[0];
-    const atoms = trainAtomsCovering(residual, target, ranked, ctx, mode).slice(
-      0,
-      MAX_BRANCH,
-    );
+    const localRanked = estimate(dates);
+    const atoms = trainAtomsCovering(
+      residual,
+      target,
+      localRanked,
+      ctx,
+      mode,
+    ).slice(0, MAX_BRANCH);
 
     // Branch: cover `target` with each candidate train.
     for (const atom of atoms) {
@@ -269,14 +282,14 @@ export function decompose(
 
   recurse(root, []);
 
-  return { components: best, cadencesTried };
+  return { components: best, cadencesTried: [...triedKeys] };
 }
 
 /** Greedy fallback / upper-bound seed: repeatedly take the highest-mass fitting
  * train, then sweep leftovers into pulses. */
 function greedyCover(
   root: Residual,
-  cadences: Cadence[],
+  estimate: (dates: OCTDate[]) => Cadence[],
   ctx: EvaluationContext,
   mode: allocation_type,
 ): Component[] {
@@ -285,6 +298,7 @@ function greedyCover(
   for (let iter = 0; iter < 100; iter++) {
     const dates = occupiedDates(residual);
     if (dates.length === 0) break;
+    const cadences = estimate(dates);
     let bestAtom: TrainAtom | null = null;
     for (const target of dates) {
       const atoms = trainAtomsCovering(residual, target, cadences, ctx, mode);
