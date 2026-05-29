@@ -614,16 +614,36 @@ describe("inferSchedule — data-adaptive cadence", () => {
     expect(cadences).toContainEqual({ unit: "MONTHS", length: 5 });
   });
 
-  it("flat biweekly → explicit singles (pinned: issue #3, DAYS allocation round-trip)", () => {
-    // The estimator identifies the 14-day period, but a DAYS uniform does not
-    // round-trip to equal amounts under the evaluator's elapsed-time allocation
-    // (leap-year sensitive), so the faithful decomposition is one pulse per
-    // date. Pins current behavior until issue #3 is resolved.
+  it("flat biweekly → one UNIFORM at 14-day cadence (issue #3)", () => {
+    // A flat biweekly train spans the March DST transition. The fix to make the
+    // evaluator's DAYS stepper UTC-pure (rather than local-time, which dropped a
+    // day across DST) lets the 14-day uniform round-trip to equal amounts, so it
+    // folds to a single statement instead of fragmenting into 26 singles.
     const result = inferSchedule({
       tranches: everyDays("2024-01-01", 14, 26, 500),
     });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(0);
-    expect(result.decomposition.singles.length).toBe(26);
+    expect(result.decomposition.uniforms.length).toBe(1);
+    expect(result.decomposition.singles.length).toBe(0);
+    expect(result.decomposition.uniforms[0].cadence).toEqual({
+      unit: "DAYS",
+      length: 14,
+    });
+  });
+
+  it("arbitrary 45-day cadence → one UNIFORM (issue #3)", () => {
+    // An out-of-vocabulary day cadence that also crosses the DST boundary; the
+    // data-adaptive estimator derives 45 days and the UTC stepper reproduces the
+    // dates exactly, so it round-trips to a single uniform.
+    const result = inferSchedule({
+      tranches: everyDays("2024-01-01", 45, 8, 750),
+    });
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.uniforms.length).toBe(1);
+    expect(result.decomposition.singles.length).toBe(0);
+    expect(result.decomposition.uniforms[0].cadence).toEqual({
+      unit: "DAYS",
+      length: 45,
+    });
   });
 });
