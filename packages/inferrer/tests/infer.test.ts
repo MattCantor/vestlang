@@ -83,16 +83,19 @@ describe("inferSchedule — pure uniform", () => {
 });
 
 describe("inferSchedule — cliff", () => {
-  it("1-year cliff (12×1000 at month 12, then 36×1000 monthly) folds to one cliff statement", () => {
+  it("1-year cliff (lump after the grant date) folds to one cliff statement", () => {
+    // Lump at 2025-01-01 is one year AFTER the grant date 2024-01-01, so it is a
+    // genuine cliff, not pre-grant accrual.
     const tranches: TrancheInput[] = [
       { date: d("2025-01-01"), amount: 12000 },
       ...monthly("2025-02-01", 36, 1000),
     ];
 
-    const result = inferSchedule({ tranches });
+    const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.decomposition.cliffFolds).toBe(1);
+    expect(result.decomposition.preGrantFolds).toBe(0);
     expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months/i);
@@ -105,11 +108,90 @@ describe("inferSchedule — cliff", () => {
       ...monthly("2025-02-01", 36, 1000),
     ];
 
-    const result = inferSchedule({ tranches });
+    const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.decomposition.cliffFolds).toBe(0);
+    expect(result.decomposition.preGrantFolds).toBe(0);
     expect(result.dsl).not.toContain("CLIFF");
+  });
+});
+
+describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
+  it("on-grid lump on the grant date → back-dated vesting start, no cliff", () => {
+    // Vesting started 2023-10-01, granted 2024-01-01; the 3 pre-grant months
+    // lump onto the grant date. Same tranche stream as a cliff, but the lump is
+    // ON the grant date, so it is read as a back-dated vesting start.
+    const tranches: TrancheInput[] = [
+      { date: d("2024-01-01"), amount: 3000 },
+      ...monthly("2024-02-01", 45, 1000),
+    ];
+
+    const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.preGrantFolds).toBe(1);
+    expect(result.decomposition.cliffFolds).toBe(0);
+    expect(result.dsl).not.toContain("CLIFF");
+    expect(result.dsl).toContain("48000 VEST");
+    expect(result.dsl).toMatch(/OVER 48 months EVERY 1 month/i);
+    expect(result.dsl).toContain("FROM DATE 2023-10-01");
+  });
+
+  it("off-grid lump (hire date) on the grant date → vesting start on the train's day-of-month", () => {
+    // Hire/vesting-start 2023-09-29 (~3 months + 2 days before a 2024-01-01
+    // grant): the train lands on the 29th, the lump on the arbitrary grant date.
+    const tranches: TrancheInput[] = [
+      { date: d("2024-01-01"), amount: 3000 },
+      { date: d("2024-01-29"), amount: 1000 },
+      { date: d("2024-02-29"), amount: 1000 },
+      { date: d("2024-03-29"), amount: 1000 },
+      { date: d("2024-04-29"), amount: 1000 },
+      { date: d("2024-05-29"), amount: 1000 },
+      { date: d("2024-06-29"), amount: 1000 },
+    ];
+
+    const result = inferSchedule({
+      tranches,
+      grantDate: d("2024-01-01"),
+      policy: "29_OR_LAST_DAY_OF_MONTH",
+    });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.preGrantFolds).toBe(1);
+    expect(result.decomposition.cliffFolds).toBe(0);
+    expect(result.dsl).not.toContain("CLIFF");
+    expect(result.dsl).toContain("FROM DATE 2023-09-29");
+  });
+
+  it("rounded train (100000 over 48) with a pre-grant lump still folds", () => {
+    // 100000/48 does not divide evenly, so installments jitter; the fold is
+    // validated by evaluation, not by lump = k * perTranche arithmetic.
+    const program = normalizeProgram(
+      parse("100000 VEST FROM DATE 2023-10-01 OVER 48 months EVERY 1 month"),
+    );
+    const full = evalAllResolved(program, {
+      events: { grantDate: d("2024-01-01") },
+      grantQuantity: 100000,
+      asOf: d("2030-01-01"),
+      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      allocation_type: "CUMULATIVE_ROUNDING",
+    });
+
+    // Hint policy + allocation: this case exercises rounded-train folding, not
+    // convention detection, and the full 32×6 search over jittery 48-tranche
+    // input is slow (a property of the B&B decompose, not the fold).
+    const result = inferSchedule({
+      tranches: full,
+      grantDate: d("2024-01-01"),
+      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      allocationType: "CUMULATIVE_ROUNDING",
+    });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.preGrantFolds).toBe(1);
+    expect(result.dsl).not.toContain("CLIFF");
+    expect(result.dsl).toContain("FROM DATE 2023-10-01");
   });
 });
 
@@ -275,7 +357,11 @@ function runRoundTrip(c: RoundTripCase) {
   const program = normalizeProgram(parse(c.dsl));
   const originalTranches = evalAllResolved(program, ctx);
 
-  const inferred = inferSchedule({ tranches: originalTranches });
+  // Feed back the known grant date: a lump on the grant date is read as
+  // pre-grant accrual, a lump after it as a cliff. Omitting it would default to
+  // the first tranche date and reinterpret cliffs (lump on the default grant) as
+  // pre-grant — see the dedicated pre-grant cases below.
+  const inferred = inferSchedule({ tranches: originalTranches, grantDate });
   expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
 
   const inferredProgram = normalizeProgram(parse(inferred.dsl));

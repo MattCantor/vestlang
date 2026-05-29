@@ -7,6 +7,7 @@ import type {
 } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { foldCliffs } from "./cliffFold.js";
+import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
 import { ALLOCATION_CANDIDATES, POLICY_CANDIDATES } from "./policy.js";
 import type {
@@ -40,6 +41,8 @@ interface Attempt {
   program: Program;
   components: Component[];
   foldCount: number;
+  preGrantFolds: number;
+  preGrantStarts: OCTDate[];
   residual: number;
   policy: vesting_day_of_month;
   allocationType: allocation_type;
@@ -55,7 +58,23 @@ function runOne(
   asOf: OCTDate,
 ): Attempt {
   const { components, cadencesTried } = decompose(sorted, policy, allocationType);
-  const { components: folded, foldCount } = foldCliffs(components, policy);
+  // Pre-grant accrual (lump on the grant date) is reinterpreted as a back-dated
+  // vesting start before cliff folding, since a lump on the grant date is never
+  // a cliff. The two passes are mutually exclusive by the lump's position.
+  const pg = foldPreGrant(
+    sorted,
+    components,
+    grantDate,
+    totalQuantity,
+    asOf,
+    policy,
+    allocationType,
+  );
+  const { components: folded, foldCount } = foldCliffs(
+    pg.components,
+    policy,
+    grantDate,
+  );
   const program: Program = folded.map((c) => buildStatement(c, policy));
 
   const verifyCtx: VerifyContext = {
@@ -71,6 +90,8 @@ function runOne(
     program,
     components: folded,
     foldCount,
+    preGrantFolds: pg.foldCount,
+    preGrantStarts: pg.vestingStarts,
     residual,
     policy,
     allocationType,
@@ -142,6 +163,8 @@ export function inferSchedule(input: InferInput): InferResult {
       program: fallbackProgram,
       components: fallbackComponents,
       foldCount: 0,
+      preGrantFolds: 0,
+      preGrantStarts: [],
       residual: 0,
       policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       allocationType: "CUMULATIVE_ROUNDING",
@@ -170,6 +193,12 @@ export function inferSchedule(input: InferInput): InferResult {
     notes.push(`grantDate defaulted to first tranche date (${firstDate})`);
   }
 
+  for (const start of best.preGrantStarts) {
+    notes.push(
+      `lump on grant date ${grantDate} reinterpreted as vesting start ${start} (pre-grant accrual)`,
+    );
+  }
+
   const uniforms = best.components
     .filter((c): c is UniformComponent => c.kind === "UNIFORM")
     .map(({ kind: _kind, ...rest }) => rest);
@@ -187,6 +216,7 @@ export function inferSchedule(input: InferInput): InferResult {
       uniforms,
       singles,
       cliffFolds,
+      preGrantFolds: best.preGrantFolds,
     },
     diagnostics: {
       residualError: best.residual,
