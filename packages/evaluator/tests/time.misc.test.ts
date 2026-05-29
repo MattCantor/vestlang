@@ -13,6 +13,31 @@ describe("time helpers", () => {
     expect(addDays("2024-01-10" as OCTDate, 5)).toBe("2024-01-15" as OCTDate);
   });
 
+  // Regression for issue #3: addDays must be UTC-pure. A local-time stepper
+  // drops a day when the span crosses a DST transition (these dates straddle the
+  // March/November US transitions), which previously corrupted DAYS schedules
+  // on non-UTC machines. These assert the calendar-correct result, which is
+  // timezone-independent.
+  it("addDays is UTC-pure across DST boundaries", () => {
+    // spring-forward (2024-03-10): Feb 26 + 14 calendar days = Mar 11
+    expect(addDays("2024-02-26" as OCTDate, 14)).toBe("2024-03-11" as OCTDate);
+    // fall-back (2024-11-03): Oct 27 + 14 = Nov 10
+    expect(addDays("2024-10-27" as OCTDate, 14)).toBe("2024-11-10" as OCTDate);
+    // a single large step over both leap day and DST stays consistent with
+    // stepping in smaller increments
+    expect(addDays("2024-01-01" as OCTDate, 84)).toBe("2024-03-25" as OCTDate);
+  });
+
+  it("nextDate DAYS yields exact 14-day grid across DST", () => {
+    const start = "2023-12-18" as OCTDate;
+    expect(nextDate(start, "DAYS", 14 * 7, baseCtx())).toBe(
+      "2024-03-25" as OCTDate,
+    );
+    expect(nextDate(start, "DAYS", 14 * 8, baseCtx())).toBe(
+      "2024-04-08" as OCTDate,
+    );
+  });
+
   it("lt/gt/eq correctness", () => {
     expect(lt("2024-01-01" as OCTDate, "2024-01-02" as OCTDate)).toBe(true);
     expect(gt("2024-01-02" as OCTDate, "2024-01-01" as OCTDate)).toBe(true);

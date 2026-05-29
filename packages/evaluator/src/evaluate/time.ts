@@ -1,5 +1,5 @@
 import type { EvaluationContext, OCTDate, PeriodTag } from "@vestlang/types";
-import { addDays as dfAddDays, isBefore, isAfter, isEqual } from "date-fns";
+import { isBefore, isAfter, isEqual } from "date-fns";
 
 // convert ISO-string ↔ Date
 export const toDate = (iso: OCTDate) => new Date(iso + "T00:00:00Z");
@@ -43,8 +43,17 @@ export function addMonthsRule(
   return toISO(result);
 }
 
-export const addDays = (iso: OCTDate, n: number): OCTDate =>
-  toISO(dfAddDays(toDate(iso), n));
+// Step `n` calendar days in UTC. We build dates at UTC midnight (`toDate`) and
+// read them back in UTC (`toISO`), so day arithmetic must also be UTC — using a
+// local-time stepper (e.g. date-fns `addDays`) drifts by a day across DST
+// transitions, since preserving wall-clock local time shifts the underlying
+// instant onto a different UTC calendar day. `setUTCDate` rolls months/years
+// correctly and is timezone-independent, matching `addMonthsRule`.
+export const addDays = (iso: OCTDate, n: number): OCTDate => {
+  const d = toDate(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return toISO(d);
+};
 
 export const lt = (a: OCTDate, b: OCTDate) => isBefore(toDate(a), toDate(b));
 export const gt = (a: OCTDate, b: OCTDate) => isAfter(toDate(a), toDate(b));
