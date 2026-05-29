@@ -4,7 +4,7 @@ Split vestlang into a `core` engine (OCF-canonical interface, verbatim) and an `
 
 ## Status
 
-- **Status**: Design Specification
+- **Status**: Staged for Implementation (8 phases; see Implementation Phases)
 - **Priority**: High
 - **Complexity**: High
 - **Spans**: `vestlang` (this repo) + `OCF-Tools` (`~/code/OCF-Tools`, branch `add-canonical-vesting-compiler`)
@@ -155,69 +155,260 @@ Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses
 
 ---
 
-## Phased roadmap
+## Implementation Phases
 
 Each phase keeps `pnpm build` + `turbo test` green and is a self-contained commit. Phase 6 is a separate repo and PR. The published `@nathamcrewott/vestlang` surface is only intentionally reshaped at Phase 5b/7.
 
+### Phase Dependencies
+
+```
+Phase 0  ──►  Phase 1  ──►  Phase 2  ──►  Phase 3  ──►  Phase 4  ──►  Phase 5a  ──►  Phase 5b  ──►  Phase 7  ──►  Phase 6
+hygiene       core IR       core         core            resolver      assembler      retire        release       OCF-Tools
++ org reg     + validate    engine       compile         + lowering    + diff gate    legacy        + publish     (separate repo)
+
+Notes:
+  • Phase 0's org registration is an external lead-time prerequisite consumed only at Phase 7.
+  • Phase 4 depends on Phase 3 (the core compile API it lowers to), not just Phase 1.
+  • Phase 5a needs BOTH the resolver (4) and a working old engine; 5b deletes the old engine only after 5a's differential gate is green.
+  • Phase 6 lives in OCF-Tools and depends on the published @vestlang/core from Phase 7.
+```
+
+---
+
 ### Phase 0 — Hygiene + publishing prerequisite
-- **Goal**: remove cruft that would otherwise mask later moves; secure the publish target.
-- **Files**: `packages/evaluator/src/evaluate/cliff.ts`, `build.ts`, **and `makeTranches.ts`** (all three carry the deep `../../../types/dist/...` import → `@vestlang/types`); `apps/cli/package.json` (`"workspace: *"` typo); delete dead `packages/ast` (salvage canonical JSON schemas into core/docs first).
-- **Prerequisite**: register the `@vestlang` npm org (free, public) so `@vestlang/core` can publish under it at Phase 7; no code depends on this yet.
-- **Checkpoint**: build + tests green, no behavior change.
-- **Commit**: `chore: fix cross-package imports and remove dead ast package`.
+
+**Goal:** Remove cruft that would otherwise mask later moves; secure the publish target.
+
+**Why First:** The deep cross-package imports and dead `packages/ast` would obscure the engine relocation in Phases 2–3; cleaning them now keeps later diffs legible. Registering the npm org is an external lead-time action that Phase 7 depends on — start it early.
+
+**Outputs:**
+- `@vestlang/types` imports fixed in `cliff.ts`, `build.ts`, and `makeTranches.ts` (all three carry the deep `../../../types/dist/...` path).
+- `apps/cli/package.json` `"workspace: *"` typo fixed.
+- Dead `packages/ast` deleted, canonical JSON schemas first salvaged into core/docs.
+- `@vestlang` npm org registered (free, public) — no code depends on it yet.
+
+**Definition of Done:**
+- [ ] `pnpm build` + `turbo test` green, no behavior change.
+- [ ] No deep `../../../types/dist/...` imports remain.
+- [ ] `@vestlang` npm org registered and owned.
+- [ ] Commit: `chore: fix cross-package imports and remove dead ast package`.
+
+---
 
 ### Phase 1 — core foundation
-- **Goal**: `packages/core` skeleton with the IR and validation, no consumers yet.
-- **Scope**: dual CJS/ESM tsup, packaged to publish standalone as `@vestlang/core` (no `private`, `publishConfig.access: public`); define canonical IR types (`VestingScheduleTemplate`, `VestingStatement`, positional `Cliff`, `Fraction`, `PeriodType`, `VestingRuntime` incl. additive-optional `vestingDayOfMonth`/allocation) from OCF-Tools' shape as spec; port OCF-Tools `validate.ts` (template + runtime halves).
-- **Files**: new `packages/core/**`; reference `~/code/OCF-Tools/types/canonical/vesting/types.ts`, `vesting_compiler/validate.ts`.
-- **Checkpoint**: core builds + tests in isolation; nothing else imports it.
-- **Commit**: `feat(core): canonical IR types + structural/runtime validation`.
+
+**Goal:** `packages/core` skeleton with the IR and validation, no consumers yet.
+
+**Inputs:**
+- Clean cross-package imports from Phase 0.
+- Reference shapes: `~/code/OCF-Tools/types/canonical/vesting/types.ts`, `vesting_compiler/validate.ts`.
+
+**Outputs:**
+- New `packages/core/**` with dual CJS/ESM tsup, packaged to publish standalone as `@vestlang/core` (no `private`, `publishConfig.access: public`).
+- Canonical IR types: `VestingScheduleTemplate`, `VestingStatement`, positional `Cliff`, `Fraction`, `PeriodType`, `VestingRuntime` (incl. additive-optional `vestingDayOfMonth`/allocation).
+- Ported `validate.ts` (template + runtime halves).
+
+**Definition of Done:**
+- [ ] core builds + tests pass in isolation; nothing else imports it.
+- [ ] Package is configured to publish standalone (private dropped, public access).
+- [ ] Commit: `feat(core): canonical IR types + structural/runtime validation`.
+
+---
 
 ### Phase 2 — core engine
-- **Goal**: move vestlang's engine into core over the IR; **convert the allocator to exact rational**.
-- **Scope**: relocate `allocation.ts`, `time.ts`, and the cliff/grant-date fold mechanics; restate all 6 allocation modes on `Fraction` (`floor((i+1)/n·q)` → `floorSharesAt(q,{numerator:i+1,denominator:n})`; `CUMULATIVE_ROUNDING` → rational round-half; `FRONT/BACK_LOADED` already integer-exact). Export `allocateExact` + `allocateVector` as the single allocator primitive. Thread `vestingDayOfMonth` from runtime into the date steppers (`addMonthsRule` / `addDays` — `addPeriod` is only the MCP tool surface).
-- **Files**: new `packages/core/src/{allocate,dates,fractions,fold}.ts`; sources from `packages/evaluator/src/evaluate/{allocation,time,cliff}.ts`.
-- **Checkpoint**: parity tests — rationalized output equals old `allocateQuantity` across all 6 modes; date math (day-of-month, DST) unchanged.
-- **Commit**: `feat(core): port vestlang allocator + date math (exact rational)`.
+
+**Goal:** Move vestlang's engine into core over the IR; **convert the allocator to exact rational**.
+
+**Inputs:**
+- Phase 1 IR types and package skeleton.
+- Sources: `packages/evaluator/src/evaluate/{allocation,time,cliff}.ts`.
+
+**Outputs:**
+- Relocated `allocation.ts`, `time.ts`, and the cliff/grant-date fold mechanics.
+- All 6 allocation modes restated on `Fraction` (`floor((i+1)/n·q)` → `floorSharesAt(q,{numerator:i+1,denominator:n})`; `CUMULATIVE_ROUNDING` → rational round-half; `FRONT/BACK_LOADED` already integer-exact).
+- `allocateExact` + `allocateVector` exported as the single allocator primitive.
+- `vestingDayOfMonth` threaded from runtime into date steppers (`addMonthsRule` / `addDays`).
+- New `packages/core/src/{allocate,dates,fractions,fold}.ts`.
+
+**Definition of Done:**
+- [ ] Parity tests: rationalized output equals old `allocateQuantity` across all 6 modes.
+- [ ] Date math (day-of-month, DST) unchanged vs. legacy.
+- [ ] Commit: `feat(core): port vestlang allocator + date math (exact rational)`.
+
+---
 
 ### Phase 3 — core compile
-- **Goal**: the `compile` / `compileToInstallments` entry points over the IR.
-- **Scope**: statement expansion (DATE cursor + EVENT firings), chronological sort, rational cumulative allocation, positional cliff expansion (`perEventGrantFractions`-style), grant-date fold, EVENT-unfired skip.
-- **Files**: new `packages/core/src/compile.ts`; port OCF-Tools' `vesting_compiler/__tests__` as core conformance tests.
-- **Checkpoint**: core compiles representative DATE/EVENT/cliff templates; totals telescope exactly to total shares.
-- **Commit**: `feat(core): canonical compile (dual numeric/OCF emit)`.
+
+**Goal:** The `compile` / `compileToInstallments` entry points over the IR.
+
+**Inputs:**
+- Phase 2 allocator primitive + date math + fold.
+
+**Outputs:**
+- `packages/core/src/compile.ts`: statement expansion (DATE cursor + EVENT firings), chronological sort, rational cumulative allocation, positional cliff expansion (`perEventGrantFractions`-style), grant-date fold, EVENT-unfired skip.
+- Dual emit: `compile(...) → {date, amount: string}[]` (OCF-native) and `compileToInstallments(...) → {date, amount: number}[]` (extended).
+- OCF-Tools' `vesting_compiler/__tests__` ported as core conformance tests.
+
+**Definition of Done:**
+- [ ] core compiles representative DATE/EVENT/cliff templates.
+- [ ] Totals telescope exactly to total shares.
+- [ ] Conformance tests (ported from OCF-Tools) pass.
+- [ ] Commit: `feat(core): canonical compile (dual numeric/OCF emit)`.
+
+---
 
 ### Phase 4 — resolver + lowering
-- **Goal**: extended's `resolveToCore` producing the `ResolveResult` contract, landed behind a new entry (not wired live).
-- **Scope**: reuse the existing selector layer (`selectors.ts`, `vestingNode/*`, `constraint.ts`) for combinator/constraint/event resolution; implement cliff lowering (Cases A/B + edges) and per-anchor-group job fan-out; emit `residual` blockers/symbolic installments.
-- **Files**: new `packages/evaluator/src/resolve/**`; depends on `@vestlang/core`.
-- **Checkpoint**: unit tests for cliff lowering and partial-resolution cases pass.
-- **Commit**: `feat(evaluator): runtime-aware resolver + lowering to core IR`.
+
+**Goal:** Extended's `resolveToCore` producing the `ResolveResult` contract, landed behind a new entry (not wired live).
+
+**Inputs:**
+- Phase 3 `compile` API (the lowering target).
+- Existing selector layer: `selectors.ts`, `vestingNode/*`, `constraint.ts`.
+
+**Outputs:**
+- New `packages/evaluator/src/resolve/**` (depends on `@vestlang/core`).
+- Combinator/constraint/event resolution reusing the selector layer.
+- Cliff lowering: Case A (on-grid, single statement `{occurrence: K, percentage: K/N}`), Case B (off-grid split into two statements), and edge cases.
+- Per-anchor-group job fan-out (one canonical job per independently-anchored statement).
+- `residual` blockers + symbolic installments emission.
+
+**Definition of Done:**
+- [ ] Unit tests for cliff lowering (Cases A/B + edges) pass.
+- [ ] Unit tests for partial-resolution (unfired-event, unresolved-cliff) cases pass.
+- [ ] Per-anchor-group fan-out verified against a graded multi-statement program.
+- [ ] Not wired into the live public path yet.
+- [ ] Commit: `feat(evaluator): runtime-aware resolver + lowering to core IR`.
+
+> **Note:** This is the heaviest phase. If it runs long, pause at a green sub-checklist boundary (resolution → Case A → Case B+edges → fan-out → residual) rather than splitting the commit.
+
+---
 
 ### Phase 5a — assembler + cutover (behind a flag)
-- **Goal**: route the public API through resolve + core + assemble, with the old in-evaluator engine still reachable so the gate can compare both.
-- **Scope**: assembler (core results ∪ residual) producing `EvaluatedSchedule`; flip `evaluateStatement`/`evaluateProgram`/`evaluateStatementAsOf` to call the new path; keep the old engine reachable behind an internal flag (no public-surface change yet).
-- **Files**: `packages/evaluator/src/evaluate/*`, `packages/vestlang/src/index.ts`, `apps/mcp-server/src/server.ts` imports.
-- **Checkpoint** (the gate): run the existing evaluator suite through **both** old and new paths; assert identical `EvaluatedSchedule` except the documented PORTION exact-rational diffs (deliberate golden-file updates). The old path must still exist for this comparison — that's the whole reason 5a precedes 5b.
-- **Commit**: `feat: route evaluation through core engine (behind flag)`.
+
+**Goal:** Route the public API through resolve + core + assemble, with the old in-evaluator engine still reachable so the gate can compare both.
+
+**Inputs:**
+- Phase 4 resolver (`ResolveResult`).
+- The still-present legacy engine (required for the differential comparison).
+
+**Outputs:**
+- Assembler (core results ∪ residual) producing `EvaluatedSchedule`.
+- `evaluateStatement` / `evaluateProgram` / `evaluateStatementAsOf` flipped to call the new path.
+- Old engine kept reachable behind an internal flag (no public-surface change yet).
+
+**Definition of Done (the gate):**
+- [ ] Existing evaluator suite runs through **both** old and new paths.
+- [ ] `EvaluatedSchedule` identical except the documented PORTION exact-rational diffs (deliberate golden-file updates).
+- [ ] Old path still exists and is reachable for comparison.
+- [ ] Commit: `feat: route evaluation through core engine (behind flag)`.
+
+---
 
 ### Phase 5b — retire the legacy engine (clean break)
-- **Goal**: delete the old in-evaluator engine and the flag once the gate is green; reshape the public surface.
-- **Scope**: delete old `evaluateSchedule`/`allocateQuantity`/`evaluateCliff` allocation code and the internal flag; reshape umbrella exports to expose `core`.
-- **Files**: `packages/evaluator/src/evaluate/*`, `packages/vestlang/src/index.ts`.
-- **Checkpoint**: build + tests green on the new path only; no references to the removed engine remain.
-- **Commit**: `feat!: remove legacy evaluator engine (clean break)`.
 
-### Phase 6 — OCF-Tools migration *(separate repo + PR)*
-- **Goal**: OCF-Tools consumes `@vestlang/core`; its duplicate engine is deleted.
-- **Scope**: in `~/code/OCF-Tools`, delete `vesting_compiler/` + `types/canonical/vesting/`, depend on the **published `@vestlang/core`** (CJS entry), keep transaction cross-referencing; re-run its exact compiled-vs-recorded comparison.
-- **Checkpoint**: OCF-Tools suite green against `@vestlang/core`, including a non-proportional-positional-cliff fixture (proves core carries fidelity the DSL doesn't express).
-- **PR**: its own, dependent on `@vestlang/core` being published (Phase 7).
+**Goal:** Delete the old in-evaluator engine and the flag once the gate is green; reshape the public surface.
+
+**Inputs:**
+- Green differential gate from Phase 5a.
+
+**Outputs:**
+- Old `evaluateSchedule` / `allocateQuantity` / `evaluateCliff` allocation code and the internal flag deleted.
+- Umbrella exports reshaped to expose `core`.
+
+**Definition of Done:**
+- [ ] build + tests green on the new path only.
+- [ ] No references to the removed engine remain.
+- [ ] Commit: `feat!: remove legacy evaluator engine (clean break)`.
+
+---
 
 ### Phase 7 — release
-- **Goal**: ship the major and publish `@vestlang/core` standalone.
-- **Scope**: changeset documenting the new standalone `@vestlang/core` package, the PORTION numeric change, and the reshaped `@nathamcrewott/vestlang` surface; publish `@vestlang/core` (under the `@vestlang` org from Phase 0) and `@nathamcrewott/vestlang` via changesets.
-- **Commit**: `chore: release @nathamcrewott/vestlang vX + @vestlang/core (core/extended)`.
+
+**Goal:** Ship the major and publish `@vestlang/core` standalone.
+
+**Inputs:**
+- Phase 5b clean-break surface.
+- `@vestlang` org from Phase 0.
+
+**Outputs:**
+- Changeset documenting the new standalone `@vestlang/core` package, the PORTION numeric change, and the reshaped `@nathamcrewott/vestlang` surface.
+- `@vestlang/core` and `@nathamcrewott/vestlang` published via changesets.
+
+**Definition of Done:**
+- [ ] `@vestlang/core` published under the `@vestlang` org (CJS entry available for OCF-Tools).
+- [ ] `@nathamcrewott/vestlang` major published.
+- [ ] Commit: `chore: release @nathamcrewott/vestlang vX + @vestlang/core (core/extended)`.
+
+---
+
+### Phase 6 — OCF-Tools migration *(separate repo + PR)*
+
+**Goal:** OCF-Tools consumes `@vestlang/core`; its duplicate engine is deleted.
+
+**Inputs:**
+- Published `@vestlang/core` (CJS entry) from Phase 7.
+
+**Outputs:**
+- In `~/code/OCF-Tools`: `vesting_compiler/` + `types/canonical/vesting/` deleted.
+- Dependency on the published `@vestlang/core`; transaction cross-referencing kept.
+- Exact compiled-vs-recorded comparison re-run.
+
+**Definition of Done:**
+- [ ] OCF-Tools suite green against `@vestlang/core`.
+- [ ] Includes a non-proportional-positional-cliff fixture (proves core carries fidelity the DSL doesn't express).
+- [ ] PR opened in OCF-Tools, dependent on `@vestlang/core` being published (Phase 7).
+
+---
+
+## Phase Checklist
+
+### Phase 0: Hygiene + publishing prerequisite
+- [ ] `packages/evaluator/src/evaluate/cliff.ts` — `@vestlang/types` import
+- [ ] `packages/evaluator/src/evaluate/build.ts` — `@vestlang/types` import
+- [ ] `packages/evaluator/src/evaluate/makeTranches.ts` — `@vestlang/types` import
+- [ ] `apps/cli/package.json` — `"workspace: *"` typo
+- [ ] `packages/ast` — salvage schemas, then delete
+- [ ] External: register `@vestlang` npm org
+
+### Phase 1: core foundation
+- [ ] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig
+- [ ] `packages/core/src/types.ts` — canonical IR types
+- [ ] `packages/core/src/validate.ts` — template + runtime validation
+
+### Phase 2: core engine
+- [ ] `packages/core/src/allocate.ts` — 6 modes on `Fraction`; `allocateExact` + `allocateVector`
+- [ ] `packages/core/src/dates.ts` — `addMonthsRule` / `addDays` + `vestingDayOfMonth`
+- [ ] `packages/core/src/fractions.ts`
+- [ ] `packages/core/src/fold.ts` — cliff/grant-date fold mechanics
+
+### Phase 3: core compile
+- [ ] `packages/core/src/compile.ts` — `compile` + `compileToInstallments`
+- [ ] `packages/core/__tests__/**` — ported OCF-Tools conformance tests
+
+### Phase 4: resolver + lowering
+- [ ] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` → `ResolveResult`
+- [ ] `packages/evaluator/src/resolve/cliff.ts` — Cases A/B + edges
+- [ ] `packages/evaluator/src/resolve/fanout.ts` — per-anchor-group jobs
+- [ ] `packages/evaluator/src/resolve/residual.ts` — blockers + symbolic installments
+
+### Phase 5a: assembler + cutover (behind a flag)
+- [ ] `packages/evaluator/src/evaluate/*` — assembler + new-path wiring + internal flag
+- [ ] `packages/vestlang/src/index.ts`
+- [ ] `apps/mcp-server/src/server.ts` — imports
+- [ ] Differential gate harness (old vs. new path)
+
+### Phase 5b: retire the legacy engine (clean break)
+- [ ] `packages/evaluator/src/evaluate/*` — delete legacy engine + flag
+- [ ] `packages/vestlang/src/index.ts` — reshape umbrella exports
+
+### Phase 7: release
+- [ ] `.changeset/*` — standalone `@vestlang/core`, PORTION numeric change, reshaped surface
+- [ ] Publish `@vestlang/core` + `@nathamcrewott/vestlang`
+
+### Phase 6: OCF-Tools migration *(separate repo)*
+- [ ] `~/code/OCF-Tools` — delete `vesting_compiler/` + `types/canonical/vesting/`
+- [ ] `~/code/OCF-Tools/package.json` — depend on published `@vestlang/core`
+- [ ] OCF-Tools fixtures — add non-proportional-positional-cliff fixture
 
 ---
 
