@@ -67,6 +67,7 @@ export interface InferResult {
     uniforms: Array<Omit<UniformComponent, "kind">>;
     singles: Array<Omit<SingleTrancheComponent, "kind">>;
     cliffFolds: number;
+    preGrantFolds: number;
   };
   diagnostics: {
     residualError: number;

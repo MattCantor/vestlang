@@ -31,7 +31,10 @@ describe("mcp-server / vestlang_infer_schedule", () => {
       amount: i.amount,
     }));
 
-    const inferred = inferSchedule({ tranches });
+    // Pass the known grant date: the cliff lump lands a year after it, so it is
+    // read as a cliff. Omitting it would default to the first tranche date (the
+    // lump itself) and reinterpret the cliff as pre-grant accrual.
+    const inferred = inferSchedule({ tranches, grantDate });
     expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
     expect(inferred.decomposition.cliffFolds).toBe(1);
 
