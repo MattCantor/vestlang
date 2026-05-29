@@ -11,6 +11,79 @@ source of truth for individual beats marked **[KEEP]**.*
 
 ---
 
+## MCP verification pass (2026-05-29) — findings
+
+Ran the deck's data through the vestlang MCP tools (`lint`, `evaluate`,
+`infer_schedule`). Three results, one of them a real discovery.
+
+**1. DSL syntax — fixes applied to `slides.md`.**
+- `VEST OVER 48 months EVERY 1 month CLIFF 12 months` lints clean (dropped the
+  `FROM grantDate` — grant date is the implicit start; this is also the form the
+  inferrer emits).
+- **Two bare statements on separate lines is a SYNTAX ERROR.** Multi-statement
+  programs MUST use the bracket-list form `[stmt, stmt]`. The asserted-cliff
+  slide now reads `[.3 VEST CLIFF 12 months, .7 VEST FROM 12 months OVER 36
+  months EVERY 1 month]`.
+
+**2. Math — verified.** 25% cliff on 4800 shares → 1200 (=12/48) at month 12,
+then 100/mo. 30% asserted on 10000 → 3000 (=30%) at month 12 plus ~194/mo.
+
+**3. THE DISCOVERY — the inferrer mechanically distinguishes derived from
+asserted cliffs.** This is the talk's thesis proven by the algorithm itself.
+- Feed it the **25% derived** cliff tranches (1200 + 100×36) →
+  `4800 VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF 12 months`.
+  **One statement, `cliffFolds:1`, `residualError:0`.** A clean, legible cliff.
+- Feed it the **30% asserted** cliff tranches (10800 + 700×36) →
+  `[25900 VEST … OVER 37 months EVERY 1 month, 10100 VEST FROM DATE 2026-01-01]`
+  — `cliffFolds:0`, a leftover single. **It does NOT recover a clean cliff.**
+- **Why (confirmed by a controlled test):** the cliff-fold fires **iff the lump
+  is an exact integer multiple of the periodic installment.** 1200 = 12×100 ✓
+  folds. 10800 / 700 = 15.43 ✗ fragments. Re-running with 8400 = 12×700 folded
+  cleanly to `25200 VEST … OVER 36 months EVERY 1 month CLIFF 12 months` — so it's
+  grid-alignment, not the percentage, that decides.
+- **This IS the derived-vs-asserted distinction made mechanical:** a derived
+  cliff *is* N stacked train-pulses, so it decomposes back into a clean CLIFF; an
+  asserted cliff is a number imposed from outside the cadence, so matching pursuit
+  can't fold it and fragments. **The inferrer can tell which kind of cliff it's
+  looking at — without being told.**
+
+**A second discovery during the bug hunt — and a fix.** Investigating why the 30%
+wouldn't fold surfaced a *regression* (committed fix: `fix(inferrer): recover
+cliffs again when no grant date is supplied`). `foldPreGrant` (commit 6350a34) had
+made cliff recognition conditional on the grant date; with no grant date supplied,
+the default (grant date = first tranche = the lump's own date) tripped the
+pre-grant reading and silently turned a 1-year cliff into a no-cliff back-dated
+train. Fix: gate both grant-date-dependent passes on whether a grant date was
+actually supplied. No grant date → fold structurally (recover the cliff, deduce
+the start); grant date → disambiguate cliff vs. pre-grant by the lump's position.
+**This gave Act III its real spine:** *the structure you can recover grows with
+the context you provide.*
+
+**Beat 10 — RESOLVED.** Reframed from "derived vs. asserted" to the grant-date
+ambiguity (the deeper, genuinely-underdetermined story; user's call):
+- **Beat 9 (keep):** decompose the 25% Beat-1 cliff → recovers a clean CLIFF. The
+  CLEAN / radio-astronomy wow moment. "With just the numbers, here's the structure."
+- **Beat 10 (reframe):** the SAME tranche array, inferred twice — no grant date →
+  CLIFF; grant date on the lump → pre-grant back-dated start, no cliff. Same
+  numbers, two honest readings, resolved only by context. **The title pays off
+  twice:** CLEAN = matching pursuit (algorithm, Beat 9) AND deconvolution is
+  ill-posed / needs priors (epistemics, Beat 10) — radio interferometry's inverse
+  is underdetermined too (limited baselines → "dirty beam" → assume point sources).
+- **Derived-vs-asserted (30% fragments)** demoted to an OPTIONAL Beat-10 sub-slide
+  + Q&A pocket — a lovely Beat-3-fork callback, no longer load-bearing.
+- **Beat 11 landing** evolved: the inverse recovers real structure but is
+  underdetermined; a cap table is the numbers, the DSL is the intent, you can't
+  losslessly recover intent without context. Honest shape of the problem.
+
+**Caveat for the live demo:** the inferrer emits **absolute** `FROM DATE …` and a
+QUANTITY prefix (`4800 VEST FROM DATE 2025-01-01 …`), not the clean relative
+`VEST OVER 48 months … CLIFF 12 months` of Beat 5. Same schedule, noisier string.
+For the Beat 9 callback "it's the line from Beat 5," show the relative form and
+say the inferrer's output is equivalent. Don't claim string-identity that isn't
+there.
+
+---
+
 ## The spine (one sentence)
 
 **A schedule is a signal — and that one lens lets you do three things in
@@ -240,11 +313,13 @@ Beat 7 no-free-lunch two-column slide.
 
 ## Open design questions
 
-1. **Act III worked example** — RESOLVED: hero through-line is the **25%
-   4-yr/1-yr cliff = the Beat-1 curve** (it's the only cliff that can *emerge*,
-   and reusing Beat 1 gives maximal unity). Live encore = the **30% asserted**
-   cliff (different, messier, ties back to the fork). Still open: add a
-   multi-cadence stretch (quarterly→monthly) in Beat 9, or save it for Q&A?
+1. **Act III worked example** — RESOLVED (revised after the MCP/bug pass): hero
+   through-line is the **25% 4-yr/1-yr cliff = the Beat-1 curve** (Beat 9 recovers
+   it cleanly). Live encore (Beat 10) is the **same 25% tranches inferred twice** —
+   with and without a grant date — to show cliff vs. pre-grant disambiguation
+   ("structure grows with context"). The 30% asserted cliff is demoted to an
+   optional sub-slide + Q&A. See "Beat 10 — RESOLVED" above. Multi-cadence
+   stretch: save for Q&A.
 2. **Syntax exposure** — RESOLVED: use real vestlang DSL wherever it *helps*, but
    never push it; never turn the talk into a tutorial. Treat it as a **running
    thread** (see below), seeding small fragments through the talk and **landing
