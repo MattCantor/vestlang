@@ -31,10 +31,15 @@ export interface FoldResult {
 export function foldCliffs(
   components: Component[],
   policy: vesting_day_of_month,
-  grantDate: OCTDate,
+  grantDate: OCTDate | null,
 ): FoldResult {
   const ctx = minimalCtx(policy);
-  const gKey = grantDate as unknown as string;
+  // `null` means the caller didn't supply a grant date. Without one, the
+  // before/after-grant distinction that separates a cliff from pre-grant accrual
+  // doesn't exist, so the guard below is skipped and folding is purely
+  // structural: a lump that is k whole installments before a matching train is a
+  // cliff, and the vesting start is deduced by walking back k periods.
+  const gKey = grantDate === null ? null : (grantDate as unknown as string);
   const singles = components.filter(
     (c): c is SingleTrancheComponent => c.kind === "SINGLE_TRANCHE",
   );
@@ -55,7 +60,8 @@ export function foldCliffs(
       if (usedSingles.has(s)) continue;
       // A lump on or before the grant date is pre-grant accrual (handled by
       // foldPreGrant), not a cliff — a cliff lands strictly after the grant.
-      if ((s.date as unknown as string) <= gKey) continue;
+      // Only applies when a grant date was actually supplied (gKey !== null).
+      if (gKey !== null && (s.date as unknown as string) <= gKey) continue;
       if (s.amount < u.perTrancheAmount - EPSILON) continue;
 
       const onePeriodAfter = walk(s.date, u.cadence, 1, ctx);

@@ -56,24 +56,32 @@ function runOne(
   totalQuantity: number,
   grantDate: OCTDate,
   asOf: OCTDate,
+  grantDateKnown: boolean,
 ): Attempt {
   const { components, cadencesTried } = decompose(sorted, policy, allocationType);
-  // Pre-grant accrual (lump on the grant date) is reinterpreted as a back-dated
-  // vesting start before cliff folding, since a lump on the grant date is never
-  // a cliff. The two passes are mutually exclusive by the lump's position.
-  const pg = foldPreGrant(
-    sorted,
-    components,
-    grantDate,
-    totalQuantity,
-    asOf,
-    policy,
-    allocationType,
-  );
+  // foldPreGrant answers "did vesting start before the grant date?" — a question
+  // that is unanswerable without a real grant date. When none was supplied (the
+  // grant date was defaulted to the first tranche), skip it entirely: detecting
+  // "pre-grant accrual" against an invented grant date is incoherent, and the
+  // honest reading of bare tranches is the structural one (deduce the vesting
+  // start from the cliff's shape). The more context supplied, the more structure
+  // the inferrer can separate — a cliff from pre-grant accrual being the case in
+  // point, since the two are numerically identical until a grant date splits them.
+  const pg = grantDateKnown
+    ? foldPreGrant(
+        sorted,
+        components,
+        grantDate,
+        totalQuantity,
+        asOf,
+        policy,
+        allocationType,
+      )
+    : { components, foldCount: 0, vestingStarts: [] as OCTDate[] };
   const { components: folded, foldCount } = foldCliffs(
     pg.components,
     policy,
-    grantDate,
+    grantDateKnown ? grantDate : null,
   );
   const program: Program = folded.map((c) => buildStatement(c, policy));
 
@@ -108,6 +116,7 @@ export function inferSchedule(input: InferInput): InferResult {
   const totalQuantity = sorted.reduce((a, t) => a + t.amount, 0);
   const firstDate = sorted[0].date;
   const lastDate = sorted[sorted.length - 1].date;
+  const grantDateKnown = input.grantDate !== undefined;
   const grantDate = input.grantDate ?? firstDate;
 
   let best: Attempt | null = null;
@@ -134,6 +143,7 @@ export function inferSchedule(input: InferInput): InferResult {
         totalQuantity,
         grantDate,
         lastDate,
+        grantDateKnown,
       );
       if (best === null) {
         best = attempt;

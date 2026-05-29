@@ -115,6 +115,28 @@ describe("inferSchedule — cliff", () => {
     expect(result.decomposition.preGrantFolds).toBe(0);
     expect(result.dsl).not.toContain("CLIFF");
   });
+
+  it("no grant date supplied → still recovers the cliff structurally", () => {
+    // Regression guard. Same tranche stream as a cliff (lump = 12×1000 on the
+    // first tranche date, then 36 monthly), but NO grant date is supplied.
+    // foldPreGrant must not run — it cannot ask "did vesting start before the
+    // grant?" without a grant — and foldCliffs must fold on shape alone,
+    // deducing the vesting start by walking back k periods. Before the
+    // grant-date-known gate, the grant date defaulted to the lump's own date,
+    // which tripped the pre-grant reading and silently dropped the cliff.
+    const tranches: TrancheInput[] = [
+      { date: d("2025-01-01"), amount: 12000 },
+      ...monthly("2025-02-01", 36, 1000),
+    ];
+
+    const result = inferSchedule({ tranches });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.cliffFolds).toBe(1);
+    expect(result.decomposition.preGrantFolds).toBe(0);
+    expect(result.dsl).toContain("CLIFF");
+    expect(result.dsl).toMatch(/OVER 48 months/i);
+  });
 });
 
 describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
