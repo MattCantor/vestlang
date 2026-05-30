@@ -75,4 +75,27 @@ describe("lowerCliff", () => {
     const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx);
     expect(result.state).toBe("UNRESOLVED");
   });
+
+  it("partial LATER_OF cliff (one branch unfired) → UNRESOLVED, not the resolved floor", () => {
+    // LATER OF(+12 months, EVENT ipo) with ipo unfired: the +12mo branch is only a
+    // lower bound — the pending event can only push the cliff later — so the cliff
+    // must stay UNRESOLVED rather than collapse to the floor (which would over-vest).
+    const noIpo = baseCtx({ events: { grantDate: "2025-01-01" as OCTDate } });
+    const cliff: VestingNodeExpr = {
+      type: "LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+      ],
+    };
+    const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, noIpo);
+    expect(result.state).toBe("UNRESOLVED");
+    if (result.state === "UNRESOLVED") {
+      expect(
+        result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
+      ).toBe(true);
+    }
+  });
 });
