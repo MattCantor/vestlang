@@ -16,14 +16,13 @@
 import type {
   Blocker,
   EvaluationContext,
-  LaterOfVestingNode,
   OCTDate,
   VestingNodeExpr,
 } from "@vestlang/types";
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/core";
 import { addPeriod, fracReduce, gt, toDate } from "@vestlang/core";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
+import { isPickedResolved } from "../evaluate/utils.js";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -87,13 +86,15 @@ export const lowerCliff = (
   };
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
-  let cliffDate: OCTDate | undefined;
-  if (isPickedResolved(res)) {
-    cliffDate = res.meta.date;
-  } else if (res.type === "PICKED" && cliffExpr.type === "LATER_OF") {
-    // Partial LATER_OF — fall back to the latest resolved item.
-    cliffDate = probeLaterOf(cliffExpr as LaterOfVestingNode, overlayCtx);
-  }
+  // A cliff date is known ONLY when the expression fully resolves. A partial
+  // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must NOT
+  // collapse to its resolved branch: that branch is only a lower bound, so the
+  // pending event can only push the cliff later. Reporting the floor as RESOLVED
+  // would over-vest a still-contingent grant — so leave it UNRESOLVED, mirroring
+  // the start path's partial-knowledge handling.
+  const cliffDate: OCTDate | undefined = isPickedResolved(res)
+    ? res.meta.date
+    : undefined;
 
   if (!cliffDate) {
     const blockers: Blocker[] =
