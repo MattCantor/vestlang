@@ -36,6 +36,11 @@ import type { NonTemplateReason } from "./types.js";
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 const DEFAULT_ALLOCATION = "CUMULATIVE_ROUND_DOWN";
 
+/** The two cumulative modes telescope as a single running fraction; the four
+ *  loaded modes don't and so aren't template-compilable (→ events-only). */
+export const isCumulativeAllocation = (mode: string): boolean =>
+  mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
+
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`. */
 export const amountToFraction = (a: Amount, totalShares: number): Fraction =>
   a.type === "QUANTITY"
@@ -165,6 +170,11 @@ export const buildTemplate = (
 
   if (resolutions.some((r) => r.start.state !== "RESOLVED")) return unresolved();
   if (resolutions.some((r) => r.cliff.state === "UNRESOLVED")) return unresolved();
+  // Loaded (non-cumulative) allocation isn't a single cumulative across the
+  // template — the interchange has no allocation field. Route to events-only.
+  if (!isCumulativeAllocation(ctx.allocation_type)) {
+    return events({ kind: "LOADED_ALLOCATION", mode: ctx.allocation_type });
+  }
   const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT");
   if (eventCliff && eventCliff.cliff.state === "EVENT") {
     return events({ kind: "EVENT_CLIFF", eventId: eventCliff.cliff.eventId });
@@ -214,6 +224,10 @@ export const buildTemplate = (
   const runtime: VestingRuntime = {
     ...(startDate !== undefined ? { startDate } : {}),
     ...(eventFirings.length > 0 ? { eventFirings } : {}),
+    // Grant-date implicit cliff: amounts scheduled before the grant existed fold
+    // onto grantDate. Core's compile applies this when runtime.grantDate is set
+    // (the legacy engine did it via evaluateGrantDate).
+    ...(ctx.events.grantDate ? { grantDate: ctx.events.grantDate } : {}),
     ...(ctx.vesting_day_of_month !== DEFAULT_DAY_OF_MONTH
       ? { vestingDayOfMonth: ctx.vesting_day_of_month }
       : {}),

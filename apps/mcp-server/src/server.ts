@@ -387,6 +387,8 @@ export function createServer(): McpServer {
       return jsonResult({
         statements: schedules.map((s, i) => ({
           index: i,
+          fidelity: s.fidelity,
+          ...(s.reason ? { reason: s.reason } : {}),
           installments: s.installments,
           blockers: s.blockers,
         })),

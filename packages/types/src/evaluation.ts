@@ -135,7 +135,20 @@ export type Installment =
  * Evaluated Schedule
  * ------------------------ */
 
+/**
+ * Interchange-fidelity verdict the assembler tags onto an evaluated schedule:
+ *   - "template"    — resolved AND fit canonical's one-template shape (best).
+ *   - "events-only" — resolved to dated amounts but didn't fit one template
+ *                     (carries `reason`); facts preserved, intent lost.
+ *   - "unresolved"  — couldn't be materialized yet (unfired event) or contradictory.
+ */
+export type Fidelity = "template" | "events-only" | "unresolved";
+
 export interface EvaluatedSchedule<T extends Installment = Installment> {
   installments: T[];
   blockers: Blocker[];
+  /** Set by the extended assembler; omitted by the legacy engine. */
+  fidelity?: Fidelity;
+  /** Human-readable reason a resolved schedule was events-only (not a template). */
+  reason?: string;
 }

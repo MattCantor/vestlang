@@ -70,4 +70,5 @@ export {
   ResolvedInstallment,
   Installment,
   EvaluatedSchedule,
+  Fidelity,
 } from "./evaluation.js";
