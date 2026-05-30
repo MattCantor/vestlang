@@ -87,11 +87,11 @@ The DSL needs no new syntax for non-proportional cliffs: genuine non-proportiona
 - **The cliff fold and the grant-date fold are the same primitive.** `evaluateCliffGeneric<T>` (`packages/evaluator/src/evaluate/cliff.ts`) is parameterized; its three thin callers (`evaluateGrantDate`, `evaluateResolvedCliff`, `evaluateUnresolvedCliff`) all route through it. Off-grid cliffs reuse this fold / core's EVENT-anchor — **no separate cliff concept**.
 - **Clean break.** The umbrella package is renamed from `@nathamcrewott/vestlang` to the unscoped **`vestlang`** (a new major). The resolver/assembler keeps the internal `@vestlang/evaluator` name (its API stays `evaluate*`); "core"/"extended" are layer terms.
 - **Publishing end-state — one brand, one registry (npmjs).** Everything published reads as *vestlang*:
-  - **`vestlang`** (unscoped) — the main package, replacing `@nathamcrewott/vestlang`. It inlines the internal packages but takes **`@vestlang/core` as a real external dependency**, so the engine ships once.
+  - **`vestlang`** (unscoped) — the main package, replacing `@nathamcrewott/vestlang`. It inlines the internal packages but takes **`@vestlang/core` as a real external dependency**, so the engine ships once. **Blocked at present:** npm's typosquat filter rejects the unscoped name as "too similar to existing package `testling`" (403). Resolution is a support ticket (below); fallback if it never clears is **`@vestlang/vestlang`** as the umbrella — a cosmetic one-name change. This only bites at Phase 6, so it does not block Phases 1–5.
   - **`@vestlang/core`** — the standalone engine: public, dual CJS/ESM, the package OCF-Tools installs.
   - The other `@vestlang/*` packages (`types`, `evaluator`, `normalizer`, …) stay **private and inlined** into `vestlang` — never published, not import targets.
 
-  Setup: register the **`@vestlang` org on npmjs** and claim the unscoped **`vestlang`** name (both currently available); drop the GitHub-Packages registry mapping for the `@vestlang` scope so everything publishes to npmjs; configure `vestlang`'s `tsup` to mark `@vestlang/core` `external` (while still inlining the rest); and deprecate `@nathamcrewott/vestlang` → `vestlang`. Registering the org + claiming the name is the one-time Phase 0 prerequisite; release rides the existing changesets pipeline.
+  Setup status (Phase 0): the **`@vestlang` org is registered on npmjs** (Free plan; publishing account `nathamcrewott`) and the GitHub-Packages registry mapping for the `@vestlang` scope is dropped (`.npmrc`). **`@vestlang/core` is unaffected by the typosquat filter** (scoped names skip the global similarity check — npm's own 403 message suggests a scoped name as the workaround) and is confirmed available; it is not placeholder-published since core doesn't exist until Phases 1–3 and a scope you own carries no squatting risk. The unscoped **`vestlang`** name is **pending** (typosquat block — see above; support ticket filed / fallback `@vestlang/vestlang`). Remaining Phase 6 wiring: configure `vestlang`'s `tsup` to mark `@vestlang/core` `external` (while still inlining the rest); deprecate `@nathamcrewott/vestlang` → `vestlang`. Release rides the existing changesets pipeline.
 
 ---
 
@@ -247,12 +247,12 @@ Notes:
 - `@vestlang/types` imports fixed in `cliff.ts`, `build.ts`, and `makeTranches.ts` (all three carry the deep `../../../types/dist/...` path).
 - `apps/cli/package.json` `"workspace: *"` typo fixed.
 - Dead `packages/ast` deleted, canonical JSON schemas first salvaged into core/docs.
-- `@vestlang` org registered on npmjs and the unscoped **`vestlang`** name claimed (both free/available); the GitHub-Packages registry mapping for the `@vestlang` scope dropped so everything targets npmjs. No code depends on these yet.
+- `@vestlang` org registered on npmjs (done; account `nathamcrewott`) and the GitHub-Packages registry mapping for the `@vestlang` scope dropped so everything targets npmjs (done). No code depends on these yet. **`@vestlang/core` available** (unaffected by the typosquat filter). The unscoped **`vestlang`** name is **blocked** by npm's typosquat filter ("too similar to existing package `testling`") — pending a support ticket; fallback `@vestlang/vestlang`. Consumed only at Phase 6.
 
 **Definition of Done:**
 - [x] `pnpm build` + `turbo test` green, no behavior change. *(build 12/12, test 16/16 — 129 tests passing.)*
 - [x] No deep `../../../types/dist/...` imports remain. *(`EvaluatedSchedule` was already re-exported from `@vestlang/types`; the three deep imports now point at the package root.)*
-- [x] `@vestlang` scope no longer mapped to GitHub Packages *(`@vestlang:registry` line removed from `.npmrc`)*. **External, still pending:** register the `@vestlang` org + claim the unscoped `vestlang` name on npmjs (manual; consumed only at Phase 6).
+- [x] `@vestlang` scope no longer mapped to GitHub Packages *(`@vestlang:registry` line removed from `.npmrc`)*; `@vestlang` org registered on npmjs (account `nathamcrewott`). **Still pending (external, consumed only at Phase 6):** the unscoped `vestlang` name is blocked by npm's typosquat filter (vs. `testling`) — support ticket filed; fallback `@vestlang/vestlang`. `@vestlang/core` is available and unaffected.
 - [ ] Commit: `chore: fix cross-package imports and remove dead ast package`.
 
 ---
@@ -409,7 +409,7 @@ Notes:
 
 **Inputs:**
 - Phase 5b clean-break surface.
-- `@vestlang` org + unscoped `vestlang` name from Phase 0.
+- `@vestlang` org (registered, Phase 0) + the unscoped `vestlang` name. **Precondition:** the unscoped name must clear npm's typosquat block (vs. `testling`) via support ticket. If it has not cleared by release, fall back to **`@vestlang/vestlang`** as the umbrella name (rename the one package; `@vestlang/core` is unaffected).
 
 **Outputs:**
 - Changeset documenting the new `@vestlang/core` package, the unscoped `vestlang` (replacing `@nathamcrewott/vestlang`), and the PORTION numeric change.
@@ -417,7 +417,7 @@ Notes:
 
 **Definition of Done:**
 - [ ] `@vestlang/core` published to npmjs (CJS entry available for OCF-Tools).
-- [ ] `vestlang` published to npmjs; `@nathamcrewott/vestlang` deprecated → `vestlang`.
+- [ ] Umbrella published to npmjs as **`vestlang`** (if the typosquat block has cleared) **or** **`@vestlang/vestlang`** (fallback); `@nathamcrewott/vestlang` deprecated → whichever name shipped.
 - [ ] Commit: `chore: release vestlang vX + @vestlang/core (core/extended)`.
 
 ---
@@ -450,7 +450,8 @@ Notes:
 - [x] `apps/cli/package.json` — `"workspace: *"` typo
 - [x] `packages/ast` — salvage schemas (→ `docs/schemas/{oct-schema,vestlang}`), then delete; `@vestlang/ast` removed from `.changeset/config.json` ignore
 - [x] Drop GitHub-Packages mapping for `@vestlang` scope (`.npmrc`)
-- [ ] External (manual, pending): register `@vestlang` org + claim unscoped `vestlang` on npmjs
+- [x] External: register `@vestlang` org on npmjs (account `nathamcrewott`)
+- [ ] External (pending, Phase 6): unscoped `vestlang` name blocked by typosquat filter (vs. `testling`) — support ticket; fallback `@vestlang/vestlang`. `@vestlang/core` available/unaffected.
 
 ### Phase 1: core foundation
 - [ ] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig
