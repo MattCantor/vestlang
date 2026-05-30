@@ -18,7 +18,7 @@ import {
   makeResolvedSchedule,
   makeStartPlusSchedule,
 } from "./makeTranches.js";
-import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
+import { EvaluatedSchedule } from "@vestlang/types";
 
 /* ------------------------
  * Helpers
