@@ -326,10 +326,18 @@ Notes:
 - OCF-Tools' `vesting_compiler/__tests__` ported as core conformance tests.
 
 **Definition of Done:**
-- [ ] core compiles representative DATE/EVENT/cliff templates.
-- [ ] Totals telescope exactly to total shares.
-- [ ] Conformance tests (ported from OCF-Tools) pass.
+- [x] core compiles representative DATE/EVENT/cliff templates. *(graded 5/15/40/40 chaining, cliff, hybrid DATE+EVENT, EVENT firings + realized_fraction, grant-date implicit cliff — 35 compile tests.)*
+- [x] Totals telescope exactly to total shares. *(`sumAmounts === totalShares` asserted across the suite, including awkward share counts and CUMULATIVE_ROUNDING.)*
+- [x] Conformance tests (ported from OCF-Tools) pass. *(the reference's own `compile.test.ts` ported verbatim onto core's `compile`; all green.)*
 - [ ] Commit: `feat(core): canonical compile (dual numeric/OCF emit)`.
+
+**Implementation notes:**
+- **Core's compiler = vestlang's engine over the canonical IR.** The orchestration (expand→sort→cumulative→grant-fold) follows OCF's `compile.ts` as the reference for the IR semantics, but every primitive it calls is vestlang's (Phase 2 `allocateExact`, `addPeriod`, `foldToGrantDate`). OCF's `compile.ts` is reference-only — never shipped/imported.
+- **Positional cliff lands here** (`perEventGrantFractions`, `{occurrence, percentage}`) — the 4th OCF win; supersedes vestlang's temporal-fold cliff *for the template path*, while vestlang's fold is still used for the grant-date implicit cliff.
+- **Grant-date fold reuses `foldToGrantDate`** instead of OCF's inline `pendingPreGrant` loop — verified equivalent across all cases (pre-grant hold, on-grant merge, past-grant flush, all-before-grant). This is the doc's "cliff fold and grant-date fold are the same primitive."
+- **Dual emit:** `compile(...) → {date, amount: string}[]` (`CompiledEvent`, OCF/Carta-native) and `compileToInstallments(...) → {date, amount: number}[]` (`CompiledInstallment`). Signature `(template, totalShares, runtime)` matches OCF's arg order for zero-translation at Phase 7.
+- **Runtime conventions threaded:** `vestingDayOfMonth` into the date stepper, `allocationType` into the allocator (default `CUMULATIVE_ROUND_DOWN`; `CUMULATIVE_ROUNDING` also telescopes). Loaded modes aren't template-compilable (extended's events-only path).
+- 91 core tests green (35 compile); build emits ESM/CJS/dts; no consumers; dependency-free. Conformance suite landed in `tests/` (core convention), not the checklist's `__tests__/`.
 
 ---
 
@@ -479,8 +487,8 @@ Notes:
 - [x] `packages/core/src/fold.ts` — cliff/grant-date fold mechanics
 
 ### Phase 3: core compile
-- [ ] `packages/core/src/compile.ts` — `compile` + `compileToInstallments`
-- [ ] `packages/core/__tests__/**` — ported OCF-Tools conformance tests
+- [x] `packages/core/src/compile.ts` — `compile` + `compileToInstallments`
+- [x] `packages/core/tests/compile.test.ts` — ported OCF-Tools conformance tests *(`tests/`, not `__tests__/`)*
 
 ### Phase 4a: resolve + lower to one template
 - [ ] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` (the `template` arm)

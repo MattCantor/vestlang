@@ -10,3 +10,4 @@ export * from "./fractions";
 export * from "./allocate";
 export * from "./dates";
 export * from "./fold";
+export * from "./compile";
