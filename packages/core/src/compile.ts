@@ -19,7 +19,7 @@ import type {
   VestingStatement,
 } from "./types";
 import { allocateExact } from "./allocate";
-import { addPeriod } from "./dates";
+import { addPeriod, gt } from "./dates";
 import { fracAdd, fracMul, fracSub, ONE, ZERO } from "./fractions";
 import { foldToGrantDate } from "./fold";
 import {
@@ -40,58 +40,6 @@ export interface CompiledInstallment {
 }
 
 /**
- * Per-event fraction-of-grant for each occurrence in a statement (length =
- * statement.occurrences), already multiplied through by statement.percentage so
- * the values are fraction of grant, not of the statement.
- *
- * Cliffless: every event vests statement.percentage / occurrenceCount.
- * With a cliff at occurrence K: events 1..K-1 are ZERO (held back), event K
- * vests cliff.percentage × statement.percentage, and K+1..N split the rest
- * evenly. This is the positional cliff — declarative, exact-rational, and what
- * round-trips to Carta's cliffPercentage/cliffLength.
- */
-const perEventGrantFractions = (statement: VestingStatement): Fraction[] => {
-  const occurrenceCount = statement.occurrences;
-  const stmtFraction = statement.percentage;
-
-  if (!statement.cliff) {
-    const eventFraction = fracMul(stmtFraction, {
-      numerator: 1,
-      denominator: occurrenceCount,
-    });
-    return Array.from({ length: occurrenceCount }, () => eventFraction);
-  }
-
-  // cliff.percentage is the fraction OF THE STATEMENT; multiplying by
-  // stmtFraction gives the fraction of grant, so a cliff composes cleanly
-  // regardless of how much of the grant the statement covers.
-  const cliffEvent = statement.cliff.occurrence;
-  const cliffFractionOfStmt = statement.cliff.percentage;
-  const cliffFractionOfGrant = fracMul(cliffFractionOfStmt, stmtFraction);
-  const postCliffCount = occurrenceCount - cliffEvent;
-  const remainingStmtFraction = fracMul(
-    fracSub(ONE, cliffFractionOfStmt),
-    stmtFraction,
-  );
-  const postCliffEventFraction =
-    postCliffCount === 0
-      ? ZERO
-      : fracMul(remainingStmtFraction, {
-          numerator: 1,
-          denominator: postCliffCount,
-        });
-
-  return Array.from({ length: occurrenceCount }, (_, idx) => {
-    const occurrence = idx + 1;
-    // Pre-cliff installments emit ZERO; the main loop's amount===0 filter skips
-    // them so no event is produced.
-    if (occurrence < cliffEvent) return ZERO;
-    if (occurrence === cliffEvent) return cliffFractionOfGrant;
-    return postCliffEventFraction;
-  });
-};
-
-/**
  * Raw event before integer-share materialization: the per-event fraction-of-grant
  * plus enough metadata for a deterministic chronological sort.
  */
@@ -101,6 +49,84 @@ interface RawEvent {
   statementOrder: number;
   occurrence: number;
 }
+
+/**
+ * Expand a statement's occurrences into raw events anchored at `anchor`, applying
+ * the time-based cliff by date. `multiplier` scales every fraction (EVENT
+ * statements pass realized_fraction; DATE statements pass ONE). All fractions are
+ * already multiplied through by statement.percentage, so they are fraction of
+ * grant, not of the statement.
+ *
+ * Cliffless: every occurrence vests statement.percentage / N at its grid date.
+ *
+ * With a cliff: the cliff date is `cliff.length` `cliff.period_type`s after the
+ * anchor. Occurrences whose grid date is at/before the cliff date are subsumed
+ * into a single lump on the cliff date (`cliff.percentage` of the statement);
+ * occurrences after the cliff split the remaining `1 − cliff.percentage` evenly,
+ * each at its own grid date. Because the cliff is a duration (not an occurrence
+ * index), the lump lands on the true cliff date even when it falls between grid
+ * points. On-grid cliffs reproduce the positional result exactly.
+ */
+const expandAnchored = (
+  statement: VestingStatement,
+  anchor: OCFDate,
+  multiplier: Fraction,
+  dom: VestingRuntime["vestingDayOfMonth"],
+): RawEvent[] => {
+  const N = statement.occurrences;
+  const stmtFraction = statement.percentage;
+  const gridDate = (i: number): OCFDate =>
+    addPeriod(anchor, i * statement.period, statement.period_type, dom);
+  const event = (
+    date: OCFDate,
+    fraction: Fraction,
+    occurrence: number,
+  ): RawEvent => ({
+    date,
+    fractionOfGrant: fracMul(fraction, multiplier),
+    statementOrder: statement.order,
+    occurrence,
+  });
+  const evenGrid = (): RawEvent[] => {
+    const per = fracMul(stmtFraction, { numerator: 1, denominator: N });
+    return Array.from({ length: N }, (_, idx) =>
+      event(gridDate(idx + 1), per, idx + 1),
+    );
+  };
+
+  if (!statement.cliff) return evenGrid();
+
+  const cliff = statement.cliff;
+  const cliffDate = addPeriod(anchor, cliff.length, cliff.period_type, dom);
+
+  // Partition occurrences: those strictly after the cliff date keep their own
+  // grid date; the rest are subsumed into the lump.
+  const postOccurrences: number[] = [];
+  let preCount = 0;
+  for (let i = 1; i <= N; i++) {
+    if (gt(gridDate(i), cliffDate)) postOccurrences.push(i);
+    else preCount++;
+  }
+
+  // Cliff at/before the first installment → no lump, plain grid.
+  if (preCount === 0) return evenGrid();
+
+  const events: RawEvent[] = [];
+  // The lump (occurrence 0 sorts it first within the statement on its date).
+  events.push(event(cliffDate, fracMul(stmtFraction, cliff.percentage), 0));
+
+  // The remaining 1 − cliff.percentage spreads over the post-cliff occurrences.
+  // (When none remain — cliff at/after the last grid date — only the lump vests.)
+  const P = postOccurrences.length;
+  if (P > 0) {
+    const per = fracMul(
+      stmtFraction,
+      fracMul(fracSub(ONE, cliff.percentage), { numerator: 1, denominator: P }),
+    );
+    for (const i of postOccurrences) events.push(event(gridDate(i), per, i));
+  }
+  return events;
+};
 
 /**
  * Expand one statement into raw events.
@@ -119,21 +145,12 @@ const expandStatement = (
   runtime: VestingRuntime,
   dateCursor: OCFDate | undefined,
 ): { events: RawEvent[]; nextCursor: OCFDate | undefined } | null => {
-  const fractions = perEventGrantFractions(statement);
-  const events: RawEvent[] = [];
   const dom = runtime.vestingDayOfMonth;
 
   if (statement.vesting_base.type === "DATE") {
     // Validator guarantees dateCursor is defined when any DATE statement exists.
     const anchor = dateCursor as OCFDate;
-    for (let i = 1; i <= statement.occurrences; i++) {
-      events.push({
-        date: addPeriod(anchor, i * statement.period, statement.period_type, dom),
-        fractionOfGrant: fractions[i - 1],
-        statementOrder: statement.order,
-        occurrence: i,
-      });
-    }
+    const events = expandAnchored(statement, anchor, ONE, dom);
     const nextCursor = addPeriod(
       anchor,
       statement.occurrences * statement.period,
@@ -149,15 +166,10 @@ const expandStatement = (
   if (!firing) return null; // statement doesn't fire; events never produced
 
   const multiplier = firing.realized_fraction ?? ONE;
-  for (let i = 1; i <= statement.occurrences; i++) {
-    events.push({
-      date: addPeriod(firing.date, i * statement.period, statement.period_type, dom),
-      fractionOfGrant: fracMul(fractions[i - 1], multiplier),
-      statementOrder: statement.order,
-      occurrence: i,
-    });
-  }
-  return { events, nextCursor: dateCursor };
+  return {
+    events: expandAnchored(statement, firing.date, multiplier, dom),
+    nextCursor: dateCursor,
+  };
 };
 
 /**

@@ -21,7 +21,7 @@ describe("compile — standard 4yr/1mo with 25% cliff", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { occurrence: 12, percentage: { numerator: 1, denominator: 4 } },
+        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -68,7 +68,7 @@ describe("compile — non-standard 30% cliff", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { occurrence: 12, percentage: { numerator: 3, denominator: 10 } },
+        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 3, denominator: 10 } },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -144,7 +144,7 @@ describe("compile — additional DATE-anchored cases", () => {
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
-          cliff: { occurrence: 12, percentage: { numerator: 1, denominator: 1 } },
+          cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 1 } },
           percentage: { numerator: 1, denominator: 1 },
         },
       ],
@@ -152,6 +152,33 @@ describe("compile — additional DATE-anchored cases", () => {
     expect(compile(template, 100_000, startJan2025)).toEqual([
       { date: "2026-01-01", amount: "100000" },
     ]);
+  });
+
+  it("off-grid cliff lumps on the true cliff date, post-cliff stays on the grid", () => {
+    // Monthly-4 from 2025-01-01; cliff 75 DAYS in = 2025-03-17 (between the
+    // Mar 1 and Apr 1 grid points). Feb 1 + Mar 1 occurrences subsume into a
+    // half-grant lump on the off-grid date; Apr 1 + May 1 split the rest.
+    const template: VestingScheduleTemplate = {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: { length: 75, period_type: "DAYS", percentage: { numerator: 1, denominator: 2 } },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    const events = compile(template, 400, startJan2025);
+    expect(events).toEqual([
+      { date: "2025-03-17", amount: "200" },
+      { date: "2025-04-01", amount: "100" },
+      { date: "2025-05-01", amount: "100" },
+    ]);
+    expect(sumAmounts(events)).toBe(400);
   });
 
   it("DAYS schedule produces correct ISO dates", () => {
@@ -304,7 +331,7 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { occurrence: 12, percentage: { numerator: 1, denominator: 4 } },
+        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -541,7 +568,7 @@ describe("compile — hybrid DATE + EVENT templates", () => {
           occurrences: 48,
           period: 1,
           period_type: "MONTHS",
-          cliff: { occurrence: 12, percentage: { numerator: 1, denominator: 4 } },
+          cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
           percentage: { numerator: 9, denominator: 10 },
         },
         {
