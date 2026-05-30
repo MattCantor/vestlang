@@ -15,7 +15,7 @@ export function prepare(stmt: Statement, ctx_input: EvaluationContextInput) {
   return { ctx, statementQuantity };
 }
 
-function createEvaluationContext(
+export function createEvaluationContext(
   input: EvaluationContextInput,
 ): EvaluationContext {
   return {
