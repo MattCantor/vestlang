@@ -1,4 +1,4 @@
-import type { EvaluationContext, OCTDate, PeriodTag } from "@vestlang/types";
+import type { EvaluationContext, OCTDate } from "@vestlang/types";
 import { isBefore, isAfter, isEqual } from "date-fns";
 
 // convert ISO-string ↔ Date
@@ -58,12 +58,3 @@ export const addDays = (iso: OCTDate, n: number): OCTDate => {
 export const lt = (a: OCTDate, b: OCTDate) => isBefore(toDate(a), toDate(b));
 export const gt = (a: OCTDate, b: OCTDate) => isAfter(toDate(a), toDate(b));
 export const eq = (a: OCTDate, b: OCTDate) => isEqual(toDate(a), toDate(b));
-
-export function nextDate(
-  d: OCTDate,
-  unit: PeriodTag,
-  length: number,
-  ctx: EvaluationContext,
-): OCTDate {
-  return unit === "MONTHS" ? addMonthsRule(d, length, ctx) : addDays(d, length);
-}

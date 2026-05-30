@@ -31,7 +31,7 @@ export const resolveToCore = (
   }
 
   // Resolves but doesn't fit one template (events) or can't materialize (unresolved).
-  return classify(build, program, ctxInput);
+  return classify(build, program);
 };
 
 export { resolveStatements, buildTemplate, amountToFraction } from "./lower.js";

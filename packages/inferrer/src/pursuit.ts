@@ -4,7 +4,7 @@ import type {
   vesting_day_of_month,
   allocation_type,
 } from "@vestlang/types";
-import { allocateQuantity } from "@vestlang/evaluator";
+import { allocateVector } from "@vestlang/core";
 import {
   type Cadence,
   cadenceKey,
@@ -38,7 +38,7 @@ function toResidual(tranches: TrancheInput[]): Residual {
   return m;
 }
 
-/** allocateQuantity fingerprints are monotonic in the total: increasing T never
+/** allocateVector fingerprints are monotonic in the total: increasing T never
  * decreases any position's share. So the set of T for which fingerprint <= mass
  * pointwise is a prefix [n, maxT]. Binary-search that maximal feasible T. */
 function maxFeasibleTotal(
@@ -47,7 +47,7 @@ function maxFeasibleTotal(
   mode: allocation_type,
 ): number {
   const fitsAt = (T: number): boolean => {
-    const fp = allocateQuantity(T, n, mode);
+    const fp = allocateVector(T, n, mode);
     for (let k = 0; k < n; k++) {
       if (fp[k] - mass[k] > EPSILON) return false;
     }
@@ -139,7 +139,7 @@ function trainAtomsCovering(
       const mass = positions.map(massAt);
       const sum = mass.reduce((a, b) => a + b, 0);
 
-      // The train's total T must satisfy: allocateQuantity(T, n, mode)[k] <= mass[k]
+      // The train's total T must satisfy: allocateVector(T, n, mode)[k] <= mass[k]
       // for every position k (so the leftover stays non-negative). Fingerprints are
       // monotonic in T, so there is a unique MAXIMAL feasible T — the train that
       // explains as much mass as possible while leaving only non-negative lumps.
@@ -151,7 +151,7 @@ function trainAtomsCovering(
       if (Math.round(sum) >= n) candidateTotals.add(Math.round(sum));
 
       for (const total of candidateTotals) {
-        const fp = allocateQuantity(total, n, mode);
+        const fp = allocateVector(total, n, mode);
         let fits = true;
         for (let k = 0; k < n; k++) {
           if (fp[k] - mass[k] > EPSILON || fp[k] <= 0) {

@@ -82,7 +82,9 @@ describe("Randomized grantQuantity fuzz test - months", () => {
       const result = evaluate(stmt, grantQuantity);
       const total = shareCount(result);
       expect(total).toBe(grantQuantity);
-      expect(result.length).toBe(over / every);
+      // The canonical engine drops zero-share installments, so when the grant is
+      // smaller than the occurrence count only `grantQuantity` tranches vest a share.
+      expect(result.length).toBe(Math.min(grantQuantity, over / every));
     });
 
     it(`trial ${i + 1}: ${stmt} (${grantQuantity} shares with cliff)`, () => {
@@ -110,7 +112,9 @@ describe("Randomized grantQuantity fuzz test - days", () => {
       const result = evaluate(stmt, grantQuantity);
       const total = shareCount(result);
       expect(total).toBe(grantQuantity);
-      expect(result.length).toBe(over / every);
+      // The canonical engine drops zero-share installments, so when the grant is
+      // smaller than the occurrence count only `grantQuantity` tranches vest a share.
+      expect(result.length).toBe(Math.min(grantQuantity, over / every));
     });
 
     it(`trial ${i + 1}: ${stmt} (${grantQuantity} shares with cliff)`, () => {
