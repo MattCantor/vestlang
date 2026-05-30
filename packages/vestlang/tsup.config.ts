@@ -6,8 +6,10 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
-  // Bundle all @vestlang/* packages into the output
-  noExternal: [/@vestlang\/.*/],
-  // External runtime dependencies (date-fns is used by evaluator)
-  external: ["date-fns"],
+  // Inline the internal @vestlang/* packages into the output, EXCEPT @vestlang/core
+  // (negative lookahead) — the engine ships once as a real external dependency,
+  // shared with OCF-Tools.
+  noExternal: [/@vestlang\/(?!core)/],
+  // External runtime deps: the engine (shipped separately) + date-fns.
+  external: ["date-fns", "@vestlang/core"],
 });

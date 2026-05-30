@@ -1,14 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { OCTDate } from "@vestlang/types";
-import { baseCtx } from "./helpers";
-import { addDays, eq, gt, lt, nextDate } from "../src/evaluate/time";
+import { addDays, eq, gt, lt } from "../src/evaluate/time";
 
 describe("time helpers", () => {
-  it("nextDate uses DAYS", () => {
-    const d = nextDate("2024-01-01" as OCTDate, "DAYS", 10, baseCtx());
-    expect(d).toBe("2024-01-11" as OCTDate);
-  });
-
   it("addDay simple", () => {
     expect(addDays("2024-01-10" as OCTDate, 5)).toBe("2024-01-15" as OCTDate);
   });
@@ -28,14 +22,10 @@ describe("time helpers", () => {
     expect(addDays("2024-01-01" as OCTDate, 84)).toBe("2024-03-25" as OCTDate);
   });
 
-  it("nextDate DAYS yields exact 14-day grid across DST", () => {
+  it("addDays yields exact 14-day grid across DST", () => {
     const start = "2023-12-18" as OCTDate;
-    expect(nextDate(start, "DAYS", 14 * 7, baseCtx())).toBe(
-      "2024-03-25" as OCTDate,
-    );
-    expect(nextDate(start, "DAYS", 14 * 8, baseCtx())).toBe(
-      "2024-04-08" as OCTDate,
-    );
+    expect(addDays(start, 14 * 7)).toBe("2024-03-25" as OCTDate);
+    expect(addDays(start, 14 * 8)).toBe("2024-04-08" as OCTDate);
   });
 
   it("lt/gt/eq correctness", () => {

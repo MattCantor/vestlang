@@ -236,6 +236,9 @@ importers:
 
   packages/inferrer:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../core
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../evaluator
@@ -355,6 +358,9 @@ importers:
 
   packages/vestlang:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../core
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0

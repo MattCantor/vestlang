@@ -1,3 +1,6 @@
+// Canonical interchange engine (shipped as a real external dependency)
+export * as core from "@vestlang/core";
+
 // Parser
 export { parse } from "@vestlang/dsl";
 

@@ -3,7 +3,7 @@
 // assert the three arms end-to-end, the exact-telescoping property for template
 // schedules, and that the legacy engine is still reachable behind the flag.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import type {
   Amount,
   EvaluationContextInput,
@@ -12,11 +12,7 @@ import type {
   VestingNode,
   VestingPeriod,
 } from "@vestlang/types";
-import {
-  evaluateStatement,
-  evaluateProgram,
-  __useLegacyEngine,
-} from "../src/evaluate/index";
+import { evaluateStatement, evaluateProgram } from "../src/evaluate/index";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -46,8 +42,6 @@ const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) =>
 });
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
-
-afterEach(() => __useLegacyEngine(false));
 
 describe("assemble — template fidelity", () => {
   const cliff12mo = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
@@ -153,23 +147,5 @@ describe("assemble — unresolved fidelity", () => {
     expect(out.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED")).toBe(true);
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(true);
-  });
-});
-
-describe("assemble — legacy engine reachable behind the flag", () => {
-  it("__useLegacyEngine(true) returns the legacy (untagged) schedule", () => {
-    const s = stmt(
-      portion(1, 1),
-      makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
-      { type: "MONTHS", length: 1, occurrences: 12 },
-    );
-    __useLegacyEngine(true);
-    const legacy = evaluateStatement(s, ctxInput());
-    expect(legacy.fidelity).toBeUndefined(); // legacy doesn't tag fidelity
-    expect(legacy.installments.length).toBeGreaterThan(0);
-
-    __useLegacyEngine(false);
-    const fresh = evaluateStatement(s, ctxInput());
-    expect(fresh.fidelity).toBe("template");
   });
 });

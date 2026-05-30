@@ -1,17 +1,17 @@
-# @nathamcrewott/vestlang
+# @vestlang/vestlang
 
 A domain-specific language for modeling vesting schedules.
 
 ## Installation
 
 ```bash
-npm install @nathamcrewott/vestlang
+npm install @vestlang/vestlang
 ```
 
 ## Usage
 
 ```typescript
-import { parse, normalizeProgram, evaluateStatement } from "@nathamcrewott/vestlang";
+import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
 
 const source = "VEST FROM EVENT grant OVER 4 years EVERY 1 month CLIFF 1 year";
 const program = normalizeProgram(parse(source));

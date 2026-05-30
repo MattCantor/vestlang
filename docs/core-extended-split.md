@@ -456,12 +456,19 @@ Notes:
 
 **Outputs:**
 - Old `evaluateSchedule` / `allocateQuantity` / `evaluateCliff` allocation code and the internal flag deleted.
-- Umbrella renamed `@nathamcrewott/vestlang` → `vestlang`; its `tsup` config marks `@vestlang/core` `external` (the rest still inlined); exports reshaped to expose `core`.
+- Umbrella renamed `@nathamcrewott/vestlang` → **`@vestlang/vestlang`** (the known-available scoped fallback — the unscoped `vestlang` name is still typosquat-blocked; resolved at Phase 6); its `tsup` config marks `@vestlang/core` `external` (the rest still inlined); exports reshaped to expose `core`.
 
 **Definition of Done:**
-- [ ] build + tests green on the new path only.
-- [ ] No references to the removed engine remain.
+- [x] build + tests green on the new path only. *(build 13/13, test 18/18 — core 93, evaluator 62, inferrer 41, integration 113, mcp-server 33.)*
+- [x] No references to the removed engine remain. *(`grep` clean for `allocateQuantity`/`evaluateCliff`/`evaluateGrantDate`/`nextDate`/`__useLegacyEngine`/`evaluate/build` in live source — only historical comments + test descriptions remain.)*
 - [ ] Commit: `feat!: remove legacy evaluator engine (clean break)`.
+
+**Implementation notes:**
+- **The unresolved arm was relocated, not kept.** The classifier's `unresolvedArm` used the legacy `evaluateStatement` (the only internal consumer of `build.ts`). It's replaced by a new `resolve/unresolved.ts` (`unresolvedInstallments`) that reproduces the non-resolved branches (impossible / unresolved-start / start-plus / unresolved-cliff) using only **kept** infrastructure — the selector layer (`selectors.ts`, `vestingNode/*`, `utils.ts`), core's `addPeriod`/`allocateVector`/`foldToGrantDate`, and the retained `makeTranches` factories. The fully-resolved path is core.compile's job (the arm discards RESOLVED installments).
+- **Inferrer migrated to the one allocator.** `pursuit.ts` now imports `allocateVector` from `@vestlang/core` (a drop-in for the deleted `allocateQuantity` — same `(quantity, n, mode) → number[]`), with `@vestlang/core` added to the inferrer's deps. 41 inferrer tests stay green.
+- **Deleted:** `evaluate/{build,cliff,allocation}.ts`, `nextDate` (from `time.ts`), the `__useLegacyEngine` flag + its `evaluate/index.ts` branch, and the legacy-only test suites (`evaluate`/`cliff`/`seedDrift`/`allocation`). **Kept** (shared with the new path): selector layer, `vestingNode/*`, `makeTranches` (incl. `makeResolvedInstallment`), `blockerToString`, `time.ts` (minus `nextDate`).
+- **Zero-share installments are dropped (semantics, surfaced here).** core.compile omits zero-amount tranches, so a grant smaller than its occurrence count vests only `min(grantQuantity, occurrences)` tranches. The randomized integration fuzz (`tests/integration`) asserted `length === occurrences`; updated to `min(grantQuantity, occurrences)`. This was established in Phase 3/5a; the fuzz only hit it now (a 2-shares-over-27-occurrences trial).
+- **tsup externalization:** `noExternal: [/@vestlang\/(?!core)/]` (negative lookahead) — `external` alone didn't win over the inlining regex; the lookahead is what actually externalizes the engine (bundle 152 → 135 KB).
 
 ---
 
@@ -549,10 +556,13 @@ Notes:
 - [x] Telescoping + classification assertions (`packages/evaluator/tests/assemble.test.ts`); no golden updates needed (new semantics matched legacy at suite magnitudes)
 
 ### Phase 5b: retire the legacy engine (clean break)
-- [ ] `packages/evaluator/src/evaluate/*` — delete legacy engine + flag
-- [ ] `packages/vestlang/package.json` — rename `@nathamcrewott/vestlang` → `vestlang`; add `@vestlang/core` dependency
-- [ ] `packages/vestlang/tsup.config.ts` — mark `@vestlang/core` `external` (inline the rest)
-- [ ] `packages/vestlang/src/index.ts` — reshape umbrella exports
+- [x] `packages/evaluator/src/evaluate/*` — deleted `build.ts`/`cliff.ts`/`allocation.ts` + `nextDate` + the `__useLegacyEngine` flag
+- [x] `packages/evaluator/src/resolve/unresolved.ts` (**new**) + `classify.ts` — relocated the unresolved producer off the legacy engine
+- [x] `packages/inferrer/{src/pursuit.ts,package.json}` — `allocateQuantity` → core `allocateVector`; added `@vestlang/core` dep
+- [x] `packages/vestlang/package.json` — rename `@nathamcrewott/vestlang` → `@vestlang/vestlang`; add `@vestlang/core` dependency
+- [x] `packages/vestlang/tsup.config.ts` — `@vestlang/core` external (`noExternal` negative lookahead); rest inlined
+- [x] `packages/vestlang/src/index.ts` — `export * as core from "@vestlang/core"`
+- [x] Legacy-only test suites deleted; integration fuzz updated for dropped zero-share tranches
 
 ### Phase 6: release
 - [ ] `.changeset/*` — `@vestlang/core`, `vestlang` (renamed from `@nathamcrewott/vestlang`), PORTION numeric change
