@@ -10,7 +10,6 @@
 import type {
   Blocker,
   EvaluationContext,
-  EvaluationContextInput,
   OCTDate,
   Program,
   ResolvedInstallment,
@@ -30,8 +29,8 @@ import {
   ONE,
   ZERO,
 } from "@vestlang/core";
-import { evaluateStatement } from "../evaluate/build.js";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
+import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type {
   NonTemplateReason,
@@ -197,12 +196,12 @@ const eventsArm = (
 
 const unresolvedArm = (
   program: Program,
-  ctxInput: EvaluationContextInput,
+  ctx: EvaluationContext,
 ): ResolveResult => {
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   for (const stmt of program) {
-    const ev = evaluateStatement(stmt, ctxInput);
+    const ev = unresolvedInstallments(stmt, ctx);
     for (const inst of ev.installments) {
       if (inst.meta.state !== "RESOLVED") symbolic.push(inst as SymbolicInstallment);
     }
@@ -215,8 +214,7 @@ const unresolvedArm = (
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
   program: Program,
-  ctxInput: EvaluationContextInput,
 ): ResolveResult =>
   build.why === "unresolved"
-    ? unresolvedArm(program, ctxInput)
+    ? unresolvedArm(program, build.ctx)
     : eventsArm(build.resolutions, build.ctx, build.totalShares, build.reason);
