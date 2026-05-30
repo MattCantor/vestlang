@@ -13,7 +13,7 @@ npm install @vestlang/vestlang
 ```typescript
 import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
 
-const source = "VEST FROM EVENT grant OVER 4 years EVERY 1 month CLIFF 1 year";
+const source = "VEST OVER 4 years EVERY 1 month CLIFF 1 year";
 const program = normalizeProgram(parse(source));
 
 const schedule = evaluateStatement(program[0], {
@@ -23,8 +23,44 @@ const schedule = evaluateStatement(program[0], {
   allocation_type: "CUMULATIVE_ROUND_DOWN",
 });
 
-console.log(schedule.installments);
+console.log(schedule.fidelity);     // "template" | "events-only" | "unresolved"
+console.log(schedule.installments); // [{ amount, date, meta: { state } }, ...]
+console.log(schedule.blockers);     // [] unless something is unresolved
 ```
+
+## How it works
+
+Vestlang has two layers, split along one line — **resolve vs. substitute**:
+
+- The **DSL front-end** (this package) _resolves_. It parses your statement, then resolves
+  its combinators (`LATER OF` / `EARLIER OF`, event gates, conditional starts) against
+  runtime — the grant date, share count, and which events have fired — and **classifies**
+  the result by how well it fits the canonical interchange.
+- The **engine** (`@vestlang/core`) _substitutes_. Given a fully concrete, combinator-free
+  template + runtime, it allocates exact integer shares — exact-rational math, a time-based
+  cliff, structural validation. It never sees a combinator or an unresolved state.
+
+The engine is re-exported as `core`:
+
+```typescript
+import { core } from "@vestlang/vestlang"; // or: import * as core from "@vestlang/core"
+```
+
+### The fidelity verdict
+
+Every `EvaluatedSchedule` carries a `fidelity` tag describing how the program mapped onto
+the interchange:
+
+| `fidelity` | Meaning |
+| :--------- | :------ |
+| `"template"` | Resolved and fit one canonical template — exact installments, intent preserved (best case). |
+| `"events-only"` | Resolved to concrete dated amounts but couldn't be one template (overlapping independent starts, a loaded allocation mode, an event-anchored cliff). Carries a `reason`; facts preserved, intent reported honestly. |
+| `"unresolved"` | Can't be materialized yet — an unfired event or a contradictory condition. Installments carry symbolic/absent dates and `blockers` name what's missing. |
+
+At the installment level, each row's `meta.state` is `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+
+`evaluateStatement` classifies one statement at a time; `evaluateProgram` collapses a whole
+multi-statement program into a **single** schedule and reports its program-level verdict.
 
 ## API
 
@@ -38,8 +74,8 @@ console.log(schedule.installments);
 
 ### Evaluation
 
-- `evaluateStatement(statement, context)` - Evaluate a single statement
-- `evaluateProgram(program, context)` - Evaluate an entire program
+- `evaluateStatement(statement, context)` - Resolve + classify a single statement into a fidelity-tagged `EvaluatedSchedule`
+- `evaluateProgram(program, context)` - Collapse a whole multi-statement program into **one** fidelity-tagged schedule (returned as a one-element array)
 - `evaluateStatementAsOf(statement, context)` - Evaluate a statement as of a specific date
 
 ### Inference (the inverse of evaluation)
@@ -71,7 +107,7 @@ The package exports commonly used types:
 **Evaluation**
 
 - `EvaluationContextInput` - Input context for evaluation
-- `EvaluatedSchedule` - Result of evaluating a schedule
+- `EvaluatedSchedule` - Result of evaluating a schedule (carries `installments`, `blockers`, and the `fidelity` tag + optional `reason`)
 - `Installment` - A single vesting installment
 - `ResolvedInstallment` / `UnresolvedInstallment` / `ImpossibleInstallment` - The installment states
 - `VestedResult` - Vested/unvested quantities produced by evaluation

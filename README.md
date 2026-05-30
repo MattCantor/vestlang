@@ -1,718 +1,272 @@
 # Vestlang
 
-> **A domain-specific language for modeling vesting schedules**
+> **A domain-specific language for modeling equity vesting schedules — and a canonical engine that resolves them exactly.**
 
-[Docs](https://mattcantor.github.io/vestlang/)
-
----
-
-## 📦 Packages
-
-| Package                              | Description                                                      |
-| ------------------------------------ | ---------------------------------------------------------------- |
-| `@vestlang/dsl`                      | PEG grammar & parser                                             |
-| `@vestlang/normalizer`               | Converts parsed grammar in normalized AST                        |
-| `@vestlang/evaluator`                | Creates a vesting schedule from the normalized AST with metadata |
-| `@vestlang/cli`                      | CLI for running and testing DSL examples                         |
-| `@vestlang/prettier-plugin-vestlang` | autoformatting                                                   |
-| `@vestlang/linter`                   | syntax errors                                                    |
-| `@vestlang/types`                    | types                                                            |
+[Documentation](https://mattcantor.github.io/vestlang/)
 
 ---
 
-## CLI Usage
+Every cap-table system models vesting a little differently, and the hardest part — the
+*contingent* bits, like vesting that waits on an IPO or starts at the *later of* a date and
+an event — usually can't be written down at all until the event happens. Vestlang tackles
+both halves:
 
-Evaluate a vesting schedule from the command line:
+- **A DSL** for *writing* vesting intent, contingency included — **combinators** like
+  `LATER OF` / `EARLIER OF`, event gates, and conditional starts (a combinator is an
+  operator over anchors, e.g. "the later of 12 months and `EVENT "ipo"`").
+- **A canonical engine** (`@vestlang/core`) that *resolves* that intent against runtime
+  (the grant date, share count, which events have fired) and allocates exact integer shares.
 
-```bash
-# Basic usage
-node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 "VEST OVER 4 years EVERY 3 months CLIFF 12 months"
+The engine's template is a proposed **interchange** — a single, exact schedule format that
+different cap-table tools can produce and consume, deliberately shaped to track Carta's
+production cap-table schema. The DSL is where the contingency that an interchange *can't*
+hold gets expressed and then resolved down to it.
 
-# With stdin
-echo 'VEST OVER 4 years EVERY 3 months CLIFF 12 months' | \
-  node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 --stdin
+```ts
+import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
 
-# With events
-node apps/cli/dist/index.js evaluate -q 100 -g 2025-01-01 -e ipo=2026-06-15 \
-  "VEST OVER 4 years EVERY 3 months CLIFF LATER OF(+12 months, EVENT ipo)"
+const program = normalizeProgram(parse("VEST OVER 4 years EVERY 1 month CLIFF 1 year"));
+const schedule = evaluateStatement(program[0], {
+  events: { grantDate: "2025-01-01" },
+  grantQuantity: 4800,
+});
+// → 1,200 shares vest at the 1-year cliff (2026-01-01), then 100/month for 36 months.
+//   37 installments that telescope exactly to 4,800 (the rounded shares sum to the
+//   grant with no drift).
 ```
 
-**Flags:**
+---
 
-- `-q, --quantity <number>` — total shares granted
-- `-g, --grantDate <YYYY-MM-DD>` — grant date
-- `-e, --event <NAME=YYYY-MM-DD>` — supply an event (repeatable)
-- `--stdin` — read DSL from stdin
+## How it works
 
-**Other commands:** `inspect` (raw AST), `compile` (normalized AST), `asOf`, `lint`
+The pipeline turns a DSL string into a classified, exactly-allocated schedule:
+
+```
+DSL string ──parse──▶ raw AST ──normalize──▶ Program (rich AST)
+                                                 │
+                       resolve combinators vs. runtime, then CLASSIFY
+                                                 │
+              ┌──────────────────────────────────┼──────────────────────────────────┐
+              ▼                                   ▼                                   ▼
+          TEMPLATE                           EVENTS-ONLY                      UNRESOLVED
+   fits one canonical template      resolves, but can't be one template    blocked on an
+   → core compiles exact shares     → bare dated amounts + the reason      unfired event
+              └──────────────────────────────────┼──────────────────────────────────┘
+                                                  ▼
+                                          EvaluatedSchedule
+```
+
+### Two layers: *resolve* vs. *substitute*
+
+The codebase splits along one precise line:
+
+- **The engine (`@vestlang/core`) *substitutes*.** Given a fixed, combinator-free template
+  + runtime + share count, it plugs in the values and allocates exactly — deterministically,
+  one template + runtime → one installment set. It never sees a combinator, a symbolic date,
+  or an "unresolved" state. This is the canonical interchange: exact-rational math, a
+  time-based cliff, structural validation.
+- **The front-end (`@vestlang/evaluator`, the "extended" layer) *resolves*.** Combinators
+  let runtime *select the structure itself* — `LATER OF(12mo, EVENT "ipo")` becomes a
+  different schedule depending on which date wins. The resolver evaluates that against
+  runtime and then **classifies** the result into one of three interchange-fidelity levels.
+
+Think of it like a source language and an IR: the DSL expresses *contingency and intent*
+that the resolved interchange can't *hold*; the engine is the exact, validated target that
+multiple producers can share.
+
+### The fidelity ladder
+
+Every resolved program lands on exactly one level:
+
+| Level | When | What you get |
+|---|---|---|
+| **`template`** | The program fits one canonical template | Exact installments; structured round-trip; intent preserved (best case) |
+| **`events-only`** | It resolves to concrete dated amounts but *can't* be one template — two overlapping independent absolute starts, a loaded allocation mode (front/back-weighted), an event-anchored cliff | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
+| **`unresolved`** | It can't be materialized yet — an unfired event, or a self-contradictory condition | Amounts with symbolic/absent dates + `blockers` naming what's missing |
+
+A program collapses to **one** template (or one events-only / unresolved verdict) — never a
+fan-out to N. At the individual installment level, each row carries a `state` of `RESOLVED`,
+`UNRESOLVED`, or `IMPOSSIBLE`.
+
+---
+
+## Packages
+
+Two packages are **published**; the rest are internal building blocks, inlined into the
+umbrella at build time and never published on their own.
+
+| Package | Published | Role |
+|---|:---:|---|
+| **`@vestlang/vestlang`** | ✅ | The umbrella toolkit — parse, normalize, evaluate, lint, stringify, infer. The package you install. |
+| **`@vestlang/core`** | ✅ | The standalone canonical engine (dual CJS/ESM): exact-rational allocator, time-based cliff, structural + runtime validation. Consumable on its own. |
+| `@vestlang/dsl` | — | PEG grammar + parser |
+| `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
+| `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
+| `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (matching-pursuit) |
+| `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
+
+Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`.
+
+> The umbrella is published as `@vestlang/vestlang` today; the unscoped `vestlang` name is
+> the intended target (pending a registry clearance).
+
+---
+
+## Using it
+
+### 1. As a library
+
+```bash
+npm install @vestlang/vestlang      # or: pnpm add @vestlang/vestlang
+```
+
+```ts
+import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
+
+const program = normalizeProgram(parse('VEST OVER 4 years EVERY 1 month CLIFF 1 year'));
+const schedule = evaluateStatement(program[0], {
+  events: { grantDate: "2025-01-01" },     // grantDate is required
+  grantQuantity: 4800,
+  // optional: asOf, vesting_day_of_month, allocation_type
+});
+
+schedule.fidelity;      // "template" | "events-only" | "unresolved"
+schedule.installments;  // [{ amount, date, meta: { state } }, ...]
+schedule.blockers;      // [] unless something is unresolved
+```
+
+`evaluateStatement` classifies one statement at a time. To collapse a whole multi-statement
+program into a **single** schedule and read its program-level fidelity verdict, use
+`evaluateProgram(program, ctx)`. The engine itself is reachable as `core`:
+
+```ts
+import { core } from "@vestlang/vestlang"; // or: import * as core from "@vestlang/core"
+```
+
+Reach for `@vestlang/core` directly when you already hold a resolved, combinator-free
+template — e.g. another cap-table tool consuming the interchange — and just need exact
+allocation, skipping the DSL entirely. It ships dual CJS/ESM (the rest of the toolkit is
+ESM-only) so even CommonJS consumers can depend on the engine.
+
+### 2. From the CLI
+
+```bash
+# Per-statement evaluation
+node apps/cli/dist/index.js evaluate -q 4800 -g 2025-01-01 \
+  "VEST OVER 4 years EVERY 1 month CLIFF 1 year"
+
+# Collapse a whole program into one schedule + its fidelity verdict
+node apps/cli/dist/index.js evaluate --program -q 100 -g 2025-01-01 "[ ... , ... ]"
+
+# Supply named events the DSL references
+node apps/cli/dist/index.js evaluate -q 4800 -g 2025-01-01 -e ipo=2026-06-15 \
+  "VEST OVER 4 years EVERY 1 month CLIFF LATER OF(+12 months, EVENT ipo)"
+```
+
+Other commands: `inspect` (raw AST), `compile` (normalized AST), `asOf`, `lint`.
+
+### 3. As an MCP server
+
+`apps/mcp-server` exposes the full pipeline as Model Context Protocol tools —
+`vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_program`,
+`vestlang_evaluate_as_of`, `vestlang_lint`, `vestlang_stringify`, `vestlang_infer_schedule` —
+and publishes the grammar/spec/examples as resources. This is the surface for driving
+vestlang from an LLM agent.
 
 ---
 
 ## Examples
 
-- [Immediate Vesting on the Grant Date](#immediate-vesting-on-the-grant-date)
-- [4-Year Monthly Vesting](#4-year-monthly-vesting)
-- [4-Year Quarterly Vesting with 1-Year Cliff](#4-year-quarterly-vesting-with-1-year-cliff)
-- [Milestone-Based Vesting](#milestone-based-vesting)
-- [Backdated Vesting Start](#backdated-vesting-start)
-- [Bespoke Vesting](#bespoke-vesting)
-- [Bespoke Vesting with Variable Cadence](#bespoke-vesting-with-variable-cadence)
-- [Two-Tier Vesting](#two-tier-vesting)
-- [Conditional Vesting Start with AND](#conditional-vesting-start-with-and)
+All grants below use a grant date of **2025-01-01**. Outputs are produced by the engine.
 
-The following examples assume a grant date of **2025-01-01** and a grant quantity of **100 shares**.
+### Time-based vesting with a cliff → `template`
 
-```ts
-const ctx: EvaluationContext = {
-  events: { grantDate: "2025-01-01" },
-  grantQuantity: 100,
-  asOf: "2025-01-29", // defaults to current date
-  vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
-}
+`VEST OVER 4 years EVERY 1 month CLIFF 1 year` over 4,800 shares:
+
+| Amount | Date | State |
+|---:|:---|:---|
+| 1,200 | 2026-01-01 | RESOLVED *(cliff lump)* |
+| 100 | 2026-02-01 | RESOLVED |
+| … | … *(34 more)* | … |
+| 100 | 2029-01-01 | RESOLVED |
+
+37 installments, telescoping to exactly 4,800.
+
+### Event-gated cliff → `template` when fired, `unresolved` when not
+
+`VEST OVER 4 years EVERY 1 month CLIFF LATER OF(+12 months, EVENT ipo)` over 4,800 shares.
+The cliff is the *later* of 12 months and the IPO.
+
+**IPO fired on 2026-06-15** → the cliff lands there; everything before it lumps:
+
+| Amount | Date | State |
+|---:|:---|:---|
+| 1,700 | 2026-06-15 | RESOLVED *(cliff lump)* |
+| 100 | 2026-07-01 | RESOLVED |
+| … | … | … |
+
+**IPO not yet fired** → the +12-month floor is only a *lower bound* (the IPO can only push
+the cliff later), so nothing is asserted as vested:
+
+| Amount | Symbolic date | State | Unresolved |
+|---:|:---|:---|:---|
+| 1,200 | `{ UNRESOLVED_CLIFF, 2026-01-01 }` | UNRESOLVED | `EVENT ipo` |
+| 100 | `{ UNRESOLVED_CLIFF, 2026-02-01 }` | UNRESOLVED | `EVENT ipo` |
+| … | … | … | … |
+
+…with a blocker: `{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }`. Supply the event —
+`events: { ipo: "2026-06-15" }` (or set `asOf` to model a scenario) — and the same schedule
+resolves to the table above. That "schedule known, runtime not yet" span is the default
+state of equity, and the DSL owns all of it.
+
+### Graded, multi-statement → one `template`
+
+A 5 / 15 / 40 / 40 graded schedule, written as four statements, collapses to a single
+template (no fan-out) — `vest evaluate --program`, 100 shares:
+
+| Amount | Date | State |
+|---:|:---|:---|
+| 5 | 2026-01-01 | RESOLVED |
+| 15 | 2027-01-01 | RESOLVED |
+| 40 | 2028-01-01 | RESOLVED |
+| 40 | 2029-01-01 | RESOLVED |
+
+`fidelity: template`.
+
+### Two overlapping absolute starts → `events-only`
+
+Two independent absolute-date grids on one grant can't be a single canonical template, so
+the program resolves to bare dated amounts with the reason — `vest evaluate --program`:
+
+`[0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months, 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months]` over 100 shares:
+
+| Amount | Date | State |
+|---:|:---|:---|
+| 50 | 2026-01-01 | RESOLVED |
+| 50 | 2026-07-01 | RESOLVED |
+
+`fidelity: events-only` — *"Two independent absolute-date vesting grids on one grant."*
+
+### The inverse: tranches → DSL
+
+`inferSchedule` reconstructs a best-fit vestlang program from an observed array of
+`{ date, amount }` tranches via matching-pursuit decomposition (it peels off the
+largest recognizable component — a uniform run, a cliff — then re-fits the remainder),
+returning the `dsl`, the decomposition, and diagnostics (residual error, detected policies).
+
+---
+
+## Development
+
+```bash
+pnpm install
+pnpm build      # turbo build across all packages
+pnpm test       # turbo test
 ```
 
-### Immediate Vesting on the Grant Date
+This is a pnpm + turbo monorepo. `@vestlang/core` builds with `tsup` (dual CJS/ESM);
+the rest build with `tsc`. Releases run through Changesets.
 
-All shares vest immediately on the grant date
+## License
 
-| Amount | Date       |
-| :----- | :--------- |
-| 100    | 2025-01-01 |
-
-#### AST
-
-```json
-{
-  "amount": {
-    "type": "PORTION",
-    "numerator": 1,
-    "denominator": 1
-  },
-  "expr": {
-    "type": "SINGLETON",
-    "vesting_start": null,
-    "periodicity": {
-      "type": "DAYS",
-      "length": 0,
-      "occurrences": 1
-    }
-  }
-}
-```
-
-#### Vestlang
-
-```vest
-VEST
-```
-
-### 4-Year Monthly Vesting
-
-Shares vest monthly over four years with no cliff, commencing on the grant date.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 2      | 2025-02-01 |
-| 2      | 2025-03-01 |
-| 2      | 2025-04-01 |
-| 2      | 2025-05-01 |
-| 2      | 2025-06-01 |
-| 2      | 2025-07-01 |
-| 2      | 2025-08-01 |
-| 2      | 2025-09-01 |
-| 2      | 2025-10-01 |
-| 2      | 2025-11-01 |
-| 2      | 2025-12-01 |
-| 3      | 2026-01-01 |
-| 2      | 2026-02-01 |
-| 2      | 2026-03-01 |
-| 2      | 2026-04-01 |
-| 2      | 2026-05-01 |
-| 2      | 2026-06-01 |
-| 2      | 2026-07-01 |
-| 2      | 2026-08-01 |
-| 2      | 2026-09-01 |
-| 2      | 2026-10-01 |
-| 2      | 2026-11-01 |
-| 2      | 2026-12-01 |
-| 3      | 2027-01-01 |
-| 2      | 2027-02-01 |
-| 2      | 2027-03-01 |
-| 2      | 2027-04-01 |
-| 2      | 2027-05-01 |
-| 2      | 2027-06-01 |
-| 2      | 2027-07-01 |
-| 2      | 2027-08-01 |
-| 2      | 2027-09-01 |
-| 2      | 2027-10-01 |
-| 2      | 2027-11-01 |
-| 2      | 2027-12-01 |
-| 3      | 2028-01-01 |
-| 2      | 2028-02-01 |
-| 2      | 2028-03-01 |
-| 2      | 2028-04-01 |
-| 2      | 2028-05-01 |
-| 2      | 2028-06-01 |
-| 2      | 2028-07-01 |
-| 2      | 2028-08-01 |
-| 2      | 2028-09-01 |
-| 2      | 2028-10-01 |
-| 2      | 2028-11-01 |
-| 2      | 2028-12-01 |
-| 3      | 2029-01-01 |
-
-#### AST
-
-```json
-{
-    "amount": {
-      "type": "PORTION",
-      "numerator": 1,
-      "denominator": 1
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": null,
-      "periodicity": {
-        "type": "MONTHS",
-        "length": 1,
-        "occurrences": 48
-      }
-    }
-  }
-```
-
-#### Vestlang
-
-```vest
-VEST OVER 48 months EVERY 1 months
-```
-
-### 4-Year Quarterly Vesting with 1-Year Cliff
-
-Shares vest quarterly over 4 years commencing from the grant date, but nothing vests until the 1-year cliff is reached.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 25     | 2026-01-01 |
-| 6      | 2026-04-01 |
-| 6      | 2026-07-01 |
-| 6      | 2026-10-01 |
-| 7      | 2027-01-01 |
-| 6      | 2027-04-01 |
-| 6      | 2027-07-01 |
-| 6      | 2027-10-01 |
-| 7      | 2028-01-01 |
-| 6      | 2028-04-01 |
-| 6      | 2028-07-01 |
-| 6      | 2028-10-01 |
-| 7      | 2029-01-01 |
-
-#### AST
-
-```json
-{
-  "amount": {
-    "type": "QUANTITY",
-    "value": 100
-  },
-  "expr": {
-    "type": "SINGLETON",
-    "vesting_start": null,
-    "periodicity": {
-      "type": "MONTHS",
-      "length": 3,
-      "occurrences": 16,
-      "cliff": {
-        "type": "DURATION",
-        "value": 12,
-        "unit": "MONTHS",
-        "sign": "PLUS"
-      }
-    }
-  }
-}
-```
-
-#### Vestlang
-
-```vest
-100 VEST
-  OVER 4 years EVERY 3 months
-  CLIFF 12 months
-```
-
-### Milestone-Based Vesting
-
-Vesting is contingent on an event (e.g., achieving a product milestone). The schedule remains unresolved until the event occurs.
-
-| Amount | Date                                |
-| :----- | :---------------------------------- |
-| 100    | `{ type: UNRESOLVED_VESTING_START}` |
-
-#### AST
-
-```json
-{
-    "amount": {
-      "type": "QUANTITY",
-      "value": 100
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": {
-        "type": "SINGLETON",
-        "base": {
-          "type": "EVENT",
-          "value": "milestone"
-        },
-        "offsets": []
-      },
-      "periodicity": {
-        "type": "DAYS",
-        "length": 0,
-        "occurrences": 1
-      }
-    }
-}
-```
-
-#### Vestlang
-
-```vest
-100 VEST FROM EVENT milestone
-```
-
-### Backdated Vesting Start
-
-Awards granted with a vesting start that precedes the grant date, providing credit for services already rendered. Installments before the grant date are accumulated and vest on the grant date.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 25     | 2025-01-01 |
-| 6      | 2025-04-01 |
-| 6      | 2025-07-01 |
-| 6      | 2025-10-01 |
-| 7      | 2026-01-01 |
-| ...    | ...        |
-
-#### AST
-
-```json
-{
-    "amount": {
-      "type": "QUANTITY",
-      "value": 100
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": {
-        "type": "SINGLETON",
-        "base": {
-          "type": "DATE",
-          "value": "2024-01-01"
-        },
-        "offsets": []
-      },
-      "periodicity": {
-        "type": "MONTHS",
-        "length": 3,
-        "occurrences": 16
-      }
-    }
-  }
-```
-
-#### Vestlang
-
-```vest
-100 VEST FROM DATE 2024-01-01
-  OVER 4 years EVERY 3 months
-```
-
-### Bespoke Vesting
-
-A custom schedule where different portions vest at different times. This example uses a 5/15/40/40 pattern over 4 years.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 5      | 2026-01-01 |
-| 15     | 2027-01-01 |
-| 40     | 2028-01-01 |
-| 40     | 2029-01-01 |
-
-#### AST
-
-Each portion is a separate statement. The normalized AST converts decimals to fractions (e.g., 0.05 → 1/20, 0.15 → 3/20, 0.40 → 2/5):
-
-```json
-[
-  {
-    "amount": { "type": "PORTION", "numerator": 1, "denominator": 20 },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": {
-        "type": "SINGLETON",
-        "base": { "type": "EVENT", "value": "grantDate" },
-        "offsets": [{ "type": "DURATION", "value": 12, "unit": "MONTHS", "sign": "PLUS" }]
-      },
-      "periodicity": { "type": "DAYS", "length": 0, "occurrences": 1 }
-    }
-  }
-]
-```
-
-_(AST truncated — 3 more statements for 15%, 40%, 40% with offsets of 24, 36, and 48 months respectively)_
-
-#### Vestlang
-
-```vest
-[
-  0.05 VEST FROM +12 months,
-  0.15 VEST FROM +24 months,
-  0.40 VEST FROM +36 months,
-  0.40 VEST FROM +48 months
-]
-```
-
-### Bespoke Vesting with Variable Cadence
-
-A custom schedule where different tranches vest at different cadences. This example vests 50% monthly over 2 years, then 50% quarterly over 3 years.
-
-**Monthly tranche (50%):**
-
-| Amount | Date        |
-| :----- | :---------- |
-| 2      | 2025-02-01  |
-| 2      | '2025-03-01 |
-| 2      | 2025-04-01  |
-| 2      | 2025-05-01  |
-| 2      | 2025-06-01  |
-| 2      | 2025-07-01  |
-| 2      | 2025-08-01  |
-| 2      | 2025-09-01  |
-| 2      | 2025-10-01  |
-| 2      | 2025-11-01  |
-| 2      | 2025-12-01  |
-| 3      | 2026-01-01  |
-| 2      | 2026-02-01  |
-| 2      | 2026-03-01  |
-| 2      | 2026-04-01  |
-| 2      | 2026-05-01  |
-| 2      | 2026-06-01  |
-| 2      | 2026-07-01  |
-| 2      | 2026-08-01  |
-| 2      | 2026-09-01  |
-| 2      | 2026-10-01  |
-| 2      | 2026-11-01  |
-| 2      | 2026-12-01  |
-| 3      | 2027-01-01  |
-
-**Quarterly tranche (50%):**
-
-| Amount | Date       |
-| :----- | :--------- |
-| 4      | 2027-04-01 |
-| 4      | 2027-07-01 |
-| 4      | 2027-10-01 |
-| 4      | 2028-01-01 |
-| 4      | 2028-04-01 |
-| 5      | 2028-07-01 |
-| 4      | 2028-10-01 |
-| 4      | 2029-01-01 |
-| 4      | 2029-04-01 |
-| 4      | 2029-07-01 |
-| 4      | 2029-10-01 |
-| 5      | 2030-01-01 |
-
-#### AST
-
-```json
-[
-  {
-    "amount": {
-      "type": "PORTION",
-      "numerator": 1,
-      "denominator": 2
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": null,
-      "periodicity": {
-        "type": "MONTHS",
-        "length": 1,
-        "occurrences": 24
-      }
-    }
-  },
-  {
-    "amount": {
-      "type": "PORTION",
-      "numerator": 1,
-      "denominator": 2
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": {
-        "type": "DURATION",
-        "value": 24,
-        "unit": "MONTHS",
-        "sign": "PLUS"
-      },
-      "periodicity": {
-        "type": "MONTHS",
-        "length": 3,
-        "occurrences": 12
-      }
-    }
-  }
-]
-```
-
-#### Vestlang
-
-```vest
-[
-  0.50 VEST OVER 24 months EVERY 1 month,
-  0.50 VEST FROM +24 months OVER 36 months EVERY 3 months
-]
-```
-
-### Two-Tier Vesting
-
-A 4-year quarterly vesting schedule with two cliff conditions: a standard 1-year time-based cliff, plus an event-based cliff requiring either an IPO or change in control (CIC) before the 7th anniversary of the grant date.
-
-| Amount | Date                                            |
-| :----- | :---------------------------------------------- |
-| 25     | {"type":"UNRESOLVED_CLIFF","date":"2026-01-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-04-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-07-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2026-10-01"} |
-| 7      | {"type":"UNRESOLVED_CLIFF","date":"2027-01-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-04-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-07-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2027-10-01"} |
-| 7      | {"type":"UNRESOLVED_CLIFF","date":"2028-01-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-04-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-07-01"} |
-| 6      | {"type":"UNRESOLVED_CLIFF","date":"2028-10-01"} |
-| 7      | {"type":"UNRESOLVED_CLIFF","date":"2029-01-01"} |
-
-The time-based cliff is applied (first 12 months accumulate to 25 shares), but installments remain unresolved until the IPO or CIC event occurs.
-
-#### AST
-
-```json
-{
-    "amount": {
-      "type": "PORTION",
-      "numerator": 1,
-      "denominator": 1
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": null,
-      "periodicity": {
-        "type": "MONTHS",
-        "length": 3,
-        "occurrences": 16,
-        "cliff": {
-          "type": "LATER_OF",
-          "items": [
-            {
-              "type": "DURATION",
-              "value": 12,
-              "unit": "MONTHS",
-              "sign": "PLUS"
-            },
-            {
-              "type": "EARLIER_OF",
-              "items": [
-                {
-                  "type": "SINGLETON",
-                  "base": {
-                    "type": "EVENT",
-                    "value": "ipo"
-                  },
-                  "offsets": [],
-                  "constraints": {
-                    "type": "ATOM",
-                    "constraint": {
-                      "type": "BEFORE",
-                      "base": {
-                        "type": "SINGLETON",
-                        "base": {
-                          "type": "EVENT",
-                          "value": "grantDate"
-                        },
-                        "offsets": [
-                          {
-                            "type": "DURATION",
-                            "value": 84,
-                            "unit": "MONTHS",
-                            "sign": "PLUS"
-                          }
-                        ]
-                      },
-                      "strict": false
-                    }
-                  }
-                },
-                {
-                  "type": "SINGLETON",
-                  "base": {
-                    "type": "EVENT",
-                    "value": "cic"
-                  },
-                  "offsets": [],
-                  "constraints": {
-                    "type": "ATOM",
-                    "constraint": {
-                      "type": "BEFORE",
-                      "base": {
-                        "type": "SINGLETON",
-                        "base": {
-                          "type": "EVENT",
-                          "value": "grantDate"
-                        },
-                        "offsets": [
-                          {
-                            "type": "DURATION",
-                            "value": 84,
-                            "unit": "MONTHS",
-                            "sign": "PLUS"
-                          }
-                        ]
-                      },
-                      "strict": false
-                    }
-                  }
-                }
-              ]
-            }
-          ]
-        }
-      }
-    }
-  }
-```
-
-#### Vestlang
-
-```vest
-VEST
-  OVER 4 years EVERY 3 months
-  CLIFF LATER OF(
-    +12 months,
-    EARLIER OF(
-      EVENT ipo BEFORE EVENT grantDate +7 years,
-      EVENT cic BEFORE EVENT grantDate +7 years
-    )
-  )
-```
-
-#### With IPO Event Resolved
-
-When the IPO occurs within the 7-year window (e.g., `ipo=2026-06-15`), the cliff resolves to the later of the two conditions: the 12-month cliff (2026-01-01) vs the IPO date (2026-06-15). Since the IPO is later, all installments through that date accumulate and vest on the IPO date.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 31     | 2026-06-15 |
-| 6      | 2026-07-01 |
-| 6      | 2026-10-01 |
-| 7      | 2027-01-01 |
-| 6      | 2027-04-01 |
-| 6      | 2027-07-01 |
-| 6      | 2027-10-01 |
-| 7      | 2028-01-01 |
-| 6      | 2028-04-01 |
-| 6      | 2028-07-01 |
-| 6      | 2028-10-01 |
-| 7      | 2029-01-01 |
-
-### Conditional Vesting Start with AND
-
-Vesting start contingent on a milestone that must occur within a specific window — after a threshold event AND before a deadline.
-
-| Amount | Date                               |
-| :----- | :--------------------------------- |
-| 100    | `{type: UNRESOLVED_VESTING_START}` |
-
-#### AST
-
-```json
-{
-    "amount": {
-      "type": "PORTION",
-      "numerator": 1,
-      "denominator": 1
-    },
-    "expr": {
-      "type": "SINGLETON",
-      "vesting_start": {
-        "type": "SINGLETON",
-        "base": {
-          "type": "EVENT",
-          "value": "milestone"
-        },
-        "offsets": [],
-        "constraints": {
-          "type": "AND",
-          "items": [
-            {
-              "type": "ATOM",
-              "constraint": {
-                "type": "AFTER",
-                "base": {
-                  "type": "SINGLETON",
-                  "base": {
-                    "type": "EVENT",
-                    "value": "threshold"
-                  },
-                  "offsets": []
-                },
-                "strict": false
-              }
-            },
-            {
-              "type": "ATOM",
-              "constraint": {
-                "type": "BEFORE",
-                "base": {
-                  "type": "SINGLETON",
-                  "base": {
-                    "type": "DATE",
-                    "value": "2027-01-01"
-                  },
-                  "offsets": []
-                },
-                "strict": false
-              }
-            }
-          ]
-        }
-      },
-      "periodicity": {
-        "type": "DAYS",
-        "length": 0,
-        "occurrences": 1
-      }
-    }
-  }
-```
-
-#### Vestlang
-
-```vest
-VEST FROM EVENT milestone
-  AFTER EVENT threshold AND BEFORE DATE 2027-01-01
-```
-
-#### With Events Resolved
-
-When the milestone occurs after the threshold and before the deadline (e.g., `threshold=2025-06-01`, `milestone=2025-09-15`), vesting resolves to the milestone date.
-
-| Amount | Date       |
-| :----- | :--------- |
-| 100    | 2025-09-15 |
+MIT
