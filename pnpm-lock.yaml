@@ -214,6 +214,9 @@ importers:
 
   packages/evaluator:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../core
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types

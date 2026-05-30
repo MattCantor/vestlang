@@ -381,11 +381,16 @@ Notes:
 - `resolveToCore` returns `kind: "template"` for fitting programs (the `events`/`unresolved` arms land in 4b).
 
 **Definition of Done:**
-- [ ] Unit tests for cliff lowering (Cases A/B + edges) pass.
-- [ ] A graded multi-statement program lowers to **one** template (verifies no fan-out).
-- [ ] A fully-resolved, template-fitting program round-trips through `core.compile`.
-- [ ] Not wired into the live public path yet.
+- [x] Unit tests for cliff lowering pass. *(time-based: on-grid → `{length:12, period_type:MONTHS, percentage:1/4}`, off-grid date → DAYS fallback, event cliff → `EVENT`, before-start → `NONE`, unresolved → blockers. The positional Case A/B split is gone — see the cliff redesign.)*
+- [x] A graded multi-statement program lowers to **one** template (verifies no fan-out). *(5/15/40/40 → one template, 4 chained DATE statements.)*
+- [x] A fully-resolved, template-fitting program round-trips through `core.compile`. *(monthly-48+cliff → 37 events; graded → 5/15/40/40; EVENT portion → firing. 13 resolve tests.)*
+- [x] Not wired into the live public path yet. *(`resolveToCore` lives in `src/resolve/`, not exported from the package index.)*
 - [ ] Commit: `feat(evaluator): runtime-aware resolver + single-template lowering`.
+
+**Implementation notes:**
+- `resolve/lower.ts`: `resolveStatements` (reuses `evaluateScheduleExpr`) + `buildTemplate`; `amountToFraction` (QUANTITY `v` → `{v, totalShares}`). Independent-start statements → chained canonical via a cursor + `eq` check; non-chaining → the `events` verdict (4b).
+- `resolve/cliff.ts`: `lowerCliff` → time-based `{length, period_type, percentage}` (`measureDuration` prefers the statement unit, falls back to exact DAYS); event cliff → `EVENT`; unresolved → blockers. Day-of-month threaded so it matches resolution + compile.
+- `resolve/index.ts`: `resolveToCore` returns the `template` arm; non-template throws a sentinel (4b replaces it with the classifier). Added `@vestlang/core` dep; exported `createEvaluationContext`.
 
 ---
 
@@ -515,9 +520,9 @@ Notes:
 - [x] `packages/core/tests/compile.test.ts` — ported OCF-Tools conformance tests *(`tests/`, not `__tests__/`)*
 
 ### Phase 4a: resolve + lower to one template
-- [ ] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` (the `template` arm)
-- [ ] `packages/evaluator/src/resolve/lower.ts` — resolved program → one canonical template
-- [ ] `packages/evaluator/src/resolve/cliff.ts` — Cases A/B + edges
+- [x] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` (the `template` arm)
+- [x] `packages/evaluator/src/resolve/lower.ts` — resolved program → one canonical template
+- [x] `packages/evaluator/src/resolve/cliff.ts` — time-based cliff lowering + edges
 
 ### Phase 4b: fidelity classification
 - [ ] `packages/evaluator/src/resolve/classify.ts` — fidelity verdict + `NonTemplateReason`; `events`/`unresolved` arms (blockers + symbolic installments)
