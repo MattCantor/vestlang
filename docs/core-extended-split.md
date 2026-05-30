@@ -200,8 +200,11 @@ Extended resolves the cliff `VestingNodeExpr` (reusing `evaluateVestingNodeExpr`
 > point at a grid boundary, so a cliff between installments had no home. Switched to the time-based
 > shape: Carta-faithful, off-grid date cliffs lower trivially, and it matches the DSL (`CLIFF +12
 > months` is already a duration). On-grid results are unchanged, so numerics don't regress.
-> **Cross-repo:** an issue filed in OCF-Composed-Schemas to move the canonical cliff to time-based,
-> and the OCF-Tools standalone-compiler PR closed in favour of importing `@vestlang/core`.
+> **Cross-repo:** [OCF-Composed-Schemas#118](https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/issues/118)
+> proposes moving the canonical cliff to time-based; OCF-Tools PRs
+> [#143](https://github.com/Open-Cap-Table-Coalition/OCF-Tools/pull/143) (standalone compiler) and
+> [#144](https://github.com/Open-Cap-Table-Coalition/OCF-Tools/pull/144) (validator integration) were
+> closed in favour of importing `@vestlang/core` (the Phase-7 migration).
 
 ### Numerics
 
