@@ -406,10 +406,14 @@ Notes:
 - Events-only and unresolved installments emitted via the core allocator primitive.
 
 **Definition of Done:**
-- [ ] A non-template-expressible program (e.g. overlapping independent absolute starts) classifies as `kind: "events"` with a reason.
-- [ ] Partial-resolution cases (unfired-event, unresolved-cliff) → `kind: "unresolved"` with blockers.
-- [ ] `ResolveResult` covers all three arms; still not wired into the live public path.
+- [x] A non-template-expressible program (e.g. overlapping independent absolute starts) classifies as `kind: "events"` with a reason. *(two non-chaining DATE grids → `events` + `OVERLAPPING_ABSOLUTE_STARTS`; installments dated + telescoping. Event cliffs → `EVENT_CLIFF`.)*
+- [x] Partial-resolution cases (unfired-event, unresolved-cliff) → `kind: "unresolved"` with blockers. *(unfired-event start → `EVENT_NOT_YET_OCCURRED`; LATER_OF-over-unfired-events cliff → blockers.)*
+- [x] `ResolveResult` covers all three arms; still not wired into the live public path. *(`resolveToCore` returns template/events/unresolved; not exported from the package index. 72 evaluator tests.)*
 - [ ] Commit: `feat(evaluator): fidelity classification (events-only + unresolved)`.
+
+**Implementation notes:**
+- `resolve/classify.ts`: `eventsArm` expands each resolved statement to dated events (`expandResolution`, mirroring core's cliff-aware expansion — incl. a fired event cliff's lump), flattens + sorts + allocates with the single running cumulative (`allocateExact`) → `ResolvedInstallment[]`. `unresolvedArm` reuses the legacy `evaluateStatement` to produce the symbolic (dateless) installments + blockers.
+- `NonTemplateReason`: `OVERLAPPING_ABSOLUTE_STARTS` | `EVENT_CLIFF`. `buildTemplate` carries the reason; `resolveToCore`'s sentinel throw is replaced by `classify`.
 
 ---
 
@@ -525,8 +529,8 @@ Notes:
 - [x] `packages/evaluator/src/resolve/cliff.ts` — time-based cliff lowering + edges
 
 ### Phase 4b: fidelity classification
-- [ ] `packages/evaluator/src/resolve/classify.ts` — fidelity verdict + `NonTemplateReason`; `events`/`unresolved` arms (blockers + symbolic installments)
-- [ ] `packages/evaluator/src/resolve/index.ts` — complete `ResolveResult` (template/events/unresolved)
+- [x] `packages/evaluator/src/resolve/classify.ts` — fidelity verdict + `NonTemplateReason`; `events`/`unresolved` arms (blockers + symbolic installments)
+- [x] `packages/evaluator/src/resolve/index.ts` — complete `ResolveResult` (template/events/unresolved)
 
 ### Phase 5a: assembler + cutover (behind a flag)
 - [ ] `packages/evaluator/src/evaluate/*` — assembler (verdict → `EvaluatedSchedule`) + new-path wiring + internal flag
