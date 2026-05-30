@@ -212,24 +212,25 @@ Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses
 
 ## Implementation Phases
 
-Each phase keeps `pnpm build` + `turbo test` green and is a self-contained commit. Phase 6 is a separate repo and PR. The published umbrella surface (`@nathamcrewott/vestlang` → `vestlang`) is only intentionally reshaped at Phase 5b/7.
+Each phase keeps `pnpm build` + `turbo test` green and is a self-contained commit. Phase 7 is a separate repo and PR. The published umbrella surface (`@nathamcrewott/vestlang` → `vestlang`) is only intentionally reshaped at Phase 5b/6.
 
 ### Phase Dependencies
 
 ```
-Phase 0  ──►  Phase 1  ──►  Phase 2  ──►  Phase 3  ──►  Phase 4  ──►  Phase 5a  ──►  Phase 5b  ──►  Phase 7  ──►  Phase 6
-hygiene       core IR       core         core            resolver/     assembler +    retire        release       OCF-Tools
-+ org reg     + validate    engine       compile         classifier    cutover        legacy        + publish     (separate repo)
+Phase 0 ──► 1 ──► 2 ──► 3 ──► 4a ──► 4b ──► 5a ──► 5b ──► 6 ──► 7
+hygiene     core  core  core   resolve classify assembler retire  release  OCF-Tools
++ org reg   IR    eng   comp   +lower  fidelity +cutover  legacy  +publish (sep. repo)
 
 Notes:
-  • Phase 0's org registration is an external lead-time prerequisite consumed only at Phase 7.
-  • Phase 4 depends on Phase 3 (the core compile API it lowers to), not just Phase 1.
+  • Phase 0's org registration is an external lead-time prerequisite consumed only at Phase 6 (release).
+  • Phase 4a depends on Phase 3 (the core compile API it lowers to), not just Phase 1.
+  • Phase 4b depends on 4a (it completes the ResolveResult union that 4a's lowering produces).
   • Phase 5a cuts the public path over to resolve/classify + core + assemble. Allocation
     semantics change deliberately (per-statement → single cumulative round-down), so the
     gate validates the NEW semantics via updated golden files + the telescoping property —
     it is NOT a parity diff against the old engine.
   • Phase 5b deletes the old engine once 5a is green on the new semantics.
-  • Phase 6 lives in OCF-Tools and depends on the published @vestlang/core from Phase 7.
+  • Phase 7 lives in OCF-Tools and depends on the published @vestlang/core from Phase 6 (release).
 ```
 
 ---
@@ -238,7 +239,7 @@ Notes:
 
 **Goal:** Remove cruft that would otherwise mask later moves; secure the publish target.
 
-**Why First:** The deep cross-package imports and dead `packages/ast` would obscure the engine relocation in Phases 2–3; cleaning them now keeps later diffs legible. Registering the npm org is an external lead-time action that Phase 7 depends on — start it early.
+**Why First:** The deep cross-package imports and dead `packages/ast` would obscure the engine relocation in Phases 2–3; cleaning them now keeps later diffs legible. Registering the npm org is an external lead-time action that Phase 6 (release) depends on — start it early.
 
 **Outputs:**
 - `@vestlang/types` imports fixed in `cliff.ts`, `build.ts`, and `makeTranches.ts` (all three carry the deep `../../../types/dist/...` path).
@@ -316,9 +317,9 @@ Notes:
 
 ---
 
-### Phase 4 — resolver / classifier + lowering
+### Phase 4a — resolve + lower to one template
 
-**Goal:** Extended's `resolveToCore` producing the classify-and-lower `ResolveResult` contract (`template` / `events` / `unresolved`), landed behind a new entry (not wired live).
+**Goal:** Extended's resolver turns a resolvable, template-fitting program into a single canonical template — the `kind: "template"` arm of `ResolveResult`. Landed behind a new entry (not wired live).
 
 **Inputs:**
 - Phase 3 `compile` API (the lowering target).
@@ -329,17 +330,33 @@ Notes:
 - Combinator/constraint/event resolution reusing the selector layer.
 - **Single-template lowering**: a resolved program → one canonical template (ordered chained DATE statements + floating EVENT statements). No fan-out.
 - Cliff lowering: Case A (on-grid, single statement `{occurrence: K, percentage: K/N}`), Case B (off-grid → two statements in one template), and edge cases.
-- **Fidelity classification**: detect schedules that resolve but don't fit the template shape → `kind: "events"` with a `NonTemplateReason`; unfired/contradictory → `kind: "unresolved"` with blockers/symbolic installments.
+- `resolveToCore` returns `kind: "template"` for fitting programs (the `events`/`unresolved` arms land in 4b).
 
 **Definition of Done:**
 - [ ] Unit tests for cliff lowering (Cases A/B + edges) pass.
-- [ ] Unit tests for partial-resolution (unfired-event, unresolved-cliff) → `kind: "unresolved"` pass.
 - [ ] A graded multi-statement program lowers to **one** template (verifies no fan-out).
-- [ ] A non-template-expressible program (e.g. overlapping independent absolute starts) classifies as `kind: "events"` with a reason.
+- [ ] A fully-resolved, template-fitting program round-trips through `core.compile`.
 - [ ] Not wired into the live public path yet.
-- [ ] Commit: `feat(evaluator): runtime-aware resolver/classifier + single-template lowering`.
+- [ ] Commit: `feat(evaluator): runtime-aware resolver + single-template lowering`.
 
-> **Note:** This is the heaviest phase. If it runs long, pause at a green sub-checklist boundary (resolution → Case A → Case B+edges → classification) rather than splitting the commit.
+---
+
+### Phase 4b — fidelity classification
+
+**Goal:** Complete the `ResolveResult` union — the `events` and `unresolved` arms — so every resolved program gets a fidelity verdict.
+
+**Inputs:**
+- Phase 4a resolver (the `template` arm + lowering).
+
+**Outputs:**
+- **Fidelity classification**: detect schedules that resolve but don't fit the template shape → `kind: "events"` with a `NonTemplateReason`; unfired/contradictory → `kind: "unresolved"` with blockers/symbolic installments.
+- Events-only and unresolved installments emitted via the core allocator primitive.
+
+**Definition of Done:**
+- [ ] A non-template-expressible program (e.g. overlapping independent absolute starts) classifies as `kind: "events"` with a reason.
+- [ ] Partial-resolution cases (unfired-event, unresolved-cliff) → `kind: "unresolved"` with blockers.
+- [ ] `ResolveResult` covers all three arms; still not wired into the live public path.
+- [ ] Commit: `feat(evaluator): fidelity classification (events-only + unresolved)`.
 
 ---
 
@@ -348,7 +365,7 @@ Notes:
 **Goal:** Route the public API through resolve/classify + core + assemble. The old in-evaluator engine stays reachable behind a flag for *revertability* during cutover — **not** for a parity comparison (the new semantics differ by design).
 
 **Inputs:**
-- Phase 4 resolver/classifier (`ResolveResult`).
+- Phase 4b resolver/classifier (the full `ResolveResult`).
 - The still-present legacy engine (kept temporarily to de-risk the cutover).
 
 **Outputs:**
@@ -384,7 +401,7 @@ Notes:
 
 ---
 
-### Phase 7 — release
+### Phase 6 — release
 
 **Goal:** Publish the consolidated `vestlang` namespace on npmjs and retire `@nathamcrewott/vestlang`.
 
@@ -403,12 +420,12 @@ Notes:
 
 ---
 
-### Phase 6 — OCF-Tools migration *(separate repo + PR)*
+### Phase 7 — OCF-Tools migration *(separate repo + PR)*
 
 **Goal:** OCF-Tools consumes `@vestlang/core`; its duplicate engine is deleted.
 
 **Inputs:**
-- Published `@vestlang/core` (CJS entry) from Phase 7.
+- Published `@vestlang/core` (CJS entry) from Phase 6 (release).
 
 **Outputs:**
 - In `~/code/OCF-Tools`: `vesting_compiler/` + `types/canonical/vesting/` deleted.
@@ -418,7 +435,7 @@ Notes:
 **Definition of Done:**
 - [ ] OCF-Tools suite green against `@vestlang/core`.
 - [ ] Includes a non-proportional-positional-cliff fixture (proves core carries fidelity the DSL doesn't express).
-- [ ] PR opened in OCF-Tools, dependent on `@vestlang/core` being published (Phase 7).
+- [ ] PR opened in OCF-Tools, dependent on `@vestlang/core` being published (Phase 6).
 
 ---
 
@@ -447,11 +464,14 @@ Notes:
 - [ ] `packages/core/src/compile.ts` — `compile` + `compileToInstallments`
 - [ ] `packages/core/__tests__/**` — ported OCF-Tools conformance tests
 
-### Phase 4: resolver / classifier + lowering
-- [ ] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` → `ResolveResult` (template/events/unresolved)
+### Phase 4a: resolve + lower to one template
+- [ ] `packages/evaluator/src/resolve/index.ts` — `resolveToCore` (the `template` arm)
 - [ ] `packages/evaluator/src/resolve/lower.ts` — resolved program → one canonical template
 - [ ] `packages/evaluator/src/resolve/cliff.ts` — Cases A/B + edges
-- [ ] `packages/evaluator/src/resolve/classify.ts` — fidelity verdict + `NonTemplateReason`; blockers + symbolic installments
+
+### Phase 4b: fidelity classification
+- [ ] `packages/evaluator/src/resolve/classify.ts` — fidelity verdict + `NonTemplateReason`; `events`/`unresolved` arms (blockers + symbolic installments)
+- [ ] `packages/evaluator/src/resolve/index.ts` — complete `ResolveResult` (template/events/unresolved)
 
 ### Phase 5a: assembler + cutover (behind a flag)
 - [ ] `packages/evaluator/src/evaluate/*` — assembler (verdict → `EvaluatedSchedule`) + new-path wiring + internal flag
@@ -465,11 +485,11 @@ Notes:
 - [ ] `packages/vestlang/tsup.config.ts` — mark `@vestlang/core` `external` (inline the rest)
 - [ ] `packages/vestlang/src/index.ts` — reshape umbrella exports
 
-### Phase 7: release
+### Phase 6: release
 - [ ] `.changeset/*` — `@vestlang/core`, `vestlang` (renamed from `@nathamcrewott/vestlang`), PORTION numeric change
 - [ ] Publish `vestlang` + `@vestlang/core` to npmjs; deprecate `@nathamcrewott/vestlang` → `vestlang`
 
-### Phase 6: OCF-Tools migration *(separate repo)*
+### Phase 7: OCF-Tools migration *(separate repo)*
 - [ ] `~/code/OCF-Tools` — delete `vesting_compiler/` + `types/canonical/vesting/`
 - [ ] `~/code/OCF-Tools/package.json` — depend on published `@vestlang/core`
 - [ ] OCF-Tools fixtures — add non-proportional-positional-cliff fixture
@@ -478,7 +498,7 @@ Notes:
 
 ## Verification
 
-- **Per phase**: `pnpm build && pnpm test` green; Phase 2 allocator parity (`allocateExact` vs old `allocateQuantity`, per-mode, at the function level), Phase 3 conformance, Phase 4 single-template lowering + classification, Phase 5a new-semantics gate.
+- **Per phase**: `pnpm build && pnpm test` green; Phase 2 allocator parity (`allocateExact` vs old `allocateQuantity`, per-mode, at the function level), Phase 3 conformance, Phase 4a single-template lowering, Phase 4b classification, Phase 5a new-semantics gate.
 - **MCP smoke test** (post Phase 5b): `vestlang_compile` → `vestlang_evaluate` on (a) monthly-over-48 with `CLIFF +12 months` → `template`; (b) event-gated `CLIFF LATER OF(+12mo, EVENT "ipo")` with the firing (→ `template`) and without (→ `unresolved` + blockers); (c) a multi-statement graded schedule → **one** template; (d) a non-template-expressible schedule → `events-only` with a reason. Totals telescope exactly to grant quantity for every `template` result.
 - **Inferrer round-trip**: `vestlang_infer_schedule` → feed `dsl` + `diagnostics.{vestingDayOfMonth,allocationType}` back through `vestlang_evaluate`; residual error stays 0.
-- **Cross-repo** (Phase 6): OCF-Tools' exact compiled-vs-recorded validator passes on existing fixtures + the non-proportional-cliff fixture.
+- **Cross-repo** (Phase 7): OCF-Tools' exact compiled-vs-recorded validator passes on existing fixtures + the non-proportional-cliff fixture.
