@@ -480,14 +480,18 @@ Notes:
 - Phase 5b clean-break surface.
 - `@vestlang` org (registered, Phase 0) + the unscoped `vestlang` name. **Precondition:** the unscoped name must clear npm's typosquat block (vs. `testling`) via support ticket. If it has not cleared by release, fall back to **`@vestlang/vestlang`** as the umbrella name (rename the one package; `@vestlang/core` is unaffected).
 
+**Decisions taken (2026-05-30):** typosquat block on unscoped `vestlang` had **not** cleared → umbrella stays **`@vestlang/vestlang`** (the scoped fallback, no rename). Version is **0.4.0** (minor bump from 0.3.3 — pre-1.0, not a hard 1.0 major). Phase executed **prepare-only**: the changeset, version bump, and publish-surface lockdown are done in-repo; the actual `npm publish` + `npm deprecate` are run by the maintainer (outward/irreversible).
+
 **Outputs:**
-- Changeset documenting the new `@vestlang/core` package, the unscoped `vestlang` (replacing `@nathamcrewott/vestlang`), and the PORTION numeric change.
-- `vestlang` + `@vestlang/core` published to npmjs via changesets; `@nathamcrewott/vestlang` deprecated, pointing at `vestlang`.
+- Changeset documenting the new `@vestlang/core` package, the umbrella (`@vestlang/vestlang`, replacing `@nathamcrewott/vestlang`), and the PORTION numeric change. *(Done — `.changeset/core-extended-split.md`, consumed by `changeset version` → umbrella 0.4.0, CHANGELOG appended.)*
+- **Publish surface restricted to two packages:** the 7 internal `@vestlang/*` packages (`types`/`dsl`/`evaluator`/`inferrer`/`linter`/`normalizer`/`stringify`) marked `"private": true` so only `@vestlang/core` + `@vestlang/vestlang` publish. *(Verified: `pnpm -r publish --dry-run` lists exactly those two.)*
+- `vestlang`/`@vestlang/vestlang` + `@vestlang/core` published to npmjs via changesets; `@nathamcrewott/vestlang` deprecated, pointing at the new name. *(Maintainer-run: `pnpm release` + `npm deprecate`.)*
 
 **Definition of Done:**
-- [ ] `@vestlang/core` published to npmjs (CJS entry available for OCF-Tools).
-- [ ] Umbrella published to npmjs as **`vestlang`** (if the typosquat block has cleared) **or** **`@vestlang/vestlang`** (fallback); `@nathamcrewott/vestlang` deprecated → whichever name shipped.
-- [ ] Commit: `chore: release vestlang vX + @vestlang/core (core/extended)`.
+- [x] Changeset authored + version bumped to **0.4.0**; publish surface restricted to `@vestlang/core` + `@vestlang/vestlang` (dry-run verified); build 13/13 + test 18/18 green. *(prepare-only; the two publish steps below are maintainer-run.)*
+- [ ] `@vestlang/core` published to npmjs (CJS entry available for OCF-Tools). *(maintainer-run: `pnpm release`)*
+- [ ] Umbrella published to npmjs as **`@vestlang/vestlang`** (typosquat block on unscoped `vestlang` not cleared at release; reversible later — see plan); `@nathamcrewott/vestlang` deprecated → `@vestlang/vestlang`. *(maintainer-run: `pnpm release` + `npm deprecate`)*
+- [x] Commit: `chore: prepare @vestlang/vestlang@0.4.0 + @vestlang/core release`.
 
 ---
 
@@ -565,8 +569,9 @@ Notes:
 - [x] Legacy-only test suites deleted; integration fuzz updated for dropped zero-share tranches
 
 ### Phase 6: release
-- [ ] `.changeset/*` — `@vestlang/core`, `vestlang` (renamed from `@nathamcrewott/vestlang`), PORTION numeric change
-- [ ] Publish `vestlang` + `@vestlang/core` to npmjs; deprecate `@nathamcrewott/vestlang` → `vestlang`
+- [x] `.changeset/*` — `@vestlang/vestlang` minor (core extraction, rename from `@nathamcrewott/vestlang`, PORTION numeric change); consumed by `changeset version` → 0.4.0
+- [x] `packages/{types,dsl,evaluator,inferrer,linter,normalizer,stringify}/package.json` — `"private": true` so only `@vestlang/core` + `@vestlang/vestlang` publish (dry-run verified)
+- [ ] *(maintainer-run)* Publish `@vestlang/vestlang` + `@vestlang/core` to npmjs (`pnpm release`); deprecate `@nathamcrewott/vestlang` → `@vestlang/vestlang`
 
 ### Phase 7: OCF-Tools migration *(separate repo)*
 - [ ] `~/code/OCF-Tools` — delete `vesting_compiler/` + `types/canonical/vesting/`
