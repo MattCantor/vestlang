@@ -31,6 +31,7 @@ import { addPeriod, eq, fracReduce } from "@vestlang/core";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, type LoweredCliff } from "./cliff.js";
+import type { NonTemplateReason } from "./types.js";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 const DEFAULT_ALLOCATION = "CUMULATIVE_ROUND_DOWN";
@@ -122,7 +123,15 @@ export type TemplateBuild =
     }
   | {
       ok: false;
-      why: "unresolved" | "events";
+      why: "unresolved";
+      resolutions: StmtResolution[];
+      ctx: EvaluationContext;
+      totalShares: number;
+    }
+  | {
+      ok: false;
+      why: "events";
+      reason: NonTemplateReason;
       resolutions: StmtResolution[];
       ctx: EvaluationContext;
       totalShares: number;
@@ -138,17 +147,28 @@ export const buildTemplate = (
   ctx: EvaluationContext,
   totalShares: number,
 ): TemplateBuild => {
-  const fail = (why: "unresolved" | "events"): TemplateBuild => ({
+  const unresolved = (): TemplateBuild => ({
     ok: false,
-    why,
+    why: "unresolved",
+    resolutions,
+    ctx,
+    totalShares,
+  });
+  const events = (reason: NonTemplateReason): TemplateBuild => ({
+    ok: false,
+    why: "events",
+    reason,
     resolutions,
     ctx,
     totalShares,
   });
 
-  if (resolutions.some((r) => r.start.state !== "RESOLVED")) return fail("unresolved");
-  if (resolutions.some((r) => r.cliff.state === "UNRESOLVED")) return fail("unresolved");
-  if (resolutions.some((r) => r.cliff.state === "EVENT")) return fail("events");
+  if (resolutions.some((r) => r.start.state !== "RESOLVED")) return unresolved();
+  if (resolutions.some((r) => r.cliff.state === "UNRESOLVED")) return unresolved();
+  const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT");
+  if (eventCliff && eventCliff.cliff.state === "EVENT") {
+    return events({ kind: "EVENT_CLIFF", eventId: eventCliff.cliff.eventId });
+  }
 
   const dom = ctx.vesting_day_of_month;
   const statements: VestingStatement[] = [];
@@ -159,7 +179,7 @@ export const buildTemplate = (
 
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
-    if (r.start.state !== "RESOLVED") return fail("unresolved"); // narrowing
+    if (r.start.state !== "RESOLVED") return unresolved(); // narrowing
     const { type, length, occurrences } = r.periodicity;
 
     let vesting_base: VestingStatement["vesting_base"];
@@ -172,7 +192,7 @@ export const buildTemplate = (
         startDate = r.start.date;
       } else if (!eq(r.start.date, cursor)) {
         // A second independent DATE grid that doesn't chain — not one template.
-        return fail("events");
+        return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
       }
       cursor = addPeriod(r.start.date, occurrences * length, type, dom);
     }

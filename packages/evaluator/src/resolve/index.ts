@@ -8,6 +8,7 @@ import type { EvaluationContextInput, Program } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
+import { classify } from "./classify.js";
 import type { ResolveResult } from "./types.js";
 
 export const resolveToCore = (
@@ -29,15 +30,13 @@ export const resolveToCore = (
     };
   }
 
-  // Phase 4b replaces this with the events/unresolved classifier.
-  throw new Error(
-    `resolveToCore: program does not fit a single template (${build.why}); ` +
-      `fidelity classification lands in Phase 4b`,
-  );
+  // Resolves but doesn't fit one template (events) or can't materialize (unresolved).
+  return classify(build, program, ctxInput);
 };
 
 export { resolveStatements, buildTemplate, amountToFraction } from "./lower.js";
 export { lowerCliff } from "./cliff.js";
+export { classify } from "./classify.js";
 export type {
   ResolveResult,
   NonTemplateReason,
