@@ -36,6 +36,12 @@ import type { NonTemplateReason } from "./types.js";
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 const DEFAULT_ALLOCATION = "CUMULATIVE_ROUND_DOWN";
 
+// The normalizer's internal anchors (packages/normalizer .. program.ts SYSTEM_EVENT).
+// They always resolve to a concrete date, so a start expressed relative to one
+// (e.g. `FROM +12 months` = `grantDate + 12mo`) is an absolute service-time DATE,
+// NOT a floating milestone — it must not register an event firing.
+const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
+
 /** The two cumulative modes telescope as a single running fraction; the four
  *  loaded modes don't and so aren't template-compilable (→ events-only). */
 export const isCumulativeAllocation = (mode: string): boolean =>
@@ -54,11 +60,16 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
   return e;
 };
 
-/** DATE vs floating EVENT, from the (winning) schedule's vesting_start leaf. */
+/** DATE vs floating EVENT, from the (winning) schedule's vesting_start leaf.
+ *  A genuine named event floats; a system anchor (grantDate/vestingStart) is a
+ *  resolved absolute date and is treated as DATE (so `FROM +N months` chains and
+ *  never registers a duplicate `grantDate` firing). */
 const startBase = (
   vs: VestingNodeExpr,
 ): { base: "DATE" | "EVENT"; eventId?: string } =>
-  vs.type === "SINGLETON" && vs.base.type === "EVENT"
+  vs.type === "SINGLETON" &&
+  vs.base.type === "EVENT" &&
+  !SYSTEM_EVENTS.has(vs.base.value)
     ? { base: "EVENT", eventId: vs.base.value }
     : { base: "DATE" };
 
@@ -194,8 +205,20 @@ export const buildTemplate = (
 
     let vesting_base: VestingStatement["vesting_base"];
     if (r.start.base === "EVENT") {
-      vesting_base = { type: "EVENT", event_id: r.start.eventId! };
-      eventFirings.push({ event_id: r.start.eventId!, date: r.start.date });
+      const eventId = r.start.eventId!;
+      const firingDate = r.start.date;
+      vesting_base = { type: "EVENT", event_id: eventId };
+      // One firing per event_id: multiple portions may float to the same event.
+      // The same event firing twice at different dates can't be one template.
+      const existing = eventFirings.find((f) => f.event_id === eventId);
+      if (!existing) {
+        eventFirings.push({ event_id: eventId, date: firingDate });
+      } else if (!eq(existing.date, firingDate)) {
+        return events({
+          kind: "OVERLAPPING_ABSOLUTE_STARTS",
+          detail: `Event "${eventId}" anchors two portions at different dates — no single template form.`,
+        });
+      }
     } else {
       vesting_base = { type: "DATE" };
       if (cursor === undefined) {

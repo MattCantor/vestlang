@@ -1,8 +1,8 @@
-import { evaluateStatement } from "@vestlang/evaluator";
+import { evaluateStatement, evaluateProgram } from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { EvaluationContext } from "@vestlang/types";
+import { EvaluationContext, EvaluatedSchedule } from "@vestlang/types";
 
 export function evaluate(
   parts: string[],
@@ -11,6 +11,7 @@ export function evaluate(
     grantDate: string;
     event: Record<string, string>;
     stdin?: boolean;
+    program?: boolean;
   },
 ): void {
   // quantity: must be a whole number
@@ -30,21 +31,36 @@ export function evaluate(
 
   const ast = parse(input(parts, opts.stdin));
   const normalized = normalizeProgram(ast);
-  const results = normalized.map((s) => evaluateStatement(s, ctx));
+
+  // --program collapses every statement into ONE schedule and reports the
+  // program-level interchange-fidelity verdict; the default classifies each
+  // statement on its own.
+  const results = opts.program
+    ? evaluateProgram(normalized, ctx)
+    : normalized.map((s) => evaluateStatement(s, ctx));
+
   results.forEach((r) => {
-    console.table(
-      r.installments.map((item) => ({
-        amount: item.amount,
-        date: item.date ?? JSON.stringify(item.meta.symbolicDate),
-        state: item.meta.state,
-        unresolved: item.meta.unresolved,
-      })),
-    );
-    if (r.blockers.length > 0) {
-      console.log();
-      console.log("Blockers");
-      r.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
-      console.log();
-    }
+    printSchedule(r, opts.program === true);
   });
+}
+
+function printSchedule(r: EvaluatedSchedule, withFidelity: boolean): void {
+  if (withFidelity) {
+    console.log();
+    console.log(`fidelity: ${r.fidelity}${r.reason ? ` (${r.reason})` : ""}`);
+  }
+  console.table(
+    r.installments.map((item) => ({
+      amount: item.amount,
+      date: item.date ?? JSON.stringify(item.meta.symbolicDate),
+      state: item.meta.state,
+      unresolved: item.meta.unresolved,
+    })),
+  );
+  if (r.blockers.length > 0) {
+    console.log();
+    console.log("Blockers");
+    r.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
+    console.log();
+  }
 }
