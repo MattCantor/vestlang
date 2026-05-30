@@ -95,6 +95,10 @@ program
     {} as Record<string, string>,
   )
   .option("--stdin", "read input from stdin")
+  .option(
+    "--program",
+    "collapse the whole program into ONE schedule and report its interchange-fidelity verdict (template / events-only / unresolved)",
+  )
   .argument("[input...]", "DSL text")
   .action(
     (
@@ -104,6 +108,7 @@ program
         grantDate: string;
         event: Record<string, string>;
         stdin?: boolean;
+        program?: boolean;
       },
     ) => {
       evaluate(parts, opts);

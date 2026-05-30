@@ -133,6 +133,51 @@ describe("assemble — events-only fidelity", () => {
   });
 });
 
+describe("assemble — program collapse regression (evaluateProgram)", () => {
+  // Statements anchored to `grantDate + offset` (DSL `FROM +N months`) each used
+  // to push a `grantDate` event firing, producing a duplicate-event_id runtime
+  // that core's validator rejected. They are absolute service-time DATE anchors,
+  // not floating milestones, so the whole program must collapse without throwing.
+  it("grantDate-relative starts collapse without a duplicate-firing throw", () => {
+    const fromGrant = (num: number, months: number) =>
+      stmt(
+        portion(num, 100),
+        makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+          makeDuration(months, "MONTHS", "PLUS"),
+        ]),
+        { type: "DAYS", length: 0, occurrences: 1 },
+      );
+    const program: Program = [fromGrant(5, 12), fromGrant(15, 24), fromGrant(80, 36)];
+    expect(() => evaluateProgram(program, ctxInput())).not.toThrow();
+    const [out] = evaluateProgram(program, ctxInput());
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    expect(sum(out.installments)).toBe(100000); // telescopes exactly
+  });
+
+  // Two portions floating to the SAME named event share one firing (dedup) and
+  // collapse to one template — not a duplicate-firing throw.
+  it("two portions on the same fired event → one template, deduped firing", () => {
+    const ipoPortion = (num: number) =>
+      stmt(portion(num, 2), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "DAYS",
+        length: 0,
+        occurrences: 1,
+      });
+    const program: Program = [ipoPortion(1), ipoPortion(1)];
+    const [out] = evaluateProgram(
+      program,
+      ctxInput({
+        events: {
+          grantDate: "2025-01-01" as OCTDate,
+          ipo: "2026-06-15" as OCTDate,
+        },
+      }),
+    );
+    expect(out.fidelity).toBe("template");
+    expect(sum(out.installments)).toBe(100000);
+  });
+});
+
 describe("assemble — unresolved fidelity", () => {
   it("unfired-event start → unresolved + blockers, symbolic installments", () => {
     const program: Program = [

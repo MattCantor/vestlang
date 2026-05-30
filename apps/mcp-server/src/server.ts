@@ -4,6 +4,7 @@ import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
   evaluateStatement,
+  evaluateProgram,
   evaluateStatementAsOf,
 } from "@vestlang/evaluator";
 import { inferSchedule } from "@vestlang/inferrer";
@@ -37,6 +38,11 @@ Typical workflows:
   AST, then explain it to the user.
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
   a grant_date, grant_quantity, and any named events that the DSL references.
+  vestlang_evaluate classifies each statement on its own; vestlang_evaluate_program
+  collapses the whole program into one schedule and reports its interchange-fidelity
+  verdict (template / events-only / unresolved) — use it to see whether a
+  multi-statement program fits a single canonical template or falls back to bare
+  events (e.g. overlapping independent starts).
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL (matching-pursuit
   decomposition). Note that the returned diagnostics.vestingDayOfMonth and
@@ -392,6 +398,40 @@ export function createServer(): McpServer {
           installments: s.installments,
           blockers: s.blockers,
         })),
+      });
+    },
+  );
+
+  /* evaluate_program: DSL program → ONE collapsed schedule + program-level fidelity verdict */
+  server.registerTool(
+    "vestlang_evaluate_program",
+    {
+      title: "Evaluate a whole program as one schedule",
+      description:
+        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its interchange-fidelity verdict: \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), or \"unresolved\" (blocked on an unfired event, with blockers). Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
+      inputSchema: z
+        .object({
+          dsl: DSL_INPUT,
+          ...EVAL_CONTEXT_FIELDS,
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const parsed = parseWithDiagnostics(params.dsl);
+      if (!parsed.ok) return jsonResult({ error: parsed.error });
+      const ctx = buildContext(params);
+      const [schedule] = evaluateProgram(parsed.program, ctx);
+      return jsonResult({
+        fidelity: schedule.fidelity,
+        ...(schedule.reason ? { reason: schedule.reason } : {}),
+        installments: schedule.installments,
+        blockers: schedule.blockers,
       });
     },
   );
