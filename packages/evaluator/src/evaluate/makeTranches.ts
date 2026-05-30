@@ -9,7 +9,7 @@ import type {
   UnresolvedInstallment,
 } from "@vestlang/types";
 import { blockerToString } from "./blockerToString.js";
-import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
+import { EvaluatedSchedule } from "@vestlang/types";
 
 /* ------------------------
  * Resolved
