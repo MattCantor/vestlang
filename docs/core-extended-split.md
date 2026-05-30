@@ -299,9 +299,17 @@ Notes:
 - New `packages/core/src/{allocate,dates,fractions,fold}.ts`.
 
 **Definition of Done:**
-- [ ] Parity tests: rationalized output equals old `allocateQuantity` across all 6 modes.
-- [ ] Date math (day-of-month, DST) unchanged vs. legacy.
+- [x] Parity tests: rationalized output equals old `allocateQuantity` across all 6 modes. *(Loaded modes match the legacy expected values exactly; cumulative modes match where float and rational agree, and stay exact + telescoping at large magnitudes where legacy float drifts.)*
+- [x] Date math (day-of-month, DST) unchanged vs. legacy. *(Day-of-month policy, DST-boundary `addDays`, and `lt/gt/eq` cases ported from the legacy time tests; plus a new `YEARS` case.)*
 - [ ] Commit: `feat(core): port vestlang allocator + date math (exact rational)`.
+
+**Implementation notes:**
+- **Allocator split:** `allocateExact` (per-step cumulative telescoping primitive — round-down/rounding via BigInt `floorSharesAt`/`roundSharesAt`) + `allocateVector` (N-way split, all 6 modes; cumulative modes loop `allocateExact`, loaded modes are verbatim integer base+remainder). `CUMULATIVE_ROUNDING` is exact round-half-up: `floor((2p+q)/2q)`.
+- **No `date-fns` in core** — ISO `YYYY-MM-DD` sorts lexicographically, so `lt/gt/eq` are string comparisons; core stays runtime-dependency-free.
+- **`vestingDayOfMonth` is a direct param** (default `VESTING_START_DAY_OR_LAST_DAY_OF_MONTH`), not read off an `EvaluationContext`; `addPeriod` adds `YEARS` (= months×12).
+- **`fold.ts` is the generic primitive only** — `foldByCliffDate<T>` (relocated `evaluateCliffGeneric`) + `foldToGrantDate`; blocker/installment-producing callers stay in the evaluator.
+- **Parity by literals, not cross-import** — tests reuse the legacy tests' expected values rather than importing `@vestlang/evaluator`, keeping core self-contained. The legacy engine is untouched (lives until Phase 5b).
+- 56 core tests green; build emits ESM/CJS/dts; no other package imports core.
 
 ---
 
@@ -465,10 +473,10 @@ Notes:
 - [x] `packages/core/src/validate.ts` — template + runtime validation
 
 ### Phase 2: core engine
-- [ ] `packages/core/src/allocate.ts` — 6 modes on `Fraction`; `allocateExact` + `allocateVector`
-- [ ] `packages/core/src/dates.ts` — `addMonthsRule` / `addDays` + `vestingDayOfMonth`
-- [ ] `packages/core/src/fractions.ts`
-- [ ] `packages/core/src/fold.ts` — cliff/grant-date fold mechanics
+- [x] `packages/core/src/allocate.ts` — 6 modes on `Fraction`; `allocateExact` + `allocateVector`
+- [x] `packages/core/src/dates.ts` — `addMonthsRule` / `addDays` + `vestingDayOfMonth`
+- [x] `packages/core/src/fractions.ts`
+- [x] `packages/core/src/fold.ts` — cliff/grant-date fold mechanics
 
 ### Phase 3: core compile
 - [ ] `packages/core/src/compile.ts` — `compile` + `compileToInstallments`

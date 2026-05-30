@@ -1,0 +1,90 @@
+// The generic anchor-date fold — the shared primitive behind both the cliff and
+// the grant-date aggregation (the spec's "cliff fold and grant-date fold are the
+// same primitive").
+//
+// Ported from vestlang's evaluate/cliff.ts `evaluateCliffGeneric` /
+// `evaluateGrantDate`, stripped to the pure date/amount mechanics. The
+// blocker/installment-producing callers stay in the evaluator; core only needs
+// the aggregation: amounts dated before `cliffDate` collapse onto `cliffDate`.
+
+import type { OCFDate } from "./types";
+import { eq, lt } from "./dates";
+
+/**
+ * Fold a parallel (dates, amounts) series against an anchor `cliffDate`:
+ *   - amounts strictly before cliffDate aggregate; the aggregate is emitted once
+ *     on cliffDate (when the run ends before it, or when the next date is past
+ *     it), provided the aggregate is non-zero,
+ *   - the amount exactly on cliffDate absorbs the running aggregate,
+ *   - amounts after cliffDate pass through unchanged.
+ * `fn` maps each emitted {date, amount} to the caller's installment shape.
+ */
+export function foldByCliffDate<T>(
+  dates: OCFDate[],
+  amounts: number[],
+  cliffDate: OCFDate,
+  fn: (x: { date: OCFDate; amount: number }) => T,
+): T[] {
+  const out: T[] = [];
+  let aggregate = 0;
+  let cliffResolved = false;
+
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    const amt = amounts[i];
+
+    const isBefore = lt(date, cliffDate);
+    const isAt = eq(date, cliffDate);
+
+    // Dates before the cliff only aggregate.
+    if (isBefore) {
+      aggregate += amt;
+      // If this is the last date and we're still before the cliff, emit the
+      // aggregate on the cliff date.
+      if (i === dates.length - 1) {
+        out.push(fn({ date: cliffDate, amount: aggregate }));
+      }
+      continue;
+    }
+
+    // Date exactly on the cliff absorbs the aggregate.
+    if (isAt) {
+      aggregate += amt;
+      out.push(fn({ date, amount: aggregate }));
+      cliffResolved = true;
+      continue;
+    }
+
+    // Cliff date falls strictly between the previous date and this one: flush
+    // the (non-zero) aggregate onto the cliff date before this installment.
+    if (!cliffResolved && lt(cliffDate, date) && aggregate > 0) {
+      out.push(fn({ date: cliffDate, amount: aggregate }));
+      cliffResolved = true;
+    }
+    out.push(fn({ date, amount: amt }));
+  }
+
+  return out;
+}
+
+/**
+ * The grant-date specialization: aggregate pre-grant amounts onto the grant date
+ * and return the rewritten parallel series. (Relocated `evaluateGrantDate`.)
+ */
+export function foldToGrantDate(
+  dates: OCFDate[],
+  amounts: number[],
+  grantDate: OCFDate,
+): { dates: OCFDate[]; amounts: number[] } {
+  const folded = foldByCliffDate<{ date: OCFDate; amount: number }>(
+    dates,
+    amounts,
+    grantDate,
+    ({ date, amount }) => ({ date, amount }),
+  );
+
+  return {
+    dates: folded.map((v) => v.date),
+    amounts: folded.map((v) => v.amount),
+  };
+}
