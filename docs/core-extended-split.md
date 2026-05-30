@@ -4,7 +4,7 @@ Split vestlang into a `core` engine — the **Carta-aligned canonical interchang
 
 ## Status
 
-- **Status**: Re-scoped (2026-05-29) — design spine revised; re-staging in progress. Phases 0–3 (core engine) largely intact; Phases 4–5 (resolver/assembler) redesigned around classify-and-lower. See "Background & key decisions" for the revision rationale.
+- **Status**: Design Specification — staged for implementation (see Implementation Phases).
 - **Priority**: High
 - **Complexity**: High
 - **Spans**: `vestlang` (this repo) + `OCF-Tools` (`~/code/OCF-Tools`, branch `add-canonical-vesting-compiler`)
@@ -25,17 +25,15 @@ The split decouples *runtime-aware resolution + intent* (extended) from *exact a
 
 ## Background & key decisions
 
-These were worked through and settled; recorded here as the decision record.
+The key decisions, with rationale.
 
-### The interchange target is Carta's schema — and it does not allow superimposition (2026-05-29 revision)
+### The interchange target is Carta's schema — and it does not allow superimposition
 
-The original spec treated OCF-Tools' linear `VestingScheduleTemplate` as a private compile IR and preserved vestlang's per-statement *superimposition* by fanning out to N core "jobs." That was backwards on both counts.
+Core's `VestingScheduleTemplate` is **not** a private compile IR — it is the *proposed OCF interchange format*, deliberately shaped to track **Carta's production schema** (`target-schema/Carta.schema.json`, "Carta Cap Table Data Schema v1alpha1"). OCF's native `vesting_conditions` *graph* is the incumbent being improved on, not the target. Carta's shape settles the design:
 
-Canonical is **not** a private IR — it is the *proposed OCF interchange format*, deliberately shaped to track **Carta's production schema** (`target-schema/Carta.schema.json`, "Carta Cap Table Data Schema v1alpha1"). OCF's native `vesting_conditions` *graph* is the incumbent being improved on, not the target. Reading Carta settles the design:
-
-- A grant's vesting is **one** `Vesting { templateId, startDate, acceleration }` — **one template, one start date, per grant.**
+- A grant's vesting references **one** template and **one** start date (`Vesting { templateId, startDate }`) — one schedule per grant.
 - `VestingScheduleTemplate { vestingScheduleType: DATE|MILESTONE|HYBRID, periods: VestingPeriod[] }`; `periods` chain by `order`, each with its own cliff (`cliffPercentage`/`cliffLength`). This maps directly onto canonical's ordered `statements[]` + positional cliff.
-- **`Acceleration = { name, terms }` is free text.** The structured interchange literally cannot model event-gated/contingent vesting — that free-text field is the vestlang-shaped hole.
+- Event/milestone vesting is **structured** (`vestingScheduleType: MILESTONE|HYBRID`; `VestingPeriod.milestoneName`/`performanceCondition`), but every anchor is *atomic* — a chained date or a single named condition. There is no combinator over anchors (no "later of a date and an event") and no representation of the unresolved state. That combinatorial/contingent layer is the vestlang-shaped hole (see "The DSL's only axis over core").
 - Multiple parallel/overlapping vesting streams are modeled as **multiple grants**, not a superimposition on one.
 
 **Consequences that drive the rest of this spec:**
@@ -46,7 +44,7 @@ Canonical is **not** a private IR — it is the *proposed OCF interchange format
 
 ### The engine to keep is vestlang's, not OCF-Tools'
 
-The original framing ("port OCF-Tools' `vesting_compiler` in as core") was backwards. vestlang's evaluator is already a compiler, and the *more capable* one:
+Core takes vestlang's engine, not OCF-Tools'. vestlang's evaluator is already a compiler, and the *more capable* one:
 
 | | vestlang evaluator | OCF-Tools `vesting_compiler` |
 |---|---|---|
@@ -71,13 +69,13 @@ vestlang's extra needs (6 allocation modes, configurable vesting-day-of-month) e
 Core and the DSL are expressive on different axes, and the split only works because the DSL's extra axis is **temporal contingency, not structure**:
 
 - **Core is wider on resolved arithmetic**: non-proportional cliffs, arbitrary per-occurrence fractions. These are machine-data artifacts (existing ledgers, rounding, raw tranche arrays) — *humans don't author them*.
-- **The DSL is wider on unresolved intent**: `LATER_OF`/`EARLIER_OF`, `AND`/`OR`, `BEFORE`/`AFTER`, event-gated cliffs. **Core is combinator-free and cannot represent any of these.** A canonical template is a *value*; a DSL program is a **schedule-valued function of runtime events**. Carta proves the gap is real — its one structured concession to event-gated vesting, the `acceleration` field, is a free-text string, precisely because a *resolved* interchange cannot hold an *unresolved* condition.
+- **The DSL is wider on unresolved intent**: `LATER_OF`/`EARLIER_OF`, `AND`/`OR`, `BEFORE`/`AFTER`, combinator-gated cliffs. **Core is combinator-free and cannot represent any of these.** The gap is *not* event-gating — both core and Carta model event/milestone anchoring structurally, and a plain `cliff ON EVENT "ipo"` lowers fine. The gap is **combinators over anchors** (an anchor that is the *later of* a date and an event) and **the unresolved state itself**. A canonical template is a *value*; a DSL program is a **schedule-valued function of runtime events** — and a resolved interchange cannot hold an unresolved condition.
 
 This axis survives hoisting completely. Hoisting to a single start constrains *structure*; it says nothing about whether the start is *known*. The hoisted start can be `LATER_OF(grant + 12mo, EVENT "ipo")` — canonical can only hold the value *after* you know which won; the DSL holds it before, across the multi-year span in which the events actually fire. That span — "schedule defined, runtime not yet known" — is the default state of equity, and the DSL owns all of it.
 
 One DSL expression therefore resolves to **one** canonical template *or to a non-template fidelity level* depending on runtime (IPO fired → a concrete template; not fired → `UNRESOLVED` + blockers). That collapse-to-one-template-or-report is the whole reason extended exists. Mental model: **DSL = source language** (intent, contingency, ergonomics, lintable, the inferrer's target); **core = IR/interchange** (resolved, exact, validated, shared by multiple producers). Like C → assembly: the target being more restrictive does not make the source redundant — the source expresses what the target cannot *hold*.
 
-What the DSL does **not** gain from this is a structural-superset axis. Extended still *evaluates* superimposed programs and produces correct dated amounts — nothing is rejected at authoring time. What changes from pre-revision (which silently unioned per-statement results) is that a superimposition which doesn't fit one canonical template is **classified as `events-only`, with the reason**, rather than passed off as a structured schedule. The facts survive; the structural pretence does not. See "Superimposition and the fidelity ladder" for the taxonomy and why the events round-trip but the structure doesn't.
+What the DSL does **not** gain from this is a structural-superset axis. Extended still *evaluates* superimposed programs and produces correct dated amounts — nothing is rejected at authoring time. But a superimposition that doesn't fit one canonical template is **classified as `events-only`, with the reason**, rather than passed off as a structured schedule. The facts survive; the structural pretence does not. See "Superimposition and the fidelity ladder" for the taxonomy and why the events round-trip but the structure doesn't.
 
 The DSL needs no new syntax for non-proportional cliffs: genuine non-proportional graded vesting is already expressible as **multiple PORTION statements** in one canonical template, and the proportional DSL cliff is simply core's `percentage = K/N` special case.
 
@@ -85,8 +83,13 @@ The DSL needs no new syntax for non-proportional cliffs: genuine non-proportiona
 
 - **"Extended never allocates" is unachievable.** Both non-template fidelity levels carry allocated amounts: `UNRESOLVED` installments carry an **amount with no date** (`packages/types/src/evaluation.ts`), and the **events-only** fallback emits dated amounts for schedules that resolve but don't fit the template. Resolution: **one allocator implementation**, exported from core as a pure primitive, called by *both* core's compiler and extended's events-only/unresolved rendering. One implementation, multiple call sites — no two allocators that can disagree.
 - **The cliff fold and the grant-date fold are the same primitive.** `evaluateCliffGeneric<T>` (`packages/evaluator/src/evaluate/cliff.ts`) is parameterized; its three thin callers (`evaluateGrantDate`, `evaluateResolvedCliff`, `evaluateUnresolvedCliff`) all route through it. Off-grid cliffs reuse this fold / core's EVENT-anchor — **no separate cliff concept**.
-- **Clean break / new major** of `@nathamcrewott/vestlang`. The resolver/assembler keeps the `@vestlang/evaluator` name (its API stays `evaluate*`); "core"/"extended" are layer terms.
-- **`@vestlang/core` is published standalone**, so OCF-Tools can depend on it directly. Today every `@vestlang/*` package is private and inlined into `@nathamcrewott/vestlang` via tsup `noExternal`; core is the exception. It ships under a newly-owned **`@vestlang` npm org** (package name `@vestlang/core`, `private` dropped, `publishConfig.access: public`), dual CJS/ESM. All other `@vestlang/*` packages stay private/inlined — unchanged. OCF-Tools depends on the published `@vestlang/core` (CJS entry); release rides the existing changesets pipeline. Registering the `@vestlang` org is a one-time prerequisite (see Phase 0).
+- **Clean break.** The umbrella package is renamed from `@nathamcrewott/vestlang` to the unscoped **`vestlang`** (a new major). The resolver/assembler keeps the internal `@vestlang/evaluator` name (its API stays `evaluate*`); "core"/"extended" are layer terms.
+- **Publishing end-state — one brand, one registry (npmjs).** Everything published reads as *vestlang*:
+  - **`vestlang`** (unscoped) — the main package, replacing `@nathamcrewott/vestlang`. It inlines the internal packages but takes **`@vestlang/core` as a real external dependency**, so the engine ships once.
+  - **`@vestlang/core`** — the standalone engine: public, dual CJS/ESM, the package OCF-Tools installs.
+  - The other `@vestlang/*` packages (`types`, `evaluator`, `normalizer`, …) stay **private and inlined** into `vestlang` — never published, not import targets.
+
+  Setup: register the **`@vestlang` org on npmjs** and claim the unscoped **`vestlang`** name (both currently available); drop the GitHub-Packages registry mapping for the `@vestlang` scope so everything publishes to npmjs; configure `vestlang`'s `tsup` to mark `@vestlang/core` `external` (while still inlining the rest); and deprecate `@nathamcrewott/vestlang` → `vestlang`. Registering the org + claiming the name is the one-time Phase 0 prerequisite; release rides the existing changesets pipeline.
 
 ---
 
@@ -147,7 +150,7 @@ type ResolveResult =
   | { kind: "unresolved", symbolic: SymbolicInstallment[], blockers: Blocker[] }
 ```
 
-A program collapses to **one** template, not N. Cursor chaining (DATE advances the cursor, EVENT floats) is core's canonical interface; the resolver *targets* it — a graded 5/15/40/40 lowers to ordered chained statements, and a time-vested portion + a portion anchored to a named `EVENT` lowers to a DATE statement plus a floating EVENT statement, both in the **same** template. The pre-revision per-statement evaluation (which superimposed) is replaced by this single-template lowering; programs that genuinely can't fit drop to `events`, not to a multi-template fan-out.
+A program collapses to **one** template, not N. Cursor chaining (DATE advances the cursor, EVENT floats) is core's canonical interface; the resolver *targets* it — a graded 5/15/40/40 lowers to ordered chained statements, and a time-vested portion + a portion anchored to a named `EVENT` lowers to a DATE statement plus a floating EVENT statement, both in the **same** template. Programs that genuinely can't fit one template drop to `events`, not to a multi-template fan-out.
 
 The published `EvaluatedSchedule` is **assembled** from the verdict: `template` → core compile (RESOLVED installments); `events` → the resolved installments passed through, tagged events-only with the reason; `unresolved` → symbolic installments + blockers. `normalizeProgram` stays a pre-resolution pass; the resolver/classifier is a second pass after it.
 
@@ -181,7 +184,7 @@ Extended resolves the cliff `VestingNodeExpr` (reusing `evaluateVestingNodeExpr`
 
 Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses BigInt to avoid overflow). Two emit shapes off one engine: `compile(...) → {date, amount: string}[]` (OCF/Carta-native, for OCF-Tools) and `compileToInstallments(...) → {date, amount: number}[]` (for extended). 
 
-**Allocation semantics change (deliberate, no users to break).** Core allocates with a **single cumulative round-down across the whole ordered template** — one running `cumulative` fraction and `vestedSoFar`, so the schedule telescopes *exactly* to total shares (canonical's guarantee). This **replaces** vestlang's pre-revision per-statement independent allocation (each PORTION rounded on its own quantity, which need not sum to the grant). The clean break also fixes the latent PORTION rounding (`grantQuantity·(num/den)` in float → exact-rational-then-floor). Both numeric changes are intentional and documented in the changeset; the Phase 5a gate validates the *new* semantics, not parity with the old.
+**Allocation model.** Core allocates with a **single cumulative round-down across the whole ordered template** — one running `cumulative` fraction and `vestedSoFar`, so the schedule telescopes *exactly* to total shares (canonical's guarantee). The current evaluator instead rounds each PORTION on its own quantity (which need not sum to the grant); core's single-cumulative model supersedes it, and the clean break also fixes the latent PORTION rounding (`grantQuantity·(num/den)` in float → exact-rational-then-floor). Both numeric differences are deliberate and documented in the changeset; the Phase 5a gate validates these semantics rather than parity with the current engine.
 
 ---
 
@@ -193,7 +196,7 @@ Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses
 - Rationalized single allocator (single cumulative round-down across the template; all 6 modes available), policy-aware date math (day-of-month, DST), positional cliff, structural/runtime validation.
 - Extended resolver/**classifier** + lowering + assembler (fidelity ladder: template / events-only / unresolved); `@vestlang/evaluator` retains its `evaluate*` API.
 - OCF-Tools repointed at `@vestlang/core` (its own commit/PR).
-- Clean-break major version of `@nathamcrewott/vestlang`.
+- Clean-break rename of the umbrella to unscoped **`vestlang`** (retiring `@nathamcrewott/vestlang`).
 
 ### Explicitly deferred
 
@@ -209,7 +212,7 @@ Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses
 
 ## Implementation Phases
 
-Each phase keeps `pnpm build` + `turbo test` green and is a self-contained commit. Phase 6 is a separate repo and PR. The published `@nathamcrewott/vestlang` surface is only intentionally reshaped at Phase 5b/7.
+Each phase keeps `pnpm build` + `turbo test` green and is a self-contained commit. Phase 6 is a separate repo and PR. The published umbrella surface (`@nathamcrewott/vestlang` → `vestlang`) is only intentionally reshaped at Phase 5b/7.
 
 ### Phase Dependencies
 
@@ -241,12 +244,12 @@ Notes:
 - `@vestlang/types` imports fixed in `cliff.ts`, `build.ts`, and `makeTranches.ts` (all three carry the deep `../../../types/dist/...` path).
 - `apps/cli/package.json` `"workspace: *"` typo fixed.
 - Dead `packages/ast` deleted, canonical JSON schemas first salvaged into core/docs.
-- `@vestlang` npm org registered (free, public) — no code depends on it yet.
+- `@vestlang` org registered on npmjs and the unscoped **`vestlang`** name claimed (both free/available); the GitHub-Packages registry mapping for the `@vestlang` scope dropped so everything targets npmjs. No code depends on these yet.
 
 **Definition of Done:**
 - [ ] `pnpm build` + `turbo test` green, no behavior change.
 - [ ] No deep `../../../types/dist/...` imports remain.
-- [ ] `@vestlang` npm org registered and owned.
+- [ ] `@vestlang` org + unscoped `vestlang` name registered/owned on npmjs; `@vestlang` scope no longer mapped to GitHub Packages.
 - [ ] Commit: `chore: fix cross-package imports and remove dead ast package`.
 
 ---
@@ -260,7 +263,7 @@ Notes:
 - Reference shapes: `~/code/OCF-Tools/types/canonical/vesting/types.ts`, `vesting_compiler/validate.ts`.
 
 **Outputs:**
-- New `packages/core/**` with dual CJS/ESM tsup, packaged to publish standalone as `@vestlang/core` (no `private`, `publishConfig.access: public`).
+- New `packages/core/**` with dual CJS/ESM tsup, packaged to publish standalone as `@vestlang/core` on npmjs (no `private`, `publishConfig` → npmjs registry + `access: public`).
 - Canonical IR types: `VestingScheduleTemplate`, `VestingStatement`, positional `Cliff`, `Fraction`, `PeriodType`, `VestingRuntime` (incl. additive-optional `vestingDayOfMonth`/allocation).
 - Ported `validate.ts` (template + runtime halves).
 
@@ -372,7 +375,7 @@ Notes:
 
 **Outputs:**
 - Old `evaluateSchedule` / `allocateQuantity` / `evaluateCliff` allocation code and the internal flag deleted.
-- Umbrella exports reshaped to expose `core`.
+- Umbrella renamed `@nathamcrewott/vestlang` → `vestlang`; its `tsup` config marks `@vestlang/core` `external` (the rest still inlined); exports reshaped to expose `core`.
 
 **Definition of Done:**
 - [ ] build + tests green on the new path only.
@@ -383,20 +386,20 @@ Notes:
 
 ### Phase 7 — release
 
-**Goal:** Ship the major and publish `@vestlang/core` standalone.
+**Goal:** Publish the consolidated `vestlang` namespace on npmjs and retire `@nathamcrewott/vestlang`.
 
 **Inputs:**
 - Phase 5b clean-break surface.
-- `@vestlang` org from Phase 0.
+- `@vestlang` org + unscoped `vestlang` name from Phase 0.
 
 **Outputs:**
-- Changeset documenting the new standalone `@vestlang/core` package, the PORTION numeric change, and the reshaped `@nathamcrewott/vestlang` surface.
-- `@vestlang/core` and `@nathamcrewott/vestlang` published via changesets.
+- Changeset documenting the new `@vestlang/core` package, the unscoped `vestlang` (replacing `@nathamcrewott/vestlang`), and the PORTION numeric change.
+- `vestlang` + `@vestlang/core` published to npmjs via changesets; `@nathamcrewott/vestlang` deprecated, pointing at `vestlang`.
 
 **Definition of Done:**
-- [ ] `@vestlang/core` published under the `@vestlang` org (CJS entry available for OCF-Tools).
-- [ ] `@nathamcrewott/vestlang` major published.
-- [ ] Commit: `chore: release @nathamcrewott/vestlang vX + @vestlang/core (core/extended)`.
+- [ ] `@vestlang/core` published to npmjs (CJS entry available for OCF-Tools).
+- [ ] `vestlang` published to npmjs; `@nathamcrewott/vestlang` deprecated → `vestlang`.
+- [ ] Commit: `chore: release vestlang vX + @vestlang/core (core/extended)`.
 
 ---
 
@@ -427,7 +430,7 @@ Notes:
 - [ ] `packages/evaluator/src/evaluate/makeTranches.ts` — `@vestlang/types` import
 - [ ] `apps/cli/package.json` — `"workspace: *"` typo
 - [ ] `packages/ast` — salvage schemas, then delete
-- [ ] External: register `@vestlang` npm org
+- [ ] External: register `@vestlang` org + claim unscoped `vestlang` on npmjs; drop GitHub-Packages mapping for `@vestlang` scope
 
 ### Phase 1: core foundation
 - [ ] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig
@@ -458,11 +461,13 @@ Notes:
 
 ### Phase 5b: retire the legacy engine (clean break)
 - [ ] `packages/evaluator/src/evaluate/*` — delete legacy engine + flag
+- [ ] `packages/vestlang/package.json` — rename `@nathamcrewott/vestlang` → `vestlang`; add `@vestlang/core` dependency
+- [ ] `packages/vestlang/tsup.config.ts` — mark `@vestlang/core` `external` (inline the rest)
 - [ ] `packages/vestlang/src/index.ts` — reshape umbrella exports
 
 ### Phase 7: release
-- [ ] `.changeset/*` — standalone `@vestlang/core`, PORTION numeric change, reshaped surface
-- [ ] Publish `@vestlang/core` + `@nathamcrewott/vestlang`
+- [ ] `.changeset/*` — `@vestlang/core`, `vestlang` (renamed from `@nathamcrewott/vestlang`), PORTION numeric change
+- [ ] Publish `vestlang` + `@vestlang/core` to npmjs; deprecate `@nathamcrewott/vestlang` → `vestlang`
 
 ### Phase 6: OCF-Tools migration *(separate repo)*
 - [ ] `~/code/OCF-Tools` — delete `vesting_compiler/` + `types/canonical/vesting/`
