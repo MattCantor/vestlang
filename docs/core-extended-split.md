@@ -250,9 +250,9 @@ Notes:
 - `@vestlang` org registered on npmjs and the unscoped **`vestlang`** name claimed (both free/available); the GitHub-Packages registry mapping for the `@vestlang` scope dropped so everything targets npmjs. No code depends on these yet.
 
 **Definition of Done:**
-- [ ] `pnpm build` + `turbo test` green, no behavior change.
-- [ ] No deep `../../../types/dist/...` imports remain.
-- [ ] `@vestlang` org + unscoped `vestlang` name registered/owned on npmjs; `@vestlang` scope no longer mapped to GitHub Packages.
+- [x] `pnpm build` + `turbo test` green, no behavior change. *(build 12/12, test 16/16 — 129 tests passing.)*
+- [x] No deep `../../../types/dist/...` imports remain. *(`EvaluatedSchedule` was already re-exported from `@vestlang/types`; the three deep imports now point at the package root.)*
+- [x] `@vestlang` scope no longer mapped to GitHub Packages *(`@vestlang:registry` line removed from `.npmrc`)*. **External, still pending:** register the `@vestlang` org + claim the unscoped `vestlang` name on npmjs (manual; consumed only at Phase 6).
 - [ ] Commit: `chore: fix cross-package imports and remove dead ast package`.
 
 ---
@@ -444,12 +444,13 @@ Notes:
 ## Phase Checklist
 
 ### Phase 0: Hygiene + publishing prerequisite
-- [ ] `packages/evaluator/src/evaluate/cliff.ts` — `@vestlang/types` import
-- [ ] `packages/evaluator/src/evaluate/build.ts` — `@vestlang/types` import
-- [ ] `packages/evaluator/src/evaluate/makeTranches.ts` — `@vestlang/types` import
-- [ ] `apps/cli/package.json` — `"workspace: *"` typo
-- [ ] `packages/ast` — salvage schemas, then delete
-- [ ] External: register `@vestlang` org + claim unscoped `vestlang` on npmjs; drop GitHub-Packages mapping for `@vestlang` scope
+- [x] `packages/evaluator/src/evaluate/cliff.ts` — `@vestlang/types` import
+- [x] `packages/evaluator/src/evaluate/build.ts` — `@vestlang/types` import
+- [x] `packages/evaluator/src/evaluate/makeTranches.ts` — `@vestlang/types` import
+- [x] `apps/cli/package.json` — `"workspace: *"` typo
+- [x] `packages/ast` — salvage schemas (→ `docs/schemas/{oct-schema,vestlang}`), then delete; `@vestlang/ast` removed from `.changeset/config.json` ignore
+- [x] Drop GitHub-Packages mapping for `@vestlang` scope (`.npmrc`)
+- [ ] External (manual, pending): register `@vestlang` org + claim unscoped `vestlang` on npmjs
 
 ### Phase 1: core foundation
 - [ ] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig

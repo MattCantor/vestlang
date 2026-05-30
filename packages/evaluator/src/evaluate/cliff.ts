@@ -23,7 +23,7 @@ import {
   makeStartPlusSchedule,
   makeUnresolvedCliffInstallment,
 } from "./makeTranches.js";
-import { EvaluatedSchedule } from "../../../types/dist/evaluation.js";
+import { EvaluatedSchedule } from "@vestlang/types";
 
 export function evaluateCliff(
   resSchedule: PickedResolved<ScheduleWithCliff>,
