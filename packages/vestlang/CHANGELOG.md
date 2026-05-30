@@ -1,4 +1,13 @@
-# @nathamcrewott/vestlang
+# @vestlang/vestlang
+
+## 0.4.0
+
+### Minor Changes
+
+- Consolidate the vesting engine into a new standalone `@vestlang/core` package and re-home the umbrella on the `@vestlang` scope.
+  - **New `@vestlang/core`** (published separately, dual CJS/ESM): the Carta-aligned canonical interchange engine — exact-rational allocator, time-based cliff, structural + runtime validation. The umbrella now depends on it as a real external dependency (shipped once), while still inlining the other internal packages.
+  - **Umbrella renamed** `@nathamcrewott/vestlang` → `@vestlang/vestlang`. The public `evaluate*` / `parse` / `lint` / `stringify` / `inferSchedule` surface is unchanged; `core` is newly re-exported.
+  - **PORTION numeric change (intentional):** allocation now uses a single cumulative round-down across the whole ordered template (exact `Fraction`, floored), replacing per-PORTION float rounding. Totals telescope exactly to grant quantity. Output can differ at the share level from prior releases for multi-PORTION schedules; this is a deliberate correctness fix, not a regression.
 
 ## 0.3.3
 
