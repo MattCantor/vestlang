@@ -271,9 +271,15 @@ Notes:
 - Ported `validate.ts` (template + runtime halves).
 
 **Definition of Done:**
-- [ ] core builds + tests pass in isolation; nothing else imports it.
-- [ ] Package is configured to publish standalone (private dropped, public access).
+- [x] core builds + tests pass in isolation; nothing else imports it. *(tsup emits ESM `index.js` + CJS `index.cjs` + `index.d.ts`/`.d.cts`; 17 validator tests green; `grep` confirms no other package depends on `@vestlang/core`.)*
+- [x] Package is configured to publish standalone (private dropped, public access). *(`publishConfig` → npmjs registry + `access: public`; no `private` field.)*
 - [ ] Commit: `feat(core): canonical IR types + structural/runtime validation`.
+
+**Implementation notes:**
+- **tsup introduced** for core (rest of repo builds with `tsc`) to get the dual CJS/ESM + `.d.ts` output in one step — OCF-Tools is a confirmed CommonJS consumer (`package.json` has no `"type"`, `tsconfig` `module: CommonJS`), so the CJS entry is required, not optional.
+- **Core is self-contained** — `AllocationType`/`VestingDayOfMonth` are defined locally in `types.ts` (mirroring `@vestlang/types`' `allocation_type`/`vesting_day_of_month`); core imports no other vestlang package, so it ships dependency-free.
+- Core's `tsconfig` uses the base `Bundler` moduleResolution (not the per-package `NodeNext` override) since tsup bundles — avoids needing `.js` import extensions in source.
+- `ISO_DATE_PATTERN` is inlined in `validate.ts`; Phase 2's `dates.ts` will own it.
 
 ---
 
@@ -454,9 +460,9 @@ Notes:
 - [ ] External (pending, Phase 6): unscoped `vestlang` name blocked by typosquat filter (vs. `testling`) — support ticket; fallback `@vestlang/vestlang`. `@vestlang/core` available/unaffected.
 
 ### Phase 1: core foundation
-- [ ] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig
-- [ ] `packages/core/src/types.ts` — canonical IR types
-- [ ] `packages/core/src/validate.ts` — template + runtime validation
+- [x] `packages/core/package.json` — dual CJS/ESM tsup, public publishConfig
+- [x] `packages/core/src/types.ts` — canonical IR types
+- [x] `packages/core/src/validate.ts` — template + runtime validation
 
 ### Phase 2: core engine
 - [ ] `packages/core/src/allocate.ts` — 6 modes on `Fraction`; `allocateExact` + `allocateVector`
