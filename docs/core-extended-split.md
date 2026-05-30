@@ -432,11 +432,18 @@ Notes:
 - Golden files updated to the **new** allocation semantics (single cumulative round-down; exact-rational PORTION).
 
 **Definition of Done (the gate):**
-- [ ] Existing evaluator suite passes on the new path with golden files updated to the new semantics; every numeric change is intentional and traceable to (a) single-cumulative allocation or (b) exact-rational PORTION.
-- [ ] Totals telescope **exactly** to grant quantity for every resolved (`template`) schedule.
-- [ ] Fidelity classification asserted end-to-end: a template case, an events-only case (with reason), and an unresolved case each produce the right `EvaluatedSchedule` shape.
-- [ ] Old path still exists behind the flag (revert safety).
+- [x] Existing evaluator suite passes on the new path with golden files updated to the new semantics; every numeric change is intentional and traceable to (a) single-cumulative allocation or (b) exact-rational PORTION. *(No golden changes were needed: at the suite's magnitudes exact-rational matches the legacy float, and loaded modes reuse the same integer base+remainder arithmetic. Full repo green — build 13/13, test 18/18, incl. 41 inferrer + 113 integration.)*
+- [x] Totals telescope **exactly** to grant quantity for every resolved (`template`) schedule. *(asserted in `assemble.test.ts`.)*
+- [x] Fidelity classification asserted end-to-end: a template case, an events-only case (with reason), and an unresolved case each produce the right `EvaluatedSchedule` shape. *(`assemble.test.ts`: template = monthly-48+cliff; events-only = overlapping starts **and** a loaded allocation mode; unresolved = unfired event.)*
+- [x] Old path still exists behind the flag (revert safety). *(`__useLegacyEngine(true)` returns the legacy untagged schedule; default is the new path.)*
 - [ ] Commit: `feat: route evaluation through core engine (behind flag)`.
+
+**Implementation notes:**
+- **Fidelity tag is additive.** `EvaluatedSchedule` gained optional `fidelity` (`"template" | "events-only" | "unresolved"`) + `reason?: string` (`packages/types/src/evaluation.ts`). Optional ⇒ no public-surface break; the legacy engine leaves them undefined.
+- **Per-statement vs whole-program.** Every consumer (`mcp-server`, `cli`, `inferrer`, `asof`) maps `evaluateStatement` per statement, and `evaluateProgram` has no callers. So `evaluateStatement(stmt)` routes a *one-statement* program through resolve→classify→assemble (per-statement contract preserved), while `evaluateProgram(program)` collapses the whole program to **one** schedule (single cumulative across the ordered template), returned as a one-element array — signature unchanged, semantics documented.
+- **Grant-date fold via runtime.** `buildTemplate` now threads `ctx.events.grantDate` into `VestingRuntime.grantDate` so core's implicit grant-date cliff fires (the legacy `evaluateGrantDate` equivalent). Safe for the 4a/4b round-trip tests (there `grantDate === startDate`, nothing folds).
+- **Loaded allocation modes → events-only (carried forward from 4b).** The inferrer searches all 6 allocation modes; the cumulative-only `compile` path threw on the four loaded modes. Fix: `buildTemplate` routes a loaded `allocation_type` to `events` (`NonTemplateReason: LOADED_ALLOCATION`), and `classify`'s new `loadedEventsArm` allocates each statement independently via `allocateVector` (the exact integer base+remainder that matches the legacy allocator), folding the grant-date and cliff lumps with `foldToGrantDate`. This keeps the inferrer on the one unified engine.
+- **No cycle:** `evaluate/index.ts` imports `resolveToCore`/`assemble` from `../resolve/*`; the classifier imports the legacy `evaluateStatement` from `../evaluate/build.js` directly (not the index), so redefining the public entry points doesn't recurse.
 
 ---
 
@@ -533,10 +540,13 @@ Notes:
 - [x] `packages/evaluator/src/resolve/index.ts` — complete `ResolveResult` (template/events/unresolved)
 
 ### Phase 5a: assembler + cutover (behind a flag)
-- [ ] `packages/evaluator/src/evaluate/*` — assembler (verdict → `EvaluatedSchedule`) + new-path wiring + internal flag
-- [ ] `packages/vestlang/src/index.ts`
-- [ ] `apps/mcp-server/src/server.ts` — imports
-- [ ] Golden files updated to new allocation semantics; telescoping + classification assertions
+- [x] `packages/evaluator/src/resolve/assemble.ts` — assembler (verdict → tagged `EvaluatedSchedule`)
+- [x] `packages/evaluator/src/evaluate/index.ts` — new-path wiring (`evaluateStatement`/`evaluateProgram`) + internal `__useLegacyEngine` flag
+- [x] `packages/types/src/evaluation.ts` — additive `fidelity`/`reason` on `EvaluatedSchedule`
+- [x] `packages/evaluator/src/resolve/{lower,classify,types}.ts` — `grantDate` into runtime; loaded-allocation → events-only (`LOADED_ALLOCATION` + `loadedEventsArm`)
+- [x] `packages/vestlang/src/index.ts` *(re-exports unchanged — same `evaluate*` names)*
+- [x] `apps/mcp-server/src/server.ts` — `vestlang_evaluate` surfaces `fidelity`/`reason`
+- [x] Telescoping + classification assertions (`packages/evaluator/tests/assemble.test.ts`); no golden updates needed (new semantics matched legacy at suite magnitudes)
 
 ### Phase 5b: retire the legacy engine (clean break)
 - [ ] `packages/evaluator/src/evaluate/*` — delete legacy engine + flag

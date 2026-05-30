@@ -23,7 +23,10 @@ export type NonTemplateReason =
   // Carta models these as separate grants, so they can't be one template.
   | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
   // An event-anchored cliff — Carta has no event anchor on the cliff field.
-  | { kind: "EVENT_CLIFF"; eventId: string; detail?: string };
+  | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
+  // A loaded (non-cumulative) allocation mode — the interchange carries no
+  // allocation field, so loaded splits can't be a canonical template.
+  | { kind: "LOADED_ALLOCATION"; mode: string; detail?: string };
 
 /** Amount-carrying installments with symbolic/absent dates (the unresolved arm). */
 export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;

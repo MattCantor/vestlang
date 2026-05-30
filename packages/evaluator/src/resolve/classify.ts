@@ -19,6 +19,9 @@ import type { Fraction } from "@vestlang/core";
 import {
   addPeriod,
   allocateExact,
+  allocateVector,
+  floorSharesAt,
+  foldToGrantDate,
   fracAdd,
   fracMul,
   fracReduce,
@@ -102,12 +105,72 @@ const expandResolution = (
   return out;
 };
 
+/** The cliff date for a resolved statement (time-based or a fired event), if any. */
+const cliffDateOf = (
+  r: StmtResolution,
+  ctx: EvaluationContext,
+): string | undefined => {
+  if (r.start.state !== "RESOLVED") return undefined;
+  if (r.cliff.state === "RESOLVED") {
+    return addPeriod(
+      r.start.date,
+      r.cliff.cliff.length,
+      r.cliff.cliff.period_type,
+      ctx.vesting_day_of_month,
+    );
+  }
+  if (r.cliff.state === "EVENT") return ctx.events[r.cliff.eventId];
+  return undefined;
+};
+
+/**
+ * Loaded (non-cumulative) allocation: each statement is an independent N-way
+ * split (allocateVector — the exact integer base+remainder, matching the legacy
+ * allocator), mapped onto its grid, with the grant-date and cliff lumps folded.
+ * No single running cumulative — loaded modes don't telescope across statements.
+ */
+const loadedEventsArm = (
+  resolutions: StmtResolution[],
+  ctx: EvaluationContext,
+  totalShares: number,
+  reason: NonTemplateReason,
+): ResolveResult => {
+  const dom = ctx.vesting_day_of_month;
+  const byDate = new Map<string, number>();
+  for (const r of resolutions) {
+    if (r.start.state !== "RESOLVED") continue;
+    const anchor = r.start.date;
+    const { type, length: period, occurrences: N } = r.periodicity;
+    const sq = floorSharesAt(totalShares, r.percentage);
+    let dates = Array.from({ length: N }, (_, i) =>
+      addPeriod(anchor, (i + 1) * period, type, dom),
+    );
+    let amounts = allocateVector(sq, N, ctx.allocation_type);
+    if (ctx.events.grantDate) {
+      ({ dates, amounts } = foldToGrantDate(dates, amounts, ctx.events.grantDate));
+    }
+    const cliffDate = cliffDateOf(r, ctx);
+    if (cliffDate && gt(cliffDate, anchor)) {
+      ({ dates, amounts } = foldToGrantDate(dates, amounts, cliffDate));
+    }
+    dates.forEach((d, i) => byDate.set(d, (byDate.get(d) ?? 0) + amounts[i]));
+  }
+  const installments: ResolvedInstallment[] = [...byDate.entries()]
+    .filter(([, amt]) => amt !== 0)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([date, amount]) => makeResolvedInstallment(date as OCTDate, amount));
+  return { kind: "events", installments, reason };
+};
+
 const eventsArm = (
   resolutions: StmtResolution[],
   ctx: EvaluationContext,
   totalShares: number,
   reason: NonTemplateReason,
 ): ResolveResult => {
+  if (reason.kind === "LOADED_ALLOCATION") {
+    return loadedEventsArm(resolutions, ctx, totalShares, reason);
+  }
   const events = resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx));
   events.sort((a, b) =>
     a.date !== b.date
