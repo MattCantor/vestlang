@@ -54,22 +54,33 @@ const validateFraction = (
 
 const validateCliff = (
   c: Cliff,
-  occurrences: number,
   path: string,
   errors: ValidationError[],
 ): void => {
-  if (!isPositiveInt(c.occurrence)) {
+  if (!isNonNegativeInt(c.length)) {
     errors.push({
-      path: `${path}.occurrence`,
-      message: "must be an integer >= 1",
+      path: `${path}.length`,
+      message: "must be an integer >= 0",
     });
-  } else if (isPositiveInt(occurrences) && c.occurrence > occurrences) {
+  }
+  if (!PERIOD_TYPES.includes(c.period_type)) {
     errors.push({
-      path: `${path}.occurrence`,
-      message: `must be <= statement.occurrences (got ${c.occurrence}, occurrences=${occurrences})`,
+      path: `${path}.period_type`,
+      message: `must be one of ${PERIOD_TYPES.join(", ")}`,
     });
   }
   validateFraction(c.percentage, `${path}.percentage`, errors);
+  // percentage is a share of the statement, so it must lie in [0, 1].
+  if (
+    isInteger(c.percentage.numerator) &&
+    isPositiveInt(c.percentage.denominator) &&
+    !fractionInUnitInterval(c.percentage)
+  ) {
+    errors.push({
+      path: `${path}.percentage`,
+      message: "must be in the closed interval [0, 1]",
+    });
+  }
 };
 
 const validateVestingBase = (
@@ -135,7 +146,7 @@ const validateStatement = (
   }
   validateFraction(s.percentage, `${path}.percentage`, errors);
   if (s.cliff) {
-    validateCliff(s.cliff, s.occurrences, `${path}.cliff`, errors);
+    validateCliff(s.cliff, `${path}.cliff`, errors);
   }
 };
 

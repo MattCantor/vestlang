@@ -32,13 +32,13 @@ The key decisions, with rationale.
 Core's `VestingScheduleTemplate` is **not** a private compile IR — it is the *proposed OCF interchange format*, deliberately shaped to track **Carta's production schema** (`target-schema/Carta.schema.json`, "Carta Cap Table Data Schema v1alpha1"). OCF's native `vesting_conditions` *graph* is the incumbent being improved on, not the target. Carta's shape settles the design:
 
 - A grant's vesting references **one** template and **one** start date (`Vesting { templateId, startDate }`) — one schedule per grant.
-- `VestingScheduleTemplate { vestingScheduleType: DATE|MILESTONE|HYBRID, periods: VestingPeriod[] }`; `periods` chain by `order`, each with its own cliff (`cliffPercentage`/`cliffLength`). This maps directly onto canonical's ordered `statements[]` + positional cliff.
+- `VestingScheduleTemplate { vestingScheduleType: DATE|MILESTONE|HYBRID, periods: VestingPeriod[] }`; `periods` chain by `order`, each with its own cliff (`cliffPercentage`/`cliffLength`/`cliffLengthUnit`). This maps directly onto canonical's ordered `statements[]` + **time-based cliff** (`{length, period_type, percentage}`, mirroring Carta's `cliffLength`/`cliffLengthUnit`/`cliffPercentage`).
 - Event/milestone vesting is **structured** (`vestingScheduleType: MILESTONE|HYBRID`; `VestingPeriod.milestoneName`/`performanceCondition`), but every anchor is *atomic* — a chained date or a single named condition. There is no combinator over anchors (no "later of a date and an event") and no representation of the unresolved state. That combinatorial/contingent layer is the vestlang-shaped hole (see "The DSL's only axis over core").
 - Multiple parallel/overlapping vesting streams are modeled as **multiple grants**, not a superimposition on one.
 
 **Consequences that drive the rest of this spec:**
 
-1. **No fan-out.** Resolving one program to *N* canonical templates produces something with no home in the interchange. The real cases all collapse to **one** template anyway: graded → ordered chained DATE statements; cliff → positional cliff; a time-vested portion **plus** a portion anchored to a named `EVENT` → a DATE statement plus a floating EVENT statement *in the same template*. Only genuine overlapping independent absolute starts don't fit — and those are multi-grant in Carta (see "Superimposition and the fidelity ladder" below).
+1. **No fan-out.** Resolving one program to *N* canonical templates produces something with no home in the interchange. The real cases all collapse to **one** template anyway: graded → ordered chained DATE statements; cliff → time-based cliff; a time-vested portion **plus** a portion anchored to a named `EVENT` → a DATE statement plus a floating EVENT statement *in the same template*. Only genuine overlapping independent absolute starts don't fit — and those are multi-grant in Carta (see "Superimposition and the fidelity ladder" below).
 2. **vestlang must hoist to a single start to round-trip structurally.** So it is *not* a structural superset of the interchange. Its value axis is **contingency / unresolved time**, which hoisting leaves fully intact (see "Core ⊇ DSL on arithmetic …" below).
 3. **The interchange always accepts bare vesting events** (Carta `vestingEvents[]`; canonical's `{date, amount}[]` output) as a fallback. So extended classifies, rather than forces, every schedule into the interchange (see "Resolver output contract").
 
@@ -52,15 +52,17 @@ Core takes vestlang's engine, not OCF-Tools'. vestlang's evaluator is already a 
 | Vesting-day-of-month | **configurable** (28 fixed + `*_OR_LAST_DAY`) | 1 policy only |
 | Date stepping | **DST-safe UTC** | basic |
 | Numerics | `number` | **exact rational (`Fraction`)** |
-| Cliff | temporal fold | **positional `{occurrence, percentage}`** |
+| Cliff | temporal fold | positional `{occurrence, percentage}` |
 | Combinator-free IR shape | no (rich AST) | **yes (canonical template)** |
 | Structural validation | no | **yes** |
 
-So core takes **vestlang's implementation** (left column) and **OCF-Tools' four genuine wins** (right-column bolds): the canonical IR shape, exact-rational numerics, the positional cliff, and structural/runtime validation. OCF-Tools' `compile.ts` becomes the **reference spec for the IR**, not shipped code.
+So core takes **vestlang's implementation** (left column) and **OCF-Tools' three genuine wins** (right-column bolds): the canonical IR shape, exact-rational numerics, and structural/runtime validation. OCF-Tools' `compile.ts` becomes the **reference spec for the IR**, not shipped code.
+
+The cliff is *not* on that list: OCF-Tools' positional `{occurrence, percentage}` cliff is a compiler convenience that **diverges from Carta**, whose cliff is time-based (`cliffLength`/`cliffLengthUnit`/`cliffPercentage`). Core uses a Carta-aligned **time-based cliff** `{length, period_type, percentage}` instead — which is also closer to vestlang's own temporal fold, and lets cliffs that don't land on an installment boundary lower without an occurrence index. See "Cliff representation and lowering" below.
 
 ### Core's interface is OCF canonical, verbatim — no bridge
 
-Core's *interface* = OCF canonical exactly: hoisted `runtime.startDate`, DATE-cursor chaining, floating EVENT statements, positional `{occurrence, percentage}` cliff. **OCF data flows straight in; OCF-Tools has no adaptation to do.** Any divergence would force an OCF↔core bridge — exactly the duplicated translation layer we're deleting.
+Core's *interface* = OCF canonical exactly: hoisted `runtime.startDate`, DATE-cursor chaining, floating EVENT statements, time-based `{length, period_type, percentage}` cliff (Carta-aligned). **OCF data flows straight in; OCF-Tools has no adaptation to do** (modulo the cliff shape, which OCF-Tools adopts — see the cross-repo note in "Cliff representation and lowering"). Any divergence would force an OCF↔core bridge — exactly the duplicated translation layer we're deleting.
 
 vestlang's wider convention space — the allocation mode and the vesting-day-of-month policy — rides on `runtime`/`EvaluationContext` as **additive, optional fields**, never on the template. The canonical template carries no field for either and assumes the defaults (allocation → `CUMULATIVE_ROUND_DOWN`; day-of-month → `VESTING_START_DAY_OR_LAST_DAY_OF_MONTH`, ≈ Carta's `SAME_DAY_AS_START_DATE`). So canonical/OCF data is a valid **subset** of core's input — the optional fields simply omitted — never a translation. These conventions are engine-internal (the inferrer searches them to recognize real data; the evaluator reproduces them), and any off-default convention is resolved-arithmetic that lands in events-only, not a structured template. **All** rich-AST→canonical adaptation lives in extended; that *is* extended's job.
 
@@ -114,7 +116,7 @@ DSL string ──parse──► RawProgram ──normalizeProgram──► Progr
                                                           │
                                                   EvaluatedSchedule
 
-        OCF/Carta data ─────────────► core (same engine; positional cliffs incl. non-proportional)
+        OCF/Carta data ─────────────► core (same engine; time-based cliffs incl. non-proportional)
 ```
 
 Core never sees a blocker, combinator, or symbolic date. Extended owns the entire `UNRESOLVED`/`IMPOSSIBLE`/blocker vocabulary **and the fidelity verdict** — TEMPLATE (best; intent preserved), EVENTS-ONLY (facts preserved, intent lost, reason reported), or UNRESOLVED. The events-only level is the interchange's own bare-events escape hatch, surfaced honestly rather than disguised as a structured template.
@@ -173,14 +175,33 @@ Extended does **not** forbid case 3 — it evaluates it and emits correct dated 
 
 This *sharpens* the seam rather than weakening it: the gap isn't "vestlang computes things the interchange can't store" — it can store the events. It's "vestlang expresses *intent* (two independent time starts) that the structured template can only record by **misclassifying** it as performance-based." That mislabel is a concrete, defensible example of where the proposed interchange leaks.
 
-### Cliff lowering (extended → core)
+### Cliff representation and lowering (extended → core)
 
-Extended resolves the cliff `VestingNodeExpr` (reusing `evaluateVestingNodeExpr`), then lowers:
+Core's cliff is **time-based** — `Cliff { length, period_type, percentage }`, matching Carta's
+`cliffLength`/`cliffLengthUnit`/`cliffPercentage`. The cliff date is `length` `period_type`s
+after the statement anchor; `percentage` of the statement vests there as a lump, and the
+occurrences after the cliff split the remaining `1 − percentage`. Because it is a **duration,
+not an occurrence index**, it handles cliffs that don't land on an installment boundary — there
+is **no on-grid/off-grid split** for date cliffs, and on-grid cliffs reproduce the old positional
+result exactly.
 
-- **Case A — cliff lands ON a grid boundary** (`d_K == cliffDate`): one core statement, `cliff: {occurrence: K, percentage: K/N}` (GCD-reduced `Fraction`). The only case the DSL produces.
-- **Case B — cliff OFF-grid** (event-gated, or a date between boundaries): **two core statements within the same template** — a pre-cliff aggregate (a one-occurrence EVENT-anchored statement, `occurrences:1, period:0`, which floats; or a DATE statement at `cliffDate`) plus the post-cliff grid statement (`occurrences = N − m`). Both sit in one canonical template (one floats, one chains) — this is lowering, not fan-out, and stays a `kind: "template"` result.
-- **Edge cases**: cliff after all occurrences → single `occurrences:1, period:0` statement at the cliff anchor (core's `Cliff.occurrence` can't exceed `occurrences`). Cliff before/at start → plain grid, no cliff. Unresolved cliff (e.g. unfired event with no resolvable alternative) → a `kind: "unresolved"` result emitting `UNRESOLVED_CLIFF` installments via the standalone allocator; a probed `LATER_OF` resolved tail lowers to a template normally.
-- **Non-proportional cliffs** are never produced by the DSL path; they enter core only via OCF data, carried as an exact `Fraction` (never re-derived as `K/N`).
+Extended resolves the cliff `VestingNodeExpr` (reusing `evaluateVestingNodeExpr` with a
+`vestingStart` overlay; `probeLaterOf` for the LATER_OF best) to a concrete `cliffDate`, then:
+
+- **Date / offset cliffs** (`CLIFF +12 months`, `CLIFF DATE …`) → `cliff = { length, period_type, percentage }`. The duration is the offset when the cliff is `vestingStart + duration`, else the day-count from anchor to `cliffDate`. `percentage` is the pre-cliff share (proportional `m/N`, GCD-reduced).
+- **Event cliffs** (`CLIFF EVENT "ipo"`) → **not** a `cliff` field. Carta has no event anchor *on* the cliff (events gate at the period level via `milestoneName`/`performanceCondition`), and a time-based cliff is a duration — so an event cliff lowers **structurally** (a floating EVENT statement for the lump + the post-cliff grid), or falls to `events-only` when that doesn't fit one template. This is the genuinely-hard case, independent of the cliff-shape choice.
+- **Unresolved cliff** (unfired event, no LATER_OF fallback) → a `kind: "unresolved"` result emitting `UNRESOLVED_CLIFF` installments via the standalone allocator; a probed `LATER_OF` resolved tail lowers normally.
+- **Edges:** cliff at/after the last occurrence → lump only; cliff at/before start → plain grid, no cliff.
+- **Non-proportional cliffs** are never produced by the DSL path; they enter core only via OCF/Carta data, carried as an exact `Fraction`.
+
+> **Design note (2026-05): positional → time-based cliff.** Core originally used OCF-Tools'
+> positional `{occurrence, percentage}` cliff. That was a **departure from Carta** (whose cliff is
+> time-based) and the root cause of an off-grid date-cliff problem — a positional cliff can only
+> point at a grid boundary, so a cliff between installments had no home. Switched to the time-based
+> shape: Carta-faithful, off-grid date cliffs lower trivially, and it matches the DSL (`CLIFF +12
+> months` is already a duration). On-grid results are unchanged, so numerics don't regress.
+> **Cross-repo:** an issue filed in OCF-Composed-Schemas to move the canonical cliff to time-based,
+> and the OCF-Tools standalone-compiler PR closed in favour of importing `@vestlang/core`.
 
 ### Numerics
 
@@ -195,7 +216,7 @@ Core computes in exact `Fraction` and emits integer shares (`floorSharesAt` uses
 ### Included
 
 - New `packages/core` (dual CJS/ESM) = vestlang's engine over the Carta-aligned canonical IR.
-- Rationalized single allocator (single cumulative round-down across the template; all 6 modes available), policy-aware date math (day-of-month, DST), positional cliff, structural/runtime validation.
+- Rationalized single allocator (single cumulative round-down across the template; all 6 modes available), policy-aware date math (day-of-month, DST), time-based cliff (Carta-aligned), structural/runtime validation.
 - Extended resolver/**classifier** + lowering + assembler (fidelity ladder: template / events-only / unresolved); `@vestlang/evaluator` retains its `evaluate*` API.
 - OCF-Tools repointed at `@vestlang/core` (its own commit/PR).
 - Clean-break rename of the umbrella to unscoped **`vestlang`** (retiring `@nathamcrewott/vestlang`).
@@ -267,7 +288,7 @@ Notes:
 
 **Outputs:**
 - New `packages/core/**` with dual CJS/ESM tsup, packaged to publish standalone as `@vestlang/core` on npmjs (no `private`, `publishConfig` → npmjs registry + `access: public`).
-- Canonical IR types: `VestingScheduleTemplate`, `VestingStatement`, positional `Cliff`, `Fraction`, `PeriodType`, `VestingRuntime` (incl. additive-optional `vestingDayOfMonth`/allocation).
+- Canonical IR types: `VestingScheduleTemplate`, `VestingStatement`, time-based `Cliff` (`{length, period_type, percentage}`), `Fraction`, `PeriodType`, `VestingRuntime` (incl. additive-optional `vestingDayOfMonth`/allocation). *(Cliff switched from positional to time-based in the 2026-05 redesign — see "Cliff representation and lowering".)*
 - Ported `validate.ts` (template + runtime halves).
 
 **Definition of Done:**
@@ -321,7 +342,7 @@ Notes:
 - Phase 2 allocator primitive + date math + fold.
 
 **Outputs:**
-- `packages/core/src/compile.ts`: statement expansion (DATE cursor + EVENT firings), chronological sort, rational cumulative allocation, positional cliff expansion (`perEventGrantFractions`-style), grant-date fold, EVENT-unfired skip.
+- `packages/core/src/compile.ts`: statement expansion (DATE cursor + EVENT firings), chronological sort, rational cumulative allocation, time-based cliff expansion (date-aware — lump at `anchor + cliff.length`, post-cliff on grid), grant-date fold, EVENT-unfired skip.
 - Dual emit: `compile(...) → {date, amount: string}[]` (OCF-native) and `compileToInstallments(...) → {date, amount: number}[]` (extended).
 - OCF-Tools' `vesting_compiler/__tests__` ported as core conformance tests.
 
@@ -333,7 +354,7 @@ Notes:
 
 **Implementation notes:**
 - **Core's compiler = vestlang's engine over the canonical IR.** The orchestration (expand→sort→cumulative→grant-fold) follows OCF's `compile.ts` as the reference for the IR semantics, but every primitive it calls is vestlang's (Phase 2 `allocateExact`, `addPeriod`, `foldToGrantDate`). OCF's `compile.ts` is reference-only — never shipped/imported.
-- **Positional cliff lands here** (`perEventGrantFractions`, `{occurrence, percentage}`) — the 4th OCF win; supersedes vestlang's temporal-fold cliff *for the template path*, while vestlang's fold is still used for the grant-date implicit cliff.
+- **Cliff handling** is date-aware `expandAnchored` (the positional `perEventGrantFractions` was later replaced by the time-based cliff — see the 2026-05 design note); vestlang's temporal fold is still used for the grant-date implicit cliff.
 - **Grant-date fold reuses `foldToGrantDate`** instead of OCF's inline `pendingPreGrant` loop — verified equivalent across all cases (pre-grant hold, on-grant merge, past-grant flush, all-before-grant). This is the doc's "cliff fold and grant-date fold are the same primitive."
 - **Dual emit:** `compile(...) → {date, amount: string}[]` (`CompiledEvent`, OCF/Carta-native) and `compileToInstallments(...) → {date, amount: number}[]` (`CompiledInstallment`). Signature `(template, totalShares, runtime)` matches OCF's arg order for zero-translation at Phase 7.
 - **Runtime conventions threaded:** `vestingDayOfMonth` into the date stepper, `allocationType` into the allocator (default `CUMULATIVE_ROUND_DOWN`; `CUMULATIVE_ROUNDING` also telescopes). Loaded modes aren't template-compilable (extended's events-only path).
@@ -353,7 +374,7 @@ Notes:
 - New `packages/evaluator/src/resolve/**` (depends on `@vestlang/core`).
 - Combinator/constraint/event resolution reusing the selector layer.
 - **Single-template lowering**: a resolved program → one canonical template (ordered chained DATE statements + floating EVENT statements). No fan-out.
-- Cliff lowering: Case A (on-grid, single statement `{occurrence: K, percentage: K/N}`), Case B (off-grid → two statements in one template), and edge cases.
+- Cliff lowering: resolve the cliff date → time-based `cliff = {length, period_type, percentage}` (no on-grid/off-grid split for date cliffs); event cliffs lower structurally or fall to events-only; edge cases (cliff past end / at-or-before start).
 - `resolveToCore` returns `kind: "template"` for fitting programs (the `events`/`unresolved` arms land in 4b).
 
 **Definition of Done:**
@@ -458,7 +479,7 @@ Notes:
 
 **Definition of Done:**
 - [ ] OCF-Tools suite green against `@vestlang/core`.
-- [ ] Includes a non-proportional-positional-cliff fixture (proves core carries fidelity the DSL doesn't express).
+- [ ] Includes a non-proportional-cliff fixture (proves core carries fidelity the DSL doesn't express).
 - [ ] PR opened in OCF-Tools, dependent on `@vestlang/core` being published (Phase 6).
 
 ---
@@ -518,7 +539,7 @@ Notes:
 ### Phase 7: OCF-Tools migration *(separate repo)*
 - [ ] `~/code/OCF-Tools` — delete `vesting_compiler/` + `types/canonical/vesting/`
 - [ ] `~/code/OCF-Tools/package.json` — depend on published `@vestlang/core`
-- [ ] OCF-Tools fixtures — add non-proportional-positional-cliff fixture
+- [ ] OCF-Tools fixtures — add non-proportional-cliff fixture
 
 ---
 

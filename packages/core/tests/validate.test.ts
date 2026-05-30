@@ -21,7 +21,11 @@ const validTemplate: VestingScheduleTemplate = {
       occurrences: 48,
       period: 1,
       period_type: "MONTHS",
-      cliff: { occurrence: 12, percentage: { numerator: 12, denominator: 48 } },
+      cliff: {
+        length: 12,
+        period_type: "MONTHS",
+        percentage: { numerator: 12, denominator: 48 },
+      },
       percentage: { numerator: 3, denominator: 4 },
     },
     {
@@ -113,7 +117,7 @@ describe("validateVestingScheduleTemplate", () => {
     );
   });
 
-  it("rejects a cliff occurrence exceeding the statement's occurrences", () => {
+  it("rejects a cliff with a negative length or a bad period_type", () => {
     const result = validateVestingScheduleTemplate({
       id: "x",
       statements: [
@@ -123,13 +127,46 @@ describe("validateVestingScheduleTemplate", () => {
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
-          cliff: { occurrence: 5, percentage: { numerator: 1, denominator: 4 } },
+          cliff: {
+            length: -1,
+            // @ts-expect-error — exercising the runtime guard with an invalid unit
+            period_type: "WEEKS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
           percentage: { numerator: 1, denominator: 1 },
         },
       ],
     });
     expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain("statements[0].cliff.occurrence");
+    expect(pathsOf(result.errors)).toEqual(
+      expect.arrayContaining([
+        "statements[0].cliff.length",
+        "statements[0].cliff.period_type",
+      ]),
+    );
+  });
+
+  it("rejects a cliff percentage outside [0, 1]", () => {
+    const result = validateVestingScheduleTemplate({
+      id: "x",
+      statements: [
+        {
+          order: 1,
+          vesting_base: { type: "DATE" },
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 2,
+            period_type: "MONTHS",
+            percentage: { numerator: 3, denominator: 2 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("statements[0].cliff.percentage");
   });
 
   it("rejects an unknown period_type", () => {

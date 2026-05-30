@@ -57,8 +57,14 @@ export interface Fraction {
 }
 
 export interface Cliff {
-  occurrence: number; // 1-indexed installment at which the cliff applies (must be <= containing statement's occurrences)
-  percentage: Fraction; // share of the statement that vests at cliff
+  // Time-based, matching Carta's VestingPeriod cliff (cliffLength/cliffLengthUnit/
+  // cliffPercentage). The cliff date is `length` `period_type`s after the
+  // statement's anchor; `percentage` of the statement vests there as a lump.
+  // A duration (not an occurrence index), so it handles cliffs that don't land
+  // on an installment boundary.
+  length: number; // duration until the cliff, in period_type units (integer >= 0)
+  period_type: PeriodType; // unit of `length`
+  percentage: Fraction; // share of the statement that vests at the cliff
 }
 
 // ─── Runtime convention catalogue ────────────────────────────
