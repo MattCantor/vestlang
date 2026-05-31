@@ -33,6 +33,9 @@ export type ResolveResult =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
+      // Pending witnesses (unfired atomic EVENT starts, Case 1) — advisory under
+      // a `template` verdict; the spec is a valid template regardless.
+      blockers: Blocker[];
     }
   | {
       kind: "events";

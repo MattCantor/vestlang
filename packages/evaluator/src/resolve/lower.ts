@@ -78,6 +78,10 @@ export interface StmtResolution {
   periodicity: { type: PeriodType; length: number; occurrences: number };
   start:
     | { state: "RESOLVED"; date: OCTDate; base: "DATE" | "EVENT"; eventId?: string }
+    // An unfired *atomic* EVENT start (Case 1): canonical holds it as an EVENT
+    // statement with no firing, so it lowers into the template rather than
+    // poisoning the program to `unresolved`. The blockers carry the pending-ness.
+    | { state: "PENDING_EVENT"; eventId: string; blockers: Blocker[] }
     | { state: "UNRESOLVED"; blockers: Blocker[] };
   cliff: LoweredCliff;
 }
@@ -114,17 +118,35 @@ export const resolveStatements = (
 
     // Start did not fully resolve. Periodicity is best-effort for the
     // unresolved arm: the winning schedule if partially picked, else the first.
-    const p =
-      res.type === "PICKED" ? res.picked.periodicity : firstSchedule(stmt.expr).periodicity;
+    const sched = res.type === "PICKED" ? res.picked : firstSchedule(stmt.expr);
+    const p = sched.periodicity;
     const blockers: Blocker[] =
       res.type === "PICKED"
         ? res.meta.type === "UNRESOLVED"
           ? res.meta.blockers
           : []
         : res.blockers;
+    const periodicity = { type: p.type, length: p.length, occurrences: p.occurrences };
+
+    // Case 1: an unfired *atomic* EVENT start (a bare SINGLETON named event, not
+    // a combinator or a system anchor) lowers into the template as an EVENT
+    // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
+    // IMPOSSIBLE and partially-picked combinators) and no cliff (an event-anchored
+    // cliff can't be lowered without the firing date — keep it UNRESOLVED so it
+    // isn't silently dropped).
+    const sb = startBase(sched.vesting_start);
+    if (res.type === "UNRESOLVED" && sb.base === "EVENT" && !p.cliff) {
+      return {
+        percentage,
+        periodicity,
+        start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
+        cliff: { state: "NONE" },
+      };
+    }
+
     return {
       percentage,
-      periodicity: { type: p.type, length: p.length, occurrences: p.occurrences },
+      periodicity,
       start: { state: "UNRESOLVED", blockers },
       cliff: { state: "NONE" },
     };
@@ -136,6 +158,10 @@ export type TemplateBuild =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
+      // Pending-ness under a `template` verdict: the unfired atomic EVENT starts
+      // (Case 1) whose witnesses haven't arrived. Advisory — the spec is still a
+      // valid template; these say which projections are still empty.
+      blockers: Blocker[];
     }
   | {
       ok: false;
@@ -179,7 +205,9 @@ export const buildTemplate = (
     totalShares,
   });
 
-  if (resolutions.some((r) => r.start.state !== "RESOLVED")) return unresolved();
+  // Only a genuinely-unresolved start poisons the program. An unfired atomic
+  // EVENT start (PENDING_EVENT) lowers into the template (Case 1).
+  if (resolutions.some((r) => r.start.state === "UNRESOLVED")) return unresolved();
   if (resolutions.some((r) => r.cliff.state === "UNRESOLVED")) return unresolved();
   // Loaded (non-cumulative) allocation isn't a single cumulative across the
   // template — the interchange has no allocation field. Route to events-only.
@@ -194,17 +222,25 @@ export const buildTemplate = (
   const dom = ctx.vesting_day_of_month;
   const statements: VestingStatement[] = [];
   const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
+  const blockers: Blocker[] = [];
   // Core dates are plain ISO strings (OCFDate); addPeriod returns the same.
   let startDate: string | undefined;
   let cursor: string | undefined;
 
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
-    if (r.start.state !== "RESOLVED") return unresolved(); // narrowing
     const { type, length, occurrences } = r.periodicity;
 
     let vesting_base: VestingStatement["vesting_base"];
-    if (r.start.base === "EVENT") {
+    if (r.start.state === "PENDING_EVENT") {
+      // Unfired atomic EVENT (Case 1): an EVENT statement with no firing. The
+      // projection stays empty until the witness arrives; the blocker carries
+      // the pending-ness onto the `template` verdict.
+      vesting_base = { type: "EVENT", event_id: r.start.eventId };
+      blockers.push(...r.start.blockers);
+    } else if (r.start.state === "UNRESOLVED") {
+      return unresolved(); // narrowing; unreachable after the guard above
+    } else if (r.start.base === "EVENT") {
       const eventId = r.start.eventId!;
       const firingDate = r.start.date;
       vesting_base = { type: "EVENT", event_id: eventId };
@@ -264,5 +300,6 @@ export const buildTemplate = (
     template: { id: "resolved", statements },
     runtime,
     totalShares,
+    blockers,
   };
 };

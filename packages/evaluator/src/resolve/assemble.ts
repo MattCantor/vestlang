@@ -42,7 +42,9 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
         installments: compiled.map((c) =>
           makeResolvedInstallment(c.date as OCTDate, c.amount),
         ),
-        blockers: [],
+        // Pending witnesses (unfired atomic EVENT starts, Case 1). A `template`
+        // can be representable yet carry blockers + an empty/partial projection.
+        blockers: result.blockers,
       };
     }
     case "events":
