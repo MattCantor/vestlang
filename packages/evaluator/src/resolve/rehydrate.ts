@@ -25,7 +25,7 @@ import type {
 import type {
   VestingRuntime,
   VestingScheduleTemplate,
-} from "@vestlang/core";
+} from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";

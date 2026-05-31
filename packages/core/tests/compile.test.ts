@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
-import type { VestingRuntime, VestingScheduleTemplate } from "../src/types";
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 
 // Conformance suite ported from OCF-Tools' vesting_compiler/__tests__/compile.test.ts
 // (the reference for the canonical-IR semantics). `compileVesting` → `compile`.

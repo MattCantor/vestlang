@@ -7,7 +7,7 @@
 // blocker/installment-producing callers stay in the evaluator; core only needs
 // the aggregation: amounts dated before `cliffDate` collapse onto `cliffDate`.
 
-import type { OCFDate } from "./types";
+import type { OCTDate } from "@vestlang/types";
 import { eq, lt } from "./dates";
 
 /**
@@ -20,10 +20,10 @@ import { eq, lt } from "./dates";
  * `fn` maps each emitted {date, amount} to the caller's installment shape.
  */
 export function foldByCliffDate<T>(
-  dates: OCFDate[],
+  dates: OCTDate[],
   amounts: number[],
-  cliffDate: OCFDate,
-  fn: (x: { date: OCFDate; amount: number }) => T,
+  cliffDate: OCTDate,
+  fn: (x: { date: OCTDate; amount: number }) => T,
 ): T[] {
   const out: T[] = [];
   let aggregate = 0;
@@ -72,11 +72,11 @@ export function foldByCliffDate<T>(
  * and return the rewritten parallel series. (Relocated `evaluateGrantDate`.)
  */
 export function foldToGrantDate(
-  dates: OCFDate[],
+  dates: OCTDate[],
   amounts: number[],
-  grantDate: OCFDate,
-): { dates: OCFDate[]; amounts: number[] } {
-  const folded = foldByCliffDate<{ date: OCFDate; amount: number }>(
+  grantDate: OCTDate,
+): { dates: OCTDate[]; amounts: number[] } {
+  const folded = foldByCliffDate<{ date: OCTDate; amount: number }>(
     dates,
     amounts,
     grantDate,

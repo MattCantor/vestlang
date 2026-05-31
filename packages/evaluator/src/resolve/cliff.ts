@@ -19,7 +19,7 @@ import type {
   OCTDate,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/core";
+import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, fracReduce, gt, toDate } from "@vestlang/core";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";

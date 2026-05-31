@@ -3,10 +3,10 @@ import { addMonthsRule } from "../src/evaluate/time.js";
 import {
   EvaluationContext,
   OCTDate,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 
-const ctx = (v: vesting_day_of_month): EvaluationContext => ({
+const ctx = (v: VestingDayOfMonth): EvaluationContext => ({
   events: { grantDate: "2025-01-01" as OCTDate },
   vesting_day_of_month: v,
   grantQuantity: 100,
@@ -17,7 +17,7 @@ const ctx = (v: vesting_day_of_month): EvaluationContext => ({
 const applyTest = (x: {
   src: OCTDate;
   months: number;
-  rule: vesting_day_of_month;
+  rule: VestingDayOfMonth;
   expected: OCTDate;
 }) => {
   const got = addMonthsRule(x.src, x.months, ctx(x.rule));

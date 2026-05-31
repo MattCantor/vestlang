@@ -1,8 +1,8 @@
 import type { PeriodTag, Program } from "@vestlang/types";
 import type { OCTDate } from "@vestlang/types";
 import type {
-  allocation_type,
-  vesting_day_of_month,
+  AllocationType,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 
 export interface TrancheInput {
@@ -24,8 +24,8 @@ export interface InferInput {
    * conventions both reproduce the installments, neither is "wrong" — the data
    * doesn't record which one made it.) Provide hints only when you know the
    * provenance. */
-  policy?: vesting_day_of_month;
-  allocationType?: allocation_type;
+  policy?: VestingDayOfMonth;
+  allocationType?: AllocationType;
 }
 
 export interface UniformComponent {
@@ -72,8 +72,8 @@ export interface InferResult {
   diagnostics: {
     residualError: number;
     totalQuantity: number;
-    vestingDayOfMonth: vesting_day_of_month;
-    allocationType: allocation_type;
+    vestingDayOfMonth: VestingDayOfMonth;
+    allocationType: AllocationType;
     cadenceTried: string[];
     notes: string[];
   };

@@ -11,14 +11,14 @@
 // All stepping is done in UTC (dates built at UTC midnight, read back in UTC),
 // so day arithmetic never drifts across DST transitions.
 
-import type { OCFDate, PeriodType, VestingDayOfMonth } from "./types";
+import type { OCTDate, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 
 const DEFAULT_DAY_OF_MONTH: VestingDayOfMonth =
   "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 
 // ISO-string ↔ Date (UTC midnight)
-export const toDate = (iso: OCFDate): Date => new Date(iso + "T00:00:00Z");
-export const toISO = (d: Date): OCFDate => d.toISOString().slice(0, 10);
+export const toDate = (iso: OCTDate): Date => new Date(iso + "T00:00:00Z");
+export const toISO = (d: Date): OCTDate => d.toISOString().slice(0, 10);
 
 /**
  * Step `months` calendar months from `iso`, picking the target day-of-month per
@@ -26,10 +26,10 @@ export const toISO = (d: Date): OCFDate => d.toISOString().slice(0, 10);
  * → Feb 28/29).
  */
 export function addMonthsRule(
-  iso: OCFDate,
+  iso: OCTDate,
   months: number,
   dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
-): OCFDate {
+): OCTDate {
   const d = toDate(iso);
 
   // Target (year, month) in UTC.
@@ -63,7 +63,7 @@ export function addMonthsRule(
 
 // Step `n` calendar days in UTC. `setUTCDate` rolls months/years correctly and
 // is timezone-independent; a local-time stepper would drift a day across DST.
-export const addDays = (iso: OCFDate, n: number): OCFDate => {
+export const addDays = (iso: OCTDate, n: number): OCTDate => {
   const d = toDate(iso);
   d.setUTCDate(d.getUTCDate() + n);
   return toISO(d);
@@ -74,11 +74,11 @@ export const addDays = (iso: OCFDate, n: number): OCFDate => {
  * day-of-month clamping applies). DAYS ignore the day-of-month policy.
  */
 export const addPeriod = (
-  start: OCFDate,
+  start: OCTDate,
   units: number,
   periodType: PeriodType,
   dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
-): OCFDate => {
+): OCTDate => {
   switch (periodType) {
     case "DAYS":
       return addDays(start, units);
@@ -90,6 +90,6 @@ export const addPeriod = (
 };
 
 // Comparisons on ISO YYYY-MM-DD strings (lexicographic == calendar order).
-export const lt = (a: OCFDate, b: OCFDate): boolean => a < b;
-export const gt = (a: OCFDate, b: OCFDate): boolean => a > b;
-export const eq = (a: OCFDate, b: OCFDate): boolean => a === b;
+export const lt = (a: OCTDate, b: OCTDate): boolean => a < b;
+export const gt = (a: OCTDate, b: OCTDate): boolean => a > b;
+export const eq = (a: OCTDate, b: OCTDate): boolean => a === b;

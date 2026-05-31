@@ -23,7 +23,7 @@ import type { EvaluationContextInput, SourceMap } from "@vestlang/types";
 import type {
   VestingRuntime,
   VestingScheduleTemplate,
-} from "@vestlang/core";
+} from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 
 /**

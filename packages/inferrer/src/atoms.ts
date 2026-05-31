@@ -2,7 +2,7 @@ import { addDays, addMonthsRule } from "@vestlang/evaluator";
 import type {
   OCTDate,
   Statement,
-  vesting_day_of_month,
+  VestingDayOfMonth,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
@@ -25,7 +25,7 @@ function bareDate(date: OCTDate): VestingNodeExpr {
 function backOnePeriod(
   date: OCTDate,
   cadence: { unit: "DAYS" | "MONTHS"; length: number },
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
 ): OCTDate {
   const ctx = minimalCtx(policy);
   if (cadence.unit === "MONTHS") {
@@ -36,7 +36,7 @@ function backOnePeriod(
 
 function buildUniform(
   c: UniformComponent,
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
 ): Statement {
   const total = c.total;
   const vestingStart = backOnePeriod(c.startDate, c.cadence, policy);
@@ -104,7 +104,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
 
 export function buildStatement(
   c: Component,
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
 ): Statement {
   if (c.kind === "UNIFORM") return buildUniform(c, policy);
   if (c.kind === "SINGLE_TRANCHE") return buildSingle(c);

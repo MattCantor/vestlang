@@ -13,5 +13,8 @@ export interface LaterOf<T> extends Selector<T, "LATER_OF"> {}
 
 // types/Date.schema.json
 // existing OCT schema
-declare const __isoDateBrand: unique symbol;
-export type OCTDate = string & { [__isoDateBrand]: never };
+//
+// A plain string alias (ISO 8601 YYYY-MM-DD). The name documents intent in
+// signatures; it carries no nominal brand today. Reconsidering a real brand +
+// a validating mint is tracked as a vestlang issue.
+export type OCTDate = string;

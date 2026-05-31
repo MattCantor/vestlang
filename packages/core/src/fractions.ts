@@ -4,7 +4,7 @@
 // shares-of-grant in exact rational so a schedule telescopes to the total
 // without float drift; these helpers keep fractions reduced as they combine.
 
-import type { Fraction } from "./types";
+import type { Fraction } from "@vestlang/types";
 
 const gcd = (a: number, b: number): number => {
   let x = Math.abs(a);

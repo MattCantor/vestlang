@@ -4,7 +4,6 @@
 // Phase 2 adds the engine primitives: fractions, the allocator, date math, and
 // the anchor-date fold. The compile entry points arrive in Phase 3.
 
-export * from "./types";
 export * from "./validate";
 export * from "./fractions";
 export * from "./allocate";

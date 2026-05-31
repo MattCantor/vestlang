@@ -1,6 +1,7 @@
-// Canonical vesting IR for `@vestlang/core` — the Carta-aligned interchange.
+// Canonical vesting IR — the Carta-aligned interchange. The single shared home
+// for these types; `@vestlang/core` imports them back (type-only).
 //
-// Ported verbatim from OCF-Tools' canonical vesting types
+// Ported from OCF-Tools' canonical vesting types
 // (~/code/OCF-Tools/types/canonical/vesting/types.ts), which themselves track
 // OCF-Composed-Schemas:
 // https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/blob/main/canonical/vesting/types.ts
@@ -8,12 +9,11 @@
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
 // with no adaptation. So the field names stay snake_case (`vesting_base`,
 // `period_type`, `event_id`, `realized_fraction`) to match the canonical wire
-// form exactly — any divergence would force the OCF↔core bridge this package
+// form exactly — any divergence would force the OCF↔core bridge `@vestlang/core`
 // exists to delete.
 
-// ─── OCF types we $ref ───────────────────────────────────────
-// From types/Date.schema.json: ISO 8601 YYYY-MM-DD
-export type OCFDate = string;
+import type { OCTDate } from "./helpers.js";
+import type { AllocationType, VestingDayOfMonth } from "./oct_types.js";
 
 // From enums/PeriodType.schema.json
 export type PeriodType = "DAYS" | "MONTHS" | "YEARS";
@@ -25,7 +25,7 @@ export interface VestingScheduleTemplate {
 
 export interface VestingStatement {
   order: number; // 1-based sequence position
-  vesting_base: VestingBase; // anchor: per-grant date (DATE) or named event (EVENT)
+  vesting_base: TemplateVestingBase; // anchor: per-grant date (DATE) or named event (EVENT)
   occurrences: number; // integer >= 1; number of vesting events in segment
   period: number; // integer >= 0; length of one installment, in period_type units
   period_type: PeriodType;
@@ -40,13 +40,19 @@ export interface VestingStatement {
 // event's definition (what it means, how it's achieved) is not modeled here;
 // the consumer maintains that out-of-band. Multiple statements may reference the
 // same event_id — a single firing fans out to all matching statements.
-export type VestingBase = VestingBaseDate | VestingBaseEvent;
+//
+// Named `Template*` to distinguish it from the DSL/AST `VestingBase` family
+// (`./ast.ts`), which preserves a syntactic `value: string` rather than this
+// semantic `event_id`.
+export type TemplateVestingBase =
+  | TemplateVestingBaseDate
+  | TemplateVestingBaseEvent;
 
-export interface VestingBaseDate {
+export interface TemplateVestingBaseDate {
   type: "DATE";
 }
 
-export interface VestingBaseEvent {
+export interface TemplateVestingBaseEvent {
   type: "EVENT";
   event_id: string;
 }
@@ -67,59 +73,6 @@ export interface Cliff {
   percentage: Fraction; // share of the statement that vests at the cliff
 }
 
-// ─── Runtime convention catalogue ────────────────────────────
-// vestlang's wider convention space — the allocation mode and the
-// vesting-day-of-month policy — rides on the runtime as additive-optional
-// fields, never on the template. The canonical template carries no field for
-// either and assumes the defaults (allocation → CUMULATIVE_ROUND_DOWN;
-// day-of-month → VESTING_START_DAY_OR_LAST_DAY_OF_MONTH). So canonical/OCF data
-// is a valid subset of core's input with these fields simply omitted.
-//
-// These unions are defined locally — core depends on no other vestlang package
-// so it ships as the one dependency-free engine OCF-Tools installs.
-
-export type AllocationType =
-  | "CUMULATIVE_ROUNDING"
-  | "CUMULATIVE_ROUND_DOWN"
-  | "FRONT_LOADED"
-  | "BACK_LOADED"
-  | "FRONT_LOADED_TO_SINGLE_TRANCHE"
-  | "BACK_LOADED_TO_SINGLE_TRANCHE";
-
-export type VestingDayOfMonth =
-  | "01"
-  | "02"
-  | "03"
-  | "04"
-  | "05"
-  | "06"
-  | "07"
-  | "08"
-  | "09"
-  | "10"
-  | "11"
-  | "12"
-  | "13"
-  | "14"
-  | "15"
-  | "16"
-  | "17"
-  | "18"
-  | "19"
-  | "20"
-  | "21"
-  | "22"
-  | "23"
-  | "24"
-  | "25"
-  | "26"
-  | "27"
-  | "28"
-  | "29_OR_LAST_DAY_OF_MONTH"
-  | "30_OR_LAST_DAY_OF_MONTH"
-  | "31_OR_LAST_DAY_OF_MONTH"
-  | "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
-
 // Per-grant runtime data the engine substitutes into a template:
 //   - startDate    — the hoisted vesting start; the DATE cursor's origin.
 //   - eventFirings — zero or more named-event firings. A single firing fans out
@@ -128,16 +81,18 @@ export type VestingDayOfMonth =
 //   - grantDate    — when provided, scheduled amounts dated before grantDate are
 //                    held back and emitted as a single aggregate on grantDate
 //                    (an implicit cliff at grant date).
-//   - vestingDayOfMonth / allocationType — additive-optional convention fields
-//                    (see above); omitted ⇒ the canonical defaults.
+//   - vestingDayOfMonth / allocationType — additive-optional convention fields;
+//                    omitted ⇒ the canonical defaults (allocation →
+//                    CUMULATIVE_ROUND_DOWN; day-of-month →
+//                    VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
 export interface VestingRuntime {
-  startDate?: OCFDate;
+  startDate?: OCTDate;
   eventFirings?: Array<{
     event_id: string;
-    date: OCFDate;
+    date: OCTDate;
     realized_fraction?: Fraction;
   }>;
-  grantDate?: OCFDate;
+  grantDate?: OCTDate;
   vestingDayOfMonth?: VestingDayOfMonth;
   allocationType?: AllocationType;
 }

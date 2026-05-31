@@ -1012,11 +1012,47 @@ done once the design has stopped moving.
 
 **Definition of Done:**
 
-- [ ] No `@vestlang/types → @vestlang/core` dependency; `@vestlang/core` depends on
+- [x] No `@vestlang/types → @vestlang/core` dependency; `@vestlang/core` depends on
       `@vestlang/types` (type-only). No re-export shims anywhere.
-- [ ] One `VestingBase` family (no name collision); the parallel-named pairs reconciled.
-- [ ] `EvaluatedSchedule` is the strict four-arm union (`status` required; no untagged arm).
-- [ ] Full build + test suite green.
+- [x] One `VestingBase` family (no name collision); the parallel-named pairs reconciled.
+- [x] `EvaluatedSchedule` is the strict four-arm union (`status` required; no untagged arm).
+- [x] Full build + test suite green.
+
+**Implementation notes (delivered):**
+
+- **Canonical types relocated** from the (now-deleted) `packages/core/src/types.ts` into a new
+  `packages/types/src/canonical.ts`; `@vestlang/core`'s internal modules and `compile.test.ts`
+  `import type` them from `@vestlang/types`. `core/src/index.ts` dropped `export * from "./types"`
+  (no re-export shim) — core's public API still *uses* the types (e.g. `compile`'s signature), so
+  they surface in core's `.d.ts` (see the publishing note below).
+- **`VestingBase` collision → `Template*` prefix.** The canonical family is now
+  `TemplateVestingBase` / `TemplateVestingBaseDate` / `TemplateVestingBaseEvent`; the DSL/AST
+  family (`ast.ts`) keeps the bare `VestingBase` names. (Decision: rename the canonical side — the
+  smaller blast radius — to keep the grammar names clean.)
+- **Enum pairs → PascalCase.** `allocation_type`/`vesting_day_of_month` were *renamed* to
+  `AllocationType`/`VestingDayOfMonth` (single definition in `oct_types.ts`); core's duplicate
+  PascalCase definitions were dropped. **Field** names are untouched (`EvaluationContext` keeps
+  snake `allocation_type:`/`vesting_day_of_month:`; `VestingRuntime` keeps camel `allocationType`/
+  `vestingDayOfMonth`) — only the *type* references moved to PascalCase. Blast radius was larger
+  than the staging note implied: the **inferrer** uses these as types throughout (~12 files), plus
+  mcp-server and several tests — all reconciled via a guarded rename that preserved member-access
+  (`.allocation_type`), object keys (`x:`), and string-literal keys (`Omit<…, "allocation_type">`).
+- **`OCFDate`/`OCTDate` → unified, brand DROPPED.** Going in, the decision was a branded
+  `OCTDate`; on hitting the cast-tax it became clear the brand was compile-time-only,
+  unvalidated, and already pierced by `as OCTDate` casts — so `OCTDate` is now a plain `string`
+  alias (`helpers.ts`), `OCFDate` removed. Reconsidering a *real* brand + a validating `iso()`
+  mint is tracked as **vestlang issue #14**.
+- **`EvaluatedSchedule` strict four-arm.** Added `InstallmentSet { installments; blockers }` to
+  `evaluation.ts`; the untagged arm is gone (`status` required). The installment-builder helpers
+  (`makeTranches.ts`'s `make*Schedule`, `resolve/unresolved.ts`'s `unresolved`/`EMPTY`) now return
+  `InstallmentSet`; `classify.ts` reads only `.installments`/`.blockers`, so consumers were
+  unaffected.
+- **Publishing / dependency direction.** `@vestlang/types` is a **devDependency** of
+  `@vestlang/core` (type-only). To keep the *published* `@vestlang/core` self-contained (it ships
+  public to npmjs; `@vestlang/types` is private), `@vestlang/types` now builds a **single bundled
+  `dist/index.d.ts` via tsup** (0-byte JS — it's type-only), and core's `tsup.config.ts` uses
+  `dts: { resolve: true }` to **inline** those declarations into core's `dist/index.d.ts`. Verified:
+  core's emitted `.d.ts` carries the canonical types inline with **no** `@vestlang/types` import.
 
 ---
 
@@ -1085,11 +1121,19 @@ done once the design has stopped moving.
   directly today; the helper lives there and is re-exported through the public package. App-routing
   onto `@vestlang/vestlang` is a later migration.
 
-### Phase 7: Type consolidation
+### Phase 7: Type consolidation ✅
 
-- [ ] `packages/core/src/types.ts` → `@vestlang/types` (relocate canonical types; `core` imports back)
-- [ ] `packages/types/package.json` / `packages/core/package.json` (flip the dependency arrow)
-- [ ] `VestingBase` collision rename + `OCTDate`/`OCFDate`/allocation/day-of-month reconciliation
-- [ ] split type-vs-value imports across evaluator (`resolve/cliff.ts`, etc.)
-- [ ] `EvaluatedSchedule` strict four-arm (`status` required); installment-builder container type
-- [ ] full build + test suite green
+- [x] `packages/core/src/types.ts` (deleted) → `packages/types/src/canonical.ts` (relocate canonical
+      types; `core` `import type`s them back from `@vestlang/types`; `core/src/index.ts` drops the
+      `export * from "./types"`)
+- [x] `packages/types/package.json` / `packages/core/package.json` (flip the arrow: types drops the
+      `@vestlang/core` dep; core gains `@vestlang/types` as a **devDependency**)
+- [x] `VestingBase` collision → `Template*` rename; `OCFDate`→`OCTDate` (brand dropped, issue #14);
+      `allocation_type`/`vesting_day_of_month` → PascalCase `AllocationType`/`VestingDayOfMonth`
+- [x] split type-vs-value imports across evaluator (`resolve/{cliff,classify,lower,types,rehydrate,
+      sidecar}.ts`); plus inferrer/mcp/test type-name reconciliation (wider than anticipated)
+- [x] `EvaluatedSchedule` strict four-arm (`status` required); `InstallmentSet` container type
+      (`evaluation.ts`); `makeTranches`/`unresolved` re-typed
+- [x] `@vestlang/types` → tsup single-file d.ts; core `dts: { resolve: true }` inlines it →
+      self-contained `@vestlang/core` d.ts (keeps the public engine standalone)
+- [x] full build (13/13) + test suite (18/18) green

@@ -3,12 +3,12 @@ import { parse } from "@vestlang/dsl";
 import { evaluateStatement } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
-  allocation_type,
+  AllocationType,
   EvaluationContextInput,
   OCTDate,
   Program,
   ResolvedInstallment,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import type { TrancheInput } from "../src/types.js";
@@ -363,8 +363,8 @@ interface RoundTripCase {
   dsl: string;
   grantDate: string;
   grantQuantity: number;
-  policy: vesting_day_of_month;
-  allocation?: allocation_type;
+  policy: VestingDayOfMonth;
+  allocation?: AllocationType;
 }
 
 function runRoundTrip(c: RoundTripCase) {

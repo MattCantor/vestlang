@@ -28,7 +28,7 @@ import type {
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
-} from "@vestlang/core";
+} from "@vestlang/types";
 import { addPeriod, eq, fracReduce } from "@vestlang/core";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -277,7 +277,7 @@ export const buildTemplate = (
   const sourceMap: SourceMap = {};
   const synthByDef = new Map<string, string>();
   let synthOrdinal = 0;
-  // Core dates are plain ISO strings (OCFDate); addPeriod returns the same.
+  // Core dates are plain ISO strings (OCTDate); addPeriod returns the same.
   let startDate: string | undefined;
   let cursor: string | undefined;
 

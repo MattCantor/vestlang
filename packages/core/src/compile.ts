@@ -13,11 +13,11 @@
 
 import type {
   Fraction,
-  OCFDate,
+  OCTDate,
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
-} from "./types";
+} from "@vestlang/types";
 import { allocateExact } from "./allocate";
 import { addPeriod, gt } from "./dates";
 import { fracAdd, fracMul, fracSub, ONE, ZERO } from "./fractions";
@@ -29,13 +29,13 @@ import {
 
 /** OCF/Carta-native vesting event — amount as a decimal string. */
 export interface CompiledEvent {
-  date: OCFDate;
+  date: OCTDate;
   amount: string;
 }
 
 /** Numeric installment — for extended's downstream rendering. */
 export interface CompiledInstallment {
-  date: OCFDate;
+  date: OCTDate;
   amount: number;
 }
 
@@ -44,7 +44,7 @@ export interface CompiledInstallment {
  * plus enough metadata for a deterministic chronological sort.
  */
 interface RawEvent {
-  date: OCFDate;
+  date: OCTDate;
   fractionOfGrant: Fraction;
   statementOrder: number;
   occurrence: number;
@@ -69,16 +69,16 @@ interface RawEvent {
  */
 const expandAnchored = (
   statement: VestingStatement,
-  anchor: OCFDate,
+  anchor: OCTDate,
   multiplier: Fraction,
   dom: VestingRuntime["vestingDayOfMonth"],
 ): RawEvent[] => {
   const N = statement.occurrences;
   const stmtFraction = statement.percentage;
-  const gridDate = (i: number): OCFDate =>
+  const gridDate = (i: number): OCTDate =>
     addPeriod(anchor, i * statement.period, statement.period_type, dom);
   const event = (
-    date: OCFDate,
+    date: OCTDate,
     fraction: Fraction,
     occurrence: number,
   ): RawEvent => ({
@@ -143,13 +143,13 @@ const expandAnchored = (
 const expandStatement = (
   statement: VestingStatement,
   runtime: VestingRuntime,
-  dateCursor: OCFDate | undefined,
-): { events: RawEvent[]; nextCursor: OCFDate | undefined } | null => {
+  dateCursor: OCTDate | undefined,
+): { events: RawEvent[]; nextCursor: OCTDate | undefined } | null => {
   const dom = runtime.vestingDayOfMonth;
 
   if (statement.vesting_base.type === "DATE") {
     // Validator guarantees dateCursor is defined when any DATE statement exists.
-    const anchor = dateCursor as OCFDate;
+    const anchor = dateCursor as OCTDate;
     const events = expandAnchored(statement, anchor, ONE, dom);
     const nextCursor = addPeriod(
       anchor,
@@ -194,7 +194,7 @@ const compileRaw = (
   // Step 1: expand each statement. DATE statements chain through dateCursor;
   // EVENT statements anchor absolutely at their firing.
   const statements = [...template.statements].sort((a, b) => a.order - b.order);
-  let dateCursor: OCFDate | undefined = runtime.startDate;
+  let dateCursor: OCTDate | undefined = runtime.startDate;
   const rawEvents: RawEvent[] = [];
   for (const statement of statements) {
     const result = expandStatement(statement, runtime, dateCursor);
@@ -218,7 +218,7 @@ const compileRaw = (
   const mode = runtime.allocationType ?? "CUMULATIVE_ROUND_DOWN";
   let cumulative: Fraction = ZERO;
   let vestedSoFar = 0;
-  const dates: OCFDate[] = [];
+  const dates: OCTDate[] = [];
   const amounts: number[] = [];
   for (const raw of rawEvents) {
     cumulative = fracAdd(cumulative, raw.fractionOfGrant);

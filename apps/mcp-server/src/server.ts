@@ -100,10 +100,10 @@ const EVAL_CONTEXT_FIELDS = {
       `Named events referenced by the DSL, e.g. {"ipo": "2027-06-01"}. grantDate is set automatically.`,
     ),
   vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-    "OCT vesting_day_of_month. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+    "OCT VestingDayOfMonth. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
   ),
   allocation_type: ALLOCATION_TYPE.optional().describe(
-    "OCT allocation_type. Defaults to CUMULATIVE_ROUND_DOWN.",
+    "OCT AllocationType. Defaults to CUMULATIVE_ROUND_DOWN.",
   ),
 };
 
@@ -580,7 +580,7 @@ export function createServer(): McpServer {
     {
       title: "Add a period to a date",
       description:
-        "Return date + (length × unit), applying the vesting_day_of_month rule for month/year arithmetic (handles month-end, leap years, day-29/30/31 clamping). Use negative length to subtract. Units: days, weeks, months, years.",
+        "Return date + (length × unit), applying the VestingDayOfMonth rule for month/year arithmetic (handles month-end, leap years, day-29/30/31 clamping). Use negative length to subtract. Units: days, weeks, months, years.",
       inputSchema: z
         .object({
           date: ISO_DATE.describe("Starting date (YYYY-MM-DD)"),
@@ -679,9 +679,9 @@ export function createServer(): McpServer {
   server.registerTool(
     "vestlang_resolve_vesting_day",
     {
-      title: "Normalize a date under a vesting_day_of_month rule",
+      title: "Normalize a date under a VestingDayOfMonth rule",
       description:
-        "Apply a vesting_day_of_month rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does 29_OR_LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
+        "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does 29_OR_LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
       inputSchema: z
         .object({
           date: ISO_DATE,

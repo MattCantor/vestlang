@@ -8,7 +8,7 @@
 import type {
   Blocker,
   EvaluationContext,
-  EvaluatedSchedule,
+  InstallmentSet,
   LaterOfVestingNode,
   OCTDate,
   Statement,
@@ -30,7 +30,7 @@ import {
   makeUnresolvedVestingStartSchedule,
 } from "../evaluate/makeTranches.js";
 
-const EMPTY: EvaluatedSchedule = { installments: [], blockers: [] };
+const EMPTY: InstallmentSet = { installments: [], blockers: [] };
 
 /**
  * Symbolic installments + blockers for one statement. A fully-resolved statement
@@ -39,7 +39,7 @@ const EMPTY: EvaluatedSchedule = { installments: [], blockers: [] };
 export const unresolvedInstallments = (
   stmt: Statement,
   ctx: EvaluationContext,
-): EvaluatedSchedule => {
+): InstallmentSet => {
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
   const res = evaluateScheduleExpr(stmt.expr, ctx);
 

@@ -1,9 +1,9 @@
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  allocation_type,
+  AllocationType,
   OCTDate,
   Statement,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { minimalCtx, walk } from "./cadence.js";
@@ -26,8 +26,8 @@ function evalToMap(
   grantDate: OCTDate,
   totalQuantity: number,
   asOf: OCTDate,
-  policy: vesting_day_of_month,
-  allocationType: allocation_type,
+  policy: VestingDayOfMonth,
+  allocationType: AllocationType,
 ): AmtMap | null {
   const result = evaluateStatement(stmt, {
     events: { grantDate },
@@ -91,8 +91,8 @@ export function foldPreGrant(
   grantDate: OCTDate,
   totalQuantity: number,
   asOf: OCTDate,
-  policy: vesting_day_of_month,
-  allocationType: allocation_type,
+  policy: VestingDayOfMonth,
+  allocationType: AllocationType,
 ): PreGrantResult {
   const ctx = minimalCtx(policy);
   const gKey = grantDate as unknown as string;

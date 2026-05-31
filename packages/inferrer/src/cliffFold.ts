@@ -1,5 +1,5 @@
 import { addMonthsRule, addDays } from "@vestlang/evaluator";
-import type { OCTDate, vesting_day_of_month } from "@vestlang/types";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { minimalCtx, walk } from "./cadence.js";
 import type {
   CliffUniformComponent,
@@ -14,7 +14,7 @@ function walkBack(
   from: OCTDate,
   cadence: { unit: "DAYS" | "MONTHS"; length: number },
   steps: number,
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
 ): OCTDate {
   const ctx = minimalCtx(policy);
   if (cadence.unit === "MONTHS") {
@@ -30,7 +30,7 @@ export interface FoldResult {
 
 export function foldCliffs(
   components: Component[],
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
   grantDate: OCTDate | null,
 ): FoldResult {
   const ctx = minimalCtx(policy);
