@@ -805,10 +805,36 @@ grant-scoped synthetic event + a source-map definition, lowering it to a `templa
 
 **Definition of Done:**
 
-- [ ] `100% MONTHLY OVER 48 FROM LATER OF(+12 MONTHS, EVENT "ipo")` (IPO unfired) → `status: "template"`
+- [x] `100% MONTHLY OVER 48 FROM LATER OF(+12 MONTHS, EVENT "ipo")` (IPO unfired) → `status: "template"`
       matching the doc's Stage-A artifact (synthetic statement + `sourceMap` entry + selector blocker).
-- [ ] `EARLIER_OF` and `LATER_OF` over a named event both admit; a pure-date combinator routes to `events-only`.
-- [ ] Two portions on the same anchor share one `event_id` and one source-map entry.
+- [x] `EARLIER_OF` and `LATER_OF` over a named event both admit. **A pure-date combinator earns no
+      synthetic event** and keeps its normal resolution — it resolves to a single DATE anchor →
+      `template` (no `sourceMap` entry), or stays `unresolved` if a literal date arm is still future
+      under asOf. (Revised: the earlier "routes to `events-only`" was imprecise. A combinator over a
+      *start anchor* selects an **anchor**, not a structure, so a resolved pure-date combinator IS a
+      valid one-template start; `events-only` — which holds concrete dated installments — is the wrong
+      bucket, and an unresolved pure-date combinator has no dates to put there. The admission test is
+      purely a gate for *minting* synthetic events; failing it changes nothing.)
+- [x] Two portions on the same anchor share one `event_id` and one source-map entry.
+
+**Implementation notes (delivered):**
+
+- A **new `SYNTHETIC_EVENT` arm** on `StmtResolution.start` (`lower.ts`) carries the raw combinator
+  expression; `resolveStatements` routes a not-fully-resolved start to it when the start is a
+  combinator (`EARLIER_OF`/`LATER_OF`) referencing ≥1 named (non-system) `EVENT`, with no cliff and
+  no `IMPOSSIBLE`. `buildTemplate` mints an **ordinal-only opaque id (`evt_<n>`)**, dedups by the
+  stringified definition (so two portions on the byte-identical anchor share one id + one entry),
+  emits the `sourceMap` entry (`@vestlang/stringify`'s `stringifyVestingNodeExpr`), and lowers to an
+  EVENT statement with **no** `eventFirings`. `sourceMap` is threaded through
+  `TemplateBuild`/`ResolveResult`/`assemble`.
+- **Id scheme = ordinal-only now**, grant-ref prefixing deferred to P5 persistence: the evaluator
+  resolves one program at a time and `EvaluationContext` has no grant identity, so there's nothing to
+  collide with at emit; the id is opaque and preserved-not-recomputed regardless.
+- **`EARLIER_OF` only admits a synthetic event while genuinely pending** — i.e. when neither arm has
+  resolved. A `+N months` (= `grantDate`-relative) arm is a **system EVENT** and is *not* asOf-gated,
+  so `EARLIER OF(+12mo, EVENT "ipo")` resolves early to the offset date (the "some-arm-resolved"
+  policy) rather than staying pending; a *literal future `DATE`* arm IS asOf-gated and keeps it
+  pending. The early-resolution/closed-world handling of `EARLIER_OF` is Stage-D / **Phase 4**.
 
 ---
 
@@ -949,12 +975,18 @@ done once the design has stopped moving.
 - [x] evaluator tests (`assemble.test.ts`, `resolve.classify.test.ts`: atomic event, 4,800-share hybrid,
       combinator boundary)
 
-### Phase 3: Case 2
+### Phase 3: Case 2 ✅
 
-- [ ] `packages/evaluator/src/resolve/lower.ts` (synthetic id mint, dedup, source-map emit)
-- [ ] `packages/evaluator/src/resolve/classify.ts` (admission test)
-- [ ] `packages/stringify/src/*` (definition rendering, if a helper is needed)
-- [ ] evaluator tests (Stage-A artifact, admission test)
+- [x] `packages/evaluator/src/resolve/lower.ts` (`SYNTHETIC_EVENT` start arm + `isCombinator`/
+      `referencesNamedEvent` admission helpers + Case-2 branch in `resolveStatements`; `evt_<n>` mint,
+      definition-keyed dedup, source-map emit in `buildTemplate`)
+- [x] `packages/evaluator/src/resolve/{types,index,assemble}.ts` (`sourceMap` threaded onto the
+      `template` arm); `classify.ts` — **no change needed** (admission lives in `lower.ts`, not classify)
+- [x] `packages/stringify/src/*` — **no change needed** (`stringifyVestingNodeExpr` already renders a
+      combinator anchor in isolation)
+- [x] `packages/evaluator/package.json` (added `@vestlang/stringify` workspace dep)
+- [x] evaluator tests (`assemble.test.ts`: Stage-A artifact, LATER_OF + EARLIER_OF admit, pure-date
+      no-synthetic, dedup; the old LATER_OF→unresolved test rewritten to →template)
 
 ### Phase 4: Rehydration
 

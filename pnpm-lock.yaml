@@ -217,6 +217,9 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../core
+      '@vestlang/stringify':
+        specifier: workspace:*
+        version: link:../stringify
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types

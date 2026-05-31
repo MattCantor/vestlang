@@ -38,7 +38,7 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
         status: "template",
         template: result.template,
         runtime: result.runtime,
-        sourceMap: {}, // populated by Case 2 (Phase 3)
+        sourceMap: result.sourceMap, // Case 2 synthetic-event definitions (may be {})
         installments: compiled.map((c) =>
           makeResolvedInstallment(c.date as OCTDate, c.amount),
         ),

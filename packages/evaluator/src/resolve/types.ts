@@ -13,6 +13,7 @@ import type {
 import type {
   Blocker,
   ResolvedInstallment,
+  SourceMap,
   SymbolicInstallment,
 } from "@vestlang/types";
 
@@ -33,8 +34,12 @@ export type ResolveResult =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
-      // Pending witnesses (unfired atomic EVENT starts, Case 1) — advisory under
-      // a `template` verdict; the spec is a valid template regardless.
+      // Externalized combinator gates (Case 2): `event_id → { definition }`. Empty
+      // unless a synthetic event was minted.
+      sourceMap: SourceMap;
+      // Pending witnesses (unfired atomic EVENT starts, Case 1; unresolved
+      // synthetic-event combinators, Case 2) — advisory under a `template` verdict;
+      // the spec is a valid template regardless.
       blockers: Blocker[];
     }
   | {
