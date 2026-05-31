@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
+  Blocker,
   EvaluationContextInput,
   OCTDate,
   Program,
@@ -237,28 +238,169 @@ describe("assemble — Case 1: classify on the spec", () => {
   });
 });
 
+describe("assemble — Case 2: combinator-over-anchors → synthetic event", () => {
+  // A combinator over a *start anchor* selects an anchor, not a structure: the
+  // downstream grid is fixed regardless of which arm wins, so it lowers to ONE
+  // canonical template by externalizing the gate as a synthetic event + a
+  // source-map definition. Pending in `blockers`, definition in `sourceMap`.
+
+  // Recursively search a blocker tree for the unfired-event leaf.
+  const findsEventNotOccurred = (bs: Blocker[], event: string): boolean =>
+    bs.some(
+      (b) =>
+        (b.type === "EVENT_NOT_YET_OCCURRED" && b.event === event) ||
+        ((b.type === "UNRESOLVED_SELECTOR" || b.type === "IMPOSSIBLE_SELECTOR") &&
+          findsEventNotOccurred(b.blockers as Blocker[], event)),
+    );
+
+  // `+12mo` desugars to `grantDate + 12 months` (a system anchor → DATE);
+  // `EVENT "ipo"` is the genuine named condition that earns the synthetic event.
+  const plus12mo = () =>
+    makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+      makeDuration(12, "MONTHS", "PLUS"),
+    ]);
+  const ipo = () => makeSingletonNode(makeVestingBaseEvent("ipo"));
+
+  const combinatorStmt = (
+    sel: "LATER_OF" | "EARLIER_OF",
+    amount: Amount,
+  ): { amount: Amount; expr: Schedule } => ({
+    amount,
+    expr: {
+      type: "SINGLETON",
+      vesting_start: { type: sel, items: [plus12mo(), ipo()] },
+      periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
+    },
+  });
+
+  it("LATER OF(+12mo, EVENT ipo), ipo unfired → template + synthetic event", () => {
+    const out = evaluateStatement(combinatorStmt("LATER_OF", portion(1, 1)), ctxInput());
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    // One EVENT statement anchored on a minted synthetic id.
+    expect(out.template.statements).toHaveLength(1);
+    const base = out.template.statements[0].vesting_base;
+    expect(base.type).toBe("EVENT");
+    const eventId = base.type === "EVENT" ? base.event_id : "";
+    expect(eventId).toMatch(/^evt_/);
+    // No witness — the synthetic event hasn't fired.
+    expect(out.runtime.eventFirings ?? []).toEqual([]);
+    // The gate's meaning lives in the source map, keyed by the same id.
+    expect(Object.keys(out.sourceMap)).toEqual([eventId]);
+    expect(out.sourceMap[eventId].definition).toMatch(/LATER OF/);
+    expect(out.sourceMap[eventId].definition).toMatch(/ipo/);
+    // Pending-ness rides `blockers`; projection empty (event not fired).
+    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+    expect(out.installments).toEqual([]);
+  });
+
+  it("EARLIER OF(DATE future, EVENT ipo) before the cap → template + synthetic event", () => {
+    // A literal future DATE arm IS asOf-gated, so with asOf before it AND ipo
+    // unfired the EARLIER_OF stays pending (neither arm resolved) — rather than
+    // resolving early to a system-anchored offset. (Closed-world early resolution
+    // of EARLIER_OF is Stage-D / Phase 4 territory.)
+    const earlierStmt = {
+      amount: portion(1, 1),
+      expr: {
+        type: "SINGLETON",
+        vesting_start: {
+          type: "EARLIER_OF",
+          items: [makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)), ipo()],
+        },
+        periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
+      },
+    } as { amount: Amount; expr: Schedule };
+    const out = evaluateStatement(earlierStmt, ctxInput({ asOf: "2025-06-01" as OCTDate }));
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    const base = out.template.statements[0].vesting_base;
+    expect(base.type).toBe("EVENT");
+    expect(Object.keys(out.sourceMap)).toHaveLength(1);
+    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+  });
+
+  it("two portions on the same anchor share one event_id + one source-map entry", () => {
+    const program: Program = [
+      combinatorStmt("LATER_OF", portion(3, 4)),
+      combinatorStmt("LATER_OF", portion(1, 4)),
+    ];
+    const [out] = evaluateProgram(program, ctxInput());
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    expect(out.template.statements).toHaveLength(2);
+    const ids = out.template.statements.map((s) =>
+      s.vesting_base.type === "EVENT" ? s.vesting_base.event_id : undefined,
+    );
+    expect(ids[0]).toBeDefined();
+    expect(ids[0]).toBe(ids[1]); // same gate → same surrogate
+    expect(Object.keys(out.sourceMap)).toEqual([ids[0]]); // one entry, deduped
+  });
+
+  it("Stage-A worked example: 100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo)", () => {
+    const out = evaluateStatement(
+      combinatorStmt("LATER_OF", portion(1, 1)),
+      ctxInput({ grantQuantity: 4800 }),
+    );
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    const s = out.template.statements[0];
+    expect(s.vesting_base.type).toBe("EVENT");
+    expect(s.occurrences).toBe(48);
+    expect(s.period).toBe(1);
+    expect(s.period_type).toBe("MONTHS");
+    expect(Object.keys(out.sourceMap)).toHaveLength(1);
+    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+    expect(out.installments).toEqual([]); // no firing → nothing projected yet
+  });
+
+  it("pure-date combinator earns NO synthetic event (resolves to a DATE template)", () => {
+    // LATER OF(+12mo, +24mo) — no named event, so it fails the admission test and
+    // resolves to a single DATE anchor (the later). Template, no source map.
+    const out = evaluateStatement(
+      {
+        amount: portion(1, 1),
+        expr: {
+          type: "SINGLETON",
+          vesting_start: {
+            type: "LATER_OF",
+            items: [
+              makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+                makeDuration(12, "MONTHS", "PLUS"),
+              ]),
+              makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+                makeDuration(24, "MONTHS", "PLUS"),
+              ]),
+            ],
+          },
+          periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
+        },
+      },
+      ctxInput(), // asOf 2035 → both date arms resolve
+    );
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    expect(out.template.statements[0].vesting_base.type).toBe("DATE");
+    expect(out.sourceMap).toEqual({});
+  });
+});
+
 describe("assemble — unresolved status", () => {
-  // A combinator-*over-anchors* start (Case 2 / Phase 3 territory) still stays
-  // `unresolved` while a named arm is unfired — only a bare SINGLETON EVENT is
-  // admitted in Case 1.
-  it("unfired combinator start (LATER OF) → unresolved + blockers", () => {
+  // A pure-date combinator that cannot fully resolve (a literal DATE arm still in
+  // the future under asOf, no named event to externalize) stays `unresolved`.
+  it("pure-date LATER OF with a future DATE arm → unresolved + blockers", () => {
     const laterOfSchedule: Schedule = {
       type: "SINGLETON",
       vesting_start: {
         type: "LATER_OF",
         items: [
+          makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)),
           makeSingletonNode(makeVestingBaseEvent("grantDate"), [
             makeDuration(12, "MONTHS", "PLUS"),
           ]),
-          makeSingletonNode(makeVestingBaseEvent("ipo")),
         ],
       },
       periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
     };
     const program: Program = [{ amount: portion(1, 1), expr: laterOfSchedule }];
-    const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
+    // asOf before the literal 2030 arm: LATER_OF can't resolve (all-arms policy),
+    // and with no named event there's nothing to externalize → unresolved.
+    const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" as OCTDate }));
     expect(out.status).toBe("unresolved");
-    expect(out.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED")).toBe(true);
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(true);
   });
