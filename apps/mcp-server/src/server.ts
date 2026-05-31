@@ -6,6 +6,7 @@ import {
   evaluateStatement,
   evaluateProgram,
   evaluateStatementAsOf,
+  presentSchedule,
 } from "@vestlang/evaluator";
 import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
@@ -369,7 +370,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting schedule",
       description:
-        "Evaluate vestlang against a grant context and return every installment (RESOLVED, UNRESOLVED, or IMPOSSIBLE) for each statement along with any blockers. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
+        "Evaluate vestlang against a grant context and return every installment (RESOLVED, UNRESOLVED, or IMPOSSIBLE) for each statement along with any blockers. Each result also carries `representable` (the spec fits a canonical layer) and `pending` (witnesses still missing) — note a `template` can be `pending` (e.g. an unfired event), so read pending from the `pending` flag / `blockers`, never from `status`. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -391,13 +392,18 @@ export function createServer(): McpServer {
         evaluateStatement(stmt, ctx),
       );
       return jsonResult({
-        statements: schedules.map((s, i) => ({
-          index: i,
-          status: s.status,
-          ...("reason" in s && s.reason ? { reason: s.reason } : {}),
-          installments: s.installments,
-          blockers: s.blockers,
-        })),
+        statements: schedules.map((s, i) => {
+          const { representable, pending } = presentSchedule(s);
+          return {
+            index: i,
+            status: s.status,
+            representable,
+            pending,
+            ...("reason" in s && s.reason ? { reason: s.reason } : {}),
+            installments: s.installments,
+            blockers: s.blockers,
+          };
+        }),
       });
     },
   );
@@ -408,7 +414,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), \"unresolved\" (blocked on an unfired event, with blockers), or \"impossible\" (self-contradictory — no firing can ever resolve it). Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
+        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), \"unresolved\" (blocked on an unfired event, with blockers), or \"impossible\" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -427,8 +433,11 @@ export function createServer(): McpServer {
       if (!parsed.ok) return jsonResult({ error: parsed.error });
       const ctx = buildContext(params);
       const [schedule] = evaluateProgram(parsed.program, ctx);
+      const { representable, pending } = presentSchedule(schedule);
       return jsonResult({
         status: schedule.status,
+        representable,
+        pending,
         ...("reason" in schedule && schedule.reason
           ? { reason: schedule.reason }
           : {}),
