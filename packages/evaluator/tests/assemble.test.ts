@@ -9,6 +9,7 @@ import type {
   EvaluationContextInput,
   OCTDate,
   Program,
+  Schedule,
   VestingNode,
   VestingPeriod,
 } from "@vestlang/types";
@@ -178,8 +179,11 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
   });
 });
 
-describe("assemble — unresolved status", () => {
-  it("unfired-event start → unresolved + blockers, symbolic installments", () => {
+describe("assemble — Case 1: classify on the spec", () => {
+  // An unfired *atomic* EVENT start is a valid canonical template (an EVENT
+  // statement with no firing), not `unresolved`: pending is the absence of a
+  // witness, carried in `blockers`, not a property of the spec's representability.
+  it("atomic unfired EVENT start → template (empty projection + blocker)", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -187,6 +191,71 @@ describe("assemble — unresolved status", () => {
         occurrences: 1,
       }),
     ];
+    const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    expect(out.installments).toEqual([]); // no firing → nothing projected yet
+    expect(
+      out.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+    // The template holds the EVENT statement; runtime carries no witness.
+    expect(out.template.statements).toHaveLength(1);
+    expect(out.template.statements[0].vesting_base).toEqual({
+      type: "EVENT",
+      event_id: "ipo",
+    });
+    expect(out.runtime.eventFirings ?? []).toEqual([]);
+  });
+
+  // The HYBRID bug (doc DoD): a DATE portion vesting now + an unfired EVENT
+  // portion. The unfired event must NOT poison the program — the already-vested,
+  // fully-dated DATE installments must survive.
+  it("75% MONTHLY + 25% unfired EVENT → template, 3,600 dated + pending blocker", () => {
+    const program: Program = [
+      stmt(portion(3, 4), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+      }),
+      stmt(portion(1, 4), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 0,
+        occurrences: 1,
+      }),
+    ];
+    const [out] = evaluateProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
+    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    expect(sum(out.installments)).toBe(3600); // the 75% time-based portion, dated
+    expect(
+      out.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+    expect(out.template.statements).toHaveLength(2); // DATE grid + pending EVENT
+  });
+});
+
+describe("assemble — unresolved status", () => {
+  // A combinator-*over-anchors* start (Case 2 / Phase 3 territory) still stays
+  // `unresolved` while a named arm is unfired — only a bare SINGLETON EVENT is
+  // admitted in Case 1.
+  it("unfired combinator start (LATER OF) → unresolved + blockers", () => {
+    const laterOfSchedule: Schedule = {
+      type: "SINGLETON",
+      vesting_start: {
+        type: "LATER_OF",
+        items: [
+          makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+            makeDuration(12, "MONTHS", "PLUS"),
+          ]),
+          makeSingletonNode(makeVestingBaseEvent("ipo")),
+        ],
+      },
+      periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
+    };
+    const program: Program = [{ amount: portion(1, 1), expr: laterOfSchedule }];
     const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
     expect(out.status).toBe("unresolved");
     expect(out.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED")).toBe(true);

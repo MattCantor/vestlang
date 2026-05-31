@@ -66,8 +66,8 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
   });
 });
 
-describe("resolveToCore — unresolved (can't materialize yet)", () => {
-  it("unfired-event start → unresolved with an EVENT_NOT_YET_OCCURRED blocker", () => {
+describe("resolveToCore — Case 1: atomic unfired EVENT → template", () => {
+  it("unfired atomic EVENT start → template (no firing) + EVENT_NOT_YET_OCCURRED blocker", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -76,14 +76,24 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
       }),
     ];
     const result = resolveToCore(program, ctxInput()); // ipo not fired
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // EVENT statement lowered with its event_id; runtime has no witness for it.
+    expect(result.template.statements).toHaveLength(1);
+    expect(result.template.statements[0].vesting_base).toEqual({
+      type: "EVENT",
+      event_id: "ipo",
+    });
+    expect(result.runtime.eventFirings ?? []).toEqual([]);
     expect(
-      result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
+      result.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
     ).toBe(true);
-    expect(result.symbolic.length).toBeGreaterThan(0);
   });
+});
 
+describe("resolveToCore — unresolved (can't materialize yet)", () => {
   it("unresolved cliff (LATER_OF over unfired events) → unresolved with blockers", () => {
     const cliff: VestingNodeExpr = {
       type: "LATER_OF",

@@ -27,6 +27,7 @@ export const resolveToCore = (
       template: build.template,
       runtime: build.runtime,
       totalShares: build.totalShares,
+      blockers: build.blockers,
     };
   }
 

@@ -758,11 +758,29 @@ already exists; this extends it to the unfired case.
 
 **Definition of Done:**
 
-- [ ] The doc's 4,800-share hybrid (`75% MONTHLY OVER 48` + `25% ON EVENT "ipo"`, `ipo` unfired)
+- [x] The doc's 4,800-share hybrid (`75% MONTHLY OVER 48` + `25% ON EVENT "ipo"`, `ipo` unfired)
       evaluates to `status: "template"` with 3,600 dated shares + one pending EVENT statement (today:
       `unresolved`, 0 dated).
-- [ ] Atomic unfired `EVENT "ipo"` start → `template`; combinator / event-cliff paths unchanged.
-- [ ] Evaluator tests cover atomic-event-in-template and the hybrid.
+- [x] Atomic unfired `EVENT "ipo"` start → `template`; combinator / event-cliff paths unchanged.
+- [x] Evaluator tests cover atomic-event-in-template and the hybrid.
+
+**Implementation notes (delivered):**
+
+- The pending atomic event is carried by a **new `PENDING_EVENT` arm** on `StmtResolution.start`
+  (`lower.ts`), minted in `resolveStatements` when the start is a bare `SINGLETON` named EVENT
+  (`startBase(...).base === "EVENT"`), the evaluation is a non-PICKED `UNRESOLVED` (rules out
+  `IMPOSSIBLE` / partially-picked combinators), **and** the schedule has no cliff (an event-anchored
+  cliff can't be lowered without the firing date — it falls back to `UNRESOLVED` rather than silently
+  drop). `buildTemplate`'s `:182` guard now bails only on `state === "UNRESOLVED"`; `PENDING_EVENT`
+  lowers to an EVENT statement with **no** `eventFirings` entry, and its blockers ride the **`template`
+  arm** (new `blockers` field threaded through `ResolveResult.template` → `assemble`).
+- **`classify.ts` needed no functional change** — its helpers already guard `r.start.state !==
+  "RESOLVED"`, which treats `PENDING_EVENT` as non-dated.
+- The two pre-existing tests asserting the old miscategorization (unfired atomic event → `unresolved`,
+  in `assemble.test.ts` and `resolve.classify.test.ts`) were rewritten to the Case-1 `template`
+  behavior; a combinator-start test now guards the boundary. Verified end-to-end through the DSL
+  parser (`[ 0.75 VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month, 0.25 VEST FROM EVENT ipo ]`
+  → `template`, 48 dated = 3,600, `EVENT_NOT_YET_OCCURRED: ipo`).
 
 ---
 
@@ -922,11 +940,14 @@ done once the design has stopped moving.
 - [x] `apps/cli/src/{evaluate,index}.ts`, `apps/mcp-server/src/server.ts` (`fidelity → status`, verdict text)
 - [x] `packages/evaluator/tests/assemble.test.ts` (`.status` assertions)
 
-### Phase 2: Case 1
+### Phase 2: Case 1 ✅
 
-- [ ] `packages/evaluator/src/resolve/lower.ts` (`buildTemplate` `:182`; unfired-atomic-EVENT path)
-- [ ] `packages/evaluator/src/resolve/classify.ts`
-- [ ] evaluator tests (atomic event, 4,800-share hybrid)
+- [x] `packages/evaluator/src/resolve/lower.ts` (`PENDING_EVENT` start arm; `buildTemplate` `:182` guard
+      → `state === "UNRESOLVED"`; unfired-atomic-EVENT lowering; `blockers` on the ok-arm)
+- [x] `packages/evaluator/src/resolve/{types,index,assemble}.ts` (`blockers` threaded onto the
+      `template` arm); `classify.ts` — no change needed (already guards `!== "RESOLVED"`)
+- [x] evaluator tests (`assemble.test.ts`, `resolve.classify.test.ts`: atomic event, 4,800-share hybrid,
+      combinator boundary)
 
 ### Phase 3: Case 2
 
