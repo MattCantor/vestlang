@@ -10,7 +10,11 @@ the first worked example of an OCF-core extension mechanism.
 
 - **Status**: Design Specification (concept-level) — supersedes the earlier Carta-centric draft and
   substantially expands the in-review fidelity draft. **Also a proposal *to* canonical / OCF** (the
-  `ext` channel; restoring `comments`).
+  `ext` channel; restoring `comments`). A review pass revised three things below: the synthetic
+  `event_id` scheme (**content hash → opaque grant-scoped surrogate**), the verdict model
+  (**IMPOSSIBLE is a terminal runtime arm, not a static check; `fidelity` sub-classifies only the
+  *resolvable* outcomes**), and the reach of Case 2 (**start anchors only** — event cliffs select a
+  structure, so they stay `unresolved` until fired).
 - **Priority**: High (carries the OCTC summit narrative).
 - **Complexity**: High.
 - **Interchange target**: OCF **canonical** (`~/code/OCF-Composed-Schemas/canonical/`) — the
@@ -76,17 +80,25 @@ fact.** Classifying on the projection conflates **"not realized yet"** with **"n
 the *rule* with its *evaluation status* because it's an API read model. vestlang must not import that
 fusion.)
 
-### The three fidelity levels = three ways canonical can hold a grant
+### Resolution outcomes and the fidelity ladder
 
-| vestlang fidelity | Canonical representation | What lives here |
-|---|---|---|
-| **`template`** | the grant references a `VestingScheduleTemplate` (the spec) | time-based schedules **and** atomic event-anchored ones (EVENT statements). The projection fills in as `TX_CANONICAL_VESTING_EVENT`s arrive. **Plus contingent schedules via Case 2.** |
-| **`events-only`** | the materialized `vestings` array (OCF `Vesting {date, amount}`) | resolved and dated but doesn't fit one template: overlapping absolute starts, a loaded allocation mode |
-| **`unresolved` / impossible** | neither | a combinator that won't resolve *to one structure*, a self-contradiction |
+Resolving a spec against runtime yields one of three outcomes — **resolvable**, **pending**, or
+**impossible**. *Fidelity* sub-classifies only the **resolvable** ones: it asks which canonical layer
+can hold a schedule that *has* a satisfiable shape. Pending and impossible are not fidelity levels —
+they are statements about **resolvability**, also computed against runtime (impossibility is *not* a
+static pre-check; see "Resolvability vs fidelity" below).
 
-Read top to bottom it's a ladder: hold the **spec** if you can; fall back to the **dated
-projection**; report inexpressible only when both fail. The atomic unfired event sits at the **top**
-— it has a spec — even though its projection is empty so far.
+| resolution outcome | verdict | Canonical representation | What lives here |
+|---|---|---|---|
+| **resolvable** | **`template`** | the grant references a `VestingScheduleTemplate` (the spec) | time-based schedules **and** atomic event-anchored ones (EVENT statements). The projection fills in as `TX_CANONICAL_VESTING_EVENT`s arrive. **Plus contingent schedules via Case 2.** |
+| **resolvable** | **`events-only`** | the materialized `vestings` array (OCF `Vesting {date, amount}`) | resolved and dated but doesn't fit one template: overlapping absolute starts, a loaded allocation mode |
+| **pending** | **`unresolved`** | neither *yet* | a combinator-over-*structures* awaiting its selector; an event cliff awaiting its firing — **satisfiable, not yet determined** |
+| **impossible** | **`impossible`** | none | a self-contradiction — **unsatisfiable**; no witness assignment can ever resolve it. A **terminal** verdict, not a fidelity level |
+
+Read the first two rows as a ladder: hold the **spec** if you can; fall back to the **dated
+projection**. The atomic unfired event sits at the **top** — it has a spec — even though its
+projection is empty so far. `unresolved` and `impossible` sit *off* the ladder: the first is "not
+yet," the second is "never."
 
 ### Verified: where this bites in the current code
 
@@ -117,6 +129,34 @@ as-of 2035 with `ipo` unfired — returns `fidelity: unresolved` with **0 dated 
 25%.) Classifying on the spec fixes this: the DATE portion
 resolves and dates; the EVENT portion floats pending its witness; the schedule is a `template`.
 
+### Resolvability vs fidelity — three orthogonal axes
+
+Classifying on the spec forces three reads that used to travel together to come apart. Once an
+unfired event can sit inside a `template` (Case 1, and Case 2 below), a schedule can be
+`fidelity: template` **and** carry blockers **and** project nothing — all at once. So three fields
+answer three different questions:
+
+| field | answers | property of |
+|---|---|---|
+| `fidelity` | which canonical layer holds the spec (`template` / `events-only`) | the **spec** (representability) |
+| `blockers` | why the projection is incomplete — which witnesses are missing | the **runtime** (pending-ness) |
+| `installments` | the projection so far | the **projection** (may be empty under a `template`) |
+
+The consumer rule that falls out: **"pending" is read from `blockers`, never from `fidelity`;
+"representable" is read from `fidelity`, never from `installments`.** This is the operational form of
+"pending is the absence of a fact." A surface that gates on `fidelity === "unresolved"` (today's MCP
+`vestlang_evaluate` / CLI) would **miss** Case 1/2 pending-templates and render them as complete — so
+those surfaces must move to keying pending off `blockers`.
+
+Impossibility lives on the *resolvability* axis, not the fidelity one — and it is **runtime-derived**,
+not static. The same spec (`AFTER EVENT "ipo" AND BEFORE 2025-01-01`) is `unresolved` while the IPO is
+unfired, `impossible` once it fires after 2025, and `template` if it fires before. So `impossible` is
+the **terminal/unsatisfiable** outcome (no future witness helps), distinct from `unresolved`'s
+**transient/pending** (a witness might yet resolve it). Detecting impossibility from a *non-firing*
+("the IPO still hasn't fired, so `BEFORE 2025` can never be met") rides the same **closed-world**
+assumption as the resolver's date-capped selectors — see Stage D — so the `unresolved → impossible`
+transition is monotonic only under append-only, forward-dated firings.
+
 ### The atomic-vs-combinator boundary
 
 The boundary for Case 1 is **atomic condition vs. combinator**, and it's already enforced structurally
@@ -127,7 +167,7 @@ genuinely non-template cases:
 |---|---|---|
 | **Atomic event** — `EVENT "ipo"` | canonical-native EVENT statement | **`template`** (Case 1) |
 | **Combinator over anchors** — `LATER OF(+12mo, EVENT "ipo")` | canonical has no combinator… | **`template`** *if it selects an anchor* (Case 2, Part II); else `unresolved` |
-| **Event-anchored cliff** — `CLIFF EVENT "ipo"` | canonical/Carta cliffs are duration-only | `events-only` / structural re-expression |
+| **Event-anchored cliff** — `CLIFF EVENT "ipo"` | the firing *partitions* the grid (lump size + pre/post split) → selects a **structure**, not an anchor; and canonical/Carta cliffs are duration-only | **pending → `unresolved`; resolved → concrete statements / `events-only`.** **Not** a synthetic-event/Case-2 case (Part II close). The engine routes all event cliffs to events-only today (`lower.ts:189`). |
 
 > This revises `core-extended-split.md:131` ("Unfired EVENT → … `unresolved` + blockers") — an
 > unfired atomic EVENT is now a `template`. (These design docs are working scratch; the sibling is not
@@ -162,19 +202,69 @@ atomic event `evt_…`. Then:
   downstream grid is unchanged.
 - **Runtime:** an ordinary `TX_CANONICAL_VESTING_EVENT` witness, once known.
 
-So **the template and the witness need no schema change** — the synthetic event is indistinguishable
-from a real named event to canonical, which is correct: by the time canonical sees it, it *is* just an
-atomic event. The only thing canonical can't hold is the event's **definition** (`evt_… =
+So **the template and the witness need no schema change.** But the synthetic event is *not*
+"indistinguishable from a real named event" — it is identical in **shape** (an ordinary EVENT
+statement + a witness) and distinct in **scope.** There are now two tiers of event:
+
+| | **named event** (`EVENT "ipo"`) | **synthetic event** (`evt_…`) |
+|---|---|---|
+| witness origin | a real-world fact, attested once | **computed** by re-resolving the definition |
+| scope of the witness | **global** — one date, shared by every grant referencing `"ipo"` | **grant-local** — `resolve(definition, thisGrant.runtime)` |
+| depends on | nothing but itself | the grant's date context (grant date, resolved vesting start) **+** the named events its definition references |
+
+A named `"ipo"` is a fact about the *world*; `LATER OF(+12mo, EVENT "ipo")` is a fact about *this
+grant* (its `+12mo`) combined with a fact about the world. Two grants with the byte-identical anchor
+resolve to **different** witness dates, so a synthetic event's firing is grant-local, not a
+coalition-wide fact — it cannot be hoisted to a shared event registry the way `"ipo"`'s firing can.
+This is why the id is **grant-scoped** (Part III) and the definition is stored **once per grant
+template** (Part IV). The only thing canonical can't hold is the event's **definition** (`evt_… =
 LATER OF(+12mo, EVENT "ipo")`) — see Parts III–IV.
 
 ### Not the synthetic-firing smuggle
 
 `core-extended-split.md:174` rejects encoding an independent **absolute-date grid** as an event with a
-synthetic firing — faking *service/calendar time* as a condition. Case 2 is different: a combinator
-over anchors is a **genuine condition** (its firing date depends on a real event), so representing it
-as a named event is legitimate. The distinguishing test: *is the anchor a real condition, or a
-calendar date dressed up as one?* Case 2 is the former; the smuggle is the latter (and still routes to
-`events-only`).
+synthetic firing — faking *service/calendar time* as a condition. Case 2 is different, but the
+distinguishing test must be **structural, not outcome-based.** "Is the anchor a real condition or a
+calendar date dressed up as one?" asks about the *resolved outcome* — which is undecidable at emit
+(you don't yet know which arm wins) and isn't even discriminating: *both* `LATER_OF` and `EARLIER_OF`
+can resolve to a pure calendar date (`LATER OF(+12mo, EVENT "ipo")` with the IPO firing early =
+`max(2026-01-01, …)` = 2026-01-01). So the witness landing on a calendar date can't be the signal.
+
+The right test — decidable at emit, and the policy the resolver already implies
+(`core-extended-split.md:174`, "emit an EVENT statement only when the DSL names a real event"):
+
+> A combinator anchor earns a synthetic event iff its **definition references at least one genuine
+> condition** (a named `EVENT`). The smuggle is a definition with **no condition at all** — a pure
+> `FROM DATE` grid dressed as an event.
+
+Under this test both `EARLIER_OF` and `LATER_OF` over `EVENT "ipo"` qualify; the pure-date grid still
+fails and routes to `events-only`. And the calendar-outcome can't recreate the case-3 harm (mislabeling
+*pure* service time as performance-conditioned): the **opaque id gives a blind reader opacity, not a
+perf/service mislabel** — it sees "opaque `evt_…` fired 2026-01-01," never an asserted ASC-718
+performance condition — and the source-map definition preserves the full hybrid truth for anyone who
+can read it. The case-3 harm requires asserting a condition where *none* exists; a combinator anchor's
+definition always contains one.
+
+### Case 2 is start-anchor-only — cliffs are the mirror
+
+The synthetic-event device works for a **start** anchor because a combinator over anchors selects an
+*anchor, not a structure*: the downstream grid is invariant regardless of which arm wins, so you can
+store a fixed template and defer one date. An event-gated **cliff** is the exact counter-example. On a
+start-anchored grid (`monthly OVER 48 FROM 2025-01-01, CLIFF EVENT "ipo"`), the firing date
+**partitions** the grid — it sets both the *lump size* (everything accrued by the firing) and the
+*pre/post split point*. So the downstream structure is *a function of* the unknown date, not invariant.
+
+That is precisely "selects a structure," which routes *away* from `template`. Hence a cliff has **no
+pending-template form**: while the event is unfired it is `unresolved` (the lump can't be deferred into
+any canonical field — the time-based cliff is duration-only, with no `event_id` slot and no
+compute-the-lump-from-a-firing semantics); once fired, the partition is known and it lowers to concrete
+statements (a floating EVENT lump at the firing + a start-anchored suffix) or to `events-only`. The
+synthetic event **never applies to a cliff**: its only job is to defer a date inside a *stored pending
+template*, and a cliff is never that — it is pending-and-not-a-template, or resolved-and-concrete.
+(Combinator cliffs behave identically; the combinator changes nothing, since neither can be a pending
+template.) The one thing that would change this is extending canonical's cliff field to reference an
+event *and* compute the lump at projection time — a change to **core cliff semantics**, out of scope
+here.
 
 ---
 
@@ -182,50 +272,79 @@ calendar date dressed up as one?* Case 2 is the former; the smuggle is the latte
 
 ### The source map
 
-Externalizing the gate produces a **source map**: `event_id → DSL definition` (a `VestingNodeExpr`
-rendered to a DSL string via `@vestlang/stringify`). It rides on extended's output and **absorbs the
-blockers** — a blocker stops meaning "I failed to classify" and starts meaning "here is an
-externalized condition, its DSL definition, and (currently) why its witness can't be computed yet."
+Externalizing the gate produces a **source map**: `event_id → { definition, label? }`, where
+`definition` is the anchor `VestingNodeExpr` rendered to a DSL string via `@vestlang/stringify` (entry
+shape detailed under "The id," below). It rides on extended's output and **absorbs the blockers** — a
+blocker stops meaning "I failed to classify" and starts meaning "here is an externalized condition, its
+DSL definition, and (currently) why its witness can't be computed yet."
 
-This also surfaces a new output requirement: **extended must expose the canonical `template` +
-`runtime` + source map**, not just installments (`packages/types/src/evaluation.ts` is
-installments-centric today). Storing the canonical artifact is the whole point of Case 2.
+### The output contract is a four-arm union
+
+Storing the canonical artifact is the whole point of Case 2, so the output must carry the **spec** and
+**runtime**, not just the projection. `packages/types/src/evaluation.ts` (`EvaluatedSchedule`,
+`Fidelity`) is installments-centric today and has no slot for them. The verdict is a **four-arm
+discriminated union** — and the presence of the artifact is *implied by* the arm, so encode it in the
+type rather than as bolt-on optionals:
+
+```ts
+type EvaluatedSchedule =
+  | { fidelity: "template";    template: ExtTemplate; runtime: VestingRuntime;
+                               sourceMap: SourceMap; installments: ResolvedInstallment[]; blockers: Blocker[] }
+  | { fidelity: "events-only"; installments: ResolvedInstallment[]; reason: NonTemplateReason; blockers: Blocker[] }
+  | { fidelity: "unresolved";  installments: SymbolicInstallment[]; blockers: Blocker[] }
+  | { fidelity: "impossible";  installments: ImpossibleInstallment[]; blockers: ImpossibleBlocker[] }
+```
+
+Only the `template` arm carries the `{template, runtime, sourceMap}` artifact. `sourceMap` is its own
+**engine-neutral** field — whether it is persisted *in-band* (`template.ext.vestlang`) or as a
+*sidecar* table is a downstream serialization choice (Part IV), not part of the output shape. The
+`fidelity` tag becomes **required** once the legacy engine is gone (Phase 5b) — its optionality today
+exists only because the legacy engine left it undefined. (`impossible` is the terminal verdict of
+"Resolvability vs fidelity"; the discriminant now spans both *resolvability* and *fidelity*, so a name
+like `status` reads more honestly than `fidelity`.)
 
 ### Worked example (4,800 shares, granted 2025-01-01)
 
 DSL: `100% MONTHLY OVER 48 FROM LATER OF(+12 MONTHS, EVENT "ipo")`.
 
-**Stage A — first evaluation, IPO unfired (as-of 2025-06-01).** `LATER OF(grant+12mo=2026-01-01,
-ipo=?)` can't resolve (the max is undetermined). Instead of bailing to `unresolved`, extended
-externalizes the anchor:
+**Stage A — first emit, IPO unfired.** Lowering to a *template* resolves the spec **structurally**
+(asOf *off*: dates resolve to their values regardless of the clock — this is Part I's spec/projection
+split, not an as-of projection). So `+12mo` resolves to 2026-01-01 and only the IPO is genuinely
+pending: `LATER OF(2026-01-01, ipo=?)` can't resolve (the max is undetermined). Instead of bailing to
+`unresolved`, extended externalizes the anchor as a **grant-scoped synthetic event** (`evt_…` — an
+opaque surrogate; see "The id," below):
 
 ```jsonc
 {
   "fidelity": "template",
-  "template": {                                   // canonical SPEC (verbatim OCF semantic fields)
+  "template": {                                    // canonical SPEC — pure OCF semantic fields, no ext
     "id": "resolved",
-    "ext": { "vestlang": { "event_definitions": {  // the source map (Part IV)
-      "evt_4f9c": "LATER OF(+12 MONTHS, EVENT \"ipo\")"
-    } } },
     "statements": [
-      { "order": 1, "vesting_base": { "type": "EVENT", "event_id": "evt_4f9c" },
+      { "order": 1, "vesting_base": { "type": "EVENT", "event_id": "evt_g7f3_01" },
         "occurrences": 48, "period": 1, "period_type": "MONTHS",
         "percentage": { "numerator": 1, "denominator": 1 } }
     ]
   },
-  "runtime": { "grantDate": "2025-01-01" },        // RUNTIME — no witness for evt_4f9c yet
+  "runtime": { "grantDate": "2025-01-01" },        // RUNTIME — no witness for evt_g7f3_01 yet
+  "sourceMap": {                                   // engine-neutral; persistence folds this into
+    "evt_g7f3_01": {                               //   template.ext.vestlang (proposed) or a sidecar (shipped)
+      "definition": "LATER OF(+12 MONTHS, EVENT \"ipo\")",
+      "label": "1-year cliff or IPO"
+    }
+  },
   "installments": [],                              // PROJECTION — empty; EVENT statement skipped
-  "blockers": [                                    // absorbed into the verdict, advisory
+  "blockers": [                                    // pending-ness, advisory under a `template` verdict
     { "type": "UNRESOLVED_SELECTOR", "selector": "LATER_OF",
       "blockers": [ { "type": "EVENT_NOT_YET_OCCURRED", "event": "ipo" } ] }
   ]
 }
 ```
 
-**Stage B — store.** The canonical template + runtime persist as OCF objects (the `evt_4f9c` EVENT
-statement is an ordinary floating-event statement); the source map persists *in* the template's
-`ext.vestlang` bag (Part IV). A vestlang-blind reader sees a valid template gated on an opaque,
-not-yet-fired event — correct, just opaque.
+**Stage B — store.** The canonical template + runtime persist as OCF objects (the `evt_g7f3_01` EVENT
+statement is an ordinary floating-event statement); the source map persists as a sidecar table keyed
+by `event_id` (shipped) or *in* the template's `ext.vestlang` bag (proposed) — Part IV. A
+vestlang-blind reader sees a valid template gated on an opaque, not-yet-fired event — correct, just
+opaque.
 
 **Stage C — IPO fires 2027-03-01; rehydrate.** Rehydration is **re-resolution of the anchor
 expression**, nothing more:
@@ -236,56 +355,105 @@ resolve( "LATER OF(+12 MONTHS, EVENT \"ipo\")",
    = LATER_OF( 2026-01-01, 2027-03-01 ) = 2027-03-01      // IPO arm wins
 ```
 
-That date **is** `evt_4f9c`'s witness:
+That date **is** `evt_g7f3_01`'s witness:
 
 ```jsonc
-{ "eventFirings": [ { "event_id": "evt_4f9c", "date": "2027-03-01" } ] }
+{ "eventFirings": [ { "event_id": "evt_g7f3_01", "date": "2027-03-01" } ] }
 ```
 
 The **stored template is untouched** — rehydration only *adds a witness*. Canonical's compiler then
 runs `compile(template, runtime + witness)` → 48 monthly tranches of 100 from 2027-04-01 to
 2031-03-01, telescoping exactly to 4,800.
 
-**Stage D — partial case (monotonic).** Rehydrate at 2026-06-01 (grant+12mo passed, IPO still
-unfired): `LATER_OF` still can't resolve (IPO could be later) → no witness produced, blocker narrows
-to just `{EVENT_NOT_YET_OCCURRED: "ipo"}`. Rehydration is monotonic — it only ever *adds* witnesses
-and *narrows* blockers; re-run it freely across the multi-year pending window.
+**Stage D — partial case, and the limits of monotonicity.** Rehydrate at 2026-06-01 (grant+12mo
+passed, IPO still unfired): `LATER_OF` still can't resolve (IPO could be later) → no witness produced,
+blocker narrows to just `{EVENT_NOT_YET_OCCURRED: "ipo"}`. Rehydration is **monotonic under
+append-only, forward-dated firings** — across that window it only ever *adds* witnesses and *narrows*
+blockers, so re-run it freely. The one exception is a **back-dated firing** (an IPO recorded late but
+dated in the past): that is a data *correction*, and it can *re-resolve* an already-resolved anchor —
+not a pure addition.
+
+Whether an anchor can resolve early is a property of the combinator's *shape*, grounded in the resolver
+(`packages/evaluator/src/evaluate/selectors.ts`) plus the asOf-gating of date arms
+(`vestingNode/vestingBase.ts:19`, `DATE_NOT_YET_OCCURRED`). `LATER_OF` (`LATER_POLICY` = *all* arms
+resolved) treats the event as an **open upper bound** — it can only resolve from a *positive* firing,
+so it never resolves prematurely and never revises. `EARLIER_OF` (`EARLIER_POLICY` = *some* arm
+resolved) is **capped** by its date arm: before the cap it stays pending (the date arm is itself
+asOf-unresolved), and once the clock passes the cap with the event unfired it resolves to the cap under
+a *retroactive* closed-world read ("no firing through a date we've now observed past"). That read is the
+same one `unresolved → impossible` detection relies on (see "Resolvability vs fidelity"), and the same
+back-dated-correction caveat applies to both.
 
 The point: a synthetic event's witness is **computed by re-resolving the definition**, not attested by
 hand. Without the definition the milestone is un-evaluatable except manually — which is the sharp
 reason the source map is load-bearing, not decorative.
 
-### The deterministic id — and why not DSL-as-id
+### The id — an opaque, grant-scoped surrogate
 
-The synthetic `event_id` must be (1) **deterministic** — the same anchor expression yields the same id
-at emit-time and at every rehydration, because the id is written in three places that must agree
-(template statement, source-map key, witness); and (2) **unique per distinct condition** (identical
-gates collapse to one id, consistent with the one-firing-per-`event_id` dedup at `lower.ts:213`). The
-chosen scheme: a **hash of the canonicalized anchor AST**, namespaced (`evt_…`). Human legibility is
-**not** baked into the id — it lives as an optional `label` *in the definition entry* (`{ definition,
-label? }`), so a `label` can be edited freely without ever moving identity. (A readable slug-as-id was
-rejected: to be safe it needs the same canonicalization plus a hash disambiguator anyway, and a lossy
-slug re-imports the natural-key fragility below.)
+The synthetic `event_id` is an **opaque, grant-scoped, deterministic surrogate**, minted once at first
+emit and thereafter *read, never recomputed*. It is **not** a content hash of the gate, and **not** the
+DSL string. Two facts drive this.
 
-It is **not** the DSL string itself. Using the DSL as the id is the tempting "self-describing"
-shortcut, rejected for three reasons:
+**The id is persisted and read, never re-derived.** Trace its life: at emit it is minted and written in
+three places (the template statement, the source-map key, the eventual witness); at rehydration we
+already hold the stored template + source map, so we **read** the id off the statement, look up its
+definition, re-resolve, and attach the witness to that *same stored id*. Nothing ever recomputes the id
+from the definition. So "same expression → same id at emit and every rehydration" is satisfied by
+**persistence**, not by hashing — determinism-of-hash buys nothing. And because a round-trip can only
+*carry an opaque token through* (you cannot recompute it), the surrogate makes lossless passthrough
+(Part V) the *only* option — which is exactly why it is **safer on round-trips than a hash**, which
+would tempt a re-importer to "recompute it, it'll match" and silently diverge if canonicalization ever
+drifts.
+
+**Content-addressing is rejected.** A hash of the canonicalized anchor AST buys exactly one thing a
+surrogate lacks — *decentralized reproducibility* (two independent systems minting the byte-identical id
+for the same gate without coordinating). That is needed in **no** workflow here: the artifact is
+persisted and edited in place (Stages B–C); single-producer/many-consumer and round-trip flows *read*
+the stored id; re-derivation-from-source after the artifact exists never happens. Worse, a content hash
+is *actively wrong* across grants — the same gate has **different** witnesses on different grants (the
+two-tier model above), so collapsing them to one id is incorrect — and it would impose a fragile,
+frozen-forever canonicalization contract (commutativity, unit normalization, collision-resistant width)
+as a durable dependency. The surrogate dissolves all of that.
+
+**Grant-scoping is by construction.** A surrogate minted per (grant, gate) is grant-local with no salt;
+the token simply **carries grant identity** (e.g. `evt_<grantref>_<ordinal>`) so synthetic events don't
+alias in a flattened event stream (a `TX_CANONICAL_VESTING_EVENT` is per-security, but a global event
+table would otherwise collide bare `evt_01`s across grants). Within one template, two portions gated on
+the *same* anchor must still share one id — done by an **emit-time structural-equality check** on the
+anchor (the one-firing-per-`event_id` dedup at `lower.ts:213`). That check is far weaker than a durable
+canonical hash: it runs only at emit with both expressions in hand, can **evolve freely** (it is never
+serialized), and a *miss* merely yields two surrogate events with identical definitions that re-resolve
+to the same date — **harmless redundancy, not corruption** (the `OVERLAPPING_ABSOLUTE_STARTS` failure at
+`lower.ts:216` needs *one* id firing at *two* dates, impossible with distinct surrogates).
+
+**Why not the DSL string itself** — three reasons, all of which survive and argue *for* a surrogate:
 
 1. **Natural-key instability.** The id would be welded to the exact spelling; reordering args,
-   relabeling, or a serializer change would change the id and dangle every stored reference/witness. A
-   surrogate (hash of the *canonical* form) decouples identity from description — cosmetic edits are
-   free, semantic changes correctly yield a new id.
+   relabeling, or a serializer change would dangle every stored reference/witness. An opaque surrogate
+   decouples identity from description entirely — cosmetic *and* semantic edits never move an existing
+   id (a changed gate just gets a freshly-minted one).
 2. **Contract mismatch / honest opacity.** `event_id` is an **OCF-core** field whose contract is
-   "opaque identity token." Putting a DSL string there leaks vestlang grammar into core and *lies* to
-   core-only consumers: it dangles an evaluable-looking formula at a consumer with no engine and no
-   obligation to evaluate it (which may then let a human guess the firing date). An opaque `evt_4f9c`
-   tells that consumer the truth — "you can't resolve this; treat it as pending."
+   "opaque identity token." A DSL string there leaks vestlang grammar into core and *lies* to core-only
+   consumers — it dangles an evaluable-looking formula at a consumer with no engine. An opaque
+   `evt_g7f3_01` tells that consumer the truth: "you can't resolve this; treat it as pending."
 3. **Durable-dependency / grammar leak.** `event_id` lives in a durable, multi-party interchange.
-   Embedding the grammar there makes the whole coalition's stored data carry a permanent dependency on
-   vestlang's grammar versions. The hash keeps the core field grammar-neutral; the grammar lives only
-   in the (opt-in) `ext.vestlang` bag.
+   Embedding the grammar there makes the coalition's stored data carry a permanent dependency on
+   vestlang's grammar versions. The surrogate keeps the core field grammar-neutral; the grammar lives
+   only in the (opt-in) source-map definition.
 
-The mental model: **id = identity (opaque, core, grammar-neutral); definition = meaning (vestlang
-grammar, extension).** We keep the self-describing data — just in the field whose contract matches it.
+Mental model: **id = identity (opaque, core, grammar-neutral); definition = meaning (vestlang grammar,
+extension).** *(If decentralized reproducibility ever becomes a hard requirement, that — and only that —
+reopens a content hash, which would then owe a fully-specified, versioned, ≥128-bit collision-resistant
+canonicalization as its entry price.)*
+
+**The definition entry.** The source map stores `event_id → { definition, label? }`, where `definition`
+is the **versioned DSL string** (`@vestlang/stringify` output) — re-resolvable *and* legible, so no
+redundant second serialization. Two guarantees ride on it: `parse ∘ stringify` must be a **verified
+round-trip fixpoint** (rehydration re-parses the string, so a non-fixpoint would drift the witness — a
+property vestlang's stringify should hold regardless), and the entry is **versioned** via the namespace
+(`vesting.vestlang.dev/v1`, Part V) so an evolving grammar never strands an old definition. `label` is a
+**display name** only (e.g. "1-year cliff or IPO") — never identity, never a second encoding of the
+gate; legibility of the *source* already lives in `definition`.
 
 ---
 
@@ -293,18 +461,23 @@ grammar, extension).** We keep the self-describing data — just in the field wh
 
 ### Placement: template-level, keyed by event_id
 
-The source map lives at the **template level**, `ext.vestlang.event_definitions: { event_id → dsl }`
-— **not** on each `VestingBaseEvent`. Because the synthetic id is `hash(definition)`, the definition
-is *functionally dependent on* the id: two statements sharing a gate share the id and must share the
-definition. Storing it per-reference would be a **denormalization** (duplicate, drift-prone) — which
-is precisely the read-model redundancy this project renormalizes away. It also mirrors canonical's own
-shape: the **firing** is recorded once per `event_id` (one witness resolves all referencing
-statements), so the **definition** — the spec-time twin of the firing — is likewise recorded once per
-`event_id`. `VestingBaseEvent` stays byte-for-byte canonical-core.
+The source map lives at the **template level**, keyed `event_id → { definition, label? }` — **not** on
+each `VestingBaseEvent`. The template is the **grant-scoped container** (a synthetic event is
+grant-local; the two-tier model in Part II), so it is the natural home for grant-local definitions. And
+within one template the emit-time dedup yields one id per distinct gate, so the map is keyed once per
+`event_id`: two statements sharing a gate share the id *and* the single definition entry. Storing it
+per-reference would be a **denormalization** (duplicate, drift-prone) — precisely the read-model
+redundancy this project renormalizes away. It also mirrors canonical's own shape: the **firing** is
+recorded once per `event_id` (one witness resolves all referencing statements), so the **definition** —
+the spec-time twin of the firing — is likewise recorded once per `event_id`. `VestingBaseEvent` stays
+byte-for-byte canonical-core.
 
 ### What canonical changes
 
 - **No change** to the template/witness **semantic** fields. The synthetic event is native.
+- **The source map is engine-neutral in extended's output** (its own `sourceMap` field, Part III).
+  Whether it persists *in-band* (`ext.vestlang`) or as a *sidecar* table keyed by `event_id` is a
+  serialization choice — not a change to either; the `ext` channel below is the in-band option.
 - **Add** a two-tier extension channel (Part V): `ext` (ignorable) and `modifierExt`
   (must-understand-or-refuse), as **known named properties** on canonical objects.
 - **Keep `additionalProperties: false`.** Unknown *top-level* fields are still rejected — `ext` is the
@@ -362,7 +535,7 @@ registry.
   both tiers even though vestlang needs only the plain one — that vestlang needs no modifier extension
   is itself a good sign.
 - **Reference core by stable id, never by position.** Extensions point into core via `event_id` (the
-  hashed id) — the discipline already embodied by the source-map keying.
+  opaque surrogate) — the discipline already embodied by the source-map keying.
 - **Lossless passthrough.** A tool that reads → edits → writes OCF MUST preserve extensions it doesn't
   understand (Protobuf's unknown-field rule). Without this, the first extension-blind tool in a
   pipeline silently destroys the data.
@@ -433,9 +606,10 @@ out of scope here. Canonical's shape (`event_id` + `ext.vestlang` definition) is
 ### Included
 
 - Case 1 (atomic unfired event → `template`; classify on the spec; the HYBRID-bug fix).
-- Case 2 (combinator-over-anchors → `template` via synthetic event + source map).
+- Case 2 (combinator-over-anchors **at the start** → `template` via synthetic event + source map).
 - The source map + rehydration mechanism (rehydration = re-resolution → witness; frozen template).
-- The deterministic hashed `event_id` (and the DSL-as-id rejection).
+- The opaque, **grant-scoped surrogate** `event_id` (content-addressing *and* DSL-as-id both rejected).
+- The four-arm output contract (`template`/`events-only`/`unresolved`/`impossible`).
 - The `ext` channel proposal on canonical + restored `comments`.
 - The OCF extension-mechanism framework (vestlang as charter example).
 
@@ -445,6 +619,8 @@ out of scope here. Canonical's shape (`event_id` + `ext.vestlang` definition) is
 |---|---|
 | The resolver/lowering + rehydration **code** | Later `doc-stage`/`doc-implement`. |
 | Filing the upstream OCF-Composed-Schemas / OCF-Tools **issues** | After vestlang-local proving. |
+| **Combinator / event cliffs as templates** | The firing partitions the grid → selects a structure, so pending → `unresolved`, resolved → concrete/`events-only` (Part II close). A pending-template form would need an event-referencing core cliff that computes the lump at projection time — a change to core cliff semantics, out of scope. |
+| **Closed-world impossibility + `EARLIER_OF` back-dated re-resolution** | Detecting `impossible` from a non-firing, and an early-resolving `EARLIER_OF`, both ride the closed-world read; a back-dated firing re-resolves. An engine-semantics question (Stage D), to settle when the resolver/lowering lands. |
 | **Partial payouts** | canonical's witness already carries `realized_fraction`; vestlang has no variable-payout concept yet (binary firing is a strict subset). |
 | **Modifier-extension** cases | vestlang needs only the plain tier; the framework reserves `modifierExt` for future extensions. |
 | Registry / namespace governance | Coalition's to decide (raised in Part V). |
@@ -460,8 +636,10 @@ These four were open going in and are now settled:
 2. **Rollout → ship on the sidecar, propose `ext`.** The sidecar (OCF's sanctioned mapping table keyed
    by `event_id`) is what vestlang ships — zero schema change, conformant today. `ext` is the in-band
    evolution we prototype in vestlang-local canonical and propose upstream (Implementation approach).
-3. **Id rendering → opaque `evt_<hash>`**, with human legibility carried as an optional `label` in the
-   definition entry — never in the id (Part III).
+3. **Id → opaque, grant-scoped surrogate** (`evt_<grantref>_<ordinal>`), minted once and **preserved,
+   not recomputed**, on round-trips. Content-addressing is rejected — used in no workflow, wrong across
+   grants, and a round-trip liability (Part III). Human legibility lives in an optional `label` in the
+   definition entry, never in the id.
 4. **Channel shape → two-tier `ext` / `modifierExt`.** Safety is structural, not a flag; vestlang uses
    only the plain `ext` tier, and `modifierExt` is reserved/specified for future meaning-changing
    extensions (Part V).
@@ -483,7 +661,10 @@ These four were open going in and are now settled:
 - **HL7 FHIR extension model** — the reference for plain vs. modifier extensions, canonical-URL
   namespacing, and graduation.
 - **Code refs (worktree)** — `packages/evaluator/src/resolve/lower.ts` (`buildTemplate`, `:182`,
-  `:213`), `packages/evaluator/src/resolve/classify.ts`, `packages/core/src/compile.ts` (`:166`,
-  `:201`), `packages/types/src/evaluation.ts` (the `fidelity` field).
+  `:189`, `:213`, `:216`), `packages/evaluator/src/resolve/classify.ts`,
+  `packages/evaluator/src/evaluate/selectors.ts` (`EARLIER_POLICY`/`LATER_POLICY`),
+  `packages/evaluator/src/evaluate/vestingNode/vestingBase.ts` (`:19`, asOf-gating),
+  `packages/core/src/compile.ts` (`:166`, `:201`), `packages/types/src/evaluation.ts` (the `fidelity`
+  field + the four-arm `EvaluatedSchedule`).
 - `docs/core-extended-split.md` — the fidelity ladder; this doc revises its `:76` and `:131`.
 - `docs/carta-vesting-question-email.md` — the open Carta export-mapping question.
