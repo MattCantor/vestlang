@@ -69,6 +69,9 @@ export {
   UnresolvedInstallment,
   ResolvedInstallment,
   Installment,
+  SymbolicInstallment,
+  SourceMapEntry,
+  SourceMap,
   EvaluatedSchedule,
-  Fidelity,
+  Status,
 } from "./evaluation.js";

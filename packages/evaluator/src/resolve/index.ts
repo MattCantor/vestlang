@@ -1,8 +1,8 @@
 // extended.resolve — runtime-aware resolver/classifier.
 //
 // Resolves a DSL program's combinators against runtime, then maps the result to
-// one interchange-fidelity level. Phase 4a implements the `template` arm; Phase
-// 4b completes `events` and `unresolved`. Not wired into the live evaluate path.
+// one verdict (`status`). Phase 4a implements the `template` arm; Phase 4b
+// completes `events` and `unresolved`. Not wired into the live evaluate path.
 
 import type { EvaluationContextInput, Program } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
@@ -37,8 +37,5 @@ export const resolveToCore = (
 export { resolveStatements, buildTemplate, amountToFraction } from "./lower.js";
 export { lowerCliff } from "./cliff.js";
 export { classify } from "./classify.js";
-export type {
-  ResolveResult,
-  NonTemplateReason,
-  SymbolicInstallment,
-} from "./types.js";
+export type { ResolveResult, NonTemplateReason } from "./types.js";
+export type { SymbolicInstallment } from "@vestlang/types";

@@ -9,7 +9,7 @@ import { assemble } from "../resolve/assemble.js";
 
 /**
  * Evaluate one normalized Statement: resolve the one-statement program against
- * runtime, classify its interchange fidelity, and assemble the tagged
+ * runtime, classify its verdict (`status`), and assemble the tagged
  * EvaluatedSchedule. (The legacy in-evaluator engine was removed in Phase 5b.)
  */
 export function evaluateStatement(

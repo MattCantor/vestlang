@@ -29,7 +29,7 @@ export function makeResolvedInstallment(
 export function makeResolvedSchedule(
   dates: OCTDate[],
   amounts: number[],
-): EvaluatedSchedule<ResolvedInstallment> {
+): EvaluatedSchedule {
   const installments: ResolvedInstallment[] = [];
   dates.forEach((date, i) =>
     installments.push(makeResolvedInstallment(date, amounts[i])),
@@ -57,7 +57,7 @@ function makeImpossibleInstallment(
 export function makeImpossibleSchedule(
   amounts: number[],
   blockers: ImpossibleBlocker[],
-): EvaluatedSchedule<ImpossibleInstallment> {
+): EvaluatedSchedule {
   const installments = Array.from({ length: amounts.length }, (_, i) => {
     return makeImpossibleInstallment(amounts[i], blockers);
   });
@@ -98,7 +98,7 @@ export function makeStartPlusSchedule(
   unit: PeriodTag,
   steplength: number,
   blockers: Blocker[],
-): EvaluatedSchedule<UnresolvedInstallment> {
+): EvaluatedSchedule {
   const installments = Array.from({ length: amounts.length }, (_, i) => {
     return makeStartPlusInstallment(i, amounts[i], unit, steplength, blockers);
   });
@@ -130,7 +130,7 @@ function makeUnresolvedVestingStartInstallment(
 export function makeUnresolvedVestingStartSchedule(
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): EvaluatedSchedule<UnresolvedInstallment> {
+): EvaluatedSchedule {
   const installments = Array.from({ length: amounts.length }, (_, i) => {
     return makeUnresolvedVestingStartInstallment(amounts[i], blockers);
   });
@@ -164,7 +164,7 @@ export function makeUnresolvedCliffSchedule(
   dates: OCTDate[],
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): EvaluatedSchedule<UnresolvedInstallment> {
+): EvaluatedSchedule {
   const installments = Array.from({ length: amounts.length }, (_, i) => {
     return makeUnresolvedCliffInstallment(dates[i], amounts[i], blockers);
   });

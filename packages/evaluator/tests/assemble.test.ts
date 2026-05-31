@@ -43,7 +43,7 @@ const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) =>
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 
-describe("assemble — template fidelity", () => {
+describe("assemble — template status", () => {
   const cliff12mo = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
@@ -55,7 +55,7 @@ describe("assemble — template fidelity", () => {
 
   it("monthly-48 + 12mo cliff → RESOLVED installments tagged template", () => {
     const out = evaluateStatement(monthly48WithCliff, ctxInput());
-    expect(out.fidelity).toBe("template");
+    expect(out.status).toBe("template");
     expect(out.blockers).toEqual([]);
     expect(out.installments).toHaveLength(37); // cliff lump + 36 monthly
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
@@ -85,12 +85,12 @@ describe("assemble — template fidelity", () => {
     ];
     const schedules = evaluateProgram(program, ctxInput());
     expect(schedules).toHaveLength(1); // whole program → one template schedule
-    expect(schedules[0].fidelity).toBe("template");
+    expect(schedules[0].status).toBe("template");
     expect(sum(schedules[0].installments)).toBe(100000);
   });
 });
 
-describe("assemble — events-only fidelity", () => {
+describe("assemble — events-only status", () => {
   it("two overlapping independent DATE grids → events-only + reason", () => {
     const program: Program = [
       stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
@@ -105,7 +105,7 @@ describe("assemble — events-only fidelity", () => {
       }),
     ];
     const [out] = evaluateProgram(program, ctxInput());
-    expect(out.fidelity).toBe("events-only");
+    expect(out.status).toBe("events-only");
     expect(out.reason).toBeTruthy();
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
     expect(out.installments.map((i) => i.date)).toEqual([
@@ -127,7 +127,7 @@ describe("assemble — events-only fidelity", () => {
       program,
       ctxInput({ allocation_type: "FRONT_LOADED" }),
     );
-    expect(out.fidelity).toBe("events-only");
+    expect(out.status).toBe("events-only");
     expect(out.reason).toMatch(/FRONT_LOADED/);
     expect(sum(out.installments)).toBe(100000);
   });
@@ -173,12 +173,12 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
         },
       }),
     );
-    expect(out.fidelity).toBe("template");
+    expect(out.status).toBe("template");
     expect(sum(out.installments)).toBe(100000);
   });
 });
 
-describe("assemble — unresolved fidelity", () => {
+describe("assemble — unresolved status", () => {
   it("unfired-event start → unresolved + blockers, symbolic installments", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
@@ -188,7 +188,7 @@ describe("assemble — unresolved fidelity", () => {
       }),
     ];
     const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
-    expect(out.fidelity).toBe("unresolved");
+    expect(out.status).toBe("unresolved");
     expect(out.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED")).toBe(true);
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(true);

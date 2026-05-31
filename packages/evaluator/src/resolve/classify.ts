@@ -1,4 +1,4 @@
-// Fidelity classification — the `events` and `unresolved` arms of ResolveResult.
+// Verdict classification — the `events` and `unresolved` arms of ResolveResult.
 //
 //  - events: the program resolves to concrete dated amounts but doesn't fit one
 //    template (independent non-chaining grids, or an event-anchored cliff). Each
@@ -13,6 +13,7 @@ import type {
   OCTDate,
   Program,
   ResolvedInstallment,
+  SymbolicInstallment,
 } from "@vestlang/types";
 import type { Fraction } from "@vestlang/core";
 import {
@@ -32,11 +33,7 @@ import {
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
-import type {
-  NonTemplateReason,
-  ResolveResult,
-  SymbolicInstallment,
-} from "./types.js";
+import type { NonTemplateReason, ResolveResult } from "./types.js";
 
 interface RawEv {
   date: string;
@@ -210,7 +207,7 @@ const unresolvedArm = (
   return { kind: "unresolved", symbolic, blockers };
 };
 
-/** Map a non-template build to its fidelity verdict. */
+/** Map a non-template build to its verdict. */
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
   program: Program,

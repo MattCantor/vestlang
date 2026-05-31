@@ -1,7 +1,7 @@
 // The resolver/classifier's output contract.
 //
 // extended.resolve(program, runtime) → ResolveResult maps one DSL program to
-// exactly one interchange-fidelity level:
+// exactly one verdict:
 //   - template   — resolves AND fits canonical's one-template shape (best).
 //   - events     — resolves to concrete dated amounts but doesn't fit a template.
 //   - unresolved — can't be materialized yet (unfired event) or contradictory.
@@ -12,9 +12,8 @@ import type {
 } from "@vestlang/core";
 import type {
   Blocker,
-  ImpossibleInstallment,
   ResolvedInstallment,
-  UnresolvedInstallment,
+  SymbolicInstallment,
 } from "@vestlang/types";
 
 /** Why a resolved program could not be a single canonical template. */
@@ -27,9 +26,6 @@ export type NonTemplateReason =
   // A loaded (non-cumulative) allocation mode — the interchange carries no
   // allocation field, so loaded splits can't be a canonical template.
   | { kind: "LOADED_ALLOCATION"; mode: string; detail?: string };
-
-/** Amount-carrying installments with symbolic/absent dates (the unresolved arm). */
-export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
 
 export type ResolveResult =
   | {
