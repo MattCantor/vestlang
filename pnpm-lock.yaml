@@ -217,6 +217,12 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../core
+      '@vestlang/dsl':
+        specifier: workspace:*
+        version: link:../dsl
+      '@vestlang/normalizer':
+        specifier: workspace:*
+        version: link:../normalizer
       '@vestlang/stringify':
         specifier: workspace:*
         version: link:../stringify
