@@ -15,6 +15,10 @@ the first worked example of an OCF-core extension mechanism.
   (**IMPOSSIBLE is a terminal runtime arm, not a static check; `fidelity` sub-classifies only the
   *resolvable* outcomes**), and the reach of Case 2 (**start anchors only** — event cliffs select a
   structure, so they stay `unresolved` until fired).
+- **Implementation**: **Phased implementation ready** — staged into six build phases (P1 output
+  contract → P6 surface migration); see *Implementation Phases* below. The `ext`-channel /
+  extension-framework prototype is **deferred out of the build phases** (Parts IV–V remain the design
+  of record; the shipped persistence path is the OCF-sanctioned sidecar in P5).
 - **Priority**: High (carries the OCTC summit narrative).
 - **Complexity**: High.
 - **Interchange target**: OCF **canonical** (`~/code/OCF-Composed-Schemas/canonical/`) — the
@@ -610,14 +614,13 @@ out of scope here. Canonical's shape (`event_id` + `ext.vestlang` definition) is
 - The source map + rehydration mechanism (rehydration = re-resolution → witness; frozen template).
 - The opaque, **grant-scoped surrogate** `event_id` (content-addressing *and* DSL-as-id both rejected).
 - The four-arm output contract (`template`/`events-only`/`unresolved`/`impossible`).
-- The `ext` channel proposal on canonical + restored `comments`.
-- The OCF extension-mechanism framework (vestlang as charter example).
 
 ### Deferred
 
 | Item | Why |
 |---|---|
-| The resolver/lowering + rehydration **code** | Later `doc-stage`/`doc-implement`. |
+| The resolver/lowering + rehydration **code** | Now **staged** as P1–P6 (*Implementation Phases* below); each phase is a `doc-implement` pass. |
+| **`ext`/`modifierExt` channel + restored `comments` prototype; OCF extension-mechanism framework as a built artifact** | Design of record in Parts IV–V; prototyping it in vestlang-local canonical is a separate later pass. The **shipped** path is the OCF-sanctioned sidecar (P5), so the build phases don't block on it. |
 | Filing the upstream OCF-Composed-Schemas / OCF-Tools **issues** | After vestlang-local proving. |
 | **Combinator / event cliffs as templates** | The firing partitions the grid → selects a structure, so pending → `unresolved`, resolved → concrete/`events-only` (Part II close). A pending-template form would need an event-referencing core cliff that computes the lump at projection time — a change to core cliff semantics, out of scope. |
 | **Closed-world impossibility + `EARLIER_OF` back-dated re-resolution** | Detecting `impossible` from a non-firing, and an early-resolving `EARLIER_OF`, both ride the closed-world read; a back-dated firing re-resolves. An engine-semantics question (Stage D), to settle when the resolver/lowering lands. |
@@ -668,3 +671,214 @@ These four were open going in and are now settled:
   field + the four-arm `EvaluatedSchedule`).
 - `docs/core-extended-split.md` — the fidelity ladder; this doc revises its `:76` and `:131`.
 - `docs/carta-vesting-question-email.md` — the open Carta export-mapping question.
+
+---
+
+## Implementation Phases
+
+Six dependency-ordered, session-sized phases. Each is implemented in its own `doc-implement` pass.
+This stages only the **Included** scope: the `ext`-channel / extension-framework prototype is deferred
+(Parts IV–V remain the design of record; persistence ships on the sidecar, P5). Three decisions taken
+at staging time are baked in: (1) the verdict discriminant is renamed **`fidelity → status`** (it now
+spans *resolvability* + *fidelity*; see "Resolvability vs fidelity"), done in P1; (2) `ext` drops out
+of the build phases; (3) persistence is **sidecar-only**.
+
+### Phase Dependencies
+
+```
+P1 Output contract ──┬──> P2 Case 1 ──> P3 Case 2 ──> P4 Rehydration
+                     │                       │
+                     │                       v
+                     └───────────────> P5 Sidecar persistence
+                                             │
+P2 / P3 / P4 ─────────────────────────────────> P6 Surface migration
+```
+
+### Phase 1: Output contract — the `status` four-arm union
+
+**Goal:** Replace the installments-centric `EvaluatedSchedule` with the four-arm discriminated union
+from Part III, rename the discriminant `fidelity → status`, and add the spec/runtime/source-map slots
+the `template` arm needs.
+
+**Why First:** Every downstream phase produces or consumes this contract. Doing the rename now folds
+two churns (union rewrite + rename) into one.
+
+**Outputs:**
+
+- `status: "template" | "events-only" | "unresolved" | "impossible"` discriminant (adds `impossible`).
+- Four-arm `EvaluatedSchedule` union; only the `template` arm carries `{ template, runtime, sourceMap }`.
+- `SourceMap` type (`event_id → { definition: string; label?: string }`).
+- `status` left optional for now (the legacy engine still leaves it undefined); required-ness is a
+  later cleanup, gated on legacy-engine removal.
+
+**Definition of Done:**
+
+- [ ] `packages/types` compiles; `EvaluatedSchedule` is the four-arm union keyed on `status`.
+- [ ] `SourceMap` exported from `@vestlang/types`.
+- [ ] Existing evaluator/surface call sites updated to the renamed discriminant; build is green.
+
+---
+
+### Phase 2: Case 1 — classify on the spec + the HYBRID fix
+
+**Goal:** Let an unfired **atomic** EVENT start lower into the template (with `event_id`, no firing)
+instead of poisoning the whole program to `unresolved`.
+
+**Inputs:**
+
+- P1's `template` arm (carries blockers + a partial/empty projection).
+
+**Why:** `lower.ts:182`'s `some(start !== RESOLVED)` drops already-vested, fully-dated installments
+behind an `unresolved` verdict (realized facts lost). The resolved-EVENT lowering at `:207–221`
+already exists; this extends it to the unfired case.
+
+**Outputs:**
+
+- `buildTemplate` distinguishes "unresolved because unfired **atomic** EVENT" (→ stays `template`, no
+  firing, blocker recorded) from genuinely-unresolved starts (→ `unresolved`).
+- The atomic-vs-combinator boundary enforced as in Part I (only a bare `SINGLETON` EVENT qualifies).
+
+**Definition of Done:**
+
+- [ ] The doc's 4,800-share hybrid (`75% MONTHLY OVER 48` + `25% ON EVENT "ipo"`, `ipo` unfired)
+      evaluates to `status: "template"` with 3,600 dated shares + one pending EVENT statement (today:
+      `unresolved`, 0 dated).
+- [ ] Atomic unfired `EVENT "ipo"` start → `template`; combinator / event-cliff paths unchanged.
+- [ ] Evaluator tests cover atomic-event-in-template and the hybrid.
+
+---
+
+### Phase 3: Case 2 — synthetic event + source-map emission
+
+**Goal:** Collapse a combinator-over-anchors **start** (e.g. `LATER OF(+12mo, EVENT "ipo")`) to one
+grant-scoped synthetic event + a source-map definition, lowering it to a `template`.
+
+**Inputs:**
+
+- P1's `sourceMap` field; P2's template-holds-unfired-events behavior.
+
+**Outputs:**
+
+- The structural admission test: a combinator anchor earns a synthetic event iff its definition
+  references ≥1 named `EVENT` (a pure `FROM DATE` grid still routes to `events-only`).
+- Opaque grant-scoped surrogate id `evt_<grantref>_<ordinal>`, minted at emit, written to the template
+  statement and the source-map key.
+- Emit-time structural-equality dedup so two portions on the same anchor share one id (reuses the
+  one-firing-per-`event_id` discipline at `lower.ts:213`).
+- Source-map emission `event_id → { definition, label? }`, `definition` via `@vestlang/stringify`.
+
+**Definition of Done:**
+
+- [ ] `100% MONTHLY OVER 48 FROM LATER OF(+12 MONTHS, EVENT "ipo")` (IPO unfired) → `status: "template"`
+      matching the doc's Stage-A artifact (synthetic statement + `sourceMap` entry + selector blocker).
+- [ ] `EARLIER_OF` and `LATER_OF` over a named event both admit; a pure-date combinator routes to `events-only`.
+- [ ] Two portions on the same anchor share one `event_id` and one source-map entry.
+
+---
+
+### Phase 4: Rehydration + closed-world resolution
+
+**Goal:** Add the rehydration entry point: stored template + source map + new firings → witnesses, by
+**re-resolving** each synthetic event's definition; the stored template is frozen (witness-only adds).
+
+**Inputs:**
+
+- P3's source map (the definitions to re-resolve).
+
+**Outputs:**
+
+- `rehydrate(template, sourceMap, runtime + firings)` re-parses each `definition`, re-resolves against
+  grant context, and emits `eventFirings: [{ event_id, date }]` for arms that now resolve.
+- Stage-D edges: `LATER_OF` (open upper bound — never early, never revises) vs `EARLIER_OF` (date-capped,
+  retroactive closed-world read); monotonic under append-only forward-dated firings; a back-dated firing
+  is a correction that may re-resolve.
+- `parse ∘ stringify` fixpoint relied on (and asserted) so a re-parsed definition reproduces the anchor.
+
+**Definition of Done:**
+
+- [ ] Stage-C: IPO fires 2027-03-01 → witness `2027-03-01`; compile → 48 tranches telescoping to 4,800.
+- [ ] Stage-D: rehydrate at 2026-06-01 (IPO unfired) → no witness, blocker narrows to `EVENT_NOT_YET_OCCURRED: ipo`.
+- [ ] `parse ∘ stringify` fixpoint test over the source-map definition strings.
+
+---
+
+### Phase 5: Sidecar persistence (ship vehicle)
+
+**Goal:** Persist the source map as the OCF-sanctioned separate mapping table keyed by `event_id` —
+zero-schema-change, conformant today, unblocking the OCTC demo without canonical changes.
+
+**Inputs:**
+
+- P3/P4 source-map content + rehydration.
+
+**Outputs:**
+
+- A sidecar mapping `event_id → { definition, label? }` emitted alongside the canonical template/runtime
+  (interim short `vestlang` key per Part V).
+- Round-trip: read template + sidecar → rehydrate → write, preserving the opaque id verbatim (no recompute).
+
+**Definition of Done:**
+
+- [ ] Stored canonical template + sidecar round-trips through rehydration with the surrogate id preserved.
+- [ ] Dropping the sidecar leaves a valid-but-opaque template (the documented un-evaluatable-milestone caveat).
+- [ ] `ext`/`modifierExt` + `comments` remain **deferred** — not implemented here.
+
+---
+
+### Phase 6: Surface migration — pending off `blockers`
+
+**Goal:** Move MCP `vestlang_evaluate` / CLI to read pending from `blockers`, never from
+`status === "unresolved"`, so Case 1/2 pending-templates aren't rendered as complete.
+
+**Inputs:**
+
+- The new contract from P2–P4 (a `template` can carry blockers + an empty projection).
+
+**Outputs:**
+
+- `packages/vestlang/src/index.ts` (and any CLI formatter) keys "pending" on `blockers`,
+  "representable" on `status`, "projected" on `installments` — the Part I consumer rule.
+
+**Definition of Done:**
+
+- [ ] A Case-1 pending-template surfaces as representable-but-pending (not "complete", not "unresolved").
+- [ ] No surface branches on `status === "unresolved"` to mean "pending".
+
+---
+
+## Phase Checklist
+
+### Phase 1: Output contract
+
+- [ ] `packages/types/src/evaluation.ts` (four-arm union, `status`, `SourceMap`)
+- [ ] `packages/types/src/index.ts` (exports)
+- [ ] `packages/evaluator/src/resolve/{assemble,classify,index}.ts` (discriminant rename call sites)
+
+### Phase 2: Case 1
+
+- [ ] `packages/evaluator/src/resolve/lower.ts` (`buildTemplate` `:182`; unfired-atomic-EVENT path)
+- [ ] `packages/evaluator/src/resolve/classify.ts`
+- [ ] evaluator tests (atomic event, 4,800-share hybrid)
+
+### Phase 3: Case 2
+
+- [ ] `packages/evaluator/src/resolve/lower.ts` (synthetic id mint, dedup, source-map emit)
+- [ ] `packages/evaluator/src/resolve/classify.ts` (admission test)
+- [ ] `packages/stringify/src/*` (definition rendering, if a helper is needed)
+- [ ] evaluator tests (Stage-A artifact, admission test)
+
+### Phase 4: Rehydration
+
+- [ ] `packages/evaluator/src/resolve/*` (rehydration entry point)
+- [ ] `packages/core/src/compile.ts` (compile with witness, if touched)
+- [ ] tests (Stage-C, Stage-D, `parse ∘ stringify` fixpoint)
+
+### Phase 5: Sidecar persistence
+
+- [ ] sidecar emit/read module (package TBD at implement time)
+- [ ] round-trip + drop-sidecar tests
+
+### Phase 6: Surface migration
+
+- [ ] `packages/vestlang/src/index.ts` (MCP/CLI pending keyed off `blockers`)
+- [ ] surface tests
