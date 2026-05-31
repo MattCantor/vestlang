@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@vestlang/core": "workspace:*",
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
     "@vestlang/stringify": "workspace:*",
     "@vestlang/types": "workspace:*",
     "date-fns": "^4.1.0"

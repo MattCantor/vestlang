@@ -858,9 +858,32 @@ grant-scoped synthetic event + a source-map definition, lowering it to a `templa
 
 **Definition of Done:**
 
-- [ ] Stage-C: IPO fires 2027-03-01 → witness `2027-03-01`; compile → 48 tranches telescoping to 4,800.
-- [ ] Stage-D: rehydrate at 2026-06-01 (IPO unfired) → no witness, blocker narrows to `EVENT_NOT_YET_OCCURRED: ipo`.
-- [ ] `parse ∘ stringify` fixpoint test over the source-map definition strings.
+- [x] Stage-C: IPO fires 2027-03-01 → witness `2027-03-01`; compile → 48 tranches telescoping to 4,800.
+- [x] Stage-D: rehydrate at 2026-06-01 (IPO unfired) → no witness, blocker narrows to `EVENT_NOT_YET_OCCURRED: ipo`.
+- [x] `parse ∘ stringify` fixpoint test over the source-map definition strings.
+
+**Implementation notes (delivered):**
+
+- New entry point `rehydrate(template, sourceMap, runtime, ctxInput)` in
+  `packages/evaluator/src/resolve/rehydrate.ts`. It iterates `sourceMap`,
+  re-parses each `definition` (`reparseDefinition` → `parse("VEST FROM " + def)`
+  through `@vestlang/dsl` + `@vestlang/normalizer`, then `expr.vesting_start`),
+  re-resolves it with the existing `evaluateVestingNodeExpr` selector layer
+  against the caller-supplied `ctxInput.events`, and merges each resolved
+  synthetic witness into a copy of the **frozen** runtime's `eventFirings`
+  (override-by-`event_id`, so a re-resolution corrects a prior firing). Returns
+  `{ runtime, blockers }`; `compileToInstallments` is then called by the caller.
+- **How a named firing arrives:** unchanged from the rest of the evaluator —
+  the caller attests it in `ctx.events` (`vestingBase.ts:30`). Rehydration only
+  *computes* the grant-local synthetic witness from that world fact.
+- **No `core/compile.ts` change** — it already anchors EVENT statements on
+  `runtime.eventFirings`. **No closed-world code** — `LATER_OF`'s
+  all-arms-resolved policy is an open upper bound, so Stage-D's "no witness yet"
+  is the selector's default; the deferred `EARLIER_OF`/back-dated edges need no
+  new logic here.
+- New evaluator deps: `@vestlang/dsl`, `@vestlang/normalizer` (`workspace:*`;
+  no cycle). Tests: `packages/evaluator/tests/rehydrate.test.ts` (Stage-C,
+  Stage-D, fixpoint).
 
 ---
 
@@ -988,11 +1011,15 @@ done once the design has stopped moving.
 - [x] evaluator tests (`assemble.test.ts`: Stage-A artifact, LATER_OF + EARLIER_OF admit, pure-date
       no-synthetic, dedup; the old LATER_OF→unresolved test rewritten to →template)
 
-### Phase 4: Rehydration
+### Phase 4: Rehydration ✅
 
-- [ ] `packages/evaluator/src/resolve/*` (rehydration entry point)
-- [ ] `packages/core/src/compile.ts` (compile with witness, if touched)
-- [ ] tests (Stage-C, Stage-D, `parse ∘ stringify` fixpoint)
+- [x] `packages/evaluator/src/resolve/rehydrate.ts` (`rehydrate` + `reparseDefinition`
+      entry point); exported via `resolve/index.ts` + package root `src/index.ts`
+- [x] `packages/evaluator/package.json` (`@vestlang/dsl` + `@vestlang/normalizer`
+      workspace deps for re-parse); `packages/core/src/compile.ts` — **no change**
+      (already anchors EVENT statements on `runtime.eventFirings`)
+- [x] `packages/evaluator/tests/rehydrate.test.ts` (Stage-C, Stage-D,
+      `parse ∘ stringify` fixpoint)
 
 ### Phase 5: Sidecar persistence
 

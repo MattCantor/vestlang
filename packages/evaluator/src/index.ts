@@ -1,6 +1,11 @@
 export { evaluateStatementAsOf, type VestedResult } from "./asof.js";
 export { evaluateStatement, evaluateProgram } from "./evaluate/index.js";
 export {
+  rehydrate,
+  reparseDefinition,
+  type RehydrateResult,
+} from "./resolve/index.js";
+export {
   addMonthsRule,
   addDays,
   toDate,
