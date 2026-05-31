@@ -904,9 +904,30 @@ zero-schema-change, conformant today, unblocking the OCTC demo without canonical
 
 **Definition of Done:**
 
-- [ ] Stored canonical template + sidecar round-trips through rehydration with the surrogate id preserved.
-- [ ] Dropping the sidecar leaves a valid-but-opaque template (the documented un-evaluatable-milestone caveat).
-- [ ] `ext`/`modifierExt` + `comments` remain **deferred** — not implemented here.
+- [x] Stored canonical template + sidecar round-trips through rehydration with the surrogate id preserved.
+- [x] Dropping the sidecar leaves a valid-but-opaque template (the documented un-evaluatable-milestone caveat).
+- [x] `ext`/`modifierExt` + `comments` remain **deferred** — not implemented here.
+
+**Implementation notes (delivered):**
+
+- New module `packages/evaluator/src/resolve/sidecar.ts` (alongside `rehydrate.ts`). **Package
+  decision: `@vestlang/evaluator`** — it already depends on both `@vestlang/core` (template/runtime
+  types) and `@vestlang/types` (`SourceMap`) and hosts `rehydrate`, so no new package or dependency.
+- The persisted form is `PersistedArtifact = { template, runtime, sidecar? }`: the canonical OCF
+  objects plus an **optional** `Sidecar` — a namespaced bag `{ [VESTLANG_SIDECAR_NAMESPACE]: SourceMap }`
+  keyed by synthetic `event_id`, living entirely **outside** the OCF objects (zero schema change). The
+  interim short key is the named constant `VESTLANG_SIDECAR_NAMESPACE = "vestlang"` (one-line swap to
+  the eventual owned URL).
+- `toSidecar` / `fromSidecar` are the emit/read pair (`toSidecar({})` → `undefined`, so a plain
+  template emits no sidecar; a missing sidecar reads back as `{}`). `toPersisted` bundles the
+  `template`-arm fields (and is the write-back path post-rehydration). `rehydratePersisted` is the ship
+  vehicle "read template + sidecar → rehydrate" — `rehydrate(template, fromSidecar(sidecar), runtime,
+  ctx)`. The synthetic id is only ever **carried**, never recomputed. All exported from the package root.
+- Tests: `packages/evaluator/tests/sidecar.test.ts` — (1) Stage-A artifact survives a real JSON
+  serialization boundary and rehydrates with the id identical in the template statement, the sidecar
+  key, and the computed witness (compiles to 4,800); (2) dropping the sidecar yields no synthetic
+  witness, a still-valid OCF template (`assertValidVestingScheduleTemplate`), the opaque id intact, and
+  an empty projection for that statement; (3) a no-synthetic-event template emits no sidecar.
 
 ---
 
@@ -1021,10 +1042,14 @@ done once the design has stopped moving.
 - [x] `packages/evaluator/tests/rehydrate.test.ts` (Stage-C, Stage-D,
       `parse ∘ stringify` fixpoint)
 
-### Phase 5: Sidecar persistence
+### Phase 5: Sidecar persistence ✅
 
-- [ ] sidecar emit/read module (package TBD at implement time)
-- [ ] round-trip + drop-sidecar tests
+- [x] `packages/evaluator/src/resolve/sidecar.ts` (`PersistedArtifact`/`Sidecar`,
+      `VESTLANG_SIDECAR_NAMESPACE`, `toSidecar`/`fromSidecar`/`toPersisted`/`rehydratePersisted`);
+      exported via `resolve/index.ts` + package root `src/index.ts`. Package = `@vestlang/evaluator`
+      (already depends on core + types, hosts `rehydrate`)
+- [x] `packages/evaluator/tests/sidecar.test.ts` (JSON round-trip + id preservation, drop-sidecar
+      valid-but-opaque, no-synthetic-event → no sidecar)
 
 ### Phase 6: Surface migration
 

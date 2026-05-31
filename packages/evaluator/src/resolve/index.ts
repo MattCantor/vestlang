@@ -41,5 +41,13 @@ export { lowerCliff } from "./cliff.js";
 export { classify } from "./classify.js";
 export { rehydrate, reparseDefinition } from "./rehydrate.js";
 export type { RehydrateResult } from "./rehydrate.js";
+export {
+  VESTLANG_SIDECAR_NAMESPACE,
+  toSidecar,
+  fromSidecar,
+  toPersisted,
+  rehydratePersisted,
+} from "./sidecar.js";
+export type { Sidecar, PersistedArtifact } from "./sidecar.js";
 export type { ResolveResult, NonTemplateReason } from "./types.js";
 export type { SymbolicInstallment } from "@vestlang/types";

@@ -6,6 +6,15 @@ export {
   type RehydrateResult,
 } from "./resolve/index.js";
 export {
+  VESTLANG_SIDECAR_NAMESPACE,
+  toSidecar,
+  fromSidecar,
+  toPersisted,
+  rehydratePersisted,
+  type Sidecar,
+  type PersistedArtifact,
+} from "./resolve/index.js";
+export {
   addMonthsRule,
   addDays,
   toDate,
