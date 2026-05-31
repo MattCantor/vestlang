@@ -33,7 +33,7 @@ export function evaluate(
   const normalized = normalizeProgram(ast);
 
   // --program collapses every statement into ONE schedule and reports the
-  // program-level interchange-fidelity verdict; the default classifies each
+  // program-level verdict (`status`); the default classifies each
   // statement on its own.
   const results = opts.program
     ? evaluateProgram(normalized, ctx)
@@ -44,10 +44,11 @@ export function evaluate(
   });
 }
 
-function printSchedule(r: EvaluatedSchedule, withFidelity: boolean): void {
-  if (withFidelity) {
+function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
+  if (withStatus) {
+    const reason = "reason" in r ? r.reason : undefined;
     console.log();
-    console.log(`fidelity: ${r.fidelity}${r.reason ? ` (${r.reason})` : ""}`);
+    console.log(`status: ${r.status}${reason ? ` (${reason})` : ""}`);
   }
   console.table(
     r.installments.map((item) => ({

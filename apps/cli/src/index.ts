@@ -97,7 +97,7 @@ program
   .option("--stdin", "read input from stdin")
   .option(
     "--program",
-    "collapse the whole program into ONE schedule and report its interchange-fidelity verdict (template / events-only / unresolved)",
+    "collapse the whole program into ONE schedule and report its verdict (template / events-only / unresolved / impossible)",
   )
   .argument("[input...]", "DSL text")
   .action(

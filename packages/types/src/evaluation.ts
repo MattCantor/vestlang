@@ -1,3 +1,4 @@
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/core";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
@@ -131,24 +132,78 @@ export type Installment =
   | UnresolvedInstallment
   | ResolvedInstallment;
 
+/** Amount-carrying installments with symbolic/absent dates (the unresolved arm). */
+export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
+
+/* ------------------------
+ * Source map
+ * ------------------------ */
+
+/**
+ * One externalized gate definition: the DSL the synthetic `event_id` stands in
+ * for, plus an optional display name. `definition` is `@vestlang/stringify`
+ * output — re-resolvable AND legible. Populated by Case 2 (Phase 3); `{}` until
+ * then.
+ */
+export interface SourceMapEntry {
+  definition: string;
+  label?: string;
+}
+
+/** `event_id → { definition, label? }`, keyed once per synthetic event. */
+export type SourceMap = Record<string, SourceMapEntry>;
+
 /* ------------------------
  * Evaluated Schedule
  * ------------------------ */
 
 /**
- * Interchange-fidelity verdict the assembler tags onto an evaluated schedule:
- *   - "template"    — resolved AND fit canonical's one-template shape (best).
- *   - "events-only" — resolved to dated amounts but didn't fit one template
+ * The verdict discriminant — spans both *resolvability* and *fidelity*:
+ *   - "template"    — resolvable AND fits canonical's one-template shape (spec held).
+ *   - "events-only" — resolvable to dated amounts but doesn't fit one template
  *                     (carries `reason`); facts preserved, intent lost.
- *   - "unresolved"  — couldn't be materialized yet (unfired event) or contradictory.
+ *   - "unresolved"  — pending: can't be materialized yet (e.g. unfired event).
+ *   - "impossible"  — terminal/unsatisfiable: no witness assignment can resolve it.
  */
-export type Fidelity = "template" | "events-only" | "unresolved";
+export type Status = "template" | "events-only" | "unresolved" | "impossible";
 
-export interface EvaluatedSchedule<T extends Installment = Installment> {
-  installments: T[];
-  blockers: Blocker[];
-  /** Set by the extended assembler; omitted by the legacy engine. */
-  fidelity?: Fidelity;
-  /** Human-readable reason a resolved schedule was events-only (not a template). */
-  reason?: string;
-}
+/**
+ * The published evaluation contract. A discriminated union keyed on `status`,
+ * where the presence of the canonical artifact is implied by the arm.
+ *
+ * The first arm is untagged: the public evaluate path always tags a verdict, but
+ * internal installment-builder helpers (makeTranches/unresolved) produce bare
+ * `{ installments, blockers }` containers. `status` becomes required once those
+ * helpers carry their own container type (a clean follow-up).
+ */
+export type EvaluatedSchedule =
+  | {
+      status?: undefined;
+      installments: Installment[];
+      blockers: Blocker[];
+      reason?: string;
+    }
+  | {
+      status: "template";
+      template: VestingScheduleTemplate;
+      runtime: VestingRuntime;
+      sourceMap: SourceMap;
+      installments: ResolvedInstallment[];
+      blockers: Blocker[];
+    }
+  | {
+      status: "events-only";
+      installments: ResolvedInstallment[];
+      reason: string;
+      blockers: Blocker[];
+    }
+  | {
+      status: "unresolved";
+      installments: SymbolicInstallment[];
+      blockers: Blocker[];
+    }
+  | {
+      status: "impossible";
+      installments: ImpossibleInstallment[];
+      blockers: ImpossibleBlocker[];
+    };

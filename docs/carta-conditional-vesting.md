@@ -15,8 +15,8 @@ the first worked example of an OCF-core extension mechanism.
   (**IMPOSSIBLE is a terminal runtime arm, not a static check; `fidelity` sub-classifies only the
   *resolvable* outcomes**), and the reach of Case 2 (**start anchors only** — event cliffs select a
   structure, so they stay `unresolved` until fired).
-- **Implementation**: **Phased implementation ready** — staged into six build phases (P1 output
-  contract → P6 surface migration); see *Implementation Phases* below. The `ext`-channel /
+- **Implementation**: **Phased implementation ready** — staged into seven build phases (P1 output
+  contract → P6 surface migration → P7 type consolidation); see *Implementation Phases* below. The `ext`-channel /
   extension-framework prototype is **deferred out of the build phases** (Parts IV–V remain the design
   of record; the shipped persistence path is the OCF-sanctioned sidecar in P5).
 - **Priority**: High (carries the OCTC summit narrative).
@@ -676,7 +676,8 @@ These four were open going in and are now settled:
 
 ## Implementation Phases
 
-Six dependency-ordered, session-sized phases. Each is implemented in its own `doc-implement` pass.
+Seven dependency-ordered, session-sized phases (P1–P6 ship the feature; P7 is the final
+architecture cleanup — full type consolidation). Each is implemented in its own `doc-implement` pass.
 This stages only the **Included** scope: the `ext`-channel / extension-framework prototype is deferred
 (Parts IV–V remain the design of record; persistence ships on the sidecar, P5). Three decisions taken
 at staging time are baked in: (1) the verdict discriminant is renamed **`fidelity → status`** (it now
@@ -692,6 +693,8 @@ P1 Output contract ──┬──> P2 Case 1 ──> P3 Case 2 ──> P4 Rehyd
                      └───────────────> P5 Sidecar persistence
                                              │
 P2 / P3 / P4 ─────────────────────────────────> P6 Surface migration
+                                                       │
+P1–P6 ───────────────────────────────────────────────> P7 Type consolidation
 ```
 
 ### Phase 1: Output contract — the `status` four-arm union
@@ -713,9 +716,24 @@ two churns (union rewrite + rename) into one.
 
 **Definition of Done:**
 
-- [ ] `packages/types` compiles; `EvaluatedSchedule` is the four-arm union keyed on `status`.
-- [ ] `SourceMap` exported from `@vestlang/types`.
-- [ ] Existing evaluator/surface call sites updated to the renamed discriminant; build is green.
+- [x] `packages/types` compiles; `EvaluatedSchedule` is the four-arm union keyed on `status`.
+- [x] `SourceMap` exported from `@vestlang/types`.
+- [x] Existing evaluator/surface call sites updated to the renamed discriminant; build is green.
+
+**Implementation notes (delivered):**
+
+- The union has a **fifth, untagged arm** (`status?: undefined`). The public evaluate path
+  (`evaluateStatement`/`evaluateProgram`) always tags a verdict, but internal
+  installment-builder helpers (`makeTranches`/`unresolved`) produce bare
+  `{ installments, blockers }` containers typed as `EvaluatedSchedule`. (Note: the legacy
+  in-evaluator engine the staging doc anticipated was *already* removed in a prior phase; the
+  untagged arm now exists only for those helpers.) `status` becomes **required** — and this arm
+  is dropped — once those helpers carry their own container type. Folded into **Phase 7**.
+- The `events-only` arm carries `reason: string` (the `reasonToString(NonTemplateReason)` output
+  `assemble` already produces), not the structured `NonTemplateReason`. Surfaces display the
+  string. `NonTemplateReason` stays evaluator-internal.
+- Dependency arrow: `@vestlang/types` now depends on `@vestlang/core` (type-only
+  `import type` of `VestingScheduleTemplate`/`VestingRuntime`). Interim; **Phase 7** flips it.
 
 ---
 
@@ -846,13 +864,63 @@ zero-schema-change, conformant today, unblocking the OCTC demo without canonical
 
 ---
 
+### Phase 7: Type consolidation — every shared type in `@vestlang/types`
+
+**Goal:** Realize the end-state architecture: every shared type lives in `@vestlang/types`, and
+all dependency arrows point at that leaf. Flip the interim `types → core` arrow (introduced in
+P1) to `core → types` (type-only). No backwards-compat shims — relocate and update importers
+directly (no prod/external consumer to preserve).
+
+**Why last:** package location is orthogonal to the feature logic in P1–P6; the canonical type
+*shapes* never change across this spec; and the `VestingBase` name collision is latent until you
+merge the two families into one namespace. So this is a mechanical, test-guarded refactor best
+done once the design has stopped moving.
+
+**Inputs:**
+
+- The whole feature landed (P1–P6) and green, so the test suite guards the move.
+
+**Outputs:**
+
+- Relocate the canonical interchange types from `packages/core/src/types.ts` into
+  `@vestlang/types`: `VestingScheduleTemplate`, `VestingStatement`, `VestingBase`(canonical),
+  `VestingBaseDate`/`VestingBaseEvent`(canonical), `Cliff`, `Fraction`, `PeriodType`,
+  `VestingRuntime`, `OCFDate`, `AllocationType`, `VestingDayOfMonth`. `@vestlang/core`
+  `import type`s them back; drop the `@vestlang/types → @vestlang/core` dependency.
+- **Resolve the `VestingBase` collision:** the DSL/AST family (`types/ast.ts:47-59`) and the
+  canonical family share the names `VestingBase`/`VestingBaseDate`/`VestingBaseEvent`. Rename one
+  domain (decision taken at implement time — likely the canonical family, e.g. a
+  `Canonical*`/`Template*` prefix, to keep the DSL grammar names clean).
+- **Reconcile the parallel-named pairs:** `OCTDate`↔`OCFDate`,
+  `allocation_type`↔`AllocationType`, `vesting_day_of_month`↔`VestingDayOfMonth` — decide
+  same-concept-unify vs intentional-brands, then collapse or rename accordingly.
+- **Split the type-vs-value imports** that today come bundled from `@vestlang/core` (e.g.
+  `resolve/cliff.ts` imports `Cliff`/`PeriodType` *and* `addPeriod`/`toDate`): types from
+  `@vestlang/types`, values from `@vestlang/core`.
+- **`status` becomes required:** give the `makeTranches`/`unresolved` installment-builder helpers
+  their own `{ installments, blockers }` container type and drop the untagged arm of
+  `EvaluatedSchedule`, making the discriminated union strict (its literal four-arm form).
+
+**Definition of Done:**
+
+- [ ] No `@vestlang/types → @vestlang/core` dependency; `@vestlang/core` depends on
+      `@vestlang/types` (type-only). No re-export shims anywhere.
+- [ ] One `VestingBase` family (no name collision); the parallel-named pairs reconciled.
+- [ ] `EvaluatedSchedule` is the strict four-arm union (`status` required; no untagged arm).
+- [ ] Full build + test suite green.
+
+---
+
 ## Phase Checklist
 
-### Phase 1: Output contract
+### Phase 1: Output contract ✅
 
-- [ ] `packages/types/src/evaluation.ts` (four-arm union, `status`, `SourceMap`)
-- [ ] `packages/types/src/index.ts` (exports)
-- [ ] `packages/evaluator/src/resolve/{assemble,classify,index}.ts` (discriminant rename call sites)
+- [x] `packages/types/src/evaluation.ts` (five-arm union, `status`, `SourceMap`, `SymbolicInstallment`)
+- [x] `packages/types/src/index.ts` (exports) + `packages/types/package.json` (interim `@vestlang/core` dep)
+- [x] `packages/evaluator/src/resolve/{assemble,classify,index,types}.ts` (tagged arms, `SymbolicInstallment` hoist, comments)
+- [x] `packages/evaluator/src/evaluate/{makeTranches,index}.ts`, `resolve/unresolved.ts` (drop generic param)
+- [x] `apps/cli/src/{evaluate,index}.ts`, `apps/mcp-server/src/server.ts` (`fidelity → status`, verdict text)
+- [x] `packages/evaluator/tests/assemble.test.ts` (`.status` assertions)
 
 ### Phase 2: Case 1
 
@@ -882,3 +950,12 @@ zero-schema-change, conformant today, unblocking the OCTC demo without canonical
 
 - [ ] `packages/vestlang/src/index.ts` (MCP/CLI pending keyed off `blockers`)
 - [ ] surface tests
+
+### Phase 7: Type consolidation
+
+- [ ] `packages/core/src/types.ts` → `@vestlang/types` (relocate canonical types; `core` imports back)
+- [ ] `packages/types/package.json` / `packages/core/package.json` (flip the dependency arrow)
+- [ ] `VestingBase` collision rename + `OCTDate`/`OCFDate`/allocation/day-of-month reconciliation
+- [ ] split type-vs-value imports across evaluator (`resolve/cliff.ts`, etc.)
+- [ ] `EvaluatedSchedule` strict four-arm (`status` required); installment-builder container type
+- [ ] full build + test suite green

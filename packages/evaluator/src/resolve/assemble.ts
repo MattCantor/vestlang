@@ -1,11 +1,12 @@
 // assemble — turn a resolver/classifier verdict into the published EvaluatedSchedule,
-// tagged by interchange fidelity. This is the last stage of the extended pipeline:
+// tagged by `status`. This is the last stage of the extended pipeline:
 //
 //   parse → normalize → resolve → classify → ASSEMBLE → EvaluatedSchedule
 //
-//   - template    → core.compile (exact-rational installments), fidelity "template".
-//   - events      → the resolved dated installments, fidelity "events-only" + reason.
-//   - unresolved  → symbolic installments + blockers, fidelity "unresolved".
+//   - template    → core.compile (exact-rational installments) + the canonical
+//                   artifact (template, runtime, sourceMap), status "template".
+//   - events      → the resolved dated installments, status "events-only" + reason.
+//   - unresolved  → symbolic installments + blockers, status "unresolved".
 
 import type { EvaluatedSchedule, OCTDate } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
@@ -24,7 +25,7 @@ const reasonToString = (r: NonTemplateReason): string => {
   }
 };
 
-/** Map a fidelity verdict to the published EvaluatedSchedule. */
+/** Map a resolve verdict to the published EvaluatedSchedule. */
 export const assemble = (result: ResolveResult): EvaluatedSchedule => {
   switch (result.kind) {
     case "template": {
@@ -34,25 +35,28 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
         result.runtime,
       );
       return {
+        status: "template",
+        template: result.template,
+        runtime: result.runtime,
+        sourceMap: {}, // populated by Case 2 (Phase 3)
         installments: compiled.map((c) =>
           makeResolvedInstallment(c.date as OCTDate, c.amount),
         ),
         blockers: [],
-        fidelity: "template",
       };
     }
     case "events":
       return {
+        status: "events-only",
         installments: result.installments,
-        blockers: [],
-        fidelity: "events-only",
         reason: reasonToString(result.reason),
+        blockers: [],
       };
     case "unresolved":
       return {
+        status: "unresolved",
         installments: result.symbolic,
         blockers: result.blockers,
-        fidelity: "unresolved",
       };
   }
 };

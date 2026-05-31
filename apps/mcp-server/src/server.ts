@@ -39,8 +39,8 @@ Typical workflows:
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
   a grant_date, grant_quantity, and any named events that the DSL references.
   vestlang_evaluate classifies each statement on its own; vestlang_evaluate_program
-  collapses the whole program into one schedule and reports its interchange-fidelity
-  verdict (template / events-only / unresolved) — use it to see whether a
+  collapses the whole program into one schedule and reports its verdict
+  (template / events-only / unresolved / impossible) — use it to see whether a
   multi-statement program fits a single canonical template or falls back to bare
   events (e.g. overlapping independent starts).
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
@@ -393,8 +393,8 @@ export function createServer(): McpServer {
       return jsonResult({
         statements: schedules.map((s, i) => ({
           index: i,
-          fidelity: s.fidelity,
-          ...(s.reason ? { reason: s.reason } : {}),
+          status: s.status,
+          ...("reason" in s && s.reason ? { reason: s.reason } : {}),
           installments: s.installments,
           blockers: s.blockers,
         })),
@@ -402,13 +402,13 @@ export function createServer(): McpServer {
     },
   );
 
-  /* evaluate_program: DSL program → ONE collapsed schedule + program-level fidelity verdict */
+  /* evaluate_program: DSL program → ONE collapsed schedule + program-level verdict (status) */
   server.registerTool(
     "vestlang_evaluate_program",
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its interchange-fidelity verdict: \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), or \"unresolved\" (blocked on an unfired event, with blockers). Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
+        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), \"unresolved\" (blocked on an unfired event, with blockers), or \"impossible\" (self-contradictory — no firing can ever resolve it). Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -428,8 +428,10 @@ export function createServer(): McpServer {
       const ctx = buildContext(params);
       const [schedule] = evaluateProgram(parsed.program, ctx);
       return jsonResult({
-        fidelity: schedule.fidelity,
-        ...(schedule.reason ? { reason: schedule.reason } : {}),
+        status: schedule.status,
+        ...("reason" in schedule && schedule.reason
+          ? { reason: schedule.reason }
+          : {}),
         installments: schedule.installments,
         blockers: schedule.blockers,
       });
