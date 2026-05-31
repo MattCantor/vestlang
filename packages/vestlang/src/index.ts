@@ -8,8 +8,13 @@ export { parse } from "@vestlang/dsl";
 export { normalizeProgram } from "@vestlang/normalizer";
 
 // Evaluator
-export { evaluateStatement, evaluateProgram, evaluateStatementAsOf } from "@vestlang/evaluator";
-export type { VestedResult } from "@vestlang/evaluator";
+export {
+  evaluateStatement,
+  evaluateProgram,
+  evaluateStatementAsOf,
+  presentSchedule,
+} from "@vestlang/evaluator";
+export type { VestedResult, SchedulePresentation } from "@vestlang/evaluator";
 
 // Linter
 export { lintProgram, lintText } from "@vestlang/linter";

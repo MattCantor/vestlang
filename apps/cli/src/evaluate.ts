@@ -1,4 +1,8 @@
-import { evaluateStatement, evaluateProgram } from "@vestlang/evaluator";
+import {
+  evaluateStatement,
+  evaluateProgram,
+  presentSchedule,
+} from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
@@ -45,10 +49,19 @@ export function evaluate(
 }
 
 function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
+  // The Part I consumer rule: "representable" is read from status, "pending"
+  // from blockers (never from status === "unresolved"). A `template` carrying
+  // blockers is representable-but-pending, not complete.
+  const { representable, pending } = presentSchedule(r);
   if (withStatus) {
     const reason = "reason" in r ? r.reason : undefined;
+    const tags = [representable ? "representable" : null, pending ? "pending" : null]
+      .filter(Boolean)
+      .join(", ");
     console.log();
-    console.log(`status: ${r.status}${reason ? ` (${reason})` : ""}`);
+    console.log(
+      `status: ${r.status}${reason ? ` (${reason})` : ""}${tags ? ` — ${tags}` : ""}`,
+    );
   }
   console.table(
     r.installments.map((item) => ({
@@ -60,7 +73,7 @@ function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
   );
   if (r.blockers.length > 0) {
     console.log();
-    console.log("Blockers");
+    console.log(pending ? "Blockers (pending — awaiting witnesses)" : "Blockers");
     r.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
     console.log();
   }

@@ -947,8 +947,29 @@ zero-schema-change, conformant today, unblocking the OCTC demo without canonical
 
 **Definition of Done:**
 
-- [ ] A Case-1 pending-template surfaces as representable-but-pending (not "complete", not "unresolved").
-- [ ] No surface branches on `status === "unresolved"` to mean "pending".
+- [x] A Case-1 pending-template surfaces as representable-but-pending (not "complete", not "unresolved").
+- [x] No surface branches on `status === "unresolved"` to mean "pending".
+
+**Implementation notes (delivered):**
+
+- The consumer rule was factored into a **pure helper** `presentSchedule(s)` →
+  `{ representable, pending, projected }` in **`@vestlang/evaluator`** (`packages/evaluator/src/present.ts`),
+  re-exported through `@vestlang/vestlang` so external consumers reach it via the public surface.
+  `representable` ← `status` (`template`|`events-only`); `pending` ← `s.status !== "impossible" &&
+  s.blockers.length > 0` (read off blockers, **never** `status === "unresolved"` — the terminal
+  `impossible` arm is excluded since its blockers are contradictions, not missing witnesses);
+  `projected` ← any RESOLVED installment.
+- The doc named `packages/vestlang/src/index.ts`, but that package is the **public re-export** the
+  in-repo apps don't yet consume. The actual edits landed on the real surfaces:
+  `apps/mcp-server/src/server.ts` (`vestlang_evaluate` + `vestlang_evaluate_program` each gained flat
+  `representable` + `pending` booleans, additive; tool descriptions note a `template` can be `pending`)
+  and `apps/cli/src/evaluate.ts` (`printSchedule` appends a `— representable, pending` tag to the
+  `--program` status line and annotates the Blockers header `(pending — awaiting witnesses)` in both
+  modes). Routing the apps onto `@vestlang/vestlang` is a deliberate **later** migration, out of scope.
+- DoD #2 was already met before this phase (no surface branched on `status === "unresolved"`); the
+  helper makes the *pending* read explicit and reusable, closing DoD #1.
+- Tests: `packages/evaluator/tests/present.test.ts` (all five discriminants via stubs + an
+  end-to-end run of the 4,800-share hybrid asserting `representable: true, pending: true`).
 
 ---
 
@@ -1051,10 +1072,18 @@ done once the design has stopped moving.
 - [x] `packages/evaluator/tests/sidecar.test.ts` (JSON round-trip + id preservation, drop-sidecar
       valid-but-opaque, no-synthetic-event → no sidecar)
 
-### Phase 6: Surface migration
+### Phase 6: Surface migration ✅
 
-- [ ] `packages/vestlang/src/index.ts` (MCP/CLI pending keyed off `blockers`)
-- [ ] surface tests
+- [x] `packages/evaluator/src/present.ts` (`presentSchedule` → `{ representable, pending, projected }`;
+      pending keyed off `blockers`, never `status === "unresolved"`); exported via `src/index.ts` and
+      re-exported from `packages/vestlang/src/index.ts`
+- [x] `apps/mcp-server/src/server.ts` (`vestlang_evaluate` + `vestlang_evaluate_program`: flat
+      `representable`/`pending` in output + description notes)
+- [x] `apps/cli/src/evaluate.ts` (`printSchedule`: status-line tag + pending-aware Blockers header)
+- [x] `packages/evaluator/tests/present.test.ts` (all five arms + end-to-end hybrid)
+- Note: the doc named `packages/vestlang/src/index.ts`, but the apps consume `@vestlang/evaluator`
+  directly today; the helper lives there and is re-exported through the public package. App-routing
+  onto `@vestlang/vestlang` is a later migration.
 
 ### Phase 7: Type consolidation
 
