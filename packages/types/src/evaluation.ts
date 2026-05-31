@@ -1,15 +1,15 @@
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/core";
+import type { VestingRuntime, VestingScheduleTemplate } from "./canonical.js";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
-import { allocation_type, vesting_day_of_month } from "./oct_types.js";
+import { AllocationType, VestingDayOfMonth } from "./oct_types.js";
 
 export interface EvaluationContext {
   events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>;
   grantQuantity: number;
   asOf: OCTDate;
-  vesting_day_of_month: vesting_day_of_month;
-  allocation_type: allocation_type;
+  vesting_day_of_month: VestingDayOfMonth;
+  allocation_type: AllocationType;
 }
 
 export type EvaluationContextInput = Omit<
@@ -168,21 +168,22 @@ export type SourceMap = Record<string, SourceMapEntry>;
 export type Status = "template" | "events-only" | "unresolved" | "impossible";
 
 /**
- * The published evaluation contract. A discriminated union keyed on `status`,
- * where the presence of the canonical artifact is implied by the arm.
- *
- * The first arm is untagged: the public evaluate path always tags a verdict, but
- * internal installment-builder helpers (makeTranches/unresolved) produce bare
- * `{ installments, blockers }` containers. `status` becomes required once those
- * helpers carry their own container type (a clean follow-up).
+ * A bare bag of installments + blockers, with no verdict. The internal
+ * installment-builder helpers (makeTranches/unresolved) produce these; the
+ * public evaluate path then wraps them into a tagged `EvaluatedSchedule` arm.
+ * Keeping this distinct is what lets `EvaluatedSchedule.status` stay required.
+ */
+export interface InstallmentSet {
+  installments: Installment[];
+  blockers: Blocker[];
+}
+
+/**
+ * The published evaluation contract. A discriminated union keyed on `status`
+ * (always present), where the presence of the canonical artifact is implied by
+ * the arm.
  */
 export type EvaluatedSchedule =
-  | {
-      status?: undefined;
-      installments: Installment[];
-      blockers: Blocker[];
-      reason?: string;
-    }
   | {
       status: "template";
       template: VestingScheduleTemplate;

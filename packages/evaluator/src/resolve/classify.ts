@@ -15,7 +15,7 @@ import type {
   ResolvedInstallment,
   SymbolicInstallment,
 } from "@vestlang/types";
-import type { Fraction } from "@vestlang/core";
+import type { Fraction } from "@vestlang/types";
 import {
   addPeriod,
   allocateExact,

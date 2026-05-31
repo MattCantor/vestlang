@@ -8,7 +8,7 @@ import type {
   EvaluationContext,
   OCTDate,
   PeriodTag,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 
 export interface Cadence {
@@ -42,7 +42,7 @@ export function cadenceKey(c: Cadence): string {
 }
 
 export function minimalCtx(
-  policy: vesting_day_of_month,
+  policy: VestingDayOfMonth,
 ): EvaluationContext {
   return {
     events: { grantDate: "1970-01-01" as OCTDate },
@@ -107,7 +107,7 @@ function modesOverN(gaps: number[], nGaps: number): GapMode[] {
  * cleaner of two lattices and synthesize a cadence at that period.
  *
  *  - MONTH lattice (calendar-month index via `monthDiff`): invariant to the
- *    `vesting_day_of_month` convention — Jan 31 → Feb 28 → Mar 31 is a flat
+ *    `VestingDayOfMonth` convention — Jan 31 → Feb 28 → Mar 31 is a flat
  *    1, 1 here. Clean for the monthly family (monthly, every-2-month, ...).
  *  - DAY lattice (via `dayDiff`): clean for sub-monthly cadences that are not
  *    month-anchored (weekly/biweekly/daily).

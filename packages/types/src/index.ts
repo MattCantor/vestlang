@@ -1,4 +1,15 @@
-export type { allocation_type, vesting_day_of_month } from "./oct_types.js";
+export type { AllocationType, VestingDayOfMonth } from "./oct_types.js";
+export type {
+  PeriodType,
+  VestingScheduleTemplate,
+  VestingStatement,
+  TemplateVestingBase,
+  TemplateVestingBaseDate,
+  TemplateVestingBaseEvent,
+  Fraction,
+  Cliff,
+  VestingRuntime,
+} from "./canonical.js";
 export type {
   TwoOrMore,
   SelectorTag,
@@ -72,6 +83,7 @@ export {
   SymbolicInstallment,
   SourceMapEntry,
   SourceMap,
+  InstallmentSet,
   EvaluatedSchedule,
   Status,
 } from "./evaluation.js";

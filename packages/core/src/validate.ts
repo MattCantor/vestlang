@@ -11,7 +11,7 @@ import type {
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
-} from "./types";
+} from "@vestlang/types";
 
 // ISO 8601 YYYY-MM-DD. Capture groups are harmless for .test() (used here);
 // the Phase 2 dates module will own this and use .exec() for parsing.

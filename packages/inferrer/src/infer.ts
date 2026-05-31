@@ -1,9 +1,9 @@
 import { stringify } from "@vestlang/stringify";
 import type {
-  allocation_type,
+  AllocationType,
   OCTDate,
   Program,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { foldCliffs } from "./cliffFold.js";
@@ -44,15 +44,15 @@ interface Attempt {
   preGrantFolds: number;
   preGrantStarts: OCTDate[];
   residual: number;
-  policy: vesting_day_of_month;
-  allocationType: allocation_type;
+  policy: VestingDayOfMonth;
+  allocationType: AllocationType;
   cadencesTried: string[];
 }
 
 function runOne(
   sorted: TrancheInput[],
-  policy: vesting_day_of_month,
-  allocationType: allocation_type,
+  policy: VestingDayOfMonth,
+  allocationType: AllocationType,
   totalQuantity: number,
   grantDate: OCTDate,
   asOf: OCTDate,
@@ -127,10 +127,10 @@ export function inferSchedule(input: InferInput): InferResult {
   // narrows one dimension. The winner-selection and explicit-list fallback below
   // are identical regardless of how many attempts there are — a wrong hint simply
   // yields no clean fit and falls back, rather than being silently widened.
-  const policies: readonly vesting_day_of_month[] = input.policy
+  const policies: readonly VestingDayOfMonth[] = input.policy
     ? [input.policy]
     : POLICY_CANDIDATES;
-  const allocations: readonly allocation_type[] = input.allocationType
+  const allocations: readonly AllocationType[] = input.allocationType
     ? [input.allocationType]
     : ALLOCATION_CANDIDATES;
 

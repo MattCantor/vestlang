@@ -10,14 +10,14 @@ import type {
   EvaluationContext,
   EvaluationContextInput,
   OCTDate,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";
 
 const MS_PER_DAY = 86_400_000;
 
-function stubCtx(rule: vesting_day_of_month): EvaluationContext {
+function stubCtx(rule: VestingDayOfMonth): EvaluationContext {
   return {
     events: { grantDate: "1970-01-01" as OCTDate },
     grantQuantity: 0,
@@ -31,7 +31,7 @@ export function addPeriod(
   date: OCTDate,
   length: number,
   unit: PeriodUnit,
-  rule: vesting_day_of_month,
+  rule: VestingDayOfMonth,
 ): OCTDate {
   switch (unit) {
     case "days":
@@ -89,7 +89,7 @@ export interface ResolveOffsetInput {
   expr: string;
   grant_date: OCTDate;
   events?: Record<string, OCTDate>;
-  vesting_day_of_month?: vesting_day_of_month;
+  vesting_day_of_month?: VestingDayOfMonth;
 }
 
 export type ResolveOffsetResult =
@@ -163,13 +163,13 @@ function blockerSummary(blockers: unknown[]): string | null {
 }
 
 /**
- * Resolve a date under a vesting_day_of_month rule, without crossing months.
+ * Resolve a date under a VestingDayOfMonth rule, without crossing months.
  * Equivalent to `addMonthsRule(date, 0, { vesting_day_of_month: rule })`:
  * keeps year+month fixed and applies the rule's day-picker for that month.
  */
 export function resolveVestingDay(
   date: OCTDate,
-  rule: vesting_day_of_month,
+  rule: VestingDayOfMonth,
 ): OCTDate {
   return addMonthsRule(date, 0, stubCtx(rule));
 }

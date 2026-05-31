@@ -14,7 +14,7 @@
 // (floorSharesAt). The four loaded modes are integer base+remainder and carry
 // over verbatim — they were already exact.
 
-import type { AllocationType, Fraction } from "./types";
+import type { AllocationType, Fraction } from "@vestlang/types";
 
 /**
  * floor(totalShares × cumulative), computed in BigInt so the intermediate

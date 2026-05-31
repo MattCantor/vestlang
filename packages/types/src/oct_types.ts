@@ -1,4 +1,4 @@
-export type allocation_type =
+export type AllocationType =
   | "CUMULATIVE_ROUNDING"
   | "CUMULATIVE_ROUND_DOWN"
   | "FRONT_LOADED"
@@ -6,7 +6,7 @@ export type allocation_type =
   | "FRONT_LOADED_TO_SINGLE_TRANCHE"
   | "BACK_LOADED_TO_SINGLE_TRANCHE";
 
-export type vesting_day_of_month =
+export type VestingDayOfMonth =
   | "01"
   | "02"
   | "03"

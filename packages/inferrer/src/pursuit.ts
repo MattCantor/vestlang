@@ -1,8 +1,8 @@
 import type {
   EvaluationContext,
   OCTDate,
-  vesting_day_of_month,
-  allocation_type,
+  VestingDayOfMonth,
+  AllocationType,
 } from "@vestlang/types";
 import { allocateVector } from "@vestlang/core";
 import {
@@ -44,7 +44,7 @@ function toResidual(tranches: TrancheInput[]): Residual {
 function maxFeasibleTotal(
   mass: number[],
   n: number,
-  mode: allocation_type,
+  mode: AllocationType,
 ): number {
   const fitsAt = (T: number): boolean => {
     const fp = allocateVector(T, n, mode);
@@ -116,7 +116,7 @@ function trainAtomsCovering(
   target: OCTDate,
   cadences: Cadence[],
   ctx: EvaluationContext,
-  mode: allocation_type,
+  mode: AllocationType,
 ): TrainAtom[] {
   const atoms: TrainAtom[] = [];
   const has = (d: OCTDate) =>
@@ -202,8 +202,8 @@ export interface DecomposeResult {
  * downstream in foldCliffs; this stage stays cliff-agnostic. */
 export function decompose(
   tranches: TrancheInput[],
-  policy: vesting_day_of_month,
-  mode: allocation_type,
+  policy: VestingDayOfMonth,
+  mode: AllocationType,
 ): DecomposeResult {
   const ctx = minimalCtx(policy);
   const root = toResidual(tranches);
@@ -291,7 +291,7 @@ function greedyCover(
   root: Residual,
   estimate: (dates: OCTDate[]) => Cadence[],
   ctx: EvaluationContext,
-  mode: allocation_type,
+  mode: AllocationType,
 ): Component[] {
   const residual = new Map(root);
   const components: Component[] = [];

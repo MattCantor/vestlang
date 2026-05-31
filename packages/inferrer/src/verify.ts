@@ -1,10 +1,10 @@
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  allocation_type,
+  AllocationType,
   OCTDate,
   Program,
   ResolvedInstallment,
-  vesting_day_of_month,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 import type { TrancheInput } from "./types.js";
 
@@ -14,8 +14,8 @@ export interface VerifyContext {
   grantDate: OCTDate;
   totalQuantity: number;
   asOf: OCTDate;
-  vestingDayOfMonth: vesting_day_of_month;
-  allocationType: allocation_type;
+  vestingDayOfMonth: VestingDayOfMonth;
+  allocationType: AllocationType;
 }
 
 export function residualAgainstInput(
