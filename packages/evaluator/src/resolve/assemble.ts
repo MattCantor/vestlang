@@ -67,7 +67,7 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
     case "unresolved":
       return {
         status: "unresolved",
-        installments: result.symbolic,
+        installments: result.installments,
         blockers: result.blockers,
       };
     case "impossible":

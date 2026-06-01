@@ -136,4 +136,48 @@ describe("presentSchedule — end-to-end hybrid", () => {
       projected: true,
     });
   });
+
+  it("[resolving, void] → unresolved yet projected (resolved tranches present)", () => {
+    const voidStart: VestingNode = {
+      type: "SINGLETON",
+      base: makeVestingBaseEvent("a"),
+      offsets: [],
+      condition: {
+        type: "ATOM",
+        constraint: {
+          type: "BEFORE",
+          base: makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+          strict: false,
+        },
+      },
+    };
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 2,
+        },
+      ),
+      stmt(portion(1, 2), voidStart, {
+        type: "MONTHS",
+        length: 12,
+        occurrences: 2,
+      }),
+    ];
+    // a fires after the BEFORE deadline → void half; the DATE half resolves.
+    const [out] = evaluateProgram(program, {
+      events: { grantDate: "2025-01-01", a: "2025-06-01" },
+      grantQuantity: 4800,
+      asOf: "2035-01-01",
+    });
+    expect(out.status).toBe("unresolved");
+    expect(presentSchedule(out)).toEqual({
+      representable: false,
+      pending: true, // the void half carries IMPOSSIBLE_CONDITION blockers
+      projected: true, // the resolved half's dated tranches are now surfaced
+    });
+  });
 });

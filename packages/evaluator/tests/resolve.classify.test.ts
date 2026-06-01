@@ -4,6 +4,7 @@ import type {
   EvaluationContextInput,
   OCTDate,
   Program,
+  ResolvedInstallment,
   VestingNode,
   VestingNodeExpr,
   VestingPeriod,
@@ -37,6 +38,23 @@ const twoYearsAnnual: VestingPeriod = {
   length: 12,
   occurrences: 2,
 };
+
+const fourYearsAnnual: VestingPeriod = {
+  type: "MONTHS",
+  length: 12,
+  occurrences: 4,
+};
+
+const laterOfEvents = (a: string, b: string): VestingNodeExpr => ({
+  type: "LATER_OF",
+  items: [
+    makeSingletonNode(makeVestingBaseEvent(a)),
+    makeSingletonNode(makeVestingBaseEvent(b)),
+  ],
+});
+
+const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
+  i.meta.state === "RESOLVED";
 
 const ctxInput = (
   events: Record<string, OCTDate> = {},
@@ -96,6 +114,36 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
       "2026-01-01",
       "2026-07-01",
     ]);
+    expect(sum(result.installments)).toBe(100000);
+  });
+
+  it("back-dated overlapping grids → events-only, pre-grant tranches fold onto grant date", () => {
+    // Both grids start before grantDate 2025-01-01; their tranches must aggregate
+    // onto the grant date (the implicit cliff), not surface pre-grant.
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2023-01-01")),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2023-07-01")),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.installments.every((i) => i.date >= "2025-01-01")).toBe(true);
     expect(sum(result.installments)).toBe(100000);
   });
 });
@@ -223,6 +271,96 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
       ctxInput({ a: "2025-06-01", b: "2025-07-01" }),
     );
     expect(result.kind).toBe("impossible");
+  });
+});
+
+describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", () => {
+  it("[resolving, void] → unresolved, carrying the resolved half's dated tranches", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        twoYearsAnnual,
+      ),
+      stmt(portion(1, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+    ];
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    const resolved = result.installments.filter(isResolved);
+    expect(resolved.map((i) => i.date)).toEqual(["2026-01-01", "2027-01-01"]);
+    expect(sum(resolved)).toBe(50000);
+    // The void half is still reported at the leaf level.
+    expect(result.installments.some((i) => i.meta.state === "IMPOSSIBLE")).toBe(
+      true,
+    );
+  });
+
+  it("[resolving, pending] → unresolved, resolved tranches alongside pending ones", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        twoYearsAnnual,
+      ),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          ...twoYearsAnnual,
+          cliff: laterOfEvents("a", "b"), // unfired → the cliff stays unresolved
+        },
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(sum(result.installments.filter(isResolved))).toBe(50000);
+    expect(result.installments.some((i) => i.meta.state === "UNRESOLVED")).toBe(
+      true,
+    );
+  });
+
+  it("partially-resolved statement (resolved start, unresolved cliff) is not double-counted", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          ...twoYearsAnnual,
+          cliff: laterOfEvents("a", "b"),
+        },
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // No even-grid RESOLVED tranche leaks in alongside the symbolic cliff ones.
+    expect(result.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(
+      true,
+    );
+    expect(result.installments).toHaveLength(2); // == occurrences, not doubled
+  });
+
+  it("back-dated resolved sibling folds pre-grant tranches onto the grant date", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2023-01-01")),
+        fourYearsAnnual,
+      ),
+      stmt(portion(1, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+    ];
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    const resolved = result.installments.filter(isResolved);
+    // The 2024-01-01 tranche (pre-grant) folds onto 2025-01-01: 12500 + 12500.
+    expect(resolved.map((i) => ({ date: i.date, amount: i.amount }))).toEqual([
+      { date: "2025-01-01", amount: 25000 },
+      { date: "2026-01-01", amount: 12500 },
+      { date: "2027-01-01", amount: 12500 },
+    ]);
   });
 });
 

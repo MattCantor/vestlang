@@ -127,6 +127,29 @@ const cliffDateOf = (
   return undefined;
 };
 
+/** The two cumulative modes telescope as a single running fraction; the four
+ *  loaded modes don't. Mirrors buildTemplate's split. */
+const isCumulative = (mode: string): boolean =>
+  mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
+
+/** Aggregate amounts dated before the grant onto the grant date (the implicit
+ *  cliff core.compile applies). Amounts are already integers, so this is an exact
+ *  regroup of a date-sorted series — no re-allocation. No-op without a grant date. */
+const foldResolvedToGrantDate = (
+  installments: ResolvedInstallment[],
+  ctx: EvaluationContext,
+): ResolvedInstallment[] => {
+  if (!ctx.events.grantDate) return installments;
+  const folded = foldToGrantDate(
+    installments.map((t) => t.date),
+    installments.map((t) => t.amount),
+    ctx.events.grantDate,
+  );
+  return folded.dates.map((d, i) =>
+    makeResolvedInstallment(d, folded.amounts[i]),
+  );
+};
+
 /**
  * Loaded (non-cumulative) allocation: each statement is an independent N-way
  * split (allocateVector, the exact integer base+remainder that matches the legacy
@@ -134,12 +157,11 @@ const cliffDateOf = (
  * There's no single running cumulative here; loaded modes don't telescope across
  * statements.
  */
-const loadedEventsArm = (
+const loadedResolvedInstallments = (
   resolutions: StmtResolution[],
   ctx: EvaluationContext,
   totalShares: number,
-  reason: NonTemplateReason,
-): ResolveResult => {
+): ResolvedInstallment[] => {
   const dom = ctx.vesting_day_of_month;
   const byDate = new Map<string, number>();
   for (const r of resolutions) {
@@ -164,22 +186,22 @@ const loadedEventsArm = (
     }
     dates.forEach((d, i) => byDate.set(d, (byDate.get(d) ?? 0) + amounts[i]));
   }
-  const installments: ResolvedInstallment[] = [...byDate.entries()]
+  return [...byDate.entries()]
     .filter(([, amt]) => amt !== 0)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([date, amount]) => makeResolvedInstallment(date, amount));
-  return { kind: "events", installments, reason };
 };
 
-const eventsArm = (
+/**
+ * Cumulative allocation: expand every resolved statement to dated fraction-events,
+ * sort, and allocate with one running cumulative (core's allocator). Pre-grant
+ * tranches fold onto the grant date — the same implicit cliff core.compile applies.
+ */
+const cumulativeResolvedInstallments = (
   resolutions: StmtResolution[],
   ctx: EvaluationContext,
   totalShares: number,
-  reason: NonTemplateReason,
-): ResolveResult => {
-  if (reason.kind === "LOADED_ALLOCATION") {
-    return loadedEventsArm(resolutions, ctx, totalShares, reason);
-  }
+): ResolvedInstallment[] => {
   const events = resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx));
   events.sort((a, b) =>
     a.date !== b.date
@@ -201,26 +223,56 @@ const eventsArm = (
     vestedSoFar += amount;
     installments.push(makeResolvedInstallment(e.date, amount));
   }
-  return { kind: "events", installments, reason };
+  return foldResolvedToGrantDate(installments, ctx);
 };
 
-const unresolvedArm = (
-  program: Program,
+/** Dated tranches for every resolved statement, allocated per the runtime mode.
+ *  Statements whose start didn't resolve contribute nothing (expandResolution and
+ *  the loaded loop both skip them). */
+const resolvedInstallments = (
+  resolutions: StmtResolution[],
   ctx: EvaluationContext,
+  totalShares: number,
+): ResolvedInstallment[] =>
+  isCumulative(ctx.allocation_type)
+    ? cumulativeResolvedInstallments(resolutions, ctx, totalShares)
+    : loadedResolvedInstallments(resolutions, ctx, totalShares);
+
+const eventsArm = (
+  resolutions: StmtResolution[],
+  ctx: EvaluationContext,
+  totalShares: number,
+  reason: NonTemplateReason,
+): ResolveResult => ({
+  kind: "events",
+  installments: resolvedInstallments(resolutions, ctx, totalShares),
+  reason,
+});
+
+const unresolvedArm = (
+  build: Extract<TemplateBuild, { why: "unresolved" }>,
+  program: Program,
 ): ResolveResult => {
+  const { ctx, totalShares } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
+  // The fully-resolved siblings, kept to materialize their dated tranches below.
+  const resolvedResolutions: StmtResolution[] = [];
   // Per-statement outcomes, tracked to decide whether the whole program is void.
   let sawImpossible = false; // a contradictory portion
   let sawPending = false; // an unfired-but-satisfiable portion
-  let sawResolvedLive = false; // a fully-resolved portion (RESOLVED installments
-  // are discarded here, but the portion is alive in the template world)
-  for (const stmt of program) {
+  let sawResolvedLive = false; // a fully-resolved portion
+  program.forEach((stmt, i) => {
     const ev = unresolvedInstallments(stmt, ctx);
     // EMPTY only comes back from unresolvedInstallments' fully-resolved paths.
+    // Those RESOLVED tranches are discarded there; collect the resolution so we
+    // can materialize them via the resolved producer instead of dropping them.
     // (A vacuous 0-occurrence statement is also empty; treating it as live keeps
     // it from forcing `impossible` — the safe direction.)
-    if (ev.installments.length === 0) sawResolvedLive = true;
+    if (ev.installments.length === 0) {
+      sawResolvedLive = true;
+      resolvedResolutions.push(build.resolutions[i]);
+    }
     for (const inst of ev.installments) {
       if (inst.meta.state === "IMPOSSIBLE") sawImpossible = true;
       else if (inst.meta.state === "UNRESOLVED") sawPending = true;
@@ -228,7 +280,7 @@ const unresolvedArm = (
         symbolic.push(inst as SymbolicInstallment);
     }
     blockers.push(...ev.blockers);
-  }
+  });
 
   // Lossless rollup: collapse to `impossible` only when every portion is void —
   // nothing merely pending, nothing already resolving. A mix stays `unresolved`,
@@ -242,7 +294,17 @@ const unresolvedArm = (
       blockers: blockers as ImpossibleBlocker[],
     };
   }
-  return { kind: "unresolved", symbolic, blockers };
+
+  // A mixed program is still unresolved, but its projection includes the resolved
+  // siblings' dated tranches (sorted) ahead of the dateless symbolic ones.
+  const resolved = resolvedResolutions.length
+    ? resolvedInstallments(resolvedResolutions, ctx, totalShares)
+    : [];
+  return {
+    kind: "unresolved",
+    installments: [...resolved, ...symbolic],
+    blockers,
+  };
 };
 
 /** Map a non-template build to its verdict. */
@@ -251,5 +313,5 @@ export const classify = (
   program: Program,
 ): ResolveResult =>
   build.why === "unresolved"
-    ? unresolvedArm(program, build.ctx)
+    ? unresolvedArm(build, program)
     : eventsArm(build.resolutions, build.ctx, build.totalShares, build.reason);
