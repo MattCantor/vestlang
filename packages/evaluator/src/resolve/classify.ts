@@ -57,7 +57,8 @@ const expandResolution = (
   const anchor = r.start.date;
   const { type, length: period, occurrences: N } = r.periodicity;
   const stmtFraction = r.percentage;
-  const gridDate = (i: number): string => addPeriod(anchor, i * period, type, dom);
+  const gridDate = (i: number): string =>
+    addPeriod(anchor, i * period, type, dom);
   const ev = (date: string, fraction: Fraction, occ: number): RawEv => ({
     date,
     fraction,
@@ -73,7 +74,12 @@ const expandResolution = (
   let cliffDate: string | undefined;
   let cliffPct: Fraction | undefined;
   if (r.cliff.state === "RESOLVED") {
-    cliffDate = addPeriod(anchor, r.cliff.cliff.length, r.cliff.cliff.period_type, dom);
+    cliffDate = addPeriod(
+      anchor,
+      r.cliff.cliff.length,
+      r.cliff.cliff.period_type,
+      dom,
+    );
     cliffPct = r.cliff.cliff.percentage;
   } else if (r.cliff.state === "EVENT") {
     cliffDate = ctx.events[r.cliff.eventId]; // undefined if not fired
@@ -143,7 +149,11 @@ const loadedEventsArm = (
     );
     let amounts = allocateVector(sq, N, ctx.allocation_type);
     if (ctx.events.grantDate) {
-      ({ dates, amounts } = foldToGrantDate(dates, amounts, ctx.events.grantDate));
+      ({ dates, amounts } = foldToGrantDate(
+        dates,
+        amounts,
+        ctx.events.grantDate,
+      ));
     }
     const cliffDate = cliffDateOf(r, ctx);
     if (cliffDate && gt(cliffDate, anchor)) {
@@ -200,7 +210,8 @@ const unresolvedArm = (
   for (const stmt of program) {
     const ev = unresolvedInstallments(stmt, ctx);
     for (const inst of ev.installments) {
-      if (inst.meta.state !== "RESOLVED") symbolic.push(inst as SymbolicInstallment);
+      if (inst.meta.state !== "RESOLVED")
+        symbolic.push(inst as SymbolicInstallment);
     }
     blockers.push(...ev.blockers);
   }

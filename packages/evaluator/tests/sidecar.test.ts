@@ -26,7 +26,11 @@ import {
   rehydratePersisted,
   type PersistedArtifact,
 } from "../src/resolve/index";
-import { makeSingletonNode, makeVestingBaseEvent, makeDuration } from "./helpers";
+import {
+  makeSingletonNode,
+  makeVestingBaseEvent,
+  makeDuration,
+} from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
@@ -68,9 +72,17 @@ const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
 // The stored Stage-A artifact (IPO unfired): a `template` arm with the synthetic
 // EVENT statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
-  const out = evaluateStatement(stageAStmt(), ctxInput({ grantQuantity: 4800 }));
-  if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
-  return { template: out.template, sourceMap: out.sourceMap, runtime: out.runtime };
+  const out = evaluateStatement(
+    stageAStmt(),
+    ctxInput({ grantQuantity: 4800 }),
+  );
+  if (out.status !== "template")
+    throw new Error(`expected template, got ${out.status}`);
+  return {
+    template: out.template,
+    sourceMap: out.sourceMap,
+    runtime: out.runtime,
+  };
 };
 
 // A plain time-based template with NO synthetic events: `100% MONTHLY OVER 48
@@ -87,7 +99,8 @@ const plainStmt = (): { amount: Amount; expr: Schedule } => ({
 // The synthetic `event_id` minted at emit — there is exactly one in Stage A.
 const syntheticIdOf = (template: PersistedArtifact["template"]): string => {
   const ev = template.statements.find((s) => s.vesting_base.type === "EVENT");
-  if (!ev || ev.vesting_base.type !== "EVENT") throw new Error("no EVENT statement");
+  if (!ev || ev.vesting_base.type !== "EVENT")
+    throw new Error("no EVENT statement");
   return ev.vesting_base.event_id;
 };
 
@@ -112,18 +125,27 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
     const result = rehydratePersisted(
       reread,
       ctxInput({
-        events: { grantDate: "2025-01-01" as OCTDate, ipo: "2027-03-01" as OCTDate },
+        events: {
+          grantDate: "2025-01-01" as OCTDate,
+          ipo: "2027-03-01" as OCTDate,
+        },
         asOf: "2027-06-01" as OCTDate,
         grantQuantity: 4800,
       }),
     );
 
     // One witness, the same id, dated at the IPO firing.
-    expect(result.runtime.eventFirings).toEqual([{ event_id: id, date: "2027-03-01" }]);
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: id, date: "2027-03-01" },
+    ]);
     expect(result.blockers).toEqual([]);
 
     // The frozen template + witnessed runtime compiles to the full schedule.
-    const installments = compileToInstallments(reread.template, 4800, result.runtime);
+    const installments = compileToInstallments(
+      reread.template,
+      4800,
+      result.runtime,
+    );
     expect(installments).toHaveLength(48);
     expect(sum(installments)).toBe(4800);
   });
@@ -145,7 +167,10 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
     const result = rehydratePersisted(
       dropped,
       ctxInput({
-        events: { grantDate: "2025-01-01" as OCTDate, ipo: "2027-03-01" as OCTDate },
+        events: {
+          grantDate: "2025-01-01" as OCTDate,
+          ipo: "2027-03-01" as OCTDate,
+        },
         grantQuantity: 4800,
       }),
     );
@@ -153,16 +178,24 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
 
     // The template is still valid canonical, the opaque event_id intact, and it
     // compiles to nothing for that statement (a pending, un-evaluatable milestone).
-    expect(() => assertValidVestingScheduleTemplate(dropped.template)).not.toThrow();
+    expect(() =>
+      assertValidVestingScheduleTemplate(dropped.template),
+    ).not.toThrow();
     expect(syntheticIdOf(dropped.template)).toBe(id);
-    expect(compileToInstallments(dropped.template, 4800, result.runtime)).toEqual([]);
+    expect(
+      compileToInstallments(dropped.template, 4800, result.runtime),
+    ).toEqual([]);
   });
 });
 
 describe("sidecar — a template with no synthetic events emits no sidecar", () => {
   it("toSidecar({}) is undefined and toPersisted omits the field", () => {
-    const out = evaluateStatement(plainStmt(), ctxInput({ grantQuantity: 4800 }));
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    const out = evaluateStatement(
+      plainStmt(),
+      ctxInput({ grantQuantity: 4800 }),
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     expect(out.sourceMap).toEqual({});
 
     expect(toSidecar(out.sourceMap)).toBeUndefined();

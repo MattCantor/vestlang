@@ -2,7 +2,7 @@ name: Deploy Docusaurus to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/docs/**"
       - "docs/talk/**"
@@ -54,4 +54,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: apps/docs/build
-

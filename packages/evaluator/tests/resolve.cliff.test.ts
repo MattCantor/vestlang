@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { OCTDate, VestingNodeExpr } from "@vestlang/types";
 import { lowerCliff } from "../src/resolve/cliff";
-import { baseCtx, makeSingletonNode, makeVestingBaseDate, makeVestingBaseEvent, makeDuration } from "./helpers";
+import {
+  baseCtx,
+  makeSingletonNode,
+  makeVestingBaseDate,
+  makeVestingBaseEvent,
+  makeDuration,
+} from "./helpers";
 
 const ctx = baseCtx({
   events: { grantDate: "2025-01-01" as OCTDate, ipo: "2026-04-01" as OCTDate },
@@ -47,7 +53,9 @@ describe("lowerCliff", () => {
   });
 
   it("event-anchored cliff → EVENT (no time-based representation)", () => {
-    const cliff: VestingNodeExpr = makeSingletonNode(makeVestingBaseEvent("ipo"));
+    const cliff: VestingNodeExpr = makeSingletonNode(
+      makeVestingBaseEvent("ipo"),
+    );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
       state: "EVENT",
       eventId: "ipo",

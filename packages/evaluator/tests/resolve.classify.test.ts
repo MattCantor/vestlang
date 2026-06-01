@@ -31,7 +31,11 @@ const portion = (numerator: number, denominator: number): Amount => ({
   denominator,
 });
 
-const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) => ({
+const stmt = (
+  amount: Amount,
+  start: VestingNode,
+  periodicity: VestingPeriod,
+) => ({
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });
@@ -42,16 +46,24 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
   it("two overlapping independent DATE grids → events with reason", () => {
     // stmt1 ends 2026-01-01; stmt2 starts 2025-07-01 (doesn't chain) → not one template.
     const program: Program = [
-      stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 12,
-        occurrences: 1,
-      }),
-      stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 12,
-        occurrences: 1,
-      }),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
     ];
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("events");
@@ -103,12 +115,16 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
       ],
     };
     const program: Program = [
-      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-        cliff,
-      }),
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff,
+        },
+      ),
     ];
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("unresolved");
@@ -120,11 +136,15 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
 describe("resolveToCore — template arm still wins when it fits", () => {
   it("a chained, resolvable program returns kind: template", () => {
     const program: Program = [
-      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 12,
-      }),
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 12,
+        },
+      ),
     ];
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("template");

@@ -20,10 +20,7 @@
 // "the id is persisted and read, never re-derived"), so the round-trip is lossless.
 
 import type { EvaluationContextInput, SourceMap } from "@vestlang/types";
-import type {
-  VestingRuntime,
-  VestingScheduleTemplate,
-} from "@vestlang/types";
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 
 /**

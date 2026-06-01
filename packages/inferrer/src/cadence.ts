@@ -1,9 +1,4 @@
-import {
-  addDays,
-  addMonthsRule,
-  toDate,
-  toISO,
-} from "@vestlang/evaluator";
+import { addDays, addMonthsRule, toDate, toISO } from "@vestlang/evaluator";
 import type {
   EvaluationContext,
   OCTDate,
@@ -41,9 +36,7 @@ export function cadenceKey(c: Cadence): string {
   return `${c.length} ${c.unit.toLowerCase()}`;
 }
 
-export function minimalCtx(
-  policy: VestingDayOfMonth,
-): EvaluationContext {
+export function minimalCtx(policy: VestingDayOfMonth): EvaluationContext {
   return {
     events: { grantDate: "1970-01-01" as OCTDate },
     grantQuantity: 0,

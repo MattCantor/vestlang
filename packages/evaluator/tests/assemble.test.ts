@@ -38,7 +38,11 @@ const portion = (numerator: number, denominator: number): Amount => ({
   denominator,
 });
 
-const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) => ({
+const stmt = (
+  amount: Amount,
+  start: VestingNode,
+  periodicity: VestingPeriod,
+) => ({
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });
@@ -60,7 +64,9 @@ describe("assemble — template status", () => {
     expect(out.status).toBe("template");
     expect(out.blockers).toEqual([]);
     expect(out.installments).toHaveLength(37); // cliff lump + 36 monthly
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
+      true,
+    );
     expect(out.installments[0]).toMatchObject({
       date: "2026-01-01",
       amount: 25000,
@@ -95,21 +101,31 @@ describe("assemble — template status", () => {
 describe("assemble — events-only status", () => {
   it("two overlapping independent DATE grids → events-only + reason", () => {
     const program: Program = [
-      stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 12,
-        occurrences: 1,
-      }),
-      stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 12,
-        occurrences: 1,
-      }),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 12,
+          occurrences: 1,
+        },
+      ),
     ];
     const [out] = evaluateProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
     expect(out.reason).toBeTruthy();
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
+      true,
+    );
     expect(out.installments.map((i) => i.date)).toEqual([
       "2026-01-01",
       "2026-07-01",
@@ -119,11 +135,15 @@ describe("assemble — events-only status", () => {
 
   it("a loaded allocation mode → events-only + reason, still telescopes", () => {
     const program: Program = [
-      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 4,
-      }),
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 4,
+        },
+      ),
     ];
     const [out] = evaluateProgram(
       program,
@@ -149,10 +169,16 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
         ]),
         { type: "DAYS", length: 0, occurrences: 1 },
       );
-    const program: Program = [fromGrant(5, 12), fromGrant(15, 24), fromGrant(80, 36)];
+    const program: Program = [
+      fromGrant(5, 12),
+      fromGrant(15, 24),
+      fromGrant(80, 36),
+    ];
     expect(() => evaluateProgram(program, ctxInput())).not.toThrow();
     const [out] = evaluateProgram(program, ctxInput());
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
+      true,
+    );
     expect(sum(out.installments)).toBe(100000); // telescopes exactly
   });
 
@@ -193,7 +219,8 @@ describe("assemble — Case 1: classify on the spec", () => {
       }),
     ];
     const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     expect(out.installments).toEqual([]); // no firing → nothing projected yet
     expect(
       out.blockers.some(
@@ -214,11 +241,15 @@ describe("assemble — Case 1: classify on the spec", () => {
   // fully-dated DATE installments must survive.
   it("75% MONTHLY + 25% unfired EVENT → template, 3,600 dated + pending blocker", () => {
     const program: Program = [
-      stmt(portion(3, 4), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-      }),
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+        },
+      ),
       stmt(portion(1, 4), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
         length: 0,
@@ -226,8 +257,11 @@ describe("assemble — Case 1: classify on the spec", () => {
       }),
     ];
     const [out] = evaluateProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(true);
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
+      true,
+    );
     expect(sum(out.installments)).toBe(3600); // the 75% time-based portion, dated
     expect(
       out.blockers.some(
@@ -249,7 +283,8 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
     bs.some(
       (b) =>
         (b.type === "EVENT_NOT_YET_OCCURRED" && b.event === event) ||
-        ((b.type === "UNRESOLVED_SELECTOR" || b.type === "IMPOSSIBLE_SELECTOR") &&
+        ((b.type === "UNRESOLVED_SELECTOR" ||
+          b.type === "IMPOSSIBLE_SELECTOR") &&
           findsEventNotOccurred(b.blockers as Blocker[], event)),
     );
 
@@ -274,8 +309,12 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
   });
 
   it("LATER OF(+12mo, EVENT ipo), ipo unfired → template + synthetic event", () => {
-    const out = evaluateStatement(combinatorStmt("LATER_OF", portion(1, 1)), ctxInput());
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    const out = evaluateStatement(
+      combinatorStmt("LATER_OF", portion(1, 1)),
+      ctxInput(),
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     // One EVENT statement anchored on a minted synthetic id.
     expect(out.template.statements).toHaveLength(1);
     const base = out.template.statements[0].vesting_base;
@@ -304,13 +343,20 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
         type: "SINGLETON",
         vesting_start: {
           type: "EARLIER_OF",
-          items: [makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)), ipo()],
+          items: [
+            makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)),
+            ipo(),
+          ],
         },
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
     } as { amount: Amount; expr: Schedule };
-    const out = evaluateStatement(earlierStmt, ctxInput({ asOf: "2025-06-01" as OCTDate }));
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    const out = evaluateStatement(
+      earlierStmt,
+      ctxInput({ asOf: "2025-06-01" as OCTDate }),
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     const base = out.template.statements[0].vesting_base;
     expect(base.type).toBe("EVENT");
     expect(Object.keys(out.sourceMap)).toHaveLength(1);
@@ -323,7 +369,8 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
       combinatorStmt("LATER_OF", portion(1, 4)),
     ];
     const [out] = evaluateProgram(program, ctxInput());
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     expect(out.template.statements).toHaveLength(2);
     const ids = out.template.statements.map((s) =>
       s.vesting_base.type === "EVENT" ? s.vesting_base.event_id : undefined,
@@ -338,7 +385,8 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
       combinatorStmt("LATER_OF", portion(1, 1)),
       ctxInput({ grantQuantity: 4800 }),
     );
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     const s = out.template.statements[0];
     expect(s.vesting_base.type).toBe("EVENT");
     expect(s.occurrences).toBe(48);
@@ -373,7 +421,8 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
       },
       ctxInput(), // asOf 2035 → both date arms resolve
     );
-    if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
     expect(out.template.statements[0].vesting_base.type).toBe("DATE");
     expect(out.sourceMap).toEqual({});
   });
@@ -399,9 +448,14 @@ describe("assemble — unresolved status", () => {
     const program: Program = [{ amount: portion(1, 1), expr: laterOfSchedule }];
     // asOf before the literal 2030 arm: LATER_OF can't resolve (all-arms policy),
     // and with no named event there's nothing to externalize → unresolved.
-    const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" as OCTDate }));
+    const out = evaluateStatement(
+      program[0],
+      ctxInput({ asOf: "2026-06-01" as OCTDate }),
+    );
     expect(out.status).toBe("unresolved");
     expect(out.installments.length).toBeGreaterThan(0);
-    expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(true);
+    expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(
+      true,
+    );
   });
 });

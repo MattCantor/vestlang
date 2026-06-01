@@ -101,9 +101,9 @@ describe("addPeriod", () => {
   });
 
   it("MONTHS honors the day-of-month policy", () => {
-    expect(addPeriod("2024-01-31", 1, "MONTHS", "31_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-02-29",
-    );
+    expect(
+      addPeriod("2024-01-31", 1, "MONTHS", "31_OR_LAST_DAY_OF_MONTH"),
+    ).toBe("2024-02-29");
   });
 
   it("YEARS = months × 12 (with day-of-month clamping)", () => {

@@ -8,7 +8,8 @@ function d(s: string): OCTDate {
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (y: number, m: number, day: number): OCTDate =>
   d(`${y}-${pad(m)}-${pad(day)}`);
-const lastDay = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+const lastDay = (y: number, m: number) =>
+  new Date(Date.UTC(y, m, 0)).getUTCDate();
 
 /** `n` dates starting at (startY, startM) stepping `step` calendar months. */
 function everyNMonths(
@@ -116,7 +117,9 @@ describe("estimateCadences — fallback to priors", () => {
   });
 
   it("fewer than 2 dates → returns the curated candidate list unchanged", () => {
-    expect(estimateCadences([d("2025-06-15")])).toEqual([...CADENCE_CANDIDATES]);
+    expect(estimateCadences([d("2025-06-15")])).toEqual([
+      ...CADENCE_CANDIDATES,
+    ]);
     expect(estimateCadences([])).toEqual([...CADENCE_CANDIDATES]);
   });
 });

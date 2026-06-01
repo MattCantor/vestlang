@@ -5,10 +5,7 @@ import {
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
 } from "../src/validate";
-import type {
-  VestingScheduleTemplate,
-  VestingRuntime,
-} from "../src/types";
+import type { VestingScheduleTemplate, VestingRuntime } from "../src/types";
 
 // A well-formed graded template: two chained DATE statements + one EVENT
 // statement, with an on-grid cliff on the first.
@@ -112,9 +109,9 @@ describe("validateVestingScheduleTemplate", () => {
       ],
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.message.includes("duplicate order"))).toBe(
-      true,
-    );
+    expect(
+      result.errors.some((e) => e.message.includes("duplicate order")),
+    ).toBe(true);
   });
 
   it("rejects a cliff with a negative length or a bad period_type", () => {
@@ -279,9 +276,9 @@ describe("validateVestingRuntime", () => {
       validTemplate,
     );
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.message.includes("duplicate event_id"))).toBe(
-      true,
-    );
+    expect(
+      result.errors.some((e) => e.message.includes("duplicate event_id")),
+    ).toBe(true);
   });
 
   it("rejects a realized_fraction outside [0, 1]", () => {

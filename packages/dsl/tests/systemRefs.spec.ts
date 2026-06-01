@@ -60,7 +60,9 @@ describe("Bareword system references", () => {
   });
 
   it("does not shadow user events whose names merely start with 'grant'", () => {
-    const stmt = first(`VEST FROM event grant before event a and after event b`);
+    const stmt = first(
+      `VEST FROM event grant before event a and after event b`,
+    );
     const vs = stmt.expr.vesting_start as VestingNode;
     expect(vs.base).toEqual({ type: "EVENT", value: "grant" });
   });

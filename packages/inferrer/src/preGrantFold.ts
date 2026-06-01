@@ -149,7 +149,10 @@ export function foldPreGrant(
     // monotonically, so the matching k is unique. Center the scan on the
     // equal-installment guess with slack for rounding.
     const per = u.perTrancheAmount > EPSILON ? u.perTrancheAmount : 1;
-    const kMax = Math.min(600, Math.max(1, Math.round(single.amount / per)) + 3);
+    const kMax = Math.min(
+      600,
+      Math.max(1, Math.round(single.amount / per)) + 3,
+    );
     for (let k = 1; k <= kMax; k++) {
       let extStart: OCTDate;
       try {

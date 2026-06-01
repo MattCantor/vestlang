@@ -17,7 +17,11 @@ import { compileToInstallments } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/stringify";
 import { evaluateStatement } from "../src/evaluate/index";
 import { rehydrate, reparseDefinition } from "../src/resolve/index";
-import { makeSingletonNode, makeVestingBaseEvent, makeDuration } from "./helpers";
+import {
+  makeSingletonNode,
+  makeVestingBaseEvent,
+  makeDuration,
+} from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
@@ -68,9 +72,17 @@ const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
 // Build the stored Stage-A artifact (IPO unfired): a `template` arm carrying the
 // synthetic EVENT statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
-  const out = evaluateStatement(stageAStmt(), ctxInput({ grantQuantity: 4800 }));
-  if (out.status !== "template") throw new Error(`expected template, got ${out.status}`);
-  return { template: out.template, sourceMap: out.sourceMap, runtime: out.runtime };
+  const out = evaluateStatement(
+    stageAStmt(),
+    ctxInput({ grantQuantity: 4800 }),
+  );
+  if (out.status !== "template")
+    throw new Error(`expected template, got ${out.status}`);
+  return {
+    template: out.template,
+    sourceMap: out.sourceMap,
+    runtime: out.runtime,
+  };
 };
 
 describe("rehydrate — Stage C: IPO fires → witness → full projection", () => {
@@ -82,7 +94,10 @@ describe("rehydrate — Stage C: IPO fires → witness → full projection", () 
       sourceMap,
       runtime,
       ctxInput({
-        events: { grantDate: "2025-01-01" as OCTDate, ipo: "2027-03-01" as OCTDate },
+        events: {
+          grantDate: "2025-01-01" as OCTDate,
+          ipo: "2027-03-01" as OCTDate,
+        },
         asOf: "2027-06-01" as OCTDate,
         grantQuantity: 4800,
       }),
@@ -128,7 +143,9 @@ describe("rehydrate — parse ∘ stringify fixpoint", () => {
   it("a source-map definition survives reparse → restringify unchanged", () => {
     const { sourceMap } = storedArtifact();
     for (const { definition } of Object.values(sourceMap)) {
-      expect(stringifyVestingNodeExpr(reparseDefinition(definition))).toBe(definition);
+      expect(stringifyVestingNodeExpr(reparseDefinition(definition))).toBe(
+        definition,
+      );
     }
   });
 });

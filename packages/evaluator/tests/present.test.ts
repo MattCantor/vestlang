@@ -46,7 +46,9 @@ const symbolic: Installment[] = [
     },
   },
 ];
-const eventBlocker: Blocker[] = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];
+const eventBlocker: Blocker[] = [
+  { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+];
 const impossibleBlocker: Blocker[] = [
   { type: "IMPOSSIBLE_SELECTOR", selector: "EARLIER_OF", blockers: [] },
 ];
@@ -95,7 +97,11 @@ describe("presentSchedule — end-to-end hybrid (DoD #1)", () => {
     numerator,
     denominator,
   });
-  const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) => ({
+  const stmt = (
+    amount: Amount,
+    start: VestingNode,
+    periodicity: VestingPeriod,
+  ) => ({
     amount,
     expr: makeSingletonSchedule(start, periodicity),
   });
@@ -107,11 +113,15 @@ describe("presentSchedule — end-to-end hybrid (DoD #1)", () => {
 
   it("75% MONTHLY + 25% unfired EVENT → template that is representable-but-pending", () => {
     const program: Program = [
-      stmt(portion(3, 4), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-      }),
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+        },
+      ),
       stmt(portion(1, 4), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
         length: 0,

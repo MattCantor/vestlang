@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type { Program } from "@vestlang/types";
-import { stringify, stringifyStatement, stringifyProgram } from "../src/index.js";
+import {
+  stringify,
+  stringifyStatement,
+  stringifyProgram,
+} from "../src/index.js";
 
 /* ------------------------
  * Helpers
@@ -169,18 +173,28 @@ describe("constraints", () => {
   });
 
   it("stringifies STRICTLY BEFORE constraint", () => {
-    const result = roundTrip("VEST FROM EVENT start STRICTLY BEFORE EVENT deadline");
+    const result = roundTrip(
+      "VEST FROM EVENT start STRICTLY BEFORE EVENT deadline",
+    );
     expect(result).toBe("VEST FROM EVENT start STRICTLY BEFORE EVENT deadline");
   });
 
   it("stringifies AND constraints", () => {
-    const result = roundTrip("VEST FROM EVENT start AND(BEFORE EVENT a, AFTER EVENT b)");
-    expect(result).toBe("VEST FROM EVENT start AND(BEFORE EVENT a, AFTER EVENT b)");
+    const result = roundTrip(
+      "VEST FROM EVENT start AND(BEFORE EVENT a, AFTER EVENT b)",
+    );
+    expect(result).toBe(
+      "VEST FROM EVENT start AND(BEFORE EVENT a, AFTER EVENT b)",
+    );
   });
 
   it("stringifies OR constraints", () => {
-    const result = roundTrip("VEST FROM EVENT start OR(BEFORE EVENT a, BEFORE EVENT b)");
-    expect(result).toBe("VEST FROM EVENT start OR(BEFORE EVENT a, BEFORE EVENT b)");
+    const result = roundTrip(
+      "VEST FROM EVENT start OR(BEFORE EVENT a, BEFORE EVENT b)",
+    );
+    expect(result).toBe(
+      "VEST FROM EVENT start OR(BEFORE EVENT a, BEFORE EVENT b)",
+    );
   });
 });
 
@@ -195,7 +209,9 @@ describe("selectors", () => {
   });
 
   it("stringifies EARLIER OF for vesting start", () => {
-    const result = roundTrip("VEST FROM EARLIER OF(DATE 2025-01-01, EVENT start)");
+    const result = roundTrip(
+      "VEST FROM EARLIER OF(DATE 2025-01-01, EVENT start)",
+    );
     expect(result).toBe("VEST FROM EARLIER OF(DATE 2025-01-01, EVENT start)");
   });
 
@@ -229,7 +245,9 @@ describe("schedule selectors", () => {
         FROM EVENT b OVER 24 months EVERY 1 month
       )
     `);
-    expect(result).toBe("VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)");
+    expect(result).toBe(
+      "VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
+    );
   });
 });
 
@@ -244,7 +262,9 @@ describe("complex examples", () => {
         OVER 48 months EVERY 1 month
         CLIFF 12 months
     `);
-    expect(result).toBe("VEST FROM EVENT grant OVER 48 months EVERY 1 month CLIFF 12 months");
+    expect(result).toBe(
+      "VEST FROM EVENT grant OVER 48 months EVERY 1 month CLIFF 12 months",
+    );
   });
 
   it("stringifies vesting with constraints and offset", () => {
@@ -253,7 +273,9 @@ describe("complex examples", () => {
         BEFORE EVENT deadline
         OVER 24 months EVERY 1 month
     `);
-    expect(result).toBe("VEST FROM EVENT start +1 month BEFORE EVENT deadline OVER 24 months EVERY 1 month");
+    expect(result).toBe(
+      "VEST FROM EVENT start +1 month BEFORE EVENT deadline OVER 24 months EVERY 1 month",
+    );
   });
 });
 
@@ -267,7 +289,9 @@ describe("program (multiple statements)", () => {
       1/4 VEST CLIFF 12 months,
       3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month
     ]`);
-    expect(result).toBe("[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]");
+    expect(result).toBe(
+      "[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]",
+    );
   });
 });
 

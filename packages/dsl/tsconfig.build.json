@@ -11,12 +11,12 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts",
     "src/generated/**/*.js",
-    "src/generated/**/*.d.ts"
-  ]
+    "src/generated/**/*.d.ts",
+  ],
 }

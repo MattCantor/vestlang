@@ -17,11 +17,7 @@ function d(s: string): OCTDate {
   return s as unknown as OCTDate;
 }
 
-function monthly(
-  startISO: string,
-  n: number,
-  amount: number,
-): TrancheInput[] {
+function monthly(startISO: string, n: number, amount: number): TrancheInput[] {
   const [y0, m0] = startISO.split("-").map(Number);
   const out: TrancheInput[] = [];
   for (let i = 0; i < n; i++) {
@@ -30,9 +26,7 @@ function monthly(
     const m = ((total - 1) % 12) + 1;
     const day = startISO.split("-")[2];
     out.push({
-      date: d(
-        `${y}-${String(m).padStart(2, "0")}-${day}`,
-      ),
+      date: d(`${y}-${String(m).padStart(2, "0")}-${day}`),
       amount,
     });
   }
@@ -253,9 +247,7 @@ describe("inferSchedule — superposition", () => {
 
 describe("inferSchedule — degenerate", () => {
   it("single tranche → one SINGLE_TRANCHE", () => {
-    const tranches: TrancheInput[] = [
-      { date: d("2025-06-15"), amount: 5000 },
-    ];
+    const tranches: TrancheInput[] = [{ date: d("2025-06-15"), amount: 5000 }];
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
@@ -387,10 +379,7 @@ function runRoundTrip(c: RoundTripCase) {
   expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
 
   const inferredProgram = normalizeProgram(parse(inferred.dsl));
-  const totalFromInferred = originalTranches.reduce(
-    (a, t) => a + t.amount,
-    0,
-  );
+  const totalFromInferred = originalTranches.reduce((a, t) => a + t.amount, 0);
   const inferredCtx: EvaluationContextInput = {
     events: { grantDate },
     grantQuantity: totalFromInferred,

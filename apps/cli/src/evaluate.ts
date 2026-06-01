@@ -55,7 +55,10 @@ function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
   const { representable, pending } = presentSchedule(r);
   if (withStatus) {
     const reason = "reason" in r ? r.reason : undefined;
-    const tags = [representable ? "representable" : null, pending ? "pending" : null]
+    const tags = [
+      representable ? "representable" : null,
+      pending ? "pending" : null,
+    ]
       .filter(Boolean)
       .join(", ");
     console.log();
@@ -73,7 +76,9 @@ function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
   );
   if (r.blockers.length > 0) {
     console.log();
-    console.log(pending ? "Blockers (pending — awaiting witnesses)" : "Blockers");
+    console.log(
+      pending ? "Blockers (pending — awaiting witnesses)" : "Blockers",
+    );
     r.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
     console.log();
   }

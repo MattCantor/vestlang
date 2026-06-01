@@ -65,7 +65,10 @@ export function foldCliffs(
       if (s.amount < u.perTrancheAmount - EPSILON) continue;
 
       const onePeriodAfter = walk(s.date, u.cadence, 1, ctx);
-      if ((onePeriodAfter as unknown as string) !== (u.startDate as unknown as string)) {
+      if (
+        (onePeriodAfter as unknown as string) !==
+        (u.startDate as unknown as string)
+      ) {
         continue;
       }
 

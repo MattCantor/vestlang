@@ -92,13 +92,9 @@ describe("allocateExact + share rounding primitives", () => {
 
   it("allocateExact round-down telescopes via vestedSoFar", () => {
     // first step of 100/3: floor(100/3) - 0 = 33
-    expect(
-      allocateExact(100, { numerator: 1, denominator: 3 }, 0),
-    ).toBe(33);
+    expect(allocateExact(100, { numerator: 1, denominator: 3 }, 0)).toBe(33);
     // second cumulative 2/3: floor(66.67) - 33 = 66 - 33 = 33
-    expect(
-      allocateExact(100, { numerator: 2, denominator: 3 }, 33),
-    ).toBe(33);
+    expect(allocateExact(100, { numerator: 2, denominator: 3 }, 33)).toBe(33);
   });
 
   it("allocateExact throws on non-cumulative modes", () => {

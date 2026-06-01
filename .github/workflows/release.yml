@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/vestlang/package.json'
+      - "packages/vestlang/package.json"
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
