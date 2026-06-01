@@ -1,9 +1,6 @@
 import type { PeriodTag, Program } from "@vestlang/types";
 import type { OCTDate } from "@vestlang/types";
-import type {
-  AllocationType,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { AllocationType, VestingDayOfMonth } from "@vestlang/types";
 
 export interface TrancheInput {
   date: OCTDate;

@@ -22,10 +22,7 @@ import type {
   SourceMap,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type {
-  VestingRuntime,
-  VestingScheduleTemplate,
-} from "@vestlang/types";
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
@@ -101,14 +98,18 @@ export const rehydrate = (
 
   // Seed from the stored firings (preserves order + any non-synthetic firings),
   // then override/insert each resolved synthetic witness by event_id.
-  const firings = new Map<string, NonNullable<VestingRuntime["eventFirings"]>[number]>(
-    (runtime.eventFirings ?? []).map((f) => [f.event_id, f]),
-  );
+  const firings = new Map<
+    string,
+    NonNullable<VestingRuntime["eventFirings"]>[number]
+  >((runtime.eventFirings ?? []).map((f) => [f.event_id, f]));
   const blockers: Blocker[] = [];
 
   for (const [eventId, entry] of Object.entries(sourceMap)) {
     if (!templateEventIds.has(eventId)) continue;
-    const res = evaluateVestingNodeExpr(reparseDefinition(entry.definition), ctx);
+    const res = evaluateVestingNodeExpr(
+      reparseDefinition(entry.definition),
+      ctx,
+    );
     if (isPickedResolved(res)) {
       firings.set(eventId, { event_id: eventId, date: res.meta.date });
     } else {

@@ -1,7 +1,4 @@
-import type {
-  AllocationType,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { AllocationType, VestingDayOfMonth } from "@vestlang/types";
 
 function numericDays(): VestingDayOfMonth[] {
   const out: VestingDayOfMonth[] = [];

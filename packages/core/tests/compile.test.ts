@@ -21,7 +21,11 @@ describe("compile — standard 4yr/1mo with 25% cliff", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
+        cliff: {
+          length: 12,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 4 },
+        },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -68,7 +72,11 @@ describe("compile — non-standard 30% cliff", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 3, denominator: 10 } },
+        cliff: {
+          length: 12,
+          period_type: "MONTHS",
+          percentage: { numerator: 3, denominator: 10 },
+        },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -89,7 +97,10 @@ describe("compile — non-standard 30% cliff", () => {
 });
 
 describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
-  const mkYear = (order: number, num: number): VestingScheduleTemplate["statements"][number] => ({
+  const mkYear = (
+    order: number,
+    num: number,
+  ): VestingScheduleTemplate["statements"][number] => ({
     order,
     vesting_base: DATE_BASE,
     occurrences: 1,
@@ -144,7 +155,11 @@ describe("compile — additional DATE-anchored cases", () => {
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
-          cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 1 } },
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 1 },
+          },
           percentage: { numerator: 1, denominator: 1 },
         },
       ],
@@ -167,7 +182,11 @@ describe("compile — additional DATE-anchored cases", () => {
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
-          cliff: { length: 75, period_type: "DAYS", percentage: { numerator: 1, denominator: 2 } },
+          cliff: {
+            length: 75,
+            period_type: "DAYS",
+            percentage: { numerator: 1, denominator: 2 },
+          },
           percentage: { numerator: 1, denominator: 1 },
         },
       ],
@@ -331,7 +350,11 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
-        cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
+        cliff: {
+          length: 12,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 4 },
+        },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
@@ -568,7 +591,11 @@ describe("compile — hybrid DATE + EVENT templates", () => {
           occurrences: 48,
           period: 1,
           period_type: "MONTHS",
-          cliff: { length: 12, period_type: "MONTHS", percentage: { numerator: 1, denominator: 4 } },
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
           percentage: { numerator: 9, denominator: 10 },
         },
         {
@@ -675,7 +702,9 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     const strs = compile(monthly12, 1200, startJan2025);
     expect(typeof nums[0].amount).toBe("number");
     expect(typeof strs[0].amount).toBe("string");
-    expect(nums.map((i) => String(i.amount))).toEqual(strs.map((e) => e.amount));
+    expect(nums.map((i) => String(i.amount))).toEqual(
+      strs.map((e) => e.amount),
+    );
     expect(nums.reduce((a, i) => a + i.amount, 0)).toBe(1200);
   });
 

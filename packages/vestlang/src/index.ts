@@ -21,7 +21,11 @@ export { lintProgram, lintText } from "@vestlang/linter";
 export type { LintOptions, LintResult, Diagnostic } from "@vestlang/linter";
 
 // Stringify
-export { stringify, stringifyStatement, stringifyProgram } from "@vestlang/stringify";
+export {
+  stringify,
+  stringifyStatement,
+  stringifyProgram,
+} from "@vestlang/stringify";
 
 // Inferrer (inverse of evaluate)
 export { inferSchedule } from "@vestlang/inferrer";

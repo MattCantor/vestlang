@@ -3,3 +3,19 @@ dist
 build
 coverage
 *.min.*
+
+# Generated parser + vendored lockfile — not hand-formatted.
+**/generated
+pnpm-lock.yaml
+
+# Design-doc scratch and the docs app (includes a draft schema with intentionally
+# invalid JSON and non-source assets).
+docs
+apps/docs
+
+# .vest fixtures are exercised by the prettier-plugin-vestlang test suite; the
+# repo-wide check skips them so a fixture the grammar rejects can't break CI.
+**/*.vest
+
+# Markdown is not Prettier-managed (kept hand-authored).
+**/*.md

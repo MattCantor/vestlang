@@ -6,10 +6,7 @@
 //   - events     — resolves to concrete dated amounts but doesn't fit a template.
 //   - unresolved — can't be materialized yet (unfired event) or contradictory.
 
-import type {
-  VestingRuntime,
-  VestingScheduleTemplate,
-} from "@vestlang/types";
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import type {
   Blocker,
   ResolvedInstallment,

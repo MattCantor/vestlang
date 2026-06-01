@@ -16,7 +16,10 @@ import type {
 } from "@vestlang/types";
 import { addPeriod, allocateVector, foldToGrantDate } from "@vestlang/core";
 import { amountToQuantify } from "../utils.js";
-import { evaluateScheduleExpr, evaluateVestingNodeExpr } from "../evaluate/selectors.js";
+import {
+  evaluateScheduleExpr,
+  evaluateVestingNodeExpr,
+} from "../evaluate/selectors.js";
 import {
   isPickedResolved,
   probeLaterOf,
@@ -46,11 +49,18 @@ export const unresolvedInstallments = (
   if (res.type === "IMPOSSIBLE")
     return makeImpossibleSchedule([statementQuantity], res.blockers);
   if (res.type === "UNRESOLVED")
-    return makeUnresolvedVestingStartSchedule([statementQuantity], res.blockers);
+    return makeUnresolvedVestingStartSchedule(
+      [statementQuantity],
+      res.blockers,
+    );
 
   // PICKED
   const { type, length, occurrences } = res.picked.periodicity;
-  const amounts = allocateVector(statementQuantity, occurrences, ctx.allocation_type);
+  const amounts = allocateVector(
+    statementQuantity,
+    occurrences,
+    ctx.allocation_type,
+  );
 
   // Unresolved vesting start (a LATER_OF whose winner didn't resolve).
   if (res.meta.type === "UNRESOLVED")
@@ -61,7 +71,13 @@ export const unresolvedInstallments = (
   const start = res.meta.date;
   let dates: OCTDate[] = Array.from(
     { length: occurrences },
-    (_, i) => addPeriod(start, length * (i + 1), type, ctx.vesting_day_of_month) as OCTDate,
+    (_, i) =>
+      addPeriod(
+        start,
+        length * (i + 1),
+        type,
+        ctx.vesting_day_of_month,
+      ) as OCTDate,
   );
   if (ctx.events.grantDate) {
     const folded = foldToGrantDate(dates, amounts, ctx.events.grantDate);
@@ -86,14 +102,19 @@ export const unresolvedInstallments = (
   if (isPickedResolved(resCliff)) return EMPTY; // resolved cliff → fully resolved
 
   // PICKED with an unresolved node: a LATER_OF whose best branch resolved.
-  const blockers: Blocker[] = (resCliff as PickedUnresolved<VestingNode>).meta.blockers;
+  const blockers: Blocker[] = (resCliff as PickedUnresolved<VestingNode>).meta
+    .blockers;
   if (cliff.type === "LATER_OF") {
     const probed = probeLaterOf(cliff as LaterOfVestingNode, overlayCtx);
     if (probed) {
       const folded = foldToGrantDate(dates, amounts, probed);
       return {
         installments: folded.dates.map((d, i) =>
-          makeUnresolvedCliffInstallment(d as OCTDate, folded.amounts[i], blockers),
+          makeUnresolvedCliffInstallment(
+            d as OCTDate,
+            folded.amounts[i],
+            blockers,
+          ),
         ),
         blockers,
       };

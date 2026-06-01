@@ -63,9 +63,34 @@ const ISO_DATE = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD");
 
 const VESTING_DAY_OF_MONTH = z.enum([
-  "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
-  "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-  "21", "22", "23", "24", "25", "26", "27", "28",
+  "01",
+  "02",
+  "03",
+  "04",
+  "05",
+  "06",
+  "07",
+  "08",
+  "09",
+  "10",
+  "11",
+  "12",
+  "13",
+  "14",
+  "15",
+  "16",
+  "17",
+  "18",
+  "19",
+  "20",
+  "21",
+  "22",
+  "23",
+  "24",
+  "25",
+  "26",
+  "27",
+  "28",
   "29_OR_LAST_DAY_OF_MONTH",
   "30_OR_LAST_DAY_OF_MONTH",
   "31_OR_LAST_DAY_OF_MONTH",
@@ -153,9 +178,7 @@ type ParseError = {
 
 function parseWithDiagnostics(
   dsl: string,
-):
-  | { ok: true; program: Program }
-  | { ok: false; error: ParseError } {
+): { ok: true; program: Program } | { ok: false; error: ParseError } {
   try {
     const raw = parse(dsl);
     return { ok: true, program: normalizeProgram(raw) };
@@ -199,9 +222,7 @@ function toolError(message: string) {
 
 function jsonResult<T>(output: T) {
   return {
-    content: [
-      { type: "text" as const, text: JSON.stringify(output, null, 2) },
-    ],
+    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
     structuredContent: output as Record<string, unknown>,
   };
 }
@@ -248,9 +269,7 @@ export function createServer(): McpServer {
             },
           });
         }
-        return toolError(
-          `Parse failed: ${e?.message ?? String(err)}`,
-        );
+        return toolError(`Parse failed: ${e?.message ?? String(err)}`);
       }
     },
   );
@@ -327,7 +346,9 @@ export function createServer(): McpServer {
               z
                 .object({
                   date: ISO_DATE,
-                  amount: z.number().describe("Tranche amount (not cumulative)"),
+                  amount: z
+                    .number()
+                    .describe("Tranche amount (not cumulative)"),
                 })
                 .strict(),
             )
@@ -414,7 +435,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        "Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): \"template\" (the program fits one canonical template), \"events-only\" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), \"unresolved\" (blocked on an unfired event, with blockers), or \"impossible\" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).",
+        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
       inputSchema: z
         .object({
           dsl: DSL_INPUT,

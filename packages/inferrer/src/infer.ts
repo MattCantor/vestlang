@@ -58,7 +58,11 @@ function runOne(
   asOf: OCTDate,
   grantDateKnown: boolean,
 ): Attempt {
-  const { components, cadencesTried } = decompose(sorted, policy, allocationType);
+  const { components, cadencesTried } = decompose(
+    sorted,
+    policy,
+    allocationType,
+  );
   // foldPreGrant answers "did vesting start before the grant date?" — a question
   // that is unanswerable without a real grant date. When none was supplied (the
   // grant date was defaulted to the first tranche), skip it entirely: detecting

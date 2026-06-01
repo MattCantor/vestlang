@@ -5,7 +5,9 @@ import { evaluateStatementAsOf } from "@vestlang/evaluator";
 import type { EvaluationContextInput, OCTDate } from "@vestlang/types";
 import { computeSummary, filterByWindow } from "../src/summary.js";
 
-const ctx = (overrides: Partial<EvaluationContextInput> = {}): EvaluationContextInput => ({
+const ctx = (
+  overrides: Partial<EvaluationContextInput> = {},
+): EvaluationContextInput => ({
   events: { grantDate: "2025-01-01" as OCTDate },
   grantQuantity: 100000,
   asOf: "2026-04-16" as OCTDate,

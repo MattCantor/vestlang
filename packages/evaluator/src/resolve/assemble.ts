@@ -17,11 +17,19 @@ import type { NonTemplateReason, ResolveResult } from "./types.js";
 const reasonToString = (r: NonTemplateReason): string => {
   switch (r.kind) {
     case "OVERLAPPING_ABSOLUTE_STARTS":
-      return r.detail ?? "Two independent absolute-date vesting grids on one grant.";
+      return (
+        r.detail ?? "Two independent absolute-date vesting grids on one grant."
+      );
     case "EVENT_CLIFF":
-      return r.detail ?? `Event-anchored cliff on "${r.eventId}" has no template form.`;
+      return (
+        r.detail ??
+        `Event-anchored cliff on "${r.eventId}" has no template form.`
+      );
     case "LOADED_ALLOCATION":
-      return r.detail ?? `Loaded allocation mode "${r.mode}" has no canonical template form.`;
+      return (
+        r.detail ??
+        `Loaded allocation mode "${r.mode}" has no canonical template form.`
+      );
   }
 };
 

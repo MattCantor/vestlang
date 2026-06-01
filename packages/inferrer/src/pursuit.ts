@@ -12,11 +12,7 @@ import {
   minimalCtx,
   walk,
 } from "./cadence.js";
-import type {
-  Component,
-  TrancheInput,
-  UniformComponent,
-} from "./types.js";
+import type { Component, TrancheInput, UniformComponent } from "./types.js";
 
 type Residual = Map<string, number>;
 
@@ -175,7 +171,9 @@ function trainAtomsCovering(
   }
 
   // Prefer atoms that remove the most mass (and longer runs) first.
-  atoms.sort((a, b) => b.coverMass - a.coverMass || b.occurrences - a.occurrences);
+  atoms.sort(
+    (a, b) => b.coverMass - a.coverMass || b.occurrences - a.occurrences,
+  );
   return atoms;
 }
 
@@ -302,7 +300,10 @@ function greedyCover(
     let bestAtom: TrainAtom | null = null;
     for (const target of dates) {
       const atoms = trainAtomsCovering(residual, target, cadences, ctx, mode);
-      if (atoms.length && (bestAtom === null || atoms[0].coverMass > bestAtom.coverMass)) {
+      if (
+        atoms.length &&
+        (bestAtom === null || atoms[0].coverMass > bestAtom.coverMass)
+      ) {
         bestAtom = atoms[0];
       }
     }

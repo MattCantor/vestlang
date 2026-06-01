@@ -49,10 +49,7 @@ export function residualAgainstInput(
   }
 
   let residual = 0;
-  const keys = new Set<string>([
-    ...produced.keys(),
-    ...expected.keys(),
-  ]);
+  const keys = new Set<string>([...produced.keys(), ...expected.keys()]);
   for (const k of keys) {
     const got = produced.get(k) ?? 0;
     const want = expected.get(k) ?? 0;

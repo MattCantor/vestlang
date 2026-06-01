@@ -32,7 +32,11 @@ const portion = (numerator: number, denominator: number): Amount => ({
   denominator,
 });
 
-const stmt = (amount: Amount, start: VestingNode, periodicity: VestingPeriod) => ({
+const stmt = (
+  amount: Amount,
+  start: VestingNode,
+  periodicity: VestingPeriod,
+) => ({
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });
@@ -45,12 +49,16 @@ describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", 
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const program: Program = [
-    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)), {
-      type: "MONTHS",
-      length: 1,
-      occurrences: 48,
-      cliff: cliff12mo,
-    }),
+    stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+      {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: cliff12mo,
+      },
+    ),
   ];
 
   it("lowers to one DATE template with a time-based cliff", () => {
@@ -126,7 +134,10 @@ describe("resolveToCore — EVENT-anchored portion", () => {
   ];
 
   it("lowers to a floating EVENT statement + firing", () => {
-    const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" as OCTDate }));
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2026-04-01" as OCTDate }),
+    );
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
@@ -140,7 +151,10 @@ describe("resolveToCore — EVENT-anchored portion", () => {
   });
 
   it("round-trips through core.compile", () => {
-    const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" as OCTDate }));
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2026-04-01" as OCTDate }),
+    );
     if (result.kind !== "template") throw new Error("expected template");
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events).toEqual([{ date: "2026-04-01", amount: "100000" }]);

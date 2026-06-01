@@ -18,21 +18,15 @@
       }
     },
     {
-      "files": ["**/*.json"],
+      "files": ["**/tsconfig*.json"],
       "options": {
-        "parser": "json"
-      }
-    },
-    {
-      "files": ["**/*.md"],
-      "options": {
-        "embeddedLanguageFormatting": "off"
+        "parser": "jsonc"
       }
     },
     {
       "files": ["**/*.jsonc"],
       "options": {
-        "parser": "json"
+        "parser": "jsonc"
       }
     }
   ]

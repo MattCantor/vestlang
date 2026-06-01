@@ -2,30 +2,30 @@
   "compilerOptions": {
     "forceConsistentCasingInFileNames": true,
     "strict": true,
-    "composite": true
+    "composite": true,
   },
   "files": [],
   "references": [
     {
-      "path": "packages/dsl"
+      "path": "packages/dsl",
     },
     {
-      "path": "packages/linter"
+      "path": "packages/linter",
     },
     {
-      "path": "packages/normalizer"
+      "path": "packages/normalizer",
     },
     {
-      "path": "apps/cli"
+      "path": "apps/cli",
     },
     {
-      "path": "packages/types"
+      "path": "packages/types",
     },
     {
-      "path": "packages/evaluator"
+      "path": "packages/evaluator",
     },
     {
-      "path": "tests/integration"
-    }
-  ]
+      "path": "tests/integration",
+    },
+  ],
 }

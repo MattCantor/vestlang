@@ -91,7 +91,12 @@ export interface StmtResolution {
   percentage: Fraction;
   periodicity: { type: PeriodType; length: number; occurrences: number };
   start:
-    | { state: "RESOLVED"; date: OCTDate; base: "DATE" | "EVENT"; eventId?: string }
+    | {
+        state: "RESOLVED";
+        date: OCTDate;
+        base: "DATE" | "EVENT";
+        eventId?: string;
+      }
     // An unfired *atomic* EVENT start (Case 1): canonical holds it as an EVENT
     // statement with no firing, so it lowers into the template rather than
     // poisoning the program to `unresolved`. The blockers carry the pending-ness.
@@ -131,7 +136,14 @@ export const resolveStatements = (
           date: res.meta.date,
           ...startBase(schedule.vesting_start),
         },
-        cliff: lowerCliff(p.cliff, res.meta.date, p.type, p.length, p.occurrences, ctx),
+        cliff: lowerCliff(
+          p.cliff,
+          res.meta.date,
+          p.type,
+          p.length,
+          p.occurrences,
+          ctx,
+        ),
       };
     }
 
@@ -145,7 +157,11 @@ export const resolveStatements = (
           ? res.meta.blockers
           : []
         : res.blockers;
-    const periodicity = { type: p.type, length: p.length, occurrences: p.occurrences };
+    const periodicity = {
+      type: p.type,
+      length: p.length,
+      occurrences: p.occurrences,
+    };
 
     // Case 1: an unfired *atomic* EVENT start (a bare SINGLETON named event, not
     // a combinator or a system anchor) lowers into the template as an EVENT
@@ -255,8 +271,10 @@ export const buildTemplate = (
 
   // Only a genuinely-unresolved start poisons the program. An unfired atomic
   // EVENT start (PENDING_EVENT) lowers into the template (Case 1).
-  if (resolutions.some((r) => r.start.state === "UNRESOLVED")) return unresolved();
-  if (resolutions.some((r) => r.cliff.state === "UNRESOLVED")) return unresolved();
+  if (resolutions.some((r) => r.start.state === "UNRESOLVED"))
+    return unresolved();
+  if (resolutions.some((r) => r.cliff.state === "UNRESOLVED"))
+    return unresolved();
   // Loaded (non-cumulative) allocation isn't a single cumulative across the
   // template — the interchange has no allocation field. Route to events-only.
   if (!isCumulativeAllocation(ctx.allocation_type)) {
