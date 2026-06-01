@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { compile } from "@vestlang/core";
 import type {
   Amount,
   EvaluationContextInput,
@@ -15,6 +16,7 @@ import {
   makeSingletonNode,
   makeVestingBaseDate,
   makeVestingBaseEvent,
+  makeDuration,
 } from "./helpers";
 
 // `EVENT <event> BEFORE DATE <deadline>` — void once the event fires after the
@@ -361,6 +363,128 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
       { date: "2026-01-01", amount: 12500 },
       { date: "2027-01-01", amount: 12500 },
     ]);
+  });
+});
+
+describe("resolveToCore — pending event-anchored start + duration cliff (#21)", () => {
+  // grant 2024-01-01, 48,000 shares: 4-year monthly grid, 1-year cliff.
+  const cliff1yr = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+    makeDuration(12, "MONTHS", "PLUS"),
+  ]);
+  const monthly48: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 48,
+    cliff: cliff1yr,
+  };
+  const ctx21 = (
+    events: Record<string, OCTDate> = {},
+  ): EvaluationContextInput => ({
+    events: { grantDate: "2024-01-01", ...events },
+    grantQuantity: 48000,
+    asOf: "2035-01-01",
+  });
+  const fullGrant = portion(1, 1);
+
+  it("unfired atomic EVENT start carries the cliff as a pending template", () => {
+    const program: Program = [
+      stmt(
+        fullGrant,
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        monthly48,
+      ),
+    ];
+    const result = resolveToCore(program, ctx21());
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements[0].vesting_base).toEqual({
+      type: "EVENT",
+      event_id: "ipo",
+    });
+    expect(result.template.statements[0].cliff).toEqual({
+      length: 12,
+      period_type: "MONTHS",
+      percentage: { numerator: 1, denominator: 4 },
+    });
+    expect(result.runtime.eventFirings ?? []).toEqual([]);
+    expect(
+      result.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+
+  it("firing the event yields the cliff lump then the monthly grid", () => {
+    const program: Program = [
+      stmt(
+        fullGrant,
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        monthly48,
+      ),
+    ];
+    const result = resolveToCore(program, ctx21({ ipo: "2025-06-01" }));
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    // 1-year cliff lump on start + 1yr, then 36 monthly installments.
+    expect(events).toHaveLength(37);
+    expect(events[0]).toEqual({ date: "2026-06-01", amount: "12000" });
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(48000);
+  });
+
+  it("unfired LATER_OF(+12mo, EVENT ipo) start carries the cliff as a pending template", () => {
+    const start: VestingNodeExpr = {
+      type: "LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+      ],
+    };
+    const program: Program = [
+      {
+        amount: fullGrant,
+        expr: {
+          type: "SINGLETON",
+          vesting_start: start,
+          periodicity: monthly48,
+        },
+      },
+    ];
+    const result = resolveToCore(program, ctx21());
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements[0].vesting_base.type).toBe("EVENT");
+    expect(result.template.statements[0].cliff).toEqual({
+      length: 12,
+      period_type: "MONTHS",
+      percentage: { numerator: 1, denominator: 4 },
+    });
+    // The combinator gate is externalized as one synthetic event.
+    expect(Object.keys(result.sourceMap)).toHaveLength(1);
+    expect(result.blockers.length).toBeGreaterThan(0);
+  });
+
+  it("an event cliff on a pending start still bails to unresolved", () => {
+    const program: Program = [
+      stmt(fullGrant, makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        ...monthly48,
+        cliff: makeSingletonNode(makeVestingBaseEvent("board")),
+      }),
+    ];
+    expect(resolveToCore(program, ctx21()).kind).toBe("unresolved");
+  });
+
+  it("a cross-unit cliff (months over a days grid) still needs the anchor → unresolved", () => {
+    const program: Program = [
+      stmt(fullGrant, makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "DAYS",
+        length: 30,
+        occurrences: 48,
+        cliff: cliff1yr,
+      }),
+    ];
+    expect(resolveToCore(program, ctx21()).kind).toBe("unresolved");
   });
 });
 

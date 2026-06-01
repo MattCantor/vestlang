@@ -32,7 +32,7 @@ import type {
 import { addPeriod, eq, fracReduce } from "@vestlang/core";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
-import { lowerCliff, type LoweredCliff } from "./cliff.js";
+import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import type { NonTemplateReason } from "./types.js";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
@@ -168,42 +168,59 @@ export const resolveStatements = (
     // An unfired *atomic* EVENT start (a bare SINGLETON named event, not a
     // combinator or a system anchor) lowers into the template as an EVENT
     // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
-    // IMPOSSIBLE and partially-picked combinators) and no cliff (an event-anchored
-    // cliff can't be lowered without the firing date, so keep it UNRESOLVED so it
-    // isn't silently dropped).
+    // IMPOSSIBLE and partially-picked combinators). A `vestingStart`-relative
+    // duration cliff lowers anchor-free and rides along on the pending statement;
+    // a cliff that genuinely needs the firing date (event cliff, cross-unit) keeps
+    // the whole statement UNRESOLVED so it isn't silently dropped.
     const sb = startBase(sched.vesting_start);
-    if (res.type === "UNRESOLVED" && sb.base === "EVENT" && !p.cliff) {
-      return {
-        percentage,
-        periodicity,
-        start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
-        cliff: { state: "NONE" },
-      };
+    if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
+      const cliff = lowerDeferredCliff(
+        p.cliff,
+        p.type,
+        p.length,
+        p.occurrences,
+      );
+      if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
+        return {
+          percentage,
+          periodicity,
+          start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
+          cliff,
+        };
+      }
     }
 
     // A combinator-over-anchors start (EARLIER_OF/LATER_OF) that references a
     // named EVENT collapses to one synthetic event. It selects an *anchor*, not a
     // structure, so the fixed downstream grid still lowers into the template with
     // one deferred event. A pure-date combinator (no named event) fails this test
-    // and keeps its normal resolution. Cliffs are excluded (an event cliff selects
-    // a structure and stays unresolved), as is IMPOSSIBLE (the res.type guards).
-    // The pending shape differs by arm: LATER_OF surfaces as PICKED with
-    // UNRESOLVED meta; EARLIER_OF and a fully-pending LATER_OF surface as
-    // UNRESOLVED.
+    // and keeps its normal resolution. IMPOSSIBLE is excluded by the res.type
+    // guards. As on the atomic path, a `vestingStart`-relative duration cliff
+    // lowers anchor-free and rides along; a cliff that needs the firing date keeps
+    // the statement UNRESOLVED. The pending shape differs by arm: LATER_OF
+    // surfaces as PICKED with UNRESOLVED meta; EARLIER_OF and a fully-pending
+    // LATER_OF surface as UNRESOLVED.
     const vs = sched.vesting_start;
     if (
       (res.type === "UNRESOLVED" ||
         (res.type === "PICKED" && res.meta.type === "UNRESOLVED")) &&
       isCombinator(vs) &&
-      referencesNamedEvent(vs) &&
-      !p.cliff
+      referencesNamedEvent(vs)
     ) {
-      return {
-        percentage,
-        periodicity,
-        start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
-        cliff: { state: "NONE" },
-      };
+      const cliff = lowerDeferredCliff(
+        p.cliff,
+        p.type,
+        p.length,
+        p.occurrences,
+      );
+      if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
+        return {
+          percentage,
+          periodicity,
+          start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
+          cliff,
+        };
+      }
     }
 
     return {
