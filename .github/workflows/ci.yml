@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   check:
-    name: Build, typecheck, lint, format, test
+    name: Build, typecheck, lint, knip, format, test
     runs-on: ubuntu-latest
     env:
       # Match the release workflow: run the JS actions on Node 24 (the Node 20
@@ -44,6 +44,9 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      - name: Knip (unused files, exports, dependencies)
+        run: pnpm knip
 
       - name: Format check
         run: pnpm format:check
