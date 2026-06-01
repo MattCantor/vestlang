@@ -19,7 +19,12 @@ import type {
   OCTDate,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
+import type {
+  Cliff,
+  PeriodTag,
+  PeriodType,
+  VestingDayOfMonth,
+} from "@vestlang/types";
 import { addPeriod, fracReduce, gt, toDate } from "@vestlang/core";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -130,6 +135,71 @@ export const lowerCliff = (
     cliff: {
       length,
       period_type,
+      percentage: fracReduce({ numerator: m, denominator: occurrences }),
+    },
+  };
+};
+
+/** A `vestingStart + <duration>` cliff's offset, when the expression is exactly
+ *  that: a bare SINGLETON on the `vestingStart` anchor with one positive duration
+ *  offset and no condition. Any other shape (a different anchor, a condition, a
+ *  combinator, multiple offsets) returns undefined. */
+const vestingStartOffset = (
+  expr: VestingNodeExpr,
+): { value: number; unit: PeriodTag } | undefined => {
+  if (
+    expr.type !== "SINGLETON" ||
+    expr.base.type !== "EVENT" ||
+    expr.base.value !== "vestingStart" ||
+    expr.condition !== undefined ||
+    expr.offsets.length !== 1
+  )
+    return undefined;
+  const off = expr.offsets[0];
+  return off.sign === "PLUS" ? { value: off.value, unit: off.unit } : undefined;
+};
+
+/**
+ * Lower a cliff for a *deferred* start — a pending atomic event or a synthetic
+ * combinator event — where there is no concrete anchor date to resolve against.
+ *
+ * Only a `vestingStart`-relative duration cliff in the grid's own unit is
+ * derivable anchor-free: `length`/`period_type` are the offset itself, and the
+ * pre-cliff share is `floor(cliffLength / step) / occurrences` — independent of
+ * when the event eventually fires (a 12-month cliff on a 1-month/48 grid is
+ * always 12/48 = 25%). Core's compile then applies it at the firing date,
+ * reproducing exactly what the already-fired case (anchored `lowerCliff`) yields.
+ *
+ * Everything else needs the firing date and is reported UNRESOLVED so the caller
+ * keeps the statement unresolved: an event cliff (`CLIFF EVENT x`, no time-based
+ * form — kept here so a pending start with one stays unresolved rather than
+ * routing to events-only), or a cliff whose unit differs from the grid's (a
+ * months-cliff over a days-grid counts a varying number of pre-cliff occurrences
+ * depending on the anchor).
+ */
+export const lowerDeferredCliff = (
+  cliffExpr: VestingNodeExpr | undefined,
+  periodType: PeriodType,
+  period: number,
+  occurrences: number,
+): LoweredCliff => {
+  if (!cliffExpr) return { state: "NONE" };
+
+  const off = vestingStartOffset(cliffExpr);
+  // Anchor-free only when the cliff and the grid share a unit; otherwise the
+  // pre-cliff count depends on the (still-unknown) firing date.
+  if (!off || off.unit !== periodType)
+    return { state: "UNRESOLVED", blockers: [] };
+
+  if (off.value <= 0) return { state: "NONE" };
+  const m = Math.min(Math.floor(off.value / period), occurrences);
+  if (m === 0) return { state: "NONE" };
+
+  return {
+    state: "RESOLVED",
+    cliff: {
+      length: off.value,
+      period_type: off.unit,
       percentage: fracReduce({ numerator: m, denominator: occurrences }),
     },
   };
