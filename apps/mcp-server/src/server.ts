@@ -182,7 +182,14 @@ function parseWithDiagnostics(
     const raw = parse(dsl);
     return { ok: true, program: normalizeProgram(raw) };
   } catch (err: unknown) {
-    const e = err as { name?: string; message?: string; location?: any };
+    const e = err as {
+      name?: string;
+      message?: string;
+      location?: {
+        start: { line: number; column: number };
+        end: { line: number; column: number };
+      };
+    };
     if (e?.name === "SyntaxError" && e.location) {
       return {
         ok: false,
@@ -258,7 +265,14 @@ export function createServer(): McpServer {
         const raw = parse(dsl);
         return jsonResult({ ast: raw });
       } catch (err: unknown) {
-        const e = err as { name?: string; message?: string; location?: any };
+        const e = err as {
+          name?: string;
+          message?: string;
+          location?: {
+            start: { line: number; column: number };
+            end: { line: number; column: number };
+          };
+        };
         if (e?.name === "SyntaxError" && e.location) {
           return jsonResult({
             error: {

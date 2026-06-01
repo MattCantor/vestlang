@@ -39,7 +39,7 @@ function normalizeCondition(node: Condition): Condition {
       return NormalizeAndSort(node, normalizeCondition);
     default:
       throw new Error(
-        `normalizeCondition: unexpected condition type ${(node as any)?.type}`,
+        `normalizeCondition: unexpected condition type ${(node as { type?: string })?.type}`,
       );
   }
 }

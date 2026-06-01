@@ -36,9 +36,9 @@ export function lintProgram(
     {},
     {
       get(_t, prop: string) {
-        return (...args: any[]) => {
+        return (...args: unknown[]) => {
           for (const r of rules) {
-            const fn = (r.visitor as any)[prop];
+            const fn = (r.visitor as Record<string, unknown>)[prop];
             if (typeof fn === "function") fn.apply(r.mod, args);
           }
         };
@@ -66,21 +66,29 @@ export function lintText(
     const raw = parseVestlang(source) as RawProgram;
     const canonical = normalizeProgram(raw);
     return lintProgram(canonical, opts);
-  } catch (err: any) {
-    if (err?.name === "SyntaxError" && err?.location) {
+  } catch (err: unknown) {
+    const e = err as {
+      name?: string;
+      message?: string;
+      location?: {
+        start: { line: number; column: number };
+        end: { line: number; column: number };
+      };
+    };
+    if (e.name === "SyntaxError" && e.location) {
       const diagnostic: Diagnostic = {
         ruleId: "syntax-error",
-        message: err.message,
+        message: e.message ?? "Syntax error",
         severity: "error",
         path: [],
         loc: {
           start: {
-            line: err.location.start.line,
-            column: err.location.start.column,
+            line: e.location.start.line,
+            column: e.location.start.column,
           },
-          end: { line: err.location.end.line, column: err.location.end.column },
+          end: { line: e.location.end.line, column: e.location.end.column },
         },
-        codeFrame: buildCodeFrame(source, err.location),
+        codeFrame: buildCodeFrame(source, e.location),
       };
       return { diagnostics: [diagnostic] };
     }
@@ -88,7 +96,7 @@ export function lintText(
     // Non-peggy errors - surface as generic diagnostic
     const diagnostic: Diagnostic = {
       ruleId: "unexpected-error",
-      message: String(err?.message ?? err),
+      message: String(e.message ?? err),
       severity: "error",
       path: [],
     };
