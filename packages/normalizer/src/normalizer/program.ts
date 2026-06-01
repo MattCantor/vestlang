@@ -44,7 +44,7 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
       return NormalizeAndSort(e, normalizeScheduleExpr);
     default:
       throw new Error(
-        `normalizeScheduleExpr: unexpected ScheduleExpr type ${(e as any)?.type}`,
+        `normalizeScheduleExpr: unexpected ScheduleExpr type ${(e as { type?: string })?.type}`,
       );
   }
 }
@@ -99,7 +99,7 @@ function normalizeNode(
       return normalizeVestingNodeExpr(c);
     default:
       throw new Error(
-        `normalizeCliff: unexpected cliff type ${(c as any)?.type}`,
+        `normalizeCliff: unexpected cliff type ${(c as { type?: string })?.type}`,
       );
   }
 }
@@ -126,7 +126,7 @@ function normalizeVestingNodeExpr(e: VestingNodeExpr): VestingNodeExpr {
       return NormalizeAndSort(e, normalizeVestingNodeExpr);
     default:
       throw new Error(
-        `normalizeVestingNodeExpr: unexpected VestingNode type ${(e as any)?.type}`,
+        `normalizeVestingNodeExpr: unexpected VestingNode type ${(e as { type?: string })?.type}`,
       );
   }
 }

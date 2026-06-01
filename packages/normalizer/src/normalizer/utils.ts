@@ -12,14 +12,14 @@ import {
  */
 function stableKey(x: unknown): string {
   const seen = new WeakSet<object>();
-  const stringify = (v: any): any => {
+  const stringify = (v: unknown): unknown => {
     if (v === null || typeof v !== "object") return v;
     if (seen.has(v)) return "[Circular]";
     seen.add(v);
-    if (Array.isArray(v)) return v.map(stringify);
+    if (Array.isArray(v)) return (v as unknown[]).map(stringify);
     const keys = Object.keys(v).sort();
-    const out: Record<string, any> = {};
-    for (const k of keys) out[k] = stringify(v[k]);
+    const out: Record<string, unknown> = {};
+    for (const k of keys) out[k] = stringify((v as Record<string, unknown>)[k]);
     return out;
   };
   return JSON.stringify(stringify(x));
@@ -70,7 +70,9 @@ export function NormalizeAndSort<
 
   // Flatten same-op: EARLIER_OF(EARLIER_OF(...), x) -> EARLIER_OF(...)
   items = items.flatMap((item) =>
-    item.type === expression.type ? (item as any).items : [item],
+    item.type === expression.type
+      ? (item as unknown as { items: N[] }).items
+      : [item],
   );
 
   // Sort & dedupe

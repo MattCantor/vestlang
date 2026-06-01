@@ -25,7 +25,9 @@ describe("evaluateVestingBase", () => {
       ctx,
     );
     expect(res.type).toBe("UNRESOLVED");
-    expect((res as any).blockers[0].type).toBe("DATE_NOT_YET_OCCURRED");
+    expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
+      "DATE_NOT_YET_OCCURRED",
+    );
   });
 
   it("EVENT resolved if ctx has date, with offsets applied (MONTHS)", () => {
@@ -52,7 +54,7 @@ describe("evaluateVestingBase", () => {
       ctx,
     );
     expect(res.type).toBe("UNRESOLVED");
-    expect((res as any).blockers[0]).toMatchObject({
+    expect((res as { blockers: unknown[] }).blockers[0]).toMatchObject({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "boardApproval",
     });

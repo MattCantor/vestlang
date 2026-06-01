@@ -53,7 +53,7 @@ export default tseslint.config(
       // Turned off so the *behavioural* type-aware rules below (floating
       // promises, misused promises, unnecessary conditions, …) stay actionable.
       // Tightening these is a gradual follow-up, not a big-bang retrofit.
-      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-member-access": "off",

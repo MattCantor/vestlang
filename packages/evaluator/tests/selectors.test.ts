@@ -27,10 +27,10 @@ describe("evaluateVestingNodeExpr selectors", () => {
           offsets: [],
         },
       ],
-    } as any;
+    } as VestingNodeExpr;
     const res = evaluateVestingNodeExpr(expr, ctx);
     expect(res.type).toBe("PICKED");
-    expect((res as any).meta.date).toBe("2024-02-01");
+    expect((res as { meta: { date: string } }).meta.date).toBe("2024-02-01");
   });
 
   it("LATER_OF returns PICKED with UNRESOLVED meta when partially resolved", () => {
@@ -52,8 +52,10 @@ describe("evaluateVestingNodeExpr selectors", () => {
     } as VestingNodeExpr;
     const res = evaluateVestingNodeExpr(expr, ctx);
     expect(res.type).toBe("PICKED");
-    expect((res as any).meta.type).toBe("UNRESOLVED");
-    expect((res as any).meta.blockers[0].type).toBe("EVENT_NOT_YET_OCCURRED");
+    expect((res as { meta: { type: string } }).meta.type).toBe("UNRESOLVED");
+    expect(
+      (res as { meta: { blockers: { type: string }[] } }).meta.blockers[0].type,
+    ).toBe("EVENT_NOT_YET_OCCURRED");
   });
 
   it("LATER_OF returns UNRESOLVED_SELECTOR when two or more items unresolved", () => {
@@ -75,7 +77,9 @@ describe("evaluateVestingNodeExpr selectors", () => {
     } as VestingNodeExpr;
     const res = evaluateVestingNodeExpr(expr, ctx);
     expect(res.type).toBe("UNRESOLVED");
-    expect((res as any).blockers[0].type).toBe("UNRESOLVED_SELECTOR");
+    expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
+      "UNRESOLVED_SELECTOR",
+    );
   });
 
   it("All impossible → IMPOSSIBLE_SELECTOR", () => {
@@ -98,12 +102,12 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
       type: "SINGLETON",
       base: makeVestingBaseDate("2024-02-01"),
       offsets: [],
-    } as any,
+    },
     { type: "MONTHS", length: 1, occurrences: 2 },
   );
   it("resolved vesting_start yields PICKED schedule", () => {
     const res = evaluateScheduleExpr(schedule, ctx);
     expect(res.type).toBe("PICKED");
-    expect((res as any).meta.date).toBe("2024-02-01");
+    expect((res as { meta: { date: string } }).meta.date).toBe("2024-02-01");
   });
 });

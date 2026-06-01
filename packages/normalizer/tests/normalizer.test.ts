@@ -98,7 +98,7 @@ describe("selectors: flatten, dedupe, collapse", () => {
     expect(items.length).toBe(2);
 
     // Ensure there is no nested selector remaining at top-level items
-    expect(items.every((x: any) => x.type === "SINGLETON")).toBe(true);
+    expect(items.every((x) => x.type === "SINGLETON")).toBe(true);
   });
 
   it("collapses to singleton after dedupe when both items are identical", () => {
@@ -198,9 +198,7 @@ describe("selectors (vesting_start): flatten + dedupe", () => {
     expect((vs as LaterOfVestingNode).items.length).toBe(2);
     // Top-level items are vesting nodes (selector was flattened)
     expect(
-      (vs as LaterOfVestingNode).items.every(
-        (x: any) => x.type === "SINGLETON",
-      ),
+      (vs as LaterOfVestingNode).items.every((x) => x.type === "SINGLETON"),
     ).toBe(true);
   });
 });

@@ -112,7 +112,10 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     expect(c.type).toBe("OR");
     expect(c.items).toHaveLength(2);
     expect(c.items[0].type).toBe("AND");
-    expect(c.items[0].items.map((x: any) => x.type)).toEqual(["ATOM", "ATOM"]);
+    expect(c.items[0].items.map((x: { type: string }) => x.type)).toEqual([
+      "ATOM",
+      "ATOM",
+    ]);
     expect(c.items[1].type).toBe("ATOM");
   });
 
