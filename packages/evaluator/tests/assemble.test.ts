@@ -455,3 +455,54 @@ describe("assemble — unresolved status", () => {
     );
   });
 });
+
+describe("assemble — impossible status", () => {
+  // `EVENT a BEFORE DATE 2025-01-01` with a firing after the deadline: no witness
+  // assignment can ever satisfy it → the whole (single-statement) grant is void.
+  const voidStart: VestingNode = {
+    type: "SINGLETON",
+    base: makeVestingBaseEvent("a"),
+    offsets: [],
+    condition: {
+      type: "ATOM",
+      constraint: {
+        type: "BEFORE",
+        base: makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        strict: false,
+      },
+    },
+  };
+  const voidStmt = stmt(portion(1, 1), voidStart, {
+    type: "MONTHS",
+    length: 12,
+    occurrences: 2,
+  });
+
+  it("contradictory statement → status impossible, all installments IMPOSSIBLE", () => {
+    const out = evaluateStatement(
+      voidStmt,
+      ctxInput({
+        events: { grantDate: "2025-01-01", a: "2025-06-01" },
+      }),
+    );
+    expect(out.status).toBe("impossible");
+    if (out.status !== "impossible") return;
+    expect(out.installments.length).toBeGreaterThan(0);
+    expect(out.installments.every((i) => i.meta.state === "IMPOSSIBLE")).toBe(
+      true,
+    );
+    expect(out.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(
+      true,
+    );
+  });
+
+  it("whole-program collapse: all-void program → impossible", () => {
+    const [out] = evaluateProgram(
+      [voidStmt, voidStmt],
+      ctxInput({
+        events: { grantDate: "2025-01-01", a: "2025-06-01" },
+      }),
+    );
+    expect(out.status).toBe("impossible");
+  });
+});

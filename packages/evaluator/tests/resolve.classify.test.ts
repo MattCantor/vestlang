@@ -16,6 +16,28 @@ import {
   makeVestingBaseEvent,
 } from "./helpers";
 
+// `EVENT <event> BEFORE DATE <deadline>` — void once the event fires after the
+// deadline (no witness assignment can satisfy it).
+const eventBeforeDate = (event: string, deadline: OCTDate): VestingNode => ({
+  type: "SINGLETON",
+  base: makeVestingBaseEvent(event),
+  offsets: [],
+  condition: {
+    type: "ATOM",
+    constraint: {
+      type: "BEFORE",
+      base: makeSingletonNode(makeVestingBaseDate(deadline)),
+      strict: false,
+    },
+  },
+});
+
+const twoYearsAnnual: VestingPeriod = {
+  type: "MONTHS",
+  length: 12,
+  occurrences: 2,
+};
+
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
@@ -130,6 +152,77 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     expect(result.blockers.length).toBeGreaterThan(0);
+  });
+});
+
+describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
+  it("single contradictory statement → impossible (all installments IMPOSSIBLE)", () => {
+    // a fires 2025-06-01, after the BEFORE 2025-01-01 deadline → can never satisfy.
+    const program: Program = [
+      stmt(portion(1, 1), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+    ];
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("impossible");
+    if (result.kind !== "impossible") return;
+    expect(result.installments.length).toBeGreaterThan(0);
+    expect(
+      result.installments.every((i) => i.meta.state === "IMPOSSIBLE"),
+    ).toBe(true);
+    expect(
+      result.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION"),
+    ).toBe(true);
+  });
+
+  it("merely-pending statement (unfired event) stays unresolved, not impossible", () => {
+    // ipo unfired + an event cliff keeps it in the unresolved arm (satisfiable).
+    const cliff: VestingNodeExpr = makeSingletonNode(makeVestingBaseEvent("c"));
+    const program: Program = [
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        ...twoYearsAnnual,
+        cliff,
+      }),
+    ];
+    const result = resolveToCore(program, ctxInput()); // ipo, c unfired
+    expect(result.kind).toBe("unresolved");
+  });
+
+  it("[void, pending] → unresolved (the pending half can still vest)", () => {
+    const program: Program = [
+      stmt(portion(1, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        twoYearsAnnual,
+      ),
+    ];
+    // a fired late (void); ipo unfired (pending).
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("unresolved");
+  });
+
+  it("[void, resolving] → unresolved (don't declare a vesting grant dead)", () => {
+    const program: Program = [
+      stmt(portion(1, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        twoYearsAnnual,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("unresolved");
+  });
+
+  it("all-void multi-statement program → impossible", () => {
+    const program: Program = [
+      stmt(portion(1, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+      stmt(portion(1, 2), eventBeforeDate("b", "2025-01-01"), twoYearsAnnual),
+    ];
+    const result = resolveToCore(
+      program,
+      ctxInput({ a: "2025-06-01", b: "2025-07-01" }),
+    );
+    expect(result.kind).toBe("impossible");
   });
 });
 
