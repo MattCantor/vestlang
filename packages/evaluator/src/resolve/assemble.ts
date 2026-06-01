@@ -7,6 +7,8 @@
 //                   artifact (template, runtime, sourceMap), status "template".
 //   - events      → the resolved dated installments, status "events-only" + reason.
 //   - unresolved  → symbolic installments + blockers, status "unresolved".
+//   - impossible  → all-void installments + contradiction blockers, status
+//                   "impossible".
 
 import type { EvaluatedSchedule } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
@@ -66,6 +68,12 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
       return {
         status: "unresolved",
         installments: result.symbolic,
+        blockers: result.blockers,
+      };
+    case "impossible":
+      return {
+        status: "impossible",
+        installments: result.installments,
         blockers: result.blockers,
       };
   }

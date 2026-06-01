@@ -11,6 +11,8 @@
 import type {
   Blocker,
   EvaluationContext,
+  ImpossibleBlocker,
+  ImpossibleInstallment,
   Program,
   ResolvedInstallment,
   SymbolicInstallment,
@@ -208,13 +210,37 @@ const unresolvedArm = (
 ): ResolveResult => {
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
+  // Per-statement outcomes, tracked to decide whether the whole program is void.
+  let sawImpossible = false; // a contradictory portion
+  let sawPending = false; // an unfired-but-satisfiable portion
+  let sawResolvedLive = false; // a fully-resolved portion (RESOLVED installments
+  // are discarded here, but the portion is alive in the template world)
   for (const stmt of program) {
     const ev = unresolvedInstallments(stmt, ctx);
+    // EMPTY only comes back from unresolvedInstallments' fully-resolved paths.
+    // (A vacuous 0-occurrence statement is also empty; treating it as live keeps
+    // it from forcing `impossible` — the safe direction.)
+    if (ev.installments.length === 0) sawResolvedLive = true;
     for (const inst of ev.installments) {
+      if (inst.meta.state === "IMPOSSIBLE") sawImpossible = true;
+      else if (inst.meta.state === "UNRESOLVED") sawPending = true;
       if (inst.meta.state !== "RESOLVED")
         symbolic.push(inst as SymbolicInstallment);
     }
     blockers.push(...ev.blockers);
+  }
+
+  // Lossless rollup: collapse to `impossible` only when every portion is void —
+  // nothing merely pending, nothing already resolving. A mix stays `unresolved`,
+  // where the leaf-level IMPOSSIBLE installments still carry the dead portion's
+  // truth. In this branch every symbolic installment is IMPOSSIBLE and every
+  // blocker is an ImpossibleBlocker, so the narrowing casts hold.
+  if (sawImpossible && !sawPending && !sawResolvedLive) {
+    return {
+      kind: "impossible",
+      installments: symbolic as ImpossibleInstallment[],
+      blockers: blockers as ImpossibleBlocker[],
+    };
   }
   return { kind: "unresolved", symbolic, blockers };
 };
