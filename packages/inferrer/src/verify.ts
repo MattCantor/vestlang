@@ -44,7 +44,7 @@ export function residualAgainstInput(
 
   const expected = new Map<string, number>();
   for (const t of input) {
-    const key = t.date as unknown as string;
+    const key = t.date;
     expected.set(key, (expected.get(key) ?? 0) + t.amount);
   }
 
@@ -60,15 +60,13 @@ export function residualAgainstInput(
   for (const [key, amount] of produced.entries()) {
     if (amount > EPSILON) {
       installments.push({
-        date: key as unknown as OCTDate,
+        date: key,
         amount,
         meta: { state: "RESOLVED" },
       });
     }
   }
-  installments.sort((a, b) =>
-    (a.date as unknown as string).localeCompare(b.date as unknown as string),
-  );
+  installments.sort((a, b) => a.date.localeCompare(b.date));
 
   return { residual, installments };
 }

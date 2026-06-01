@@ -2,10 +2,9 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { lintProgram } from "../src/index.js";
-import type { RawProgram } from "@vestlang/types";
 
 function diagnosticsOf(src: string) {
-  const raw = parse(src) as RawProgram;
+  const raw = parse(src);
   const program = normalizeProgram(raw);
   return lintProgram(program).diagnostics;
 }

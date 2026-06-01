@@ -1,0 +1,23 @@
+{
+  // Whole-repo program for type-aware ESLint and the standalone `typecheck`
+  // script. Unlike the per-package build tsconfigs (which `include: ["src"]`),
+  // this also pulls in test files, so type errors in tests are caught too.
+  // Emits nothing; cross-package imports resolve through the built `dist`
+  // outputs, so run after a build (CI builds first; turbo's test task already
+  // depends on ^build).
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+  },
+  "include": ["packages", "apps/cli", "apps/mcp-server", "tests"],
+  "exclude": [
+    "**/node_modules",
+    "**/dist",
+    "**/build",
+    "packages/dsl/src/generated",
+    "apps/docs",
+  ],
+}

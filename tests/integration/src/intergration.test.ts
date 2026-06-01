@@ -2,18 +2,14 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateStatement } from "@vestlang/evaluator";
-import type {
-  EvaluationContextInput,
-  Installment,
-  OCTDate,
-} from "@vestlang/types";
+import type { EvaluationContextInput, Installment } from "@vestlang/types";
 
 /* ------------------------
  * Helpers
  * ------------------------ */
 
 const date = new Date();
-const today = date.toISOString().split("T")[0] as OCTDate;
+const today = date.toISOString().split("T")[0];
 
 const createCtx = (grantQuantity: number = 100) =>
   ({

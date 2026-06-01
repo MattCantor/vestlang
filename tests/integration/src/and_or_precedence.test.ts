@@ -13,15 +13,15 @@ import type {
  * ------------------------ */
 
 const date = new Date();
-const today = date.toISOString().split("T")[0] as OCTDate;
+const today = date.toISOString().split("T")[0];
 
 const datePlus1 = new Date(date);
 datePlus1.setDate(date.getDate() + 1);
-const tomorrow = datePlus1.toISOString().split("T")[0] as OCTDate;
+const tomorrow = datePlus1.toISOString().split("T")[0];
 
 const dateMinus1 = new Date(date);
 dateMinus1.setDate(date.getDate() - 1);
-const yesterday = dateMinus1.toISOString().split("T")[0] as OCTDate;
+const yesterday = dateMinus1.toISOString().split("T")[0];
 
 // EVENT X BEFORE EVENT A -> TRUE when A > X
 const eventTrue = (event: string) => ({

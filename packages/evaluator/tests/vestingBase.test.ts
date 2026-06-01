@@ -7,22 +7,21 @@ import {
   makeVestingBaseEvent,
   makeDuration,
 } from "./helpers.js";
-import { OCTDate } from "@vestlang/types";
 
 describe("evaluateVestingBase", () => {
   it("DATE resolved when <= asOf", () => {
-    const ctx = baseCtx({ asOf: "2024-02-01" as OCTDate });
+    const ctx = baseCtx({ asOf: "2024-02-01" });
     const res = evaluateVestingBase(
-      makeSingletonNode(makeVestingBaseDate("2024-02-01" as OCTDate)),
+      makeSingletonNode(makeVestingBaseDate("2024-02-01")),
       ctx,
     );
-    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" as OCTDate });
+    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" });
   });
 
   it("DATE unresolved when > asOf, blocker is DATE_NOT_YET_OCCURRED", () => {
-    const ctx = baseCtx({ asOf: "2024-01-01" as OCTDate });
+    const ctx = baseCtx({ asOf: "2024-01-01" });
     const res = evaluateVestingBase(
-      makeSingletonNode(makeVestingBaseDate("2024-02-01" as OCTDate)),
+      makeSingletonNode(makeVestingBaseDate("2024-02-01")),
       ctx,
     );
     expect(res.type).toBe("UNRESOLVED");
@@ -32,9 +31,9 @@ describe("evaluateVestingBase", () => {
   it("EVENT resolved if ctx has date, with offsets applied (MONTHS)", () => {
     const ctx = baseCtx({
       events: {
-        grantDate: "2025-01-01" as OCTDate,
-        vestingStart: "2024-01-10" as OCTDate,
-        boardApproval: "2024-01-31" as OCTDate,
+        grantDate: "2025-01-01",
+        vestingStart: "2024-01-10",
+        boardApproval: "2024-01-31",
       },
     });
     const res = evaluateVestingBase(
@@ -43,11 +42,11 @@ describe("evaluateVestingBase", () => {
       ]),
       ctx,
     );
-    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-29" as OCTDate }); // 31_OR_LAST clamps
+    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-29" }); // 31_OR_LAST clamps
   });
 
   it("EVENT unresolved if missing", () => {
-    const ctx = baseCtx({ events: { grantDate: "2025-01-01" as OCTDate } });
+    const ctx = baseCtx({ events: { grantDate: "2025-01-01" } });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseEvent("boardApproval")),
       ctx,
@@ -62,20 +61,18 @@ describe("evaluateVestingBase", () => {
   it("DATE with offsets (DAYS MINUS)", () => {
     const ctx = baseCtx();
     const res = evaluateVestingBase(
-      makeSingletonNode(makeVestingBaseDate("2024-03-10" as OCTDate), [
+      makeSingletonNode(makeVestingBaseDate("2024-03-10"), [
         makeDuration(10, "DAYS", "MINUS"),
       ]),
       ctx,
     );
-    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-29" as OCTDate });
+    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-29" });
   });
 
   it("DATE resolution ignores asOf when asOf=false", () => {
-    const ctx = baseCtx({ asOf: "2024-01-01" as OCTDate });
-    const node = makeSingletonNode(
-      makeVestingBaseDate("2024-02-01" as OCTDate),
-    );
-    const res = evaluateVestingBase(node as any, ctx, false);
-    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" as OCTDate });
+    const ctx = baseCtx({ asOf: "2024-01-01" });
+    const node = makeSingletonNode(makeVestingBaseDate("2024-02-01"));
+    const res = evaluateVestingBase(node, ctx, false);
+    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" });
   });
 });

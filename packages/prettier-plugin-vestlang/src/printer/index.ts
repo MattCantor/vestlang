@@ -1,4 +1,4 @@
-import { RawProgram, RawScheduleExpr, RawStatement } from "@vestlang/types";
+import { RawStatement } from "@vestlang/types";
 import { AstPath, Doc, Printer } from "prettier";
 import { printStatement } from "./program.js";
 import { group, hardline, indent, join, softline } from "../builders.js";

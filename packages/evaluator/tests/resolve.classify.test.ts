@@ -20,9 +20,9 @@ const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate, ...events },
+  events: { grantDate: "2025-01-01", ...events },
   grantQuantity,
-  asOf: "2035-01-01" as OCTDate,
+  asOf: "2035-01-01",
 });
 
 const portion = (numerator: number, denominator: number): Amount => ({
@@ -48,7 +48,7 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
     const program: Program = [
       stmt(
         portion(1, 2),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 12,
@@ -57,7 +57,7 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
       ),
       stmt(
         portion(1, 2),
-        makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-07-01")),
         {
           type: "MONTHS",
           length: 12,
@@ -117,7 +117,7 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
     const program: Program = [
       stmt(
         portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 1,
@@ -138,7 +138,7 @@ describe("resolveToCore — template arm still wins when it fits", () => {
     const program: Program = [
       stmt(
         portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 1,

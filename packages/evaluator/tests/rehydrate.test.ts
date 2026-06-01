@@ -10,7 +10,6 @@ import type {
   Amount,
   Blocker,
   EvaluationContextInput,
-  OCTDate,
   Schedule,
 } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
@@ -26,9 +25,9 @@ import {
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate },
+  events: { grantDate: "2025-01-01" },
   grantQuantity: 100000,
-  asOf: "2035-01-01" as OCTDate,
+  asOf: "2035-01-01",
   ...overrides,
 });
 
@@ -94,11 +93,8 @@ describe("rehydrate — Stage C: IPO fires → witness → full projection", () 
       sourceMap,
       runtime,
       ctxInput({
-        events: {
-          grantDate: "2025-01-01" as OCTDate,
-          ipo: "2027-03-01" as OCTDate,
-        },
-        asOf: "2027-06-01" as OCTDate,
+        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
+        asOf: "2027-06-01",
         grantQuantity: 4800,
       }),
     );
@@ -128,8 +124,8 @@ describe("rehydrate — Stage D: IPO still unfired → no witness", () => {
       sourceMap,
       runtime,
       ctxInput({
-        events: { grantDate: "2025-01-01" as OCTDate }, // ipo unfired
-        asOf: "2026-06-01" as OCTDate, // grant+12mo passed, IPO not
+        events: { grantDate: "2025-01-01" }, // ipo unfired
+        asOf: "2026-06-01", // grant+12mo passed, IPO not
         grantQuantity: 4800,
       }),
     );

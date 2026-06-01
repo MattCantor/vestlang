@@ -14,7 +14,7 @@ describe("blockerToString", () => {
   it("DATE_NOT_YET_OCCURRED", () => {
     const s = blockerToString({
       type: "DATE_NOT_YET_OCCURRED",
-      date: "2024-02-01" as OCTDate,
+      date: "2024-02-01",
     });
     expect(s).toBe("DATE 2024-02-01");
   });

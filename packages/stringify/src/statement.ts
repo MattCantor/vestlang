@@ -1,6 +1,5 @@
 import type {
   Amount,
-  AmountPortion,
   Schedule,
   ScheduleExpr,
   Statement,
@@ -132,7 +131,7 @@ function stringifyAmount(a: Amount): string {
   if (a.type === "QUANTITY") {
     return String(a.value);
   }
-  const p = a as AmountPortion;
+  const p = a;
   // Omit default 1/1 portion
   if (p.numerator === 1 && p.denominator === 1) {
     return "";

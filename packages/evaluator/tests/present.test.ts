@@ -11,7 +11,6 @@ import type {
   EvaluatedSchedule,
   EvaluationContextInput,
   Installment,
-  OCTDate,
   Program,
   VestingNode,
   VestingPeriod,
@@ -34,7 +33,7 @@ const stub = (
   ({ status, blockers, installments }) as unknown as EvaluatedSchedule;
 
 const dated: Installment[] = [
-  { amount: 100, date: "2025-02-01" as OCTDate, meta: { state: "RESOLVED" } },
+  { amount: 100, date: "2025-02-01", meta: { state: "RESOLVED" } },
 ];
 const symbolic: Installment[] = [
   {
@@ -106,16 +105,16 @@ describe("presentSchedule — end-to-end hybrid (DoD #1)", () => {
     expr: makeSingletonSchedule(start, periodicity),
   });
   const ctxInput = (): EvaluationContextInput => ({
-    events: { grantDate: "2025-01-01" as OCTDate },
+    events: { grantDate: "2025-01-01" },
     grantQuantity: 4800,
-    asOf: "2035-01-01" as OCTDate,
+    asOf: "2035-01-01",
   });
 
   it("75% MONTHLY + 25% unfired EVENT → template that is representable-but-pending", () => {
     const program: Program = [
       stmt(
         portion(3, 4),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 1,

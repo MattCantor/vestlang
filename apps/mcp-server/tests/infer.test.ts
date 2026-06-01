@@ -64,7 +64,7 @@ function tranchesFromDsl(
     (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
   );
   return installments.map((i) => ({
-    date: i.date as unknown as string,
+    date: i.date,
     amount: i.amount,
   }));
 }
@@ -123,9 +123,9 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     const client = await connectClient();
     const tranches = tranchesFromDsl(
       "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month CLIFF 12 months",
-      "2024-01-01" as OCTDate,
+      "2024-01-01",
       48000,
-      "2028-02-01" as OCTDate,
+      "2028-02-01",
     );
 
     const res = await callInfer(client, {

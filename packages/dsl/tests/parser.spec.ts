@@ -35,13 +35,17 @@ describe("Start & basics", () => {
 
     const first = ast[0].expr;
     if (first.type !== "SINGLETON")
-      throw new Error(`${first} expected to have type "SINGLETON`);
+      throw new Error(
+        `${JSON.stringify(first)} expected to have type "SINGLETON`,
+      );
     const firstVestingStart = first.vesting_start as VestingNode;
     expect(firstVestingStart.base.value).toBe("a");
 
     const second = ast[1].expr;
     if (second.type !== "SINGLETON")
-      throw new Error(`${second} expected to have type "SINGLETON"`);
+      throw new Error(
+        `${JSON.stringify(second)} expected to have type "SINGLETON"`,
+      );
     const secondVestingStart = second.vesting_start as VestingNode;
     expect(secondVestingStart.base.value).toBe("b");
   });
@@ -91,7 +95,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
 
   it("canonicalizes offsets: sum per unit, explicit sign, drop zeros", () => {
     const s = first(`VEST FROM EVENT a + 2 months - 1 months + 10 days`);
-    const start = (s as any).expr.vesting_start;
+    const start = s.expr.vesting_start;
     expect(start.type).toBe("SINGLETON");
     expect(start.offsets).toEqual([
       { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },

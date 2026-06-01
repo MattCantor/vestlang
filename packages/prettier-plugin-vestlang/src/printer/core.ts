@@ -40,10 +40,11 @@ function printCondition(node?: Condition): Doc {
     case "ATOM":
       return printConstraint(node.constraint);
     case "AND":
-    case "OR":
+    case "OR": {
       const keyword = kw(node.type);
       const items = node.items.map(printCondition);
       return [line, printParenGroup(keyword, items)];
+    }
   }
 }
 

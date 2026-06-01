@@ -14,7 +14,7 @@ export function evaluateVestingBase(
   asOf: boolean = true,
 ): ResolvedNode | UnresolvedNode {
   switch (node.base.type) {
-    case "DATE":
+    case "DATE": {
       const offsetDate = applyOffsets(node.base.value, node.offsets, ctx);
       const notResolved = asOf && gt(offsetDate, ctx.asOf);
       return notResolved
@@ -26,7 +26,8 @@ export function evaluateVestingBase(
             type: "RESOLVED",
             date: applyOffsets(node.base.value, node.offsets, ctx),
           };
-    case "EVENT":
+    }
+    case "EVENT": {
       const eventDate = ctx.events[node.base.value];
       return eventDate
         ? { type: "RESOLVED", date: applyOffsets(eventDate, node.offsets, ctx) }
@@ -39,6 +40,7 @@ export function evaluateVestingBase(
               },
             ],
           };
+    }
   }
 }
 

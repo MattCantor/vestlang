@@ -2,22 +2,22 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateStatementAsOf } from "@vestlang/evaluator";
-import type { EvaluationContextInput, OCTDate } from "@vestlang/types";
+import type { EvaluationContextInput } from "@vestlang/types";
 import { computeSummary, filterByWindow } from "../src/summary.js";
 
 const ctx = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate },
+  events: { grantDate: "2025-01-01" },
   grantQuantity: 100000,
-  asOf: "2026-04-16" as OCTDate,
+  asOf: "2026-04-16",
   allocation_type: "CUMULATIVE_ROUND_DOWN",
   ...overrides,
 });
 
 const run = (dsl: string, context = ctx()) => {
   const program = normalizeProgram(parse(dsl));
-  return evaluateStatementAsOf(program[0]!, context);
+  return evaluateStatementAsOf(program[0], context);
 };
 
 describe("computeSummary", () => {
@@ -38,7 +38,7 @@ describe("computeSummary", () => {
   it("fully_vested_date is null when schedule has unresolved installments", () => {
     const result = run(
       "VEST FROM EVENT ipo OVER 2 years EVERY 1 month",
-      ctx({ events: { grantDate: "2025-01-01" as OCTDate } }),
+      ctx({ events: { grantDate: "2025-01-01" } }),
     );
     const s = computeSummary(result, 100000);
     expect(s.fully_vested_date).toBeNull();
@@ -48,7 +48,7 @@ describe("computeSummary", () => {
   it("cliff_date is null when nothing has vested yet", () => {
     const result = run(
       "VEST OVER 4 years EVERY 1 month CLIFF 1 year",
-      ctx({ asOf: "2025-06-01" as OCTDate }),
+      ctx({ asOf: "2025-06-01" }),
     );
     const s = computeSummary(result, 100000);
     expect(s.cliff_date).toBeNull();
@@ -72,7 +72,7 @@ describe("computeSummary", () => {
       "VEST OVER 3 months EVERY 1 month",
       ctx({
         grantQuantity: 100,
-        asOf: "2025-02-01" as OCTDate,
+        asOf: "2025-02-01",
       }),
     );
     const s = computeSummary(result, 100);
@@ -86,8 +86,8 @@ describe("filterByWindow", () => {
     const result = run("VEST OVER 4 years EVERY 1 month CLIFF 1 year");
     const { installments, total } = filterByWindow(
       result.vested,
-      "2026-01-01" as OCTDate,
-      "2026-03-31" as OCTDate,
+      "2026-01-01",
+      "2026-03-31",
     );
     // Cliff (25000) + Feb (2083) + Mar (2083) = 29166
     expect(installments.length).toBe(3);
@@ -98,8 +98,8 @@ describe("filterByWindow", () => {
     const result = run("VEST OVER 4 years EVERY 1 month CLIFF 1 year");
     const { installments, total } = filterByWindow(
       result.vested,
-      "2025-06-01" as OCTDate,
-      "2025-12-31" as OCTDate,
+      "2025-06-01",
+      "2025-12-31",
     );
     expect(installments).toHaveLength(0);
     expect(total).toBe(0);
@@ -109,8 +109,8 @@ describe("filterByWindow", () => {
     const result = run("VEST OVER 4 years EVERY 1 month CLIFF 1 year");
     const { installments, total } = filterByWindow(
       result.vested,
-      "2026-01-01" as OCTDate,
-      "2026-01-01" as OCTDate,
+      "2026-01-01",
+      "2026-01-01",
     );
     expect(installments).toHaveLength(1);
     expect(total).toBe(25000);

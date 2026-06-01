@@ -124,4 +124,4 @@ program
     lint(parts, opts);
   });
 
-program.parseAsync();
+void program.parseAsync();

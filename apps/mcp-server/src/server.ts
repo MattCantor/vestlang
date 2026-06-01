@@ -24,7 +24,6 @@ import {
   dateDiff,
   resolveOffset,
   resolveVestingDay,
-  type PeriodUnit,
 } from "./date-math.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
@@ -141,7 +140,7 @@ function today(): OCTDate {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}` as OCTDate;
+  return `${y}-${m}-${d}`;
 }
 
 function buildContext(input: {
@@ -154,13 +153,13 @@ function buildContext(input: {
 }): EvaluationContextInput {
   const events: Record<string, OCTDate> = {};
   for (const [name, date] of Object.entries(input.events ?? {})) {
-    events[name] = date as OCTDate;
+    events[name] = date;
   }
-  events.grantDate = input.grant_date as OCTDate;
+  events.grantDate = input.grant_date;
   return {
     events: events as EvaluationContextInput["events"],
     grantQuantity: input.grant_quantity,
-    asOf: (input.as_of ?? today()) as OCTDate,
+    asOf: input.as_of ?? today(),
     vesting_day_of_month:
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     allocation_type: input.allocation_type ?? "CUMULATIVE_ROUND_DOWN",
@@ -372,10 +371,10 @@ export function createServer(): McpServer {
       try {
         const result = inferSchedule({
           tranches: tranches.map((t) => ({
-            date: t.date as OCTDate,
+            date: t.date,
             amount: t.amount,
           })),
-          grantDate: grant_date as OCTDate | undefined,
+          grantDate: grant_date,
         });
         return jsonResult(result);
       } catch (err: unknown) {
@@ -547,13 +546,13 @@ export function createServer(): McpServer {
         evaluateStatementAsOf(stmt, ctx),
       );
       return jsonResult({
-        from: params.from as OCTDate,
-        to: params.to as OCTDate,
+        from: params.from,
+        to: params.to,
         statements: results.map((r, i) => {
           const { installments, total } = filterByWindow(
             r.vested,
-            params.from as OCTDate,
-            params.to as OCTDate,
+            params.from,
+            params.to,
           );
           return {
             index: i,
@@ -621,9 +620,9 @@ export function createServer(): McpServer {
     },
     async ({ date, length, unit, vesting_day_of_month: rule }) => {
       const result = addPeriod(
-        date as OCTDate,
+        date,
         length,
-        unit as PeriodUnit,
+        unit,
         rule ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       );
       return jsonResult({ date: result });
@@ -651,7 +650,7 @@ export function createServer(): McpServer {
       },
     },
     async ({ from, to, unit }) => {
-      const result = dateDiff(from as OCTDate, to as OCTDate, unit);
+      const result = dateDiff(from, to, unit);
       return jsonResult(result);
     },
   );
@@ -685,11 +684,11 @@ export function createServer(): McpServer {
     async ({ expr, grant_date, events, vesting_day_of_month: rule }) => {
       const events_oct: Record<string, OCTDate> = {};
       for (const [k, v] of Object.entries(events ?? {})) {
-        events_oct[k] = v as OCTDate;
+        events_oct[k] = v;
       }
       const result = resolveOffset({
         expr,
-        grant_date: grant_date as OCTDate,
+        grant_date: grant_date,
         events: events_oct,
         vesting_day_of_month: rule,
       });
@@ -717,7 +716,7 @@ export function createServer(): McpServer {
       },
     },
     async ({ date, rule }) => {
-      const result = resolveVestingDay(date as OCTDate, rule);
+      const result = resolveVestingDay(date, rule);
       return jsonResult({ date: result });
     },
   );

@@ -22,9 +22,7 @@ import type {
 import { residualAgainstInput, type VerifyContext } from "./verify.js";
 
 function sortInput(tranches: TrancheInput[]): TrancheInput[] {
-  return [...tranches].sort((a, b) =>
-    (a.date as unknown as string).localeCompare(b.date as unknown as string),
-  );
+  return [...tranches].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function explicitListFallback(sorted: TrancheInput[]): Component[] {

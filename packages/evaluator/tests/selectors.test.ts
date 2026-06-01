@@ -8,7 +8,7 @@ import {
   makeVestingBaseDate,
   makeSingletonSchedule,
 } from "./helpers.js";
-import { OCTDate, VestingNodeExpr } from "@vestlang/types";
+import { VestingNodeExpr } from "@vestlang/types";
 
 describe("evaluateVestingNodeExpr selectors", () => {
   it("EARLIER_OF resolves to earliest resolved item", () => {
@@ -18,12 +18,12 @@ describe("evaluateVestingNodeExpr selectors", () => {
       items: [
         {
           type: "SINGLETON",
-          base: makeVestingBaseDate("2024-03-01" as OCTDate),
+          base: makeVestingBaseDate("2024-03-01"),
           offsets: [],
         },
         {
           type: "SINGLETON",
-          base: makeVestingBaseDate("2024-02-01" as OCTDate),
+          base: makeVestingBaseDate("2024-02-01"),
           offsets: [],
         },
       ],
@@ -40,7 +40,7 @@ describe("evaluateVestingNodeExpr selectors", () => {
       items: [
         {
           type: "SINGLETON",
-          base: makeVestingBaseDate("2024-02-01" as OCTDate),
+          base: makeVestingBaseDate("2024-02-01"),
           offsets: [],
         },
         {
@@ -96,13 +96,13 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
   const schedule = makeSingletonSchedule(
     {
       type: "SINGLETON",
-      base: makeVestingBaseDate("2024-02-01" as OCTDate),
+      base: makeVestingBaseDate("2024-02-01"),
       offsets: [],
     } as any,
     { type: "MONTHS", length: 1, occurrences: 2 },
   );
   it("resolved vesting_start yields PICKED schedule", () => {
-    const res = evaluateScheduleExpr(schedule as any, ctx);
+    const res = evaluateScheduleExpr(schedule, ctx);
     expect(res.type).toBe("PICKED");
     expect((res as any).meta.date).toBe("2024-02-01");
   });

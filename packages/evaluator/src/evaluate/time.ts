@@ -3,8 +3,7 @@ import { isBefore, isAfter, isEqual } from "date-fns";
 
 // convert ISO-string ↔ Date
 export const toDate = (iso: OCTDate) => new Date(iso + "T00:00:00Z");
-export const toISO = (d: Date): OCTDate =>
-  d.toISOString().slice(0, 10) as OCTDate;
+export const toISO = (d: Date): OCTDate => d.toISOString().slice(0, 10);
 
 export function addMonthsRule(
   iso: OCTDate,

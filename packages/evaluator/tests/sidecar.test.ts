@@ -7,12 +7,7 @@
 // no sidecar at all.
 
 import { describe, it, expect } from "vitest";
-import type {
-  Amount,
-  EvaluationContextInput,
-  OCTDate,
-  Schedule,
-} from "@vestlang/types";
+import type { Amount, EvaluationContextInput, Schedule } from "@vestlang/types";
 import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
@@ -35,9 +30,9 @@ import {
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate },
+  events: { grantDate: "2025-01-01" },
   grantQuantity: 100000,
-  asOf: "2035-01-01" as OCTDate,
+  asOf: "2035-01-01",
   ...overrides,
 });
 
@@ -125,11 +120,8 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
     const result = rehydratePersisted(
       reread,
       ctxInput({
-        events: {
-          grantDate: "2025-01-01" as OCTDate,
-          ipo: "2027-03-01" as OCTDate,
-        },
-        asOf: "2027-06-01" as OCTDate,
+        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
+        asOf: "2027-06-01",
         grantQuantity: 4800,
       }),
     );
@@ -167,10 +159,7 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
     const result = rehydratePersisted(
       dropped,
       ctxInput({
-        events: {
-          grantDate: "2025-01-01" as OCTDate,
-          ipo: "2027-03-01" as OCTDate,
-        },
+        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
         grantQuantity: 4800,
       }),
     );

@@ -9,15 +9,11 @@ const meta = {
 
 export const ruleNoVestingStartInFromStatement: RuleModule = {
   meta,
-  create(ctx) {
-    const { id, severity } = meta;
+  create(_ctx) {
     return {
-      Schedule(node, path) {
+      Schedule(node, _path) {
         const vestingStart = node.vesting_start;
         if (!vestingStart || vestingStart.type !== "SINGLETON") return;
-
-        const baseOk =
-          vestingStart.base.type === "EVENT" && vestingStart.base.value === "";
       },
     };
   },

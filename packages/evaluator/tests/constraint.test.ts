@@ -8,7 +8,7 @@ import {
   makeImpossibleConditionBlocker,
   makeVestingBaseDate,
 } from "./helpers.js";
-import { ImpossibleNode, OCTDate, UnresolvedBlocker } from "@vestlang/types";
+import { ImpossibleNode, OCTDate } from "@vestlang/types";
 
 const aDate = "2024-01-31" as OCTDate;
 const bDate = "2024-02-01" as OCTDate;
@@ -81,7 +81,7 @@ describe("evaluateConstraint", () => {
     const b = makeUnresolvedNode({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "b",
-    } as UnresolvedBlocker);
+    });
     const out = evaluateConstraint(a, b, constrainedNode)!;
     expect(out.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(true);
   });

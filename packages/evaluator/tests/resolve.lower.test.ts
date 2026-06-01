@@ -21,9 +21,9 @@ const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate, ...events },
+  events: { grantDate: "2025-01-01", ...events },
   grantQuantity,
-  asOf: "2035-01-01" as OCTDate,
+  asOf: "2035-01-01",
 });
 
 const portion = (numerator: number, denominator: number): Amount => ({
@@ -49,16 +49,12 @@ describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", 
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const program: Program = [
-    stmt(
-      portion(1, 1),
-      makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
-      {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-        cliff: cliff12mo,
-      },
-    ),
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 48,
+      cliff: cliff12mo,
+    }),
   ];
 
   it("lowers to one DATE template with a time-based cliff", () => {
@@ -94,10 +90,10 @@ describe("resolveToCore — graded 5/15/40/40 chained over 4 years", () => {
       occurrences: 1,
     });
   const program: Program = [
-    yearStmt(1, "2025-01-01" as OCTDate),
-    yearStmt(3, "2026-01-01" as OCTDate),
-    yearStmt(8, "2027-01-01" as OCTDate),
-    yearStmt(8, "2028-01-01" as OCTDate),
+    yearStmt(1, "2025-01-01"),
+    yearStmt(3, "2026-01-01"),
+    yearStmt(8, "2027-01-01"),
+    yearStmt(8, "2028-01-01"),
   ];
 
   it("lowers to ONE template with four chained DATE statements (no fan-out)", () => {
@@ -134,10 +130,7 @@ describe("resolveToCore — EVENT-anchored portion", () => {
   ];
 
   it("lowers to a floating EVENT statement + firing", () => {
-    const result = resolveToCore(
-      program,
-      ctxInput({ ipo: "2026-04-01" as OCTDate }),
-    );
+    const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" }));
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
@@ -151,10 +144,7 @@ describe("resolveToCore — EVENT-anchored portion", () => {
   });
 
   it("round-trips through core.compile", () => {
-    const result = resolveToCore(
-      program,
-      ctxInput({ ipo: "2026-04-01" as OCTDate }),
-    );
+    const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" }));
     if (result.kind !== "template") throw new Error("expected template");
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events).toEqual([{ date: "2026-04-01", amount: "100000" }]);
@@ -166,7 +156,7 @@ describe("resolveToCore — QUANTITY amount lowers to a portion of the grant", (
     const program: Program = [
       stmt(
         { type: "QUANTITY", value: 25000 },
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         { type: "MONTHS", length: 1, occurrences: 1 },
       ),
     ];

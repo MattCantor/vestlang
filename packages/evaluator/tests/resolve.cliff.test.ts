@@ -10,7 +10,7 @@ import {
 } from "./helpers";
 
 const ctx = baseCtx({
-  events: { grantDate: "2025-01-01" as OCTDate, ipo: "2026-04-01" as OCTDate },
+  events: { grantDate: "2025-01-01", ipo: "2026-04-01" },
   vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
 });
 const anchor = "2025-01-01" as OCTDate;
@@ -40,7 +40,7 @@ describe("lowerCliff", () => {
   it("off-grid date cliff → falls back to DAYS, proportional pre-cliff share", () => {
     // 2025-03-17 on a monthly-4 grid: Feb 1 + Mar 1 are pre-cliff (m=2 of 4).
     const cliff: VestingNodeExpr = makeSingletonNode(
-      makeVestingBaseDate("2025-03-17" as OCTDate),
+      makeVestingBaseDate("2025-03-17"),
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 4, ctx)).toEqual({
       state: "RESOLVED",
@@ -64,7 +64,7 @@ describe("lowerCliff", () => {
 
   it("cliff at/before the start → NONE", () => {
     const cliff: VestingNodeExpr = makeSingletonNode(
-      makeVestingBaseDate("2024-06-01" as OCTDate),
+      makeVestingBaseDate("2024-06-01"),
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
       state: "NONE",
@@ -88,7 +88,7 @@ describe("lowerCliff", () => {
     // LATER OF(+12 months, EVENT ipo) with ipo unfired: the +12mo branch is only a
     // lower bound — the pending event can only push the cliff later — so the cliff
     // must stay UNRESOLVED rather than collapse to the floor (which would over-vest).
-    const noIpo = baseCtx({ events: { grantDate: "2025-01-01" as OCTDate } });
+    const noIpo = baseCtx({ events: { grantDate: "2025-01-01" } });
     const cliff: VestingNodeExpr = {
       type: "LATER_OF",
       items: [

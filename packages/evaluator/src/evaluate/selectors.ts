@@ -12,7 +12,6 @@ import type {
 import { lt } from "./time.js";
 import {
   isPickedResolved,
-  type Picked,
   type PickedResolved,
   type PickReturn,
 } from "./utils.js";
@@ -175,16 +174,17 @@ export function evaluateScheduleExpr(
 ): PickReturn<Schedule> {
   let candidates: PickReturn<Schedule>[] | undefined = undefined;
   switch (expr.type) {
-    case "SINGLETON":
+    case "SINGLETON": {
       const res = evaluateVestingNodeExpr(expr.vesting_start, ctx);
       if (res.type === "PICKED") {
         return {
           type: res.type,
-          picked: expr as Schedule,
+          picked: expr,
           meta: res.meta,
-        } as Picked<Schedule>;
+        };
       }
       return res;
+    }
 
     case "EARLIER_OF":
       candidates = expr.items.map((item) => evaluateScheduleExpr(item, ctx));
@@ -202,13 +202,14 @@ export function evaluateVestingNodeExpr(
 ): PickReturn<VestingNode> {
   let candidates: PickReturn<VestingNode>[] | undefined = undefined;
   switch (expr.type) {
-    case "SINGLETON":
+    case "SINGLETON": {
       const res = evaluateVestingNode(expr, ctx);
 
       if (res.type === "RESOLVED") {
         return { type: "PICKED", picked: expr, meta: res };
       }
       return res;
+    }
 
     case "EARLIER_OF":
       candidates = expr.items.map((item) => evaluateVestingNodeExpr(item, ctx));
