@@ -1,18 +1,18 @@
-// The single allocator primitive — exact-rational, integer-emitting.
+// Exact-rational, integer-emitting allocation. Two entry points share one
+// implementation:
 //
-// Two shapes off one implementation:
-//   - allocateExact  — the per-step telescoping primitive (running cumulative
-//                      fraction + vestedSoFar). compile drives a single
-//                      cumulative across the whole ordered template through this;
-//                      the evaluator's events-only/unresolved rendering reuses it.
-//   - allocateVector — the N-way even split for all 6 allocation modes (the
-//                      exact-rational replacement for the legacy float
-//                      `allocateQuantity`).
+//   allocateExact   The per-step telescoping primitive: a running cumulative
+//                   fraction plus vestedSoFar. compile drives one cumulative
+//                   across the whole ordered template through it, and the
+//                   evaluator's events-only/unresolved rendering reuses it.
+//   allocateVector  The N-way even split for all six allocation modes. This is
+//                   the exact-rational replacement for the legacy float
+//                   `allocateQuantity`.
 //
-// The cumulative modes are restated on Fraction: the legacy
-// `Math.floor((i+1)/n · q)` becomes the exact `floor(q · (i+1)/n)` via BigInt
-// (floorSharesAt). The four loaded modes are integer base+remainder and carry
-// over verbatim — they were already exact.
+// The cumulative modes are restated over Fraction: the old
+// `Math.floor((i+1)/n · q)` becomes the exact `floor(q · (i+1)/n)` in BigInt
+// (floorSharesAt). The four loaded modes were already exact integer
+// base+remainder, so they carry over verbatim.
 
 import type { AllocationType, Fraction } from "@vestlang/types";
 

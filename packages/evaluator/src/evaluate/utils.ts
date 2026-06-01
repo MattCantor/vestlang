@@ -33,10 +33,6 @@ export type ScheduleWithCliff = Schedule & {
   periodicity: VestingPeriodWithCliff;
 };
 
-// export type PickResolvedScheduleWithCliff = PickedResolved<Schedule> & {
-//   picked: { periodicity: { cliff: VestingNodeExpr } };
-// };
-
 export type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
 
 export function isPickedResolved<T>(x: any): x is PickedResolved<T> {
@@ -47,19 +43,6 @@ export function isPickedResolved<T>(x: any): x is PickedResolved<T> {
     x.meta.type === "RESOLVED"
   );
 }
-// /**
-//  * Catch-up: collapse all installments strictly before `floor` into one tranche on `floor`.
-//  */
-// export function catchUp(dates: readonly OCTDate[], floor: OCTDate): OCTDate[] {
-//   let idx = 0;
-//   while (idx < dates.length && lt(dates[idx], floor)) idx++;
-//
-//   if (idx > 0) {
-//     // Replace all earlier installments with a single tranche at `floor`
-//     return [floor, ...dates.slice(idx)];
-//   }
-//   return [...dates];
-// }
 
 /** Probe for latest resolved dates within a LATER OF */
 export function probeLaterOf(

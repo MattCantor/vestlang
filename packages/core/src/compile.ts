@@ -1,15 +1,15 @@
-// The canonical compile: a template + per-grant runtime + total shares → exact
-// integer installments.
+// The canonical compile: a template, a per-grant runtime, and a total share
+// count become exact integer installments.
 //
-// Core's engine is vestlang's — the allocator, date math, and fold. This file is
-// the orchestration that interprets the canonical IR, structured per OCF-Tools'
-// compile.ts (the reference for the IR semantics), and it lands the positional
-// cliff (`{occurrence, percentage}` via perEventGrantFractions). Every primitive
-// it calls is vestlang's.
+// The engine is vestlang's own. The allocator, date math, and fold are all
+// vestlang primitives; this file only adds the orchestration that walks the
+// canonical IR. That orchestration is a port of OCF-Tools' compile.ts (the
+// reference for the IR semantics), with the cliff applied by date rather than by
+// occurrence index (see expandAnchored).
 //
-// Two emit shapes off one engine:
-//   - compile(...)             → { date, amount: string }[]  (OCF/Carta-native)
-//   - compileToInstallments(…) → { date, amount: number }[]  (for extended)
+// One engine, two output shapes:
+//   compile(...)             -> { date, amount: string }[]  (OCF/Carta-native)
+//   compileToInstallments(…) -> { date, amount: number }[]  (consumed by extended)
 
 import type {
   Fraction,

@@ -26,7 +26,7 @@ export function InstallmentsTable({
             <tr key={index}>
               <td
                 style={{
-                  padding: "0.875rem 1 rem",
+                  padding: "0.875rem 1rem",
                   fontWeight: "600",
                 }}
               >
@@ -34,7 +34,7 @@ export function InstallmentsTable({
               </td>
               <td
                 style={{
-                  padding: "0.875rem 1 rem",
+                  padding: "0.875rem 1rem",
                   fontFamily: "var(--ifm-font-family-monospace)",
                 }}
               >

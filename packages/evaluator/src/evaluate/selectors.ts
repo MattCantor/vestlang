@@ -108,7 +108,6 @@ function handleSelector<T extends Schedule | VestingNode>(
   if (allImpossible(candidates))
     return {
       type: "IMPOSSIBLE",
-      // blockers: collectImpossibleBlockers(candidates),
       blockers: [
         {
           type: "IMPOSSIBLE_SELECTOR",

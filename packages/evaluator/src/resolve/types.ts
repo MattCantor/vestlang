@@ -1,10 +1,9 @@
 // The resolver/classifier's output contract.
 //
-// extended.resolve(program, runtime) → ResolveResult maps one DSL program to
-// exactly one verdict:
-//   - template   — resolves AND fits canonical's one-template shape (best).
-//   - events     — resolves to concrete dated amounts but doesn't fit a template.
-//   - unresolved — can't be materialized yet (unfired event) or contradictory.
+// extended.resolve(program, runtime) maps one DSL program to exactly one verdict:
+//   template     resolves and fits canonical's one-template shape (the best case).
+//   events       resolves to concrete dated amounts but doesn't fit a template.
+//   unresolved   can't be materialized yet (unfired event) or is contradictory.
 
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import type {
@@ -19,7 +18,7 @@ export type NonTemplateReason =
   // Two independent DATE-anchored time grids live at once. Carta models these as
   // separate grants, so they can't be one template.
   | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
-  // An event-anchored cliff — Carta has no event anchor on the cliff field.
+  // An event-anchored cliff; Carta has no event anchor on the cliff field.
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
   // A loaded (non-cumulative) allocation mode — the interchange carries no
   // allocation field, so loaded splits can't be a canonical template.
@@ -35,7 +34,7 @@ export type ResolveResult =
       // a synthetic event was minted.
       sourceMap: SourceMap;
       // Pending witnesses (unfired atomic EVENT starts; unresolved synthetic-event
-      // combinators) — advisory under a `template` verdict; the program is a valid
+      // combinators). Advisory under a `template` verdict; the program is a valid
       // template regardless.
       blockers: Blocker[];
     }

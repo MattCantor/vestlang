@@ -3,7 +3,8 @@
 //  - events: the program resolves to concrete dated amounts but doesn't fit one
 //    template (independent non-chaining grids, or an event-anchored cliff). Each
 //    statement is expanded to dated events, flattened, sorted, and allocated with
-//    the single running cumulative (core's allocator) — facts preserved, intent lost.
+//    the single running cumulative (core's allocator). The facts survive; the
+//    intent does not.
 //  - unresolved: a start/cliff can't be materialized yet. Reuses vestlang's
 //    evaluator to produce the symbolic (dateless) installments + blockers.
 
@@ -43,8 +44,8 @@ interface RawEv {
 
 /**
  * Expand one resolved statement to its dated events (fraction-of-grant each),
- * honoring a time-based or (fired) event cliff — the same shape core's compile
- * produces, but per statement so independent grids can coexist.
+ * honoring a time-based or (fired) event cliff. This is the same shape core's
+ * compile produces, but per statement so independent grids can coexist.
  */
 const expandResolution = (
   r: StmtResolution,
@@ -126,9 +127,10 @@ const cliffDateOf = (
 
 /**
  * Loaded (non-cumulative) allocation: each statement is an independent N-way
- * split (allocateVector — the exact integer base+remainder, matching the legacy
+ * split (allocateVector, the exact integer base+remainder that matches the legacy
  * allocator), mapped onto its grid, with the grant-date and cliff lumps folded.
- * No single running cumulative — loaded modes don't telescope across statements.
+ * There's no single running cumulative here; loaded modes don't telescope across
+ * statements.
  */
 const loadedEventsArm = (
   resolutions: StmtResolution[],

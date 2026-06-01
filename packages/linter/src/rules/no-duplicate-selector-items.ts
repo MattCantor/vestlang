@@ -36,7 +36,7 @@ export const ruleNoDuplicateSelectorItems: RuleModule = {
           if (seen.has(k)) {
             ctx.report({
               ruleId: id,
-              message: `${node.type} constaints duplicate items`,
+              message: `${node.type} contains duplicate items`,
               severity,
               path: path.concat("items", i),
             });

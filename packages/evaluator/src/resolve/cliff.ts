@@ -9,9 +9,9 @@
 //   - the percentage is the proportional pre-cliff share m/N (DSL cliffs are
 //     always proportional; non-proportional cliffs arrive only via OCF data).
 //
-// A bare event cliff (`CLIFF EVENT "ipo"`) is NOT a `cliff` field — Carta has no
+// A bare event cliff (`CLIFF EVENT "ipo"`) is not a `cliff` field; Carta has no
 // event anchor on the cliff. It's reported so the classifier (4b) can route it
-// structurally / to events-only. An unresolved cliff is reported with blockers.
+// structurally, to events-only. An unresolved cliff is reported with blockers.
 
 import type {
   Blocker,
@@ -29,7 +29,7 @@ const MS_PER_DAY = 86_400_000;
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
-  // Event-anchored cliff — has no time-based `cliff` representation.
+  // Event-anchored cliff: no time-based `cliff` representation.
   | { state: "EVENT"; eventId: string }
   | { state: "UNRESOLVED"; blockers: Blocker[] };
 
@@ -56,7 +56,7 @@ const measureDuration = (
   return { length: dayCount(anchor, cliffDate), period_type: "DAYS" };
 };
 
-/** A bare, non-`vestingStart` event anchor → no time-based cliff field. */
+/** A bare, non-`vestingStart` event anchor: no time-based cliff field. */
 const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
   expr.type === "SINGLETON" &&
   expr.base.type === "EVENT" &&
@@ -86,11 +86,11 @@ export const lowerCliff = (
   };
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
-  // A cliff date is known ONLY when the expression fully resolves. A partial
-  // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must NOT
+  // A cliff date is known only when the expression fully resolves. A partial
+  // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must not
   // collapse to its resolved branch: that branch is only a lower bound, so the
   // pending event can only push the cliff later. Reporting the floor as RESOLVED
-  // would over-vest a still-contingent grant — so leave it UNRESOLVED, mirroring
+  // would over-vest a still-contingent grant, so leave it UNRESOLVED, mirroring
   // the start path's partial-knowledge handling.
   const cliffDate: OCTDate | undefined = isPickedResolved(res)
     ? res.meta.date
