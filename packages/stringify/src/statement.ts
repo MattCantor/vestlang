@@ -86,7 +86,7 @@ function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
   if (vs.base.type !== "EVENT") return false;
   if (vs.base.value !== "grantDate") return false;
   if (vs.offsets && vs.offsets.length > 0) return false;
-  if (vs.constraints) return false;
+  if (vs.condition) return false;
   return true;
 }
 
@@ -108,7 +108,7 @@ function sugaredAnchorDuration(
   if (node.type !== "SINGLETON") return null;
   if (node.base.type !== "EVENT") return null;
   if (node.base.value !== systemEvent) return null;
-  if (node.constraints) return null;
+  if (node.condition) return null;
   if (!node.offsets || node.offsets.length !== 1) return null;
   const offset = node.offsets[0];
   if (offset.sign !== "PLUS") return null;

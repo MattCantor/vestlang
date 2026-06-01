@@ -137,11 +137,11 @@ describe("constraints: dedupe + singleton collapse", () => {
         `Expected ${JSON.stringify(vesting_start)} start to be constrainted`,
       );
     }
-    if (!vesting_start.constraints)
+    if (!vesting_start.condition)
       throw new Error(
         `Expected ${JSON.stringify(vesting_start)} to have constraints`,
       );
-    const c = vesting_start.constraints;
+    const c = vesting_start.condition;
 
     // After dedupe, AND has 1 item -> collapses to that item (ATOM)
     expect(c.type).toBe("ATOM");
@@ -167,9 +167,9 @@ describe("constraints: flatten AND", () => {
     const vs = getSingleton(out).vesting_start;
     if (vs.type !== "SINGLETON")
       throw new Error(`Expected ${JSON.stringify(vs)} type to be "SINGLETON"`);
-    if (!vs.constraints)
+    if (!vs.condition)
       throw new Error(`Expected ${JSON.stringify(vs)} to have constraints`);
-    const c = vs.constraints;
+    const c = vs.condition;
     expect(c.type).toBe("AND");
     expect((c as AndCondition).items.length).toBe(3);
     // Sanity: each item is an ATOM constraint

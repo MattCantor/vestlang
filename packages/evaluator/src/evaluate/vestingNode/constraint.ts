@@ -17,10 +17,10 @@ import { eq, gt, lt } from "../time.js";
  * ------------------------ */
 
 const createImpossibleBlocker = (
-  n: VestingNode & { constraints: AtomCondition },
+  n: VestingNode & { condition: AtomCondition },
 ): ImpossibleBlocker => ({
   type: "IMPOSSIBLE_CONDITION",
-  condition: { base: n.base, offsets: n.offsets, constraints: n.constraints },
+  condition: { base: n.base, offsets: n.offsets, condition: n.condition },
 });
 
 const assertNever = (x: never): never => {
@@ -81,9 +81,9 @@ const mergedUnresolved = (
 export function evaluateConstraint(
   a: ResolvedNode | UnresolvedNode,
   b: NodeMeta,
-  vestingNode: VestingNode & { constraints: AtomCondition },
+  vestingNode: VestingNode & { condition: AtomCondition },
 ): Blocker[] | undefined {
-  const { constraint } = vestingNode.constraints;
+  const { constraint } = vestingNode.condition;
   const isStrict = constraint.strict;
 
   // B can't happen

@@ -32,13 +32,13 @@ export function evaluateVestingNode(
   const resBase = evaluateVestingBase(node, ctx);
 
   // Return the resolved vesting node base if there are no constraints
-  if (!node.constraints) return resBase;
+  if (!node.condition) return resBase;
 
   // Resolve constraints
   const blockers = evaluateConstrainedVestingNode(
     node as ConstrainedVestingNode,
     resBase,
-    node.constraints,
+    node.condition,
     ctx,
   );
 

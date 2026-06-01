@@ -30,15 +30,15 @@ SystemRefEvent = name:SystemRef { return mkEvent(name); }
 VestingNode
   = base:(EventRef / SystemRefEvent / DateLiteral)
     offsets:(_ Duration)*
-    constraints:(_ OrExpr)? {
+    condition:(_ OrExpr)? {
       const offs = offsets.map(o => o[1])
       const node = {
         type: "SINGLETON",
         base,
         offsets: normalizeOffsets(offs)
       }
-      if (constraints) node.constraints = constraints[1]
-      return node 
+      if (condition) node.condition = condition[1]
+      return node
   }
 
 // A binary constraint whose subject is the enclosing VestingNode

@@ -10,10 +10,10 @@ import { AtomCondition, Condition, VestingNode } from "@vestlang/types";
  * - Normalize constraints (if CONSTRAINED)
  */
 export function normalizeVestingNode(node: VestingNode): VestingNode {
-  if (node.constraints) {
+  if (node.condition) {
     return {
       ...node,
-      constraints: normalizeCondition(node.constraints),
+      condition: normalizeCondition(node.condition),
     };
   }
   return node;

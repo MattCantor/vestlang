@@ -33,7 +33,7 @@ export function blockerToString(b: Blocker): string {
 }
 
 function vestingNodeToString(node: VestingNode): string {
-  return `${vestingBaseToString(node.base)}${offsetsToString(node.offsets)}${node.constraints ? ` ${conditionToString(node.constraints)}` : ""}`;
+  return `${vestingBaseToString(node.base)}${offsetsToString(node.offsets)}${node.condition ? ` ${conditionToString(node.condition)}` : ""}`;
 }
 
 function blockerConditionToString(c: Omit<VestingNode, "type">): string {
