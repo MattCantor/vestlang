@@ -1,4 +1,5 @@
 import type {
+  Blocker,
   ConstrainedVestingNode,
   EvaluationContext,
   ImpossibleBlocker,
@@ -12,12 +13,8 @@ import { evaluateConstrainedVestingNode } from "./constrainedVestingNode.js";
  * Helpers
  * ------------------------ */
 
-function allImpossibleBlockers(x: any[]): x is ImpossibleBlocker[] {
-  return (
-    !!x &&
-    typeof x === "object" &&
-    x.every((blocker) => blocker.type.split("_")[0] === "IMPOSSIBLE")
-  );
+function allImpossibleBlockers(x: Blocker[]): x is ImpossibleBlocker[] {
+  return x.every((blocker) => blocker.type.split("_")[0] === "IMPOSSIBLE");
 }
 
 /* ------------------------

@@ -4,15 +4,14 @@ import type {
   LaterOfVestingNode,
   OCTDate,
   ResolvedNode,
-  Schedule,
   UnresolvedNode,
-  VestingNodeExpr,
-  VestingPeriod,
 } from "@vestlang/types";
 import { lt } from "./time.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
 
-// Picked with UnresolvedNode indicates an unresolved LaterOf selector, where picked represents the latest of the resolved items
+// A Picked result carries the chosen item plus its resolution meta. When meta is
+// an UnresolvedNode, the pick is a partially-resolved LATER_OF: `picked` is the
+// latest of the items resolved so far, still pending the rest.
 export interface Picked<T> {
   type: "PICKED";
   picked: T;
@@ -27,24 +26,13 @@ export interface PickedUnresolved<T> extends Picked<T> {
   meta: UnresolvedNode;
 }
 
-export type VestingPeriodWithCliff = VestingPeriod & { cliff: VestingNodeExpr };
-
-export type ScheduleWithCliff = Schedule & {
-  periodicity: VestingPeriodWithCliff;
-};
-
 export type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
 
-export function isPickedResolved<T>(x: any): x is PickedResolved<T> {
-  return (
-    !!x &&
-    typeof x === "object" &&
-    x.type === "PICKED" &&
-    x.meta.type === "RESOLVED"
-  );
+export function isPickedResolved<T>(x: PickReturn<T>): x is PickedResolved<T> {
+  return x.type === "PICKED" && x.meta.type === "RESOLVED";
 }
 
-/** Probe for latest resolved dates within a LATER OF */
+/** Probe for the latest resolved date within a LATER OF (ignoring pending items). */
 export function probeLaterOf(
   expr: LaterOfVestingNode,
   ctx: EvaluationContext,
@@ -55,12 +43,10 @@ export function probeLaterOf(
     const res = evaluateVestingNodeExpr(item, ctx);
     if (res.type === "PICKED" && res.meta.type === "RESOLVED")
       resolvedDates.push(res.meta.date);
-    continue;
   }
 
   if (resolvedDates.length === 0) return undefined;
 
-  // latest of all resolved so far
   let latest = resolvedDates[0];
   for (let i = 1; i < resolvedDates.length; i++) {
     if (lt(latest, resolvedDates[i])) latest = resolvedDates[i];

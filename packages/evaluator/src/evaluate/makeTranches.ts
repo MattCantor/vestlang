@@ -30,9 +30,8 @@ export function makeResolvedSchedule(
   dates: OCTDate[],
   amounts: number[],
 ): InstallmentSet {
-  const installments: ResolvedInstallment[] = [];
-  dates.forEach((date, i) =>
-    installments.push(makeResolvedInstallment(date, amounts[i])),
+  const installments = dates.map((date, i) =>
+    makeResolvedInstallment(date, amounts[i]),
   );
   return { installments, blockers: [] };
 }

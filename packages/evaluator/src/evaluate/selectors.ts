@@ -76,7 +76,7 @@ function reduceBest<T>(
 }
 
 /* ------------------------
- * Unified selector for both EarlieOF/LaterOf
+ * Unified selector for both EARLIER_OF and LATER_OF
  * ------------------------ */
 
 /**
@@ -85,7 +85,7 @@ function reduceBest<T>(
  */
 type SelectorPolicy = {
   selector: SelectorTag;
-  selectorIsSatisfied: (candidates: PickReturn<any>[]) => boolean; // earlier: any resolved, later: all resolved
+  selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // earlier: any resolved, later: all resolved
   partialEmit: boolean; // only true for LATER_OF
 };
 
@@ -117,7 +117,7 @@ function handleSelector<T extends Schedule | VestingNode>(
       ],
     };
 
-  const resolved = candidates.filter(isPickedResolved) as PickedResolved<T>[];
+  const resolved = candidates.filter(isPickedResolved);
   const hasAnyResolved = resolved.length > 0;
   const allResolved = hasAnyResolved && resolved.length === candidates.length;
   const unresolved = candidates.length - resolved.length;
@@ -145,7 +145,7 @@ function handleSelector<T extends Schedule | VestingNode>(
                   blockers: collectBlockers(candidates),
                 },
               ]
-            : [...collectBlockers(candidates)],
+            : collectBlockers(candidates),
       },
     };
   }
@@ -171,7 +171,6 @@ export function evaluateScheduleExpr(
   expr: ScheduleExpr,
   ctx: EvaluationContext,
 ): PickReturn<Schedule> {
-  let candidates: PickReturn<Schedule>[] | undefined = undefined;
   switch (expr.type) {
     case "SINGLETON": {
       const res = evaluateVestingNodeExpr(expr.vesting_start, ctx);
@@ -185,13 +184,19 @@ export function evaluateScheduleExpr(
       return res;
     }
 
-    case "EARLIER_OF":
-      candidates = expr.items.map((item) => evaluateScheduleExpr(item, ctx));
+    case "EARLIER_OF": {
+      const candidates = expr.items.map((item) =>
+        evaluateScheduleExpr(item, ctx),
+      );
       return handleSelector(candidates, EARLIER_POLICY);
+    }
 
-    case "LATER_OF":
-      candidates = expr.items.map((item) => evaluateScheduleExpr(item, ctx));
+    case "LATER_OF": {
+      const candidates = expr.items.map((item) =>
+        evaluateScheduleExpr(item, ctx),
+      );
       return handleSelector(candidates, LATER_POLICY);
+    }
   }
 }
 
@@ -199,7 +204,6 @@ export function evaluateVestingNodeExpr(
   expr: VestingNodeExpr,
   ctx: EvaluationContext,
 ): PickReturn<VestingNode> {
-  let candidates: PickReturn<VestingNode>[] | undefined = undefined;
   switch (expr.type) {
     case "SINGLETON": {
       const res = evaluateVestingNode(expr, ctx);
@@ -210,11 +214,18 @@ export function evaluateVestingNodeExpr(
       return res;
     }
 
-    case "EARLIER_OF":
-      candidates = expr.items.map((item) => evaluateVestingNodeExpr(item, ctx));
+    case "EARLIER_OF": {
+      const candidates = expr.items.map((item) =>
+        evaluateVestingNodeExpr(item, ctx),
+      );
       return handleSelector(candidates, EARLIER_POLICY);
-    case "LATER_OF":
-      candidates = expr.items.map((item) => evaluateVestingNodeExpr(item, ctx));
+    }
+
+    case "LATER_OF": {
+      const candidates = expr.items.map((item) =>
+        evaluateVestingNodeExpr(item, ctx),
+      );
       return handleSelector(candidates, LATER_POLICY);
+    }
   }
 }
