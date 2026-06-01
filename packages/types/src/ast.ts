@@ -4,11 +4,21 @@ import {
   ConstraintTag,
   OffsetTag,
   PeriodTag,
-  VBaseTag,
 } from "./enums.js";
 import { EarlierOf, LaterOf, OCTDate, TwoOrMore } from "./helpers.js";
 
-type Shape = "raw" | "canonical";
+// The DSL AST exists in two phases, tracked by this parameter:
+//   "raw"        — straight off the parser: a vesting start may be null and a
+//                  cliff may still be a bare Duration.
+//   "normalized" — after the normalizer runs: starts are resolved to a node and
+//                  cliffs to a VestingNodeExpr.
+// "normalized" is the default, so the unparameterized types (Schedule, Program,
+// …) describe the normalized shape and the Raw* aliases pin the raw phase.
+//
+// This is NOT the same "canonical" as ./canonical.ts. There, canonical means the
+// OCF/Carta interchange — a different layer. Here we mean "normalized by our own
+// normalizer," which is why the value is named accordingly.
+type Phase = "raw" | "normalized";
 
 /* ------------------------
  * Durations
@@ -44,22 +54,20 @@ export type Offsets =
  * ------------------------ */
 
 // primitives/vestlang/VestingBase.schema.json
-export interface VestingBase {
-  type: VBaseTag;
-  value: string;
-}
-
-// types/vestlang/VestingBaseDate.schema.json
-export interface VestingBaseDate extends VestingBase {
+// A vesting anchor: a calendar DATE or a named EVENT. Exported as the union so
+// callers narrow on `type`; there is intentionally no wide `{ type: VBaseTag }`
+// base type to annotate against (that would discard the discriminant).
+export interface VestingBaseDate {
   type: "DATE";
   value: OCTDate;
 }
 
-// types/vestlang/VestingBaseEvent.schema.json
-export interface VestingBaseEvent extends VestingBase {
+export interface VestingBaseEvent {
   type: "EVENT";
   value: string;
 }
+
+export type VestingBase = VestingBaseDate | VestingBaseEvent;
 
 /* ------------------------
  * Vesting Node
@@ -68,16 +76,15 @@ export interface VestingBaseEvent extends VestingBase {
 // primitives/types/vestlang/VestingNode.schema.json
 export interface VestingNode {
   type: "SINGLETON";
-  base: VestingBaseDate | VestingBaseEvent;
+  base: VestingBase;
   offsets: Offsets;
-  constraints?: Condition;
+  condition?: Condition;
 }
 
 export type ConstrainedVestingNode = VestingNode & {
-  constraints: Condition;
+  condition: Condition;
 };
 
-// TODO: add to schmea
 export type LaterOfVestingNode = LaterOf<VestingNodeExpr>;
 
 export type EarlierOfVestingNode = EarlierOf<VestingNodeExpr>;
@@ -91,23 +98,20 @@ export type VestingNodeExpr =
  * Conditions & Constraints
  * ------------------------ */
 
-export interface BaseCondition {
+interface BaseCondition {
   type: ConditionTag;
 }
 
-// TODO: add to schema
 export interface AtomCondition extends BaseCondition {
   type: "ATOM";
   constraint: Constraint;
 }
 
-// TODO: add to schema
 export interface AndCondition extends BaseCondition {
   type: "AND";
   items: TwoOrMore<Condition>;
 }
 
-// TODO: add to schema
 export interface OrCondition extends BaseCondition {
   type: "OR";
   items: TwoOrMore<Condition>;
@@ -115,9 +119,14 @@ export interface OrCondition extends BaseCondition {
 
 export type Condition = AtomCondition | AndCondition | OrCondition;
 
-// TODO: add to schema
 export interface Constraint {
   type: ConstraintTag;
+  // The reference anchor is a single VestingNode, never a VestingNodeExpr. A
+  // BEFORE/AFTER relation needs one comparison point, so selectors
+  // (EARLIER/LATER OF), which denote a set of candidate dates, are disallowed
+  // here. Keeping it a plain node also bounds the evaluator: a node carries a
+  // condition and a condition references a node, so admitting a selector here
+  // would deepen that recursion.
   base: VestingNode;
   strict: boolean;
 }
@@ -126,11 +135,11 @@ export interface Constraint {
  * Periodicity
  * ------------------------ */
 
-export interface VestingPeriod<S extends Shape = "canonical"> {
+export interface VestingPeriod<P extends Phase = "normalized"> {
   type: PeriodTag;
   occurrences: number;
   length: number;
-  cliff?: S extends "canonical"
+  cliff?: P extends "normalized"
     ? VestingNodeExpr | undefined
     : Duration | VestingNodeExpr | undefined;
 }
@@ -141,30 +150,28 @@ export type RawVestingPeriod = VestingPeriod<"raw">;
  * Expressions
  * ------------------------ */
 
-// TODO: add to schema
-export interface Schedule<S extends Shape = "canonical"> {
+export interface Schedule<P extends Phase = "normalized"> {
   type: "SINGLETON";
-  vesting_start: S extends "canonical"
+  vesting_start: P extends "normalized"
     ? VestingNodeExpr
     : VestingNodeExpr | null;
-  periodicity: VestingPeriod<S>;
+  periodicity: VestingPeriod<P>;
 }
 
 export type RawSchedule = Schedule<"raw">;
 
-// TODO: add to schema
-export type LaterOfSchedule<S extends Shape = "canonical"> = LaterOf<
-  ScheduleExpr<S>
+export type LaterOfSchedule<P extends Phase = "normalized"> = LaterOf<
+  ScheduleExpr<P>
 >;
 
-export type EarlierOfSchedule<S extends Shape = "canonical"> = EarlierOf<
-  ScheduleExpr<S>
+export type EarlierOfSchedule<P extends Phase = "normalized"> = EarlierOf<
+  ScheduleExpr<P>
 >;
 
-export type ScheduleExpr<S extends Shape = "canonical"> =
-  | Schedule<S>
-  | LaterOfSchedule<S>
-  | EarlierOfSchedule<S>;
+export type ScheduleExpr<P extends Phase = "normalized"> =
+  | Schedule<P>
+  | LaterOfSchedule<P>
+  | EarlierOfSchedule<P>;
 
 export type RawScheduleExpr = ScheduleExpr<"raw">;
 
@@ -172,9 +179,9 @@ export type RawScheduleExpr = ScheduleExpr<"raw">;
  * Statements
  * ------------------------ */
 
-export type BaseAmount = {
+interface BaseAmount {
   type: AmountTag;
-};
+}
 export interface AmountQuantity extends BaseAmount {
   type: "QUANTITY";
   value: number;
@@ -186,13 +193,13 @@ export interface AmountPortion extends BaseAmount {
 }
 export type Amount = AmountQuantity | AmountPortion;
 
-export interface Statement<S extends Shape = "canonical"> {
+export interface Statement<P extends Phase = "normalized"> {
   amount: Amount;
-  expr: ScheduleExpr<S>;
+  expr: ScheduleExpr<P>;
 }
 
 export type RawStatement = Statement<"raw">;
 
-export type Program<S extends Shape = "canonical"> = Statement<S>[];
+export type Program<P extends Phase = "normalized"> = Statement<P>[];
 
 export type RawProgram = Program<"raw">;

@@ -311,15 +311,15 @@ function peg$parse(input, options) {
   function peg$f25() {    return "vestingStart";  }
   function peg$f26(name) {    return mkEvent(name);  }
   function peg$f27(name) {    return mkEvent(name);  }
-  function peg$f28(base, offsets, constraints) {
+  function peg$f28(base, offsets, condition) {
     const offs = offsets.map(o => o[1])
     const node = {
       type: "SINGLETON",
       base,
       offsets: normalizeOffsets(offs)
     }
-    if (constraints) node.constraints = constraints[1]
-    return node 
+    if (condition) node.condition = condition[1]
+    return node
   }
   function peg$f29(s, op, base) {
     return {

@@ -35,8 +35,8 @@ export function stringifyVestingNode(node: VestingNode): string {
   if (offsets) {
     parts.push(offsets);
   }
-  if (node.constraints) {
-    parts.push(stringifyCondition(node.constraints));
+  if (node.condition) {
+    parts.push(stringifyCondition(node.condition));
   }
   return parts.join(" ");
 }

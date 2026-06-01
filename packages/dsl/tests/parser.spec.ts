@@ -77,7 +77,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     const s = first(`VEST FROM EVENT a BEFORE EVENT b + 10 days`);
     const node = s.expr.vesting_start;
     expect(node.type).toBe("SINGLETON");
-    expect(node.constraints).toMatchObject({
+    expect(node.condition).toMatchObject({
       type: "ATOM",
       constraint: {
         type: "BEFORE",
@@ -107,7 +107,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     const s = first(
       `VEST FROM EVENT X BEFORE EVENT A AND BEFORE EVENT B OR BEFORE EVENT C`,
     );
-    const c = s.expr.vesting_start.constraints;
+    const c = s.expr.vesting_start.condition;
     // OR( AND( BEFORE b, AFTER c ), BEFORE date )
     expect(c.type).toBe("OR");
     expect(c.items).toHaveLength(2);
@@ -121,7 +121,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
       `VEST FROM EVENT X BEFORE EVENT A OR BEFORE EVENT B AND BEFORE EVENT C`,
     );
 
-    const c = s.expr.vesting_start.constraints;
+    const c = s.expr.vesting_start.condition;
     expect(c.type).toBe("OR");
     expect(c.items).toHaveLength(2);
     expect(c.items[1].type).toBe("AND");
@@ -131,7 +131,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     const s = first(
       `VEST FROM EVENT a AND( BEFORE EVENT b, AFTER DATE 2025-01-01 )`,
     );
-    const c = s.expr.vesting_start.constraints;
+    const c = s.expr.vesting_start.condition;
     expect(c.type).toBe("AND");
     expect(c.items).toHaveLength(2);
     expect(c.items[0].type).toBe("ATOM");

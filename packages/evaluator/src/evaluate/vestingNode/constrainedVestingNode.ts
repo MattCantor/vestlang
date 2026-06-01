@@ -26,7 +26,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       const results = evaluateConstraint(
         resSubject,
         resConstraintBase,
-        node as VestingNode & { constraints: AtomCondition },
+        node as VestingNode & { condition: AtomCondition },
       );
 
       return results;
@@ -36,7 +36,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
         const results = evaluateConstrainedVestingNode(
           {
             ...node,
-            constraints: current,
+            condition: current,
           }, // only evaluate one condition at a time
           resSubject,
           current,
@@ -53,7 +53,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       const blockers: Blocker[] = [];
       for (const c of condition.items) {
         const results = evaluateConstrainedVestingNode(
-          { ...node, constraints: c }, // only evaluate one condition at a time
+          { ...node, condition: c }, // only evaluate one condition at a time
           resSubject,
           c,
           ctx,

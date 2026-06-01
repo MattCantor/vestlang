@@ -108,11 +108,11 @@ export const makeConstrainedNodeWithAtomCondition = (
   constraintBaseDate: OCTDate,
   strict: boolean = false,
   offsets: Offsets = [],
-): VestingNode & { constraints: AtomCondition } => {
+): VestingNode & { condition: AtomCondition } => {
   return {
     type: "SINGLETON",
     base: makeVestingBaseDate(baseDate),
-    constraints: makeAtomCondition(
+    condition: makeAtomCondition(
       makeConstraint(
         constraintTag,
         makeSingletonNode(makeVestingBaseDate(constraintBaseDate)),

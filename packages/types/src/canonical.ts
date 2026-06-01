@@ -16,6 +16,9 @@ import type { OCTDate } from "./helpers.js";
 import type { AllocationType, VestingDayOfMonth } from "./oct_types.js";
 
 // From enums/PeriodType.schema.json
+// The OCF/Carta interchange period unit, which includes YEARS. Distinct from the
+// DSL's own `PeriodTag` (./enums.ts), which omits YEARS: vestlang source writes a
+// year as 12 months. The difference is intentional, not an oversight.
 export type PeriodType = "DAYS" | "MONTHS" | "YEARS";
 
 export interface VestingScheduleTemplate {

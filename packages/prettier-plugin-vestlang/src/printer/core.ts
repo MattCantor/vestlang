@@ -15,10 +15,10 @@ import { printParenGroup } from "./utils.js";
  * ------------------------ */
 
 export function printVestingNode(node: VestingNode): Doc {
-  if (node.constraints) {
+  if (node.condition) {
     return [
       [printVestingBase(node.base), printOffsets(node.offsets)],
-      printCondition(node.constraints),
+      printCondition(node.condition),
     ];
   }
 

@@ -45,8 +45,8 @@ export function walkVestingNodeExpr(
   if (e.type === "SINGLETON") {
     const vestingNode = e;
     v.VestingNode?.(vestingNode, path);
-    if (vestingNode.constraints)
-      walkCondition(vestingNode.constraints, v, path.concat("constraints"));
+    if (vestingNode.condition)
+      walkCondition(vestingNode.condition, v, path.concat("condition"));
   } else {
     v.VestingNodeSelector?.(e, path);
     e.items.forEach((item, i) =>
