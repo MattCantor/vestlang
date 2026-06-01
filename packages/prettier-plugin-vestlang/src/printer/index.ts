@@ -11,8 +11,6 @@ export const printer: Printer = {
       // Program = Statement[]
       if (node.length === 0) return "";
 
-      // const docs = node.map((s) => printStatement(s));
-      // return [join(hardline, docs), hardline];
       if (node.length === 1) return [printStatement(node[0]), hardline];
       const docs = node.map((s) => printStatement(s));
       return group([

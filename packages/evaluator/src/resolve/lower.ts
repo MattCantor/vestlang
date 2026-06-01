@@ -41,11 +41,12 @@ const DEFAULT_ALLOCATION = "CUMULATIVE_ROUND_DOWN";
 // The normalizer's internal anchors (packages/normalizer .. program.ts SYSTEM_EVENT).
 // They always resolve to a concrete date, so a start expressed relative to one
 // (e.g. `FROM +12 months` = `grantDate + 12mo`) is an absolute service-time DATE,
-// NOT a floating milestone — it must not register an event firing.
+// not a floating milestone, so it must not register an event firing.
 const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
 
-/** The two cumulative modes telescope as a single running fraction; the four
- *  loaded modes don't and so aren't template-compilable (→ events-only). */
+/** The two cumulative modes telescope as a single running fraction. The four
+ *  loaded modes don't, so they can't compile to one template and route to
+ *  events-only instead. */
 export const isCumulativeAllocation = (mode: string): boolean =>
   mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
 
@@ -168,7 +169,7 @@ export const resolveStatements = (
     // combinator or a system anchor) lowers into the template as an EVENT
     // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
     // IMPOSSIBLE and partially-picked combinators) and no cliff (an event-anchored
-    // cliff can't be lowered without the firing date — keep it UNRESOLVED so it
+    // cliff can't be lowered without the firing date, so keep it UNRESOLVED so it
     // isn't silently dropped).
     const sb = startBase(sched.vesting_start);
     if (res.type === "UNRESOLVED" && sb.base === "EVENT" && !p.cliff) {
@@ -180,14 +181,15 @@ export const resolveStatements = (
       };
     }
 
-    // A combinator-over-anchors start (EARLIER_OF/LATER_OF) referencing a named
-    // EVENT collapses to one synthetic event — it selects an *anchor*, not a
-    // structure, so the fixed downstream grid lowers into the template with one
-    // deferred event. A pure-date combinator (no named event)
-    // fails this test and keeps its normal resolution. Excludes cliffs (an event
-    // cliff selects a structure → stays unresolved) and IMPOSSIBLE (the res.type
-    // guards). Pending in all arms: LATER_OF → PICKED+UNRESOLVED meta; EARLIER_OF /
-    // fully-pending LATER_OF → UNRESOLVED.
+    // A combinator-over-anchors start (EARLIER_OF/LATER_OF) that references a
+    // named EVENT collapses to one synthetic event. It selects an *anchor*, not a
+    // structure, so the fixed downstream grid still lowers into the template with
+    // one deferred event. A pure-date combinator (no named event) fails this test
+    // and keeps its normal resolution. Cliffs are excluded (an event cliff selects
+    // a structure and stays unresolved), as is IMPOSSIBLE (the res.type guards).
+    // The pending shape differs by arm: LATER_OF surfaces as PICKED with
+    // UNRESOLVED meta; EARLIER_OF and a fully-pending LATER_OF surface as
+    // UNRESOLVED.
     const vs = sched.vesting_start;
     if (
       (res.type === "UNRESOLVED" ||
@@ -277,7 +279,8 @@ export const buildTemplate = (
   if (resolutions.some((r) => r.cliff.state === "UNRESOLVED"))
     return unresolved();
   // Loaded (non-cumulative) allocation isn't a single cumulative across the
-  // template — the interchange has no allocation field. Route to events-only.
+  // template, and the interchange has no allocation field, so route to
+  // events-only.
   if (!isCumulativeAllocation(ctx.allocation_type)) {
     return events({ kind: "LOADED_ALLOCATION", mode: ctx.allocation_type });
   }
@@ -339,7 +342,7 @@ export const buildTemplate = (
       } else if (!eq(existing.date, firingDate)) {
         return events({
           kind: "OVERLAPPING_ABSOLUTE_STARTS",
-          detail: `Event "${eventId}" anchors two portions at different dates — no single template form.`,
+          detail: `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
         });
       }
     } else {

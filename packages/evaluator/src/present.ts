@@ -1,16 +1,17 @@
 import type { EvaluatedSchedule } from "@vestlang/types";
 
 /**
- * The consumer rule made explicit: three orthogonal reads of an
- * `EvaluatedSchedule`, each keyed off a different field.
+ * The consumer rule, made explicit. There are three orthogonal reads of an
+ * `EvaluatedSchedule`, each keyed off a different field:
  *
- *   - `representable` ← `status`        — can the canonical interchange hold the spec?
- *   - `pending`       ← `blockers`      — are witnesses still missing? (NEVER `status === "unresolved"`)
- *   - `projected`     ← `installments`  — is there a dated projection yet?
+ *   representable  from `status`        can the canonical interchange hold the spec?
+ *   pending        from `blockers`      are witnesses still missing? (never read this
+ *                                       from `status === "unresolved"`)
+ *   projected      from `installments`  is there a dated projection yet?
  *
- * The pending-template is the case this exists for: `status === "template"`
- * (representable) AND blockers present (pending) — a state surfaces must not
- * collapse into "complete".
+ * The pending template is the case this exists for: a `status` of `template`
+ * (representable) together with blockers present (pending). Surfaces must not let
+ * that collapse into "complete".
  */
 export interface SchedulePresentation {
   /** The spec is held by a canonical layer: `template` or `events-only`. */

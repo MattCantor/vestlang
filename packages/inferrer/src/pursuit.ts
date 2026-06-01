@@ -49,11 +49,11 @@ function maxFeasibleTotal(
     }
     return true;
   };
-  const hi0 = Math.round(mass.reduce((a, b) => a + b, 0));
-  if (hi0 < n) return 0;
-  if (fitsAt(hi0)) return hi0;
+  const hiInit = Math.round(mass.reduce((a, b) => a + b, 0));
+  if (hiInit < n) return 0;
+  if (fitsAt(hiInit)) return hiInit;
   let lo = n;
-  let hi = hi0;
+  let hi = hiInit;
   if (!fitsAt(lo)) return 0;
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);
@@ -235,10 +235,6 @@ export function decompose(
       best = chosen.slice();
       bestCost = chosen.length;
       return;
-    }
-    // Admissible bound: at least one more component is needed.
-    if (chosen.length + 1 >= bestCost && dates.length > 0) {
-      // still allow if exactly one component could finish it (handled by recursion)
     }
 
     const target = dates[0];

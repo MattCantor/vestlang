@@ -36,7 +36,7 @@ const EMPTY: InstallmentSet = { installments: [], blockers: [] };
 
 /**
  * Symbolic installments + blockers for one statement. A fully-resolved statement
- * yields no installments (EMPTY) — it isn't part of the unresolved verdict.
+ * yields no installments (EMPTY); it isn't part of the unresolved verdict.
  */
 export const unresolvedInstallments = (
   stmt: Statement,
@@ -79,7 +79,7 @@ export const unresolvedInstallments = (
   }
 
   const cliff = res.picked.periodicity.cliff;
-  if (!cliff) return EMPTY; // fully resolved → not part of the unresolved verdict
+  if (!cliff) return EMPTY; // fully resolved, so not part of the unresolved verdict
 
   const overlayCtx: EvaluationContext = {
     ...ctx,
@@ -91,7 +91,7 @@ export const unresolvedInstallments = (
     return makeImpossibleSchedule(amounts, resCliff.blockers);
   if (resCliff.type === "UNRESOLVED")
     return makeUnresolvedCliffSchedule(dates, amounts, resCliff.blockers);
-  if (isPickedResolved(resCliff)) return EMPTY; // resolved cliff → fully resolved
+  if (isPickedResolved(resCliff)) return EMPTY; // resolved cliff, so fully resolved
 
   // PICKED with an unresolved node: a LATER_OF whose best branch resolved.
   const blockers: Blocker[] = (resCliff as PickedUnresolved<VestingNode>).meta

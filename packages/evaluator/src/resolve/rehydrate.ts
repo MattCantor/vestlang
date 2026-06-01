@@ -2,19 +2,19 @@
 // firings into synthetic-event witnesses.
 //
 // Lowering a combinator-over-anchors start into a `template` externalizes the
-// gate as a grant-scoped synthetic event (`evt_<n>`) with NO firing and a
-// source-map definition (its DSL). Rehydration is the inverse half:
-// when the world's named events fire (the IPO happens — attested by the caller in
+// gate as a grant-scoped synthetic event (`evt_<n>`) with no firing and a
+// source-map definition (its DSL). Rehydration is the inverse half: once the
+// world's named events fire (the IPO happens, attested by the caller in
 // `ctx.events`, the same channel `evaluateVestingBase` already reads), each
-// synthetic event's witness is *computed* by RE-RESOLVING its definition against
+// synthetic event's witness is computed by re-resolving its definition against
 // the updated grant context.
 //
-// The stored template is FROZEN: rehydration only adds `eventFirings` entries; it
+// The stored template is frozen. Rehydration only adds `eventFirings` entries; it
 // never re-mints ids or rewrites statements (the id is persisted and read, never
 // re-derived). The re-resolution rides the existing selector layer, so the edge
-// cases fall out for free: `LATER_OF` is an open upper bound (never
-// resolves until its event fires → no premature witness), and a re-resolved
-// witness overrides any prior synthetic firing (back-dated-correction-friendly).
+// cases fall out for free: a `LATER_OF` is an open upper bound that doesn't
+// resolve until its event fires (no premature witness), and a re-resolved witness
+// overrides any prior synthetic firing (which keeps back-dated corrections sane).
 
 import type {
   Blocker,
@@ -42,8 +42,8 @@ export interface RehydrateResult {
 /**
  * Re-parse a stored source-map definition back into a `VestingNodeExpr`, through
  * the same production pipeline that produced it (`parse` → `normalizeProgram`),
- * so it re-normalizes to the identical canonical shape — the `parse ∘ stringify`
- * fixpoint rehydration relies on.
+ * so it re-normalizes to the identical canonical shape, the `parse`/`stringify`
+ * fixpoint that rehydration relies on.
  *
  * The definition is a bare anchor expression, so it is wrapped as the `FROM`
  * anchor of a throwaway statement (`OverEveryOpt` has an empty-string fallback,
@@ -78,7 +78,7 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
  * @param runtime   the stored runtime; its structural fields (startDate, grantDate,
  *                  …) and any existing firings carry through untouched.
  * @param ctxInput  the world: `events` (now including fired named events like
- *                  `ipo`), `asOf`, etc. — how vestlang learns a named event fired.
+ *                  `ipo`), `asOf`, etc.; this is how vestlang learns an event fired.
  */
 export const rehydrate = (
   template: VestingScheduleTemplate,
