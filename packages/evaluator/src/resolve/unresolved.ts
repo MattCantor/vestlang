@@ -9,7 +9,6 @@ import type {
   Blocker,
   EvaluationContext,
   InstallmentSet,
-  LaterOfVestingNode,
   OCTDate,
   Statement,
   VestingNode,
@@ -69,19 +68,12 @@ export const unresolvedInstallments = (
   // Resolved start — generate the grid (anchored from start to avoid drift),
   // fold the grant-date lump, then inspect the cliff.
   const start = res.meta.date;
-  let dates: OCTDate[] = Array.from(
-    { length: occurrences },
-    (_, i) =>
-      addPeriod(
-        start,
-        length * (i + 1),
-        type,
-        ctx.vesting_day_of_month,
-      ) as OCTDate,
+  let dates: OCTDate[] = Array.from({ length: occurrences }, (_, i) =>
+    addPeriod(start, length * (i + 1), type, ctx.vesting_day_of_month),
   );
   if (ctx.events.grantDate) {
     const folded = foldToGrantDate(dates, amounts, ctx.events.grantDate);
-    dates = folded.dates as OCTDate[];
+    dates = folded.dates;
     amounts.length = 0;
     amounts.push(...folded.amounts);
   }
@@ -105,16 +97,12 @@ export const unresolvedInstallments = (
   const blockers: Blocker[] = (resCliff as PickedUnresolved<VestingNode>).meta
     .blockers;
   if (cliff.type === "LATER_OF") {
-    const probed = probeLaterOf(cliff as LaterOfVestingNode, overlayCtx);
+    const probed = probeLaterOf(cliff, overlayCtx);
     if (probed) {
       const folded = foldToGrantDate(dates, amounts, probed);
       return {
         installments: folded.dates.map((d, i) =>
-          makeUnresolvedCliffInstallment(
-            d as OCTDate,
-            folded.amounts[i],
-            blockers,
-          ),
+          makeUnresolvedCliffInstallment(d, folded.amounts[i], blockers),
         ),
         blockers,
       };

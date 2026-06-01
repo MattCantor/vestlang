@@ -95,12 +95,12 @@ export function foldPreGrant(
   allocationType: AllocationType,
 ): PreGrantResult {
   const ctx = minimalCtx(policy);
-  const gKey = grantDate as unknown as string;
+  const gKey = grantDate;
 
   // The lump must sit exactly on the grant date.
   const single = components.find(
     (c): c is SingleTrancheComponent =>
-      c.kind === "SINGLE_TRANCHE" && (c.date as unknown as string) === gKey,
+      c.kind === "SINGLE_TRANCHE" && c.date === gKey,
   );
   if (!single) return { components, foldCount: 0, vestingStarts: [] };
 
@@ -108,7 +108,7 @@ export function foldPreGrant(
   // input, not against a reconstruction of the decomposed train.
   const inputMap: AmtMap = new Map();
   for (const t of input) {
-    const key = t.date as unknown as string;
+    const key = t.date;
     inputMap.set(key, (inputMap.get(key) ?? 0) + t.amount);
   }
 

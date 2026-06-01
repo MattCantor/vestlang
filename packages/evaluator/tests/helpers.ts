@@ -26,10 +26,10 @@ import {
 export const baseCtx = (
   overrides: Partial<EvaluationContext> = {},
 ): EvaluationContext => ({
-  events: { grantDate: "2025-01-01" as OCTDate },
+  events: { grantDate: "2025-01-01" },
   vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
   grantQuantity: 100,
-  asOf: "2025-06-01" as OCTDate,
+  asOf: "2025-06-01",
   allocation_type: "CUMULATIVE_ROUND_DOWN",
   ...overrides,
 });
@@ -78,7 +78,7 @@ export const makeImpossibleConditionBlocker = (
   base: VestingBaseDate | VestingBaseEvent,
   offsets: Offsets = [],
 ): Extract<ImpossibleBlocker, { type: "IMPOSSIBLE_CONDITION" }> => {
-  const { type, ...rest } = makeSingletonNode(base, offsets);
+  const { type: _type, ...rest } = makeSingletonNode(base, offsets);
   return {
     type: "IMPOSSIBLE_CONDITION",
     condition: rest,

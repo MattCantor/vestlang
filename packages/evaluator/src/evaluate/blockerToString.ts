@@ -20,12 +20,14 @@ export function blockerToString(b: Blocker): string {
     case "UNRESOLVED_SELECTOR":
     case "IMPOSSIBLE_SELECTOR":
       switch (b.selector) {
-        case "EARLIER_OF":
+        case "EARLIER_OF": {
           const EarlierOfItems = b.blockers.map(blockerToString).join(", ");
           return `EARLIER OF ( ${EarlierOfItems} )`;
-        case "LATER_OF":
+        }
+        case "LATER_OF": {
           const LaterOfItems = b.blockers.map(blockerToString).join(", ");
           return `LATER OF ( ${LaterOfItems} )`;
+        }
       }
   }
 }
@@ -43,9 +45,10 @@ function conditionToString(c: Condition): string {
     case "ATOM":
       return constraintToString(c.constraint);
     case "AND":
-    case "OR":
+    case "OR": {
       const items = c.items.map(conditionToString);
-      return `${c.type} ( ${items} )`;
+      return `${c.type} ( ${items.join(", ")} )`;
+    }
   }
 }
 

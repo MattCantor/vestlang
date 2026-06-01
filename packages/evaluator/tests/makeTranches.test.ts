@@ -19,14 +19,14 @@ describe("makeTranches", () => {
       [3, 7],
     );
     expect(out.installments).toEqual([
-      { amount: 3, date: "2024-01-01" as OCTDate, meta: { state: "RESOLVED" } },
-      { amount: 7, date: "2024-02-01" as OCTDate, meta: { state: "RESOLVED" } },
+      { amount: 3, date: "2024-01-01", meta: { state: "RESOLVED" } },
+      { amount: 7, date: "2024-02-01", meta: { state: "RESOLVED" } },
     ]);
   });
 
   it("makeStartPlusTranches steps are index * stepLength", () => {
     const out = makeStartPlusSchedule([1, 1, 1], "MONTHS", 3, [
-      { type: "DATE_NOT_YET_OCCURRED", date: "2024-02-01" as OCTDate },
+      { type: "DATE_NOT_YET_OCCURRED", date: "2024-02-01" },
     ]);
     expect(out.installments.map((t) => t.meta.symbolicDate)).toEqual([
       { type: "START_PLUS", unit: "MONTHS", steps: 0 },
@@ -38,9 +38,7 @@ describe("makeTranches", () => {
 
   it("makeImpossibleTranches repeats blockers and amounts", () => {
     const blockers: ImpossibleBlocker[] = [
-      makeImpossibleConditionBlocker(
-        makeVestingBaseDate("2025-01-01" as OCTDate),
-      ),
+      makeImpossibleConditionBlocker(makeVestingBaseDate("2025-01-01")),
     ];
     const out = makeImpossibleSchedule([5, 6], blockers);
     expect(out.installments).toHaveLength(2);
@@ -53,15 +51,11 @@ describe("makeTranches", () => {
     const symbolicDate = unresolvedStart.installments[0].meta.symbolicDate;
     expect(symbolicDate).toMatchObject({ type: "UNRESOLVED_VESTING_START" });
 
-    const unresolvedCliff = makeUnresolvedCliffInstallment(
-      "2024-03-01" as OCTDate,
-      5,
-      [],
-    );
+    const unresolvedCliff = makeUnresolvedCliffInstallment("2024-03-01", 5, []);
     const symbolicDate2 = unresolvedCliff.meta.symbolicDate;
     expect(symbolicDate2).toMatchObject({
       type: "UNRESOLVED_CLIFF",
-      date: "2024-03-01" as OCTDate,
+      date: "2024-03-01",
     });
   });
 });

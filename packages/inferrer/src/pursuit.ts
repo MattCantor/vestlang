@@ -28,8 +28,8 @@ const TOP_CADENCES = 5;
 function toResidual(tranches: TrancheInput[]): Residual {
   const m = new Map<string, number>();
   for (const t of tranches) {
-    const prev = m.get(t.date as unknown as string) ?? 0;
-    m.set(t.date as unknown as string, prev + t.amount);
+    const prev = m.get(t.date) ?? 0;
+    m.set(t.date, prev + t.amount);
   }
   return m;
 }
@@ -83,7 +83,7 @@ function occupiedDates(r: Residual): OCTDate[] {
   return Array.from(r.keys())
     .filter((k) => (r.get(k) ?? 0) > EPSILON)
     .sort()
-    .map((s) => s as unknown as OCTDate);
+    .map((s) => s);
 }
 
 /** A candidate UNIFORM atom: a train whose allocation fingerprint fits (pointwise
@@ -115,9 +115,8 @@ function trainAtomsCovering(
   mode: AllocationType,
 ): TrainAtom[] {
   const atoms: TrainAtom[] = [];
-  const has = (d: OCTDate) =>
-    (residual.get(d as unknown as string) ?? 0) > EPSILON;
-  const massAt = (d: OCTDate) => residual.get(d as unknown as string) ?? 0;
+  const has = (d: OCTDate) => (residual.get(d) ?? 0) > EPSILON;
+  const massAt = (d: OCTDate) => residual.get(d) ?? 0;
 
   for (const cadence of cadences) {
     // Build the maximal on-grid run that begins at `target`.
@@ -180,7 +179,7 @@ function trainAtomsCovering(
 function applyAtom(residual: Residual, atom: TrainAtom): Residual {
   const next = new Map(residual);
   atom.run.forEach((d, k) => {
-    const key = d as unknown as string;
+    const key = d;
     const v = (next.get(key) ?? 0) - atom.fingerprint[k];
     if (v <= EPSILON) next.delete(key);
     else next.set(key, v);
@@ -269,8 +268,8 @@ export function decompose(
     // Branch: cover `target` as a lone pulse.
     {
       const next = new Map(residual);
-      const amt = next.get(target as unknown as string) ?? 0;
-      next.delete(target as unknown as string);
+      const amt = next.get(target) ?? 0;
+      next.delete(target);
       recurse(next, [
         ...chosen,
         { kind: "SINGLE_TRANCHE", date: target, amount: amt },
@@ -321,7 +320,7 @@ function greedyCover(
     for (const [k, v] of applied) residual.set(k, v);
   }
   for (const d of occupiedDates(residual)) {
-    const amt = residual.get(d as unknown as string) ?? 0;
+    const amt = residual.get(d) ?? 0;
     if (amt > EPSILON)
       components.push({ kind: "SINGLE_TRANCHE", date: d, amount: amt });
   }

@@ -18,7 +18,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
   ctx: EvaluationContext,
 ): Blocker[] | undefined {
   switch (condition.type) {
-    case "ATOM":
+    case "ATOM": {
       const resConstraintBase = evaluateVestingBase(
         condition.constraint.base,
         ctx,
@@ -30,6 +30,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       );
 
       return results;
+    }
     case "AND":
       return condition.items.reduce((acc, current) => {
         const results = evaluateConstrainedVestingNode(
@@ -47,7 +48,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
         acc.push(...results);
         return acc;
       }, [] as Blocker[]);
-    case "OR":
+    case "OR": {
       let anyUnblocked: boolean = false;
       const blockers: Blocker[] = [];
       for (const c of condition.items) {
@@ -68,5 +69,6 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
       if (anyUnblocked) return undefined;
 
       return blockers;
+    }
   }
 }

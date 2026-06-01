@@ -18,7 +18,7 @@ export function getTodayISO(): OCTDate {
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const dd = String(today.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}` as OCTDate;
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export function validateDate(input: string): OCTDate {
@@ -29,5 +29,5 @@ export function validateDate(input: string): OCTDate {
     process.exit(1);
   }
 
-  return input as OCTDate;
+  return input;
 }

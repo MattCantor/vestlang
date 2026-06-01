@@ -26,9 +26,9 @@ import {
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" as OCTDate },
+  events: { grantDate: "2025-01-01" },
   grantQuantity: 100000,
-  asOf: "2035-01-01" as OCTDate,
+  asOf: "2035-01-01",
   ...overrides,
 });
 
@@ -55,7 +55,7 @@ describe("assemble — template status", () => {
   ]);
   const monthly48WithCliff = stmt(
     portion(1, 1),
-    makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+    makeSingletonNode(makeVestingBaseDate("2025-01-01")),
     { type: "MONTHS", length: 1, occurrences: 48, cliff: cliff12mo },
   );
 
@@ -86,10 +86,10 @@ describe("assemble — template status", () => {
         occurrences: 1,
       });
     const program: Program = [
-      yearStmt(1, "2025-01-01" as OCTDate),
-      yearStmt(3, "2026-01-01" as OCTDate),
-      yearStmt(8, "2027-01-01" as OCTDate),
-      yearStmt(8, "2028-01-01" as OCTDate),
+      yearStmt(1, "2025-01-01"),
+      yearStmt(3, "2026-01-01"),
+      yearStmt(8, "2027-01-01"),
+      yearStmt(8, "2028-01-01"),
     ];
     const schedules = evaluateProgram(program, ctxInput());
     expect(schedules).toHaveLength(1); // whole program → one template schedule
@@ -103,7 +103,7 @@ describe("assemble — events-only status", () => {
     const program: Program = [
       stmt(
         portion(1, 2),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 12,
@@ -112,7 +112,7 @@ describe("assemble — events-only status", () => {
       ),
       stmt(
         portion(1, 2),
-        makeSingletonNode(makeVestingBaseDate("2025-07-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-07-01")),
         {
           type: "MONTHS",
           length: 12,
@@ -122,6 +122,7 @@ describe("assemble — events-only status", () => {
     ];
     const [out] = evaluateProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
+    if (out.status !== "events-only") throw new Error("expected events-only");
     expect(out.reason).toBeTruthy();
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
       true,
@@ -137,7 +138,7 @@ describe("assemble — events-only status", () => {
     const program: Program = [
       stmt(
         portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 1,
@@ -150,6 +151,7 @@ describe("assemble — events-only status", () => {
       ctxInput({ allocation_type: "FRONT_LOADED" }),
     );
     expect(out.status).toBe("events-only");
+    if (out.status !== "events-only") throw new Error("expected events-only");
     expect(out.reason).toMatch(/FRONT_LOADED/);
     expect(sum(out.installments)).toBe(100000);
   });
@@ -196,8 +198,8 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
       program,
       ctxInput({
         events: {
-          grantDate: "2025-01-01" as OCTDate,
-          ipo: "2026-06-15" as OCTDate,
+          grantDate: "2025-01-01",
+          ipo: "2026-06-15",
         },
       }),
     );
@@ -243,7 +245,7 @@ describe("assemble — Case 1: classify on the spec", () => {
     const program: Program = [
       stmt(
         portion(3, 4),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01" as OCTDate)),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           type: "MONTHS",
           length: 1,
@@ -343,17 +345,14 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
         type: "SINGLETON",
         vesting_start: {
           type: "EARLIER_OF",
-          items: [
-            makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)),
-            ipo(),
-          ],
+          items: [makeSingletonNode(makeVestingBaseDate("2030-01-01")), ipo()],
         },
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
     } as { amount: Amount; expr: Schedule };
     const out = evaluateStatement(
       earlierStmt,
-      ctxInput({ asOf: "2025-06-01" as OCTDate }),
+      ctxInput({ asOf: "2025-06-01" }),
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
@@ -437,7 +436,7 @@ describe("assemble — unresolved status", () => {
       vesting_start: {
         type: "LATER_OF",
         items: [
-          makeSingletonNode(makeVestingBaseDate("2030-01-01" as OCTDate)),
+          makeSingletonNode(makeVestingBaseDate("2030-01-01")),
           makeSingletonNode(makeVestingBaseEvent("grantDate"), [
             makeDuration(12, "MONTHS", "PLUS"),
           ]),
@@ -448,10 +447,7 @@ describe("assemble — unresolved status", () => {
     const program: Program = [{ amount: portion(1, 1), expr: laterOfSchedule }];
     // asOf before the literal 2030 arm: LATER_OF can't resolve (all-arms policy),
     // and with no named event there's nothing to externalize → unresolved.
-    const out = evaluateStatement(
-      program[0],
-      ctxInput({ asOf: "2026-06-01" as OCTDate }),
-    );
+    const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" }));
     expect(out.status).toBe("unresolved");
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(

@@ -62,7 +62,7 @@ describe("allocateVector — cumulative modes", () => {
   // Exact-rational beyond float's safe range: where legacy float
   // Math.floor((i+1)/n*q) would drift, the BigInt path stays exact.
   it("stays exact and telescopes at large magnitude", () => {
-    const q = 9_007_199_254_740_993; // > Number.MAX_SAFE_INTEGER
+    const q = 9_007_199_254_740_992; // 2^53, > Number.MAX_SAFE_INTEGER (2^53 - 1)
     const n = 7;
     const v = allocateVector(q, n, "CUMULATIVE_ROUND_DOWN");
     // telescopes exactly

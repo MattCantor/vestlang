@@ -14,7 +14,7 @@ import { inferSchedule } from "../src/index.js";
 import type { TrancheInput } from "../src/types.js";
 
 function d(s: string): OCTDate {
-  return s as unknown as OCTDate;
+  return s;
 }
 
 function monthly(startISO: string, n: number, amount: number): TrancheInput[] {
@@ -345,7 +345,7 @@ function evalAllResolved(
   return Array.from(map.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, amount]) => ({
-      date: date as unknown as OCTDate,
+      date: date,
       amount,
     }));
 }
@@ -388,11 +388,9 @@ function runRoundTrip(c: RoundTripCase) {
     allocation_type: inferred.diagnostics.allocationType,
   };
   const reTranches = evalAllResolved(inferredProgram, inferredCtx);
-  const reByDate = new Map(
-    reTranches.map((t) => [t.date as unknown as string, t.amount]),
-  );
+  const reByDate = new Map(reTranches.map((t) => [t.date, t.amount]));
   for (const t of originalTranches) {
-    const got = reByDate.get(t.date as unknown as string) ?? 0;
+    const got = reByDate.get(t.date) ?? 0;
     expect(got).toBeCloseTo(t.amount, 6);
   }
   return inferred;

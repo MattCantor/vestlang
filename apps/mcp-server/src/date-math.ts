@@ -19,9 +19,9 @@ const MS_PER_DAY = 86_400_000;
 
 function stubCtx(rule: VestingDayOfMonth): EvaluationContext {
   return {
-    events: { grantDate: "1970-01-01" as OCTDate },
+    events: { grantDate: "1970-01-01" },
     grantQuantity: 0,
-    asOf: "1970-01-01" as OCTDate,
+    asOf: "1970-01-01",
     vesting_day_of_month: rule,
     allocation_type: "CUMULATIVE_ROUND_DOWN",
   };
@@ -125,13 +125,13 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
   const ctx: EvaluationContextInput = {
     events: events as EvaluationContextInput["events"],
     grantQuantity: 1,
-    asOf: "9999-12-31" as OCTDate,
+    asOf: "9999-12-31",
     vesting_day_of_month:
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     allocation_type: "CUMULATIVE_ROUND_DOWN",
   };
 
-  const { installments, blockers } = evaluateStatement(program[0]!, ctx);
+  const { installments, blockers } = evaluateStatement(program[0], ctx);
   const first = installments[0] ?? null;
 
   if (first?.meta.state === "RESOLVED" && first.date) {

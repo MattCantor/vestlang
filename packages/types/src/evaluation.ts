@@ -14,7 +14,7 @@ export interface EvaluationContext {
 
 export type EvaluationContextInput = Omit<
   EvaluationContext,
-  "vesting_day_of_month"
+  "vesting_day_of_month" | "allocation_type"
 > &
   Partial<Pick<EvaluationContext, "vesting_day_of_month" | "allocation_type">>;
 

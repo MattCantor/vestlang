@@ -3,7 +3,7 @@ import type { OCTDate } from "@vestlang/types";
 import { CADENCE_CANDIDATES, estimateCadences } from "../src/cadence.js";
 
 function d(s: string): OCTDate {
-  return s as unknown as OCTDate;
+  return s;
 }
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (y: number, m: number, day: number): OCTDate =>

@@ -10,7 +10,6 @@
 import type {
   Blocker,
   EvaluationContext,
-  OCTDate,
   Program,
   ResolvedInstallment,
   SymbolicInstallment,
@@ -164,7 +163,7 @@ const loadedEventsArm = (
   const installments: ResolvedInstallment[] = [...byDate.entries()]
     .filter(([, amt]) => amt !== 0)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([date, amount]) => makeResolvedInstallment(date as OCTDate, amount));
+    .map(([date, amount]) => makeResolvedInstallment(date, amount));
   return { kind: "events", installments, reason };
 };
 
@@ -196,7 +195,7 @@ const eventsArm = (
     const amount = allocateExact(totalShares, cumulative, vestedSoFar);
     if (amount === 0) continue;
     vestedSoFar += amount;
-    installments.push(makeResolvedInstallment(e.date as OCTDate, amount));
+    installments.push(makeResolvedInstallment(e.date, amount));
   }
   return { kind: "events", installments, reason };
 };

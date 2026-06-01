@@ -5,7 +5,7 @@ import {
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
 } from "../src/validate";
-import type { VestingScheduleTemplate, VestingRuntime } from "../src/types";
+import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
 // A well-formed graded template: two chained DATE statements + one EVENT
 // statement, with an on-grid cliff on the first.

@@ -51,7 +51,7 @@ export function computeSummary(
       (i): i is Installment & { date: OCTDate } => typeof i.date === "string",
     );
     if (all.length > 0) {
-      fully_vested_date = all.sort(byDate)[all.length - 1]!.date;
+      fully_vested_date = all.sort(byDate)[all.length - 1].date;
     }
   }
 
@@ -59,9 +59,7 @@ export function computeSummary(
     (i): i is Installment & { date: OCTDate } => typeof i.date === "string",
   );
   const cliff_date =
-    resolvedVested.length > 0
-      ? [...resolvedVested].sort(byDate)[0]!.date
-      : null;
+    resolvedVested.length > 0 ? [...resolvedVested].sort(byDate)[0].date : null;
 
   return {
     total_vested,

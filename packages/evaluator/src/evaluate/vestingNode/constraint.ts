@@ -47,7 +47,7 @@ const failByRelation = (
     return isStrict ? !isAfter : !(isAfter || isEqual);
   }
 
-  return assertNever(relation as never);
+  return assertNever(relation);
 };
 
 const mergedUnresolved = (

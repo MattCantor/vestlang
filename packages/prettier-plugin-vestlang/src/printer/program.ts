@@ -1,6 +1,5 @@
 import {
   Amount,
-  AmountPortion,
   RawSchedule,
   RawScheduleExpr,
   RawStatement,
@@ -28,7 +27,7 @@ export function printStatement(s: RawStatement): Doc {
 
 function printAmount(a: Amount): Doc {
   if (a.type === "QUANTITY") return `${String(a.value)} `;
-  const p = a as AmountPortion;
+  const p = a;
   if (p.numerator === 1 && p.denominator === 1) return [];
   return `${p.numerator}/${p.denominator} `;
 }
@@ -38,10 +37,11 @@ function printScheduleExpr(e: RawScheduleExpr): Doc {
     case "SINGLETON":
       return printSchedule(e);
     case "LATER_OF":
-    case "EARLIER_OF":
+    case "EARLIER_OF": {
       const keyword = kw(e.type.replace("_", " "));
       const items = e.items.map((item) => printScheduleExpr(item));
       return printParenGroup(keyword, items);
+    }
   }
 }
 
@@ -95,10 +95,11 @@ function printVestingNodeExpr(node: Duration | VestingNodeExpr): Doc {
     case "DURATION":
       return printDuration(node);
     case "EARLIER_OF":
-    case "LATER_OF":
+    case "LATER_OF": {
       const keyword = kw(node.type.replace("_", " "));
       const items = node.items.map((item) => printVestingNodeExpr(item));
       return printParenGroup(keyword, items);
+    }
     case "SINGLETON":
       return printVestingNode(node);
   }
