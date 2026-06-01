@@ -78,7 +78,7 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
   });
 });
 
-describe("resolveToCore — Case 1: atomic unfired EVENT → template", () => {
+describe("resolveToCore — atomic unfired EVENT → template", () => {
   it("unfired atomic EVENT start → template (no firing) + EVENT_NOT_YET_OCCURRED blocker", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {

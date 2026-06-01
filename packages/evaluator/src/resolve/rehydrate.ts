@@ -1,18 +1,18 @@
-// Rehydration (Phase 4): turn a stored canonical artifact + the world's
-// named-event firings into synthetic-event witnesses.
+// Rehydration: turn a stored canonical artifact + the world's named-event
+// firings into synthetic-event witnesses.
 //
-// Case 2 (Phase 3) lowers a combinator-over-anchors start into a `template` by
-// externalizing the gate as a grant-scoped synthetic event (`evt_<n>`) with NO
-// firing and a source-map definition (its DSL). Rehydration is the inverse half:
+// Lowering a combinator-over-anchors start into a `template` externalizes the
+// gate as a grant-scoped synthetic event (`evt_<n>`) with NO firing and a
+// source-map definition (its DSL). Rehydration is the inverse half:
 // when the world's named events fire (the IPO happens — attested by the caller in
 // `ctx.events`, the same channel `evaluateVestingBase` already reads), each
 // synthetic event's witness is *computed* by RE-RESOLVING its definition against
 // the updated grant context.
 //
 // The stored template is FROZEN: rehydration only adds `eventFirings` entries; it
-// never re-mints ids or rewrites statements (Part III — "the id is persisted and
-// read, never re-derived"). The re-resolution rides the existing selector layer,
-// so the Stage-D edges fall out for free: `LATER_OF` is an open upper bound (never
+// never re-mints ids or rewrites statements (the id is persisted and read, never
+// re-derived). The re-resolution rides the existing selector layer, so the edge
+// cases fall out for free: `LATER_OF` is an open upper bound (never
 // resolves until its event fires → no premature witness), and a re-resolved
 // witness overrides any prior synthetic firing (back-dated-correction-friendly).
 

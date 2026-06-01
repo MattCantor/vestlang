@@ -1,7 +1,7 @@
-// Phase 5a gate: the public evaluate path runs through resolve → classify →
-// assemble → core, tagging each EvaluatedSchedule by interchange fidelity. These
-// assert the three arms end-to-end, the exact-telescoping property for template
-// schedules, and that the legacy engine is still reachable behind the flag.
+// The public evaluate path runs through resolve → classify → assemble → core,
+// tagging each EvaluatedSchedule by interchange fidelity. These assert the three
+// arms (template / events / unresolved) end-to-end and the exact-telescoping
+// property for template schedules.
 
 import { describe, it, expect } from "vitest";
 import type {
@@ -208,7 +208,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
   });
 });
 
-describe("assemble — Case 1: classify on the spec", () => {
+describe("assemble — atomic unfired EVENT start: classify on the spec", () => {
   // An unfired *atomic* EVENT start is a valid canonical template (an EVENT
   // statement with no firing), not `unresolved`: pending is the absence of a
   // witness, carried in `blockers`, not a property of the spec's representability.
@@ -238,9 +238,9 @@ describe("assemble — Case 1: classify on the spec", () => {
     expect(out.runtime.eventFirings ?? []).toEqual([]);
   });
 
-  // The HYBRID bug (doc DoD): a DATE portion vesting now + an unfired EVENT
-  // portion. The unfired event must NOT poison the program — the already-vested,
-  // fully-dated DATE installments must survive.
+  // The HYBRID case: a DATE portion vesting now + an unfired EVENT portion. The
+  // unfired event must NOT poison the program — the already-vested, fully-dated
+  // DATE installments must survive.
   it("75% MONTHLY + 25% unfired EVENT → template, 3,600 dated + pending blocker", () => {
     const program: Program = [
       stmt(
@@ -274,7 +274,7 @@ describe("assemble — Case 1: classify on the spec", () => {
   });
 });
 
-describe("assemble — Case 2: combinator-over-anchors → synthetic event", () => {
+describe("assemble — combinator-over-anchors → synthetic event", () => {
   // A combinator over a *start anchor* selects an anchor, not a structure: the
   // downstream grid is fixed regardless of which arm wins, so it lowers to ONE
   // canonical template by externalizing the gate as a synthetic event + a
@@ -338,7 +338,7 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
     // A literal future DATE arm IS asOf-gated, so with asOf before it AND ipo
     // unfired the EARLIER_OF stays pending (neither arm resolved) — rather than
     // resolving early to a system-anchored offset. (Closed-world early resolution
-    // of EARLIER_OF is Stage-D / Phase 4 territory.)
+    // of EARLIER_OF is not attempted.)
     const earlierStmt = {
       amount: portion(1, 1),
       expr: {
@@ -379,7 +379,7 @@ describe("assemble — Case 2: combinator-over-anchors → synthetic event", () 
     expect(Object.keys(out.sourceMap)).toEqual([ids[0]]); // one entry, deduped
   });
 
-  it("Stage-A worked example: 100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo)", () => {
+  it("100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo) → synthetic event", () => {
     const out = evaluateStatement(
       combinatorStmt("LATER_OF", portion(1, 1)),
       ctxInput({ grantQuantity: 4800 }),

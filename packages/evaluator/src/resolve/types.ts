@@ -16,8 +16,8 @@ import type {
 
 /** Why a resolved program could not be a single canonical template. */
 export type NonTemplateReason =
-  // Two independent DATE-anchored time grids live at once (fidelity-ladder case 3).
-  // Carta models these as separate grants, so they can't be one template.
+  // Two independent DATE-anchored time grids live at once. Carta models these as
+  // separate grants, so they can't be one template.
   | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
   // An event-anchored cliff — Carta has no event anchor on the cliff field.
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
@@ -31,12 +31,12 @@ export type ResolveResult =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
-      // Externalized combinator gates (Case 2): `event_id → { definition }`. Empty
-      // unless a synthetic event was minted.
+      // Externalized combinator gates: `event_id → { definition }`. Empty unless
+      // a synthetic event was minted.
       sourceMap: SourceMap;
-      // Pending witnesses (unfired atomic EVENT starts, Case 1; unresolved
-      // synthetic-event combinators, Case 2) — advisory under a `template` verdict;
-      // the spec is a valid template regardless.
+      // Pending witnesses (unfired atomic EVENT starts; unresolved synthetic-event
+      // combinators) — advisory under a `template` verdict; the program is a valid
+      // template regardless.
       blockers: Blocker[];
     }
   | {

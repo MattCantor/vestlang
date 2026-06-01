@@ -7,7 +7,7 @@
 // DATE anchor to `runtime.startDate` and chains the rest, and (3) lowers the
 // cliff to the time-based form. A program that resolves but doesn't fit one
 // template (event cliff, non-chaining independent grids) or doesn't resolve is
-// reported for the classifier (Phase 4b).
+// reported for the classifier to route to the `events` or `unresolved` arm.
 
 import type {
   Amount,
@@ -80,8 +80,9 @@ const isCombinator = (e: VestingNodeExpr): boolean =>
   e.type === "EARLIER_OF" || e.type === "LATER_OF";
 
 /** Does the expression reference ≥1 genuine named EVENT (not a system anchor)?
- *  The Case-2 admission test: a combinator anchor earns a synthetic event only
- *  if its definition names a real condition (Part II close — the "smuggle" guard). */
+ *  The synthetic-event admission test: a combinator anchor earns a synthetic
+ *  event only if its definition names a real condition. Guards against smuggling
+ *  a pure-date combinator (which resolves directly) into the synthetic path. */
 const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
   e.type === "SINGLETON"
     ? e.base.type === "EVENT" && !SYSTEM_EVENTS.has(e.base.value)
@@ -97,12 +98,12 @@ export interface StmtResolution {
         base: "DATE" | "EVENT";
         eventId?: string;
       }
-    // An unfired *atomic* EVENT start (Case 1): canonical holds it as an EVENT
-    // statement with no firing, so it lowers into the template rather than
-    // poisoning the program to `unresolved`. The blockers carry the pending-ness.
+    // An unfired *atomic* EVENT start: canonical holds it as an EVENT statement
+    // with no firing, so it lowers into the template rather than poisoning the
+    // program to `unresolved`. The blockers carry the pending-ness.
     | { state: "PENDING_EVENT"; eventId: string; blockers: Blocker[] }
-    // A combinator-over-anchors start referencing ≥1 named EVENT (Case 2): it
-    // collapses to one synthetic event, lowering into the template. `expr` is the
+    // A combinator-over-anchors start referencing ≥1 named EVENT: it collapses to
+    // one synthetic event, lowering into the template. `expr` is the
     // raw combinator; `buildTemplate` mints its grant-scoped id (with dedup across
     // statements) and records its DSL definition in the source map.
     | { state: "SYNTHETIC_EVENT"; expr: VestingNodeExpr; blockers: Blocker[] }
@@ -163,8 +164,8 @@ export const resolveStatements = (
       occurrences: p.occurrences,
     };
 
-    // Case 1: an unfired *atomic* EVENT start (a bare SINGLETON named event, not
-    // a combinator or a system anchor) lowers into the template as an EVENT
+    // An unfired *atomic* EVENT start (a bare SINGLETON named event, not a
+    // combinator or a system anchor) lowers into the template as an EVENT
     // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
     // IMPOSSIBLE and partially-picked combinators) and no cliff (an event-anchored
     // cliff can't be lowered without the firing date — keep it UNRESOLVED so it
@@ -179,10 +180,10 @@ export const resolveStatements = (
       };
     }
 
-    // Case 2: a combinator-over-anchors start (EARLIER_OF/LATER_OF) referencing a
-    // named EVENT collapses to one synthetic event (Part II) — it selects an
-    // *anchor*, not a structure, so the fixed downstream grid lowers into the
-    // template with one deferred event. A pure-date combinator (no named event)
+    // A combinator-over-anchors start (EARLIER_OF/LATER_OF) referencing a named
+    // EVENT collapses to one synthetic event — it selects an *anchor*, not a
+    // structure, so the fixed downstream grid lowers into the template with one
+    // deferred event. A pure-date combinator (no named event)
     // fails this test and keeps its normal resolution. Excludes cliffs (an event
     // cliff selects a structure → stays unresolved) and IMPOSSIBLE (the res.type
     // guards). Pending in all arms: LATER_OF → PICKED+UNRESOLVED meta; EARLIER_OF /
@@ -217,14 +218,14 @@ export type TemplateBuild =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
-      // Externalized combinator gates (Case 2): `event_id → { definition }` for
-      // each synthetic event minted below. Empty unless a combinator-over-anchors
+      // Externalized combinator gates: `event_id → { definition }` for each
+      // synthetic event minted below. Empty unless a combinator-over-anchors
       // start was collapsed.
       sourceMap: SourceMap;
       // Pending-ness under a `template` verdict: the unfired atomic EVENT starts
-      // (Case 1) and unresolved synthetic-event combinators (Case 2) whose
-      // witnesses haven't arrived. Advisory — the spec is still a valid template;
-      // these say which projections are still empty.
+      // and unresolved synthetic-event combinators whose witnesses haven't
+      // arrived. Advisory — the program is still a valid template; these say
+      // which projections are still empty.
       blockers: Blocker[];
     }
   | {
@@ -270,7 +271,7 @@ export const buildTemplate = (
   });
 
   // Only a genuinely-unresolved start poisons the program. An unfired atomic
-  // EVENT start (PENDING_EVENT) lowers into the template (Case 1).
+  // EVENT start (PENDING_EVENT) lowers into the template.
   if (resolutions.some((r) => r.start.state === "UNRESOLVED"))
     return unresolved();
   if (resolutions.some((r) => r.cliff.state === "UNRESOLVED"))
@@ -289,7 +290,7 @@ export const buildTemplate = (
   const statements: VestingStatement[] = [];
   const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
   const blockers: Blocker[] = [];
-  // Case 2 synthetic events: minted once per distinct gate (keyed by its DSL
+  // Synthetic events: minted once per distinct gate (keyed by its DSL
   // definition), so two portions on the byte-identical anchor share one id and
   // one source-map entry.
   const sourceMap: SourceMap = {};
@@ -305,16 +306,16 @@ export const buildTemplate = (
 
     let vesting_base: VestingStatement["vesting_base"];
     if (r.start.state === "PENDING_EVENT") {
-      // Unfired atomic EVENT (Case 1): an EVENT statement with no firing. The
-      // projection stays empty until the witness arrives; the blocker carries
-      // the pending-ness onto the `template` verdict.
+      // Unfired atomic EVENT: an EVENT statement with no firing. The projection
+      // stays empty until the witness arrives; the blocker carries the
+      // pending-ness onto the `template` verdict.
       vesting_base = { type: "EVENT", event_id: r.start.eventId };
       blockers.push(...r.start.blockers);
     } else if (r.start.state === "SYNTHETIC_EVENT") {
-      // Combinator-over-anchors (Case 2): externalize the gate as one synthetic
-      // event. The definition (its DSL) is the dedup key — same anchor → same id,
-      // one source-map entry. No firing yet; the witness is computed by
-      // re-resolving the definition at rehydration (Phase 4).
+      // Combinator-over-anchors: externalize the gate as one synthetic event.
+      // The definition (its DSL) is the dedup key — same anchor → same id, one
+      // source-map entry. No firing yet; the witness is computed by re-resolving
+      // the definition at rehydration.
       const definition = stringifyVestingNodeExpr(r.start.expr);
       let eventId = synthByDef.get(definition);
       if (eventId === undefined) {
@@ -370,8 +371,7 @@ export const buildTemplate = (
     ...(startDate !== undefined ? { startDate } : {}),
     ...(eventFirings.length > 0 ? { eventFirings } : {}),
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
-    // onto grantDate. Core's compile applies this when runtime.grantDate is set
-    // (the legacy engine did it via evaluateGrantDate).
+    // onto grantDate. Core's compile applies this when runtime.grantDate is set.
     ...(ctx.events.grantDate ? { grantDate: ctx.events.grantDate } : {}),
     ...(ctx.vesting_day_of_month !== DEFAULT_DAY_OF_MONTH
       ? { vestingDayOfMonth: ctx.vesting_day_of_month }

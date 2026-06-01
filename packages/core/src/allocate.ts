@@ -2,9 +2,9 @@
 //
 // Two shapes off one implementation:
 //   - allocateExact  — the per-step telescoping primitive (running cumulative
-//                      fraction + vestedSoFar). Phase 3's compile drives a single
+//                      fraction + vestedSoFar). compile drives a single
 //                      cumulative across the whole ordered template through this;
-//                      extended's events-only/unresolved rendering reuses it.
+//                      the evaluator's events-only/unresolved rendering reuses it.
 //   - allocateVector — the N-way even split for all 6 allocation modes (the
 //                      exact-rational replacement for the legacy float
 //                      `allocateQuantity`).

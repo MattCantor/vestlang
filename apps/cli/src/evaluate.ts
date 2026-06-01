@@ -49,8 +49,8 @@ export function evaluate(
 }
 
 function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
-  // The Part I consumer rule: "representable" is read from status, "pending"
-  // from blockers (never from status === "unresolved"). A `template` carrying
+  // The consumer rule: "representable" is read from status, "pending" from
+  // blockers (never from status === "unresolved"). A `template` carrying
   // blockers is representable-but-pending, not complete.
   const { representable, pending } = presentSchedule(r);
   if (withStatus) {

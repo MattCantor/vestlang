@@ -142,8 +142,8 @@ export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
 /**
  * One externalized gate definition: the DSL the synthetic `event_id` stands in
  * for, plus an optional display name. `definition` is `@vestlang/stringify`
- * output — re-resolvable AND legible. Populated by Case 2 (Phase 3); `{}` until
- * then.
+ * output — re-resolvable AND legible. Populated when a combinator-over-anchors
+ * start mints a synthetic event; `{}` otherwise.
  */
 export interface SourceMapEntry {
   definition: string;

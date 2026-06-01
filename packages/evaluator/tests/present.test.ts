@@ -1,8 +1,8 @@
-// Phase 6: the Part I consumer rule, made explicit. `presentSchedule` derives
-// three orthogonal reads — representable (status), pending (blockers, NOT
-// status === "unresolved"), projected (installments). The load-bearing case is
-// a Case-1/2 pending-template: status "template" AND blockers present must read
-// representable-but-pending, not complete.
+// The consumer rule, made explicit. `presentSchedule` derives three orthogonal
+// reads — representable (status), pending (blockers, NOT status === "unresolved"),
+// projected (installments). The load-bearing case is a pending-template: status
+// "template" AND blockers present must read representable-but-pending, not
+// complete.
 
 import { describe, it, expect } from "vitest";
 import type {
@@ -52,7 +52,7 @@ const impossibleBlocker: Blocker[] = [
   { type: "IMPOSSIBLE_SELECTOR", selector: "EARLIER_OF", blockers: [] },
 ];
 
-describe("presentSchedule — the three Part I reads", () => {
+describe("presentSchedule — the three orthogonal reads", () => {
   it("template + blockers (pending-template) → representable AND pending", () => {
     expect(presentSchedule(stub("template", eventBlocker, dated))).toEqual({
       representable: true,
@@ -89,8 +89,9 @@ describe("presentSchedule — the three Part I reads", () => {
   });
 });
 
-// End-to-end through the real pipeline: the doc's 4,800-share hybrid (DoD #1).
-describe("presentSchedule — end-to-end hybrid (DoD #1)", () => {
+// End-to-end through the real pipeline: a 4,800-share hybrid (dated portion +
+// unfired-event portion).
+describe("presentSchedule — end-to-end hybrid", () => {
   const portion = (numerator: number, denominator: number): Amount => ({
     type: "PORTION",
     numerator,

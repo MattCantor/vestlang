@@ -46,12 +46,12 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
         status: "template",
         template: result.template,
         runtime: result.runtime,
-        sourceMap: result.sourceMap, // Case 2 synthetic-event definitions (may be {})
+        sourceMap: result.sourceMap, // synthetic-event definitions (may be {})
         installments: compiled.map((c) =>
           makeResolvedInstallment(c.date, c.amount),
         ),
-        // Pending witnesses (unfired atomic EVENT starts, Case 1). A `template`
-        // can be representable yet carry blockers + an empty/partial projection.
+        // Pending witnesses (unfired atomic EVENT starts). A `template` can be
+        // representable yet carry blockers + an empty/partial projection.
         blockers: result.blockers,
       };
     }
