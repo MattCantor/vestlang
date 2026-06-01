@@ -1,6 +1,6 @@
 // The generic anchor-date fold — the shared primitive behind both the cliff and
-// the grant-date aggregation (the spec's "cliff fold and grant-date fold are the
-// same primitive").
+// the grant-date aggregation (the two are the same fold over a different anchor
+// date).
 //
 // Ported from vestlang's evaluate/cliff.ts `evaluateCliffGeneric` /
 // `evaluateGrantDate`, stripped to the pure date/amount mechanics. The

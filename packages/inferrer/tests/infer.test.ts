@@ -111,13 +111,11 @@ describe("inferSchedule — cliff", () => {
   });
 
   it("no grant date supplied → still recovers the cliff structurally", () => {
-    // Regression guard. Same tranche stream as a cliff (lump = 12×1000 on the
-    // first tranche date, then 36 monthly), but NO grant date is supplied.
+    // Same tranche stream as a cliff (lump = 12×1000 on the first tranche date,
+    // then 36 monthly), but NO grant date is supplied. With no grant date,
     // foldPreGrant must not run — it cannot ask "did vesting start before the
-    // grant?" without a grant — and foldCliffs must fold on shape alone,
-    // deducing the vesting start by walking back k periods. Before the
-    // grant-date-known gate, the grant date defaulted to the lump's own date,
-    // which tripped the pre-grant reading and silently dropped the cliff.
+    // grant?" — and foldCliffs must fold on shape alone, deducing the vesting
+    // start by walking back k periods. The cliff must still be recovered.
     const tranches: TrancheInput[] = [
       { date: d("2025-01-01"), amount: 12000 },
       ...monthly("2025-02-01", 36, 1000),

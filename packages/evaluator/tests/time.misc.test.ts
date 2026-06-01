@@ -7,11 +7,10 @@ describe("time helpers", () => {
     expect(addDays("2024-01-10", 5)).toBe("2024-01-15");
   });
 
-  // Regression for issue #3: addDays must be UTC-pure. A local-time stepper
-  // drops a day when the span crosses a DST transition (these dates straddle the
-  // March/November US transitions), which previously corrupted DAYS schedules
-  // on non-UTC machines. These assert the calendar-correct result, which is
-  // timezone-independent.
+  // addDays must be UTC-pure: a local-time stepper drops a day when the span
+  // crosses a DST transition (these dates straddle the March/November US
+  // transitions), so DAYS schedules would differ by machine timezone. These
+  // assert the calendar-correct, timezone-independent result.
   it("addDays is UTC-pure across DST boundaries", () => {
     // spring-forward (2024-03-10): Feb 26 + 14 calendar days = Mar 11
     expect(addDays("2024-02-26", 14)).toBe("2024-03-11");

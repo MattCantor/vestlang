@@ -1,8 +1,7 @@
 // Structural + runtime validation for the canonical vesting IR.
 //
 // Ported from OCF-Tools' vesting_compiler/validate.ts. The only changes are the
-// import source (core's own ./types) and the ISO_DATE_PATTERN, inlined here for
-// now — Phase 2 introduces core's dates.ts and will own this constant.
+// import source (core's own ./types) and the ISO_DATE_PATTERN, inlined here.
 
 import type {
   Cliff,
@@ -13,8 +12,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 
-// ISO 8601 YYYY-MM-DD. Capture groups are harmless for .test() (used here);
-// the Phase 2 dates module will own this and use .exec() for parsing.
+// ISO 8601 YYYY-MM-DD. Capture groups are harmless for the .test() used here.
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export interface ValidationError {

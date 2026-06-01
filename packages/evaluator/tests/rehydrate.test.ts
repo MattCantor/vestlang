@@ -1,9 +1,8 @@
-// Phase 4 — rehydration. A stored Case-2 artifact (template + sourceMap +
-// runtime) turns into synthetic-event witnesses by RE-RESOLVING each definition
-// against the world's named-event firings (Stage-C); a still-unfired event
-// produces no witness and a narrowed blocker (Stage-D); and the source-map
-// definition survives a `parse ∘ stringify` round-trip (the fixpoint rehydration
-// relies on).
+// Rehydration. A stored artifact (template + sourceMap + runtime) with synthetic
+// events turns into synthetic-event witnesses by RE-RESOLVING each definition
+// against the world's named-event firings; a still-unfired event produces no
+// witness and a narrowed blocker; and the source-map definition survives a
+// `parse ∘ stringify` round-trip (the fixpoint rehydration relies on).
 
 import { describe, it, expect } from "vitest";
 import type {
@@ -48,9 +47,9 @@ const findsEventNotOccurred = (bs: Blocker[], event: string): boolean =>
         findsEventNotOccurred(b.blockers as Blocker[], event)),
   );
 
-// `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")` — the doc's worked
-// example. `+12mo` desugars to the `grantDate` system anchor (→ DATE);
-// `EVENT "ipo"` is the genuine condition that earns the synthetic event.
+// `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")`. `+12mo` desugars to
+// the `grantDate` system anchor (→ DATE); `EVENT "ipo"` is the genuine condition
+// that earns the synthetic event.
 const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
   amount: portion(1, 1),
   expr: {
@@ -68,7 +67,7 @@ const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
   },
 });
 
-// Build the stored Stage-A artifact (IPO unfired): a `template` arm carrying the
+// Build the stored artifact (IPO unfired): a `template` arm carrying the
 // synthetic EVENT statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
   const out = evaluateStatement(

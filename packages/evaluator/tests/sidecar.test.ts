@@ -1,8 +1,8 @@
-// Phase 5 — sidecar persistence. A stored Case-2 artifact (template + runtime)
-// carries its source map out-of-band in a namespaced `vestlang` sidecar — the
-// OCF-sanctioned separate mapping table keyed by `event_id`. The artifact must
-// survive a real serialization boundary (JSON) and rehydrate with the synthetic
-// id preserved verbatim (Stage-C); dropping the sidecar must leave a
+// Sidecar persistence. A stored artifact (template + runtime) with synthetic
+// events carries its source map out-of-band in a namespaced `vestlang` sidecar —
+// the OCF-sanctioned separate mapping table keyed by `event_id`. The artifact
+// must survive a real serialization boundary (JSON) and rehydrate with the
+// synthetic id preserved verbatim; dropping the sidecar must leave a
 // valid-but-opaque template; and a plain template with no synthetic events emits
 // no sidecar at all.
 
@@ -44,9 +44,9 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 
-// `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")` — the doc's worked
-// example: `+12mo` is the grantDate system anchor (→ DATE), `EVENT "ipo"` the
-// genuine condition that earns the synthetic event.
+// `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")`: `+12mo` is the
+// grantDate system anchor (→ DATE), `EVENT "ipo"` the genuine condition that
+// earns the synthetic event.
 const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
   amount: portion(1, 1),
   expr: {
@@ -64,8 +64,8 @@ const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
   },
 });
 
-// The stored Stage-A artifact (IPO unfired): a `template` arm with the synthetic
-// EVENT statement, an empty runtime (no witness), and the source map.
+// The stored artifact (IPO unfired): a `template` arm with the synthetic EVENT
+// statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
   const out = evaluateStatement(
     stageAStmt(),
