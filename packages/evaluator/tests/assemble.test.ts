@@ -505,4 +505,30 @@ describe("assemble — impossible status", () => {
     );
     expect(out.status).toBe("impossible");
   });
+
+  it("[resolving, void] program → unresolved, projecting the resolved half (#28)", () => {
+    const resolving = stmt(
+      portion(1, 2),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+      { type: "MONTHS", length: 12, occurrences: 2 },
+    );
+    const half = stmt(portion(1, 2), voidStart, {
+      type: "MONTHS",
+      length: 12,
+      occurrences: 2,
+    });
+    const [out] = evaluateProgram(
+      [resolving, half],
+      ctxInput({ events: { grantDate: "2025-01-01", a: "2025-06-01" } }),
+    );
+    expect(out.status).toBe("unresolved");
+    const resolved = out.installments.filter(
+      (i) => i.meta.state === "RESOLVED",
+    );
+    expect(resolved.map((i) => i.date)).toEqual(["2026-01-01", "2027-01-01"]);
+    expect(sum(resolved)).toBe(50000);
+    expect(out.installments.some((i) => i.meta.state === "IMPOSSIBLE")).toBe(
+      true,
+    );
+  });
 });

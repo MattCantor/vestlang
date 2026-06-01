@@ -4,7 +4,11 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { parse } from "@vestlang/dsl";
 import { evaluateStatement } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { OCTDate, ResolvedInstallment } from "@vestlang/types";
+import type {
+  Installment,
+  OCTDate,
+  ResolvedInstallment,
+} from "@vestlang/types";
 import { createServer } from "../src/server.js";
 
 // These tests exercise the MCP tool layer for `vestlang_infer_schedule` —
@@ -54,19 +58,19 @@ function tranchesFromDsl(
   asOf: OCTDate,
 ): { date: string; amount: number }[] {
   const program = normalizeProgram(parse(dsl));
-  const installments = evaluateStatement(program[0], {
+  const installments: Installment[] = evaluateStatement(program[0], {
     events: { grantDate },
     grantQuantity,
     asOf,
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     allocation_type: "CUMULATIVE_ROUNDING",
-  }).installments.filter(
-    (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
-  );
-  return installments.map((i) => ({
-    date: i.date,
-    amount: i.amount,
-  }));
+  }).installments;
+  return installments
+    .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+    .map((i) => ({
+      date: i.date,
+      amount: i.amount,
+    }));
 }
 
 describe("mcp-server / vestlang_infer_schedule tool layer", () => {

@@ -13,9 +13,9 @@ import type {
   Blocker,
   ImpossibleBlocker,
   ImpossibleInstallment,
+  Installment,
   ResolvedInstallment,
   SourceMap,
-  SymbolicInstallment,
 } from "@vestlang/types";
 
 /** Why a resolved program could not be a single canonical template. */
@@ -50,7 +50,10 @@ export type ResolveResult =
     }
   | {
       kind: "unresolved";
-      symbolic: SymbolicInstallment[];
+      // May carry RESOLVED tranches from fully-resolved siblings alongside the
+      // symbolic (UNRESOLVED/IMPOSSIBLE) ones — a mixed program is unresolved but
+      // still projects its resolved portion.
+      installments: Installment[];
       blockers: Blocker[];
     }
   | {

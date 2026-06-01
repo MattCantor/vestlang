@@ -200,7 +200,9 @@ export type EvaluatedSchedule =
     }
   | {
       status: "unresolved";
-      installments: SymbolicInstallment[];
+      // Symbolic (UNRESOLVED/IMPOSSIBLE) installments, plus any RESOLVED tranches
+      // from fully-resolved sibling statements in a mixed program.
+      installments: Installment[];
       blockers: Blocker[];
     }
   | {

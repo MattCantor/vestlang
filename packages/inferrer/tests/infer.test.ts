@@ -5,6 +5,7 @@ import { normalizeProgram } from "@vestlang/normalizer";
 import type {
   AllocationType,
   EvaluationContextInput,
+  Installment,
   OCTDate,
   Program,
   ResolvedInstallment,
@@ -281,8 +282,11 @@ describe("inferSchedule — policy detection", () => {
     const stmt = normalizeProgram(
       parse("48000 VEST FROM DATE 2024-01-31 OVER 48 months EVERY 1 month"),
     )[0];
-    const evalResult = evaluateStatement(stmt, ctx);
-    const tranches: TrancheInput[] = evalResult.installments
+    const installments: Installment[] = evaluateStatement(
+      stmt,
+      ctx,
+    ).installments;
+    const tranches: TrancheInput[] = installments
       .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
       .map((i) => ({ date: i.date, amount: i.amount }));
 
@@ -496,10 +500,12 @@ describe("inferSchedule — rounded trains", () => {
           `${c.total} VEST FROM DATE 2024-01-01 OVER ${c.over} months EVERY 1 month`,
         ),
       )[0];
-      const tranches: TrancheInput[] = evaluateStatement(stmt, ctx)
-        .installments.filter(
-          (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
-        )
+      const installments: Installment[] = evaluateStatement(
+        stmt,
+        ctx,
+      ).installments;
+      const tranches: TrancheInput[] = installments
+        .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
         .map((i) => ({ date: i.date, amount: i.amount }));
 
       // Sanity: the run really is jittery (amounts are not all equal).
