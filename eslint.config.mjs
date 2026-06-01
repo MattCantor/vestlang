@@ -48,17 +48,17 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      // The `any`-family from recommendedTypeChecked is too noisy to adopt
-      // wholesale on this AST-heavy codebase (DSL nodes, generic walkers).
-      // Turned off so the *behavioural* type-aware rules below (floating
-      // promises, misused promises, unnecessary conditions, …) stay actionable.
-      // Tightening these is a gradual follow-up, not a big-bang retrofit.
+      // The any-family is on. `no-explicit-any` bans literal `any`; the five
+      // type-flow `no-unsafe-*` rules catch `any` values leaking in from untyped
+      // boundaries. They run on source; the test override below relaxes the
+      // `no-unsafe-*` set, where loosely-typed parse output and partial fixtures
+      // make them noise rather than signal.
       "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
       // `interface Foo extends Bar {}` is a deliberate named alias here.
       "@typescript-eslint/no-empty-object-type": [
         "error",
@@ -67,6 +67,20 @@ export default tseslint.config(
       // MCP/CLI handlers are idiomatically `async` even when their current body
       // has no `await` (the signature is the contract); don't force churn there.
       "@typescript-eslint/require-await": "off",
+    },
+  },
+
+  // Tests legitimately poke at loosely-typed parse output and build partial
+  // fixtures, so the type-flow `no-unsafe-*` rules add ceremony there without
+  // real safety gain. Relax them in test files only (`no-explicit-any` stays on).
+  {
+    files: ["**/*.{test,spec}.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
     },
   },
 
