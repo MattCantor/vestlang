@@ -1,8 +1,6 @@
 import {
-  AndCondition,
   AtomCondition,
   Blocker,
-  Condition,
   Constraint,
   ConstraintTag,
   Duration,
@@ -11,11 +9,9 @@ import {
   OCTDate,
   Offsets,
   OffsetTag,
-  OrCondition,
   PeriodTag,
   ResolvedNode,
   Schedule,
-  TwoOrMore,
   UnresolvedNode,
   VestingBaseDate,
   VestingBaseEvent,
@@ -64,7 +60,7 @@ export const makeSingletonNode = (
   offsets,
 });
 
-export const makeConstraint = (
+const makeConstraint = (
   type: ConstraintTag,
   base: VestingNode,
   strict: boolean = false,
@@ -85,21 +81,9 @@ export const makeImpossibleConditionBlocker = (
   };
 };
 
-export const makeAtomCondition = (constraint: Constraint): AtomCondition => ({
+const makeAtomCondition = (constraint: Constraint): AtomCondition => ({
   type: "ATOM",
   constraint,
-});
-
-export const makeAndCondition = (
-  items: TwoOrMore<Condition>,
-): AndCondition => ({
-  type: "AND",
-  items,
-});
-
-export const makeOrCondtion = (items: TwoOrMore<Condition>): OrCondition => ({
-  type: "OR",
-  items,
 });
 
 export const makeConstrainedNodeWithAtomCondition = (

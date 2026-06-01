@@ -12,12 +12,12 @@ export function walkProgram(p: Program, v: Visitor) {
   p.forEach((stmt, i) => walkStatement(stmt, v, ["Program", i]));
 }
 
-export function walkStatement(node: Statement, v: Visitor, path: NodePath) {
+function walkStatement(node: Statement, v: Visitor, path: NodePath) {
   v.Statement?.(node, path);
   walkScheduleExpr(node.expr, v, path.concat("expr"));
 }
 
-export function walkScheduleExpr(e: ScheduleExpr, v: Visitor, path: NodePath) {
+function walkScheduleExpr(e: ScheduleExpr, v: Visitor, path: NodePath) {
   if (e.type === "SINGLETON") {
     const schedule = e;
     if (schedule.vesting_start)
@@ -37,11 +37,7 @@ export function walkScheduleExpr(e: ScheduleExpr, v: Visitor, path: NodePath) {
   }
 }
 
-export function walkVestingNodeExpr(
-  e: VestingNodeExpr,
-  v: Visitor,
-  path: NodePath,
-) {
+function walkVestingNodeExpr(e: VestingNodeExpr, v: Visitor, path: NodePath) {
   if (e.type === "SINGLETON") {
     const vestingNode = e;
     v.VestingNode?.(vestingNode, path);
@@ -55,7 +51,7 @@ export function walkVestingNodeExpr(
   }
 }
 
-export function walkCondition(c: Condition, v: Visitor, path: NodePath) {
+function walkCondition(c: Condition, v: Visitor, path: NodePath) {
   v.Condition?.(c, path);
   switch (c.type) {
     case "ATOM":

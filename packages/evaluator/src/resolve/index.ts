@@ -36,9 +36,6 @@ export const resolveToCore = (
   return classify(build, program);
 };
 
-export { resolveStatements, buildTemplate, amountToFraction } from "./lower.js";
-export { lowerCliff } from "./cliff.js";
-export { classify } from "./classify.js";
 export { rehydrate, reparseDefinition } from "./rehydrate.js";
 export type { RehydrateResult } from "./rehydrate.js";
 export {
@@ -49,5 +46,4 @@ export {
   rehydratePersisted,
 } from "./sidecar.js";
 export type { Sidecar, PersistedArtifact } from "./sidecar.js";
-export type { ResolveResult, NonTemplateReason } from "./types.js";
-export type { SymbolicInstallment } from "@vestlang/types";
+export type { ResolveResult } from "./types.js";
