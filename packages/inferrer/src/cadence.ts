@@ -1,4 +1,4 @@
-import { addDays, addMonthsRule, toDate, toISO } from "@vestlang/evaluator";
+import { addDays, addMonthsRule, toDate } from "@vestlang/evaluator";
 import type {
   EvaluationContext,
   OCTDate,
@@ -58,12 +58,12 @@ export function walk(
   return addDays(from, cadence.length * steps);
 }
 
-export function dayDiff(a: OCTDate, b: OCTDate): number {
+function dayDiff(a: OCTDate, b: OCTDate): number {
   const ms = toDate(b).getTime() - toDate(a).getTime();
   return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
-export function monthDiff(a: OCTDate, b: OCTDate): number {
+function monthDiff(a: OCTDate, b: OCTDate): number {
   const da = toDate(a);
   const db = toDate(b);
   return (
@@ -179,5 +179,3 @@ export function estimateCadences(dates: OCTDate[]): Cadence[] {
   );
   return scored.map((s) => s.cadence);
 }
-
-export { toISO };

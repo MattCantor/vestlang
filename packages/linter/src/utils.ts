@@ -16,7 +16,3 @@ export function stableKey(x: unknown): string {
   };
   return JSON.stringify(stringify(x));
 }
-
-export function at<T>(arr: T[], i: number): T | undefined {
-  return i >= 0 && i < arr.length ? arr[i] : undefined;
-}

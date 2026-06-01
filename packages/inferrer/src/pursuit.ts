@@ -322,5 +322,3 @@ function greedyCover(
   }
   return components;
 }
-
-export { type EvaluationContext };

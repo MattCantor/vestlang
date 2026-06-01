@@ -47,11 +47,11 @@ const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
 /** The two cumulative modes telescope as a single running fraction. The four
  *  loaded modes don't, so they can't compile to one template and route to
  *  events-only instead. */
-export const isCumulativeAllocation = (mode: string): boolean =>
+const isCumulativeAllocation = (mode: string): boolean =>
   mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
 
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`. */
-export const amountToFraction = (a: Amount, totalShares: number): Fraction =>
+const amountToFraction = (a: Amount, totalShares: number): Fraction =>
   a.type === "QUANTITY"
     ? fracReduce({ numerator: a.value, denominator: totalShares })
     : fracReduce({ numerator: a.numerator, denominator: a.denominator });

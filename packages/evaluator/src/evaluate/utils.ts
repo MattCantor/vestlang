@@ -12,7 +12,7 @@ import { evaluateVestingNodeExpr } from "./selectors.js";
 // A Picked result carries the chosen item plus its resolution meta. When meta is
 // an UnresolvedNode, the pick is a partially-resolved LATER_OF: `picked` is the
 // latest of the items resolved so far, still pending the rest.
-export interface Picked<T> {
+interface Picked<T> {
   type: "PICKED";
   picked: T;
   meta: ResolvedNode | UnresolvedNode;
