@@ -25,7 +25,7 @@ export {
   stringify,
   stringifyStatement,
   stringifyProgram,
-} from "@vestlang/stringify";
+} from "@vestlang/render";
 
 // Inferrer (inverse of evaluate)
 export { inferSchedule } from "@vestlang/inferrer";

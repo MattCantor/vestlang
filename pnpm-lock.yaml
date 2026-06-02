@@ -176,9 +176,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
-      '@vestlang/stringify':
+      '@vestlang/render':
         specifier: workspace:*
-        version: link:../../packages/stringify
+        version: link:../../packages/render
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -244,9 +244,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
-      '@vestlang/stringify':
+      '@vestlang/render':
         specifier: workspace:*
-        version: link:../stringify
+        version: link:../render
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -269,9 +269,9 @@ importers:
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../evaluator
-      '@vestlang/stringify':
+      '@vestlang/render':
         specifier: workspace:*
-        version: link:../stringify
+        version: link:../render
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -338,6 +338,12 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
+      '@vestlang/normalizer':
+        specifier: workspace:*
+        version: link:../normalizer
+      '@vestlang/render':
+        specifier: workspace:*
+        version: link:../render
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -355,7 +361,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.5.2)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.9.0)
 
-  packages/stringify:
+  packages/render:
     dependencies:
       '@vestlang/types':
         specifier: workspace:*
@@ -407,9 +413,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
-      '@vestlang/stringify':
+      '@vestlang/render':
         specifier: workspace:*
-        version: link:../stringify
+        version: link:../render
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types

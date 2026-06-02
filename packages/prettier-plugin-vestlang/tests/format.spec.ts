@@ -12,10 +12,6 @@ VEST FROM EVENT grant OVER 48 months EVERY 1 month
       parser: "vestlang-parser",
     });
 
-    expect(output).toMatchInlineSnapshot(`
-"VEST FROM EVENT grant
-  OVER 48 months EVERY 1 months
-"
-`);
+    expect(output).toMatchInlineSnapshot(`"VEST FROM EVENT grant OVER 48 months EVERY 1 month"`);
   });
 });

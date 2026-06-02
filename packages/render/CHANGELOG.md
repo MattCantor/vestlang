@@ -1,4 +1,4 @@
-# @vestlang/stringify
+# @vestlang/render
 
 ## 0.1.1
 

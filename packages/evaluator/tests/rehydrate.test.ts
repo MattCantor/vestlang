@@ -12,7 +12,7 @@ import type {
   Schedule,
 } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
-import { stringifyVestingNodeExpr } from "@vestlang/stringify";
+import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { evaluateStatement } from "../src/evaluate/index";
 import { rehydrate, reparseDefinition } from "../src/resolve/index";
 import {

@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@vestlang/dsl": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {

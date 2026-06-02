@@ -20,7 +20,7 @@ import type {
   VestingNodeExpr,
   OCTDate,
 } from "@vestlang/types";
-import { stringifyVestingNodeExpr } from "@vestlang/stringify";
+import { stringifyVestingNodeExpr } from "@vestlang/render";
 import type {
   Cliff,
   Fraction,
