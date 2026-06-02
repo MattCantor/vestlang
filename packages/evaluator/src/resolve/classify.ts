@@ -263,6 +263,17 @@ const unresolvedArm = (
   let sawPending = false; // an unfired-but-satisfiable portion
   let sawResolvedLive = false; // a fully-resolved portion
   program.forEach((stmt, i) => {
+    // A THEN tail has no start of its own to re-resolve here — the cursor pre-pass
+    // already handed it one (the date the previous segment ended on). In phase 2
+    // that's always a concrete date, so treat the tail like any other
+    // fully-resolved sibling and let the resolved producer materialize its
+    // tranches, rather than routing it through the start-from-scratch path below
+    // (which has nothing to work with). Event-origin tails are phase 3.
+    if (stmt.chained) {
+      sawResolvedLive = true;
+      resolvedResolutions.push(build.resolutions[i]);
+      return;
+    }
     const ev = unresolvedInstallments(stmt, ctx);
     // EMPTY only comes back from unresolvedInstallments' fully-resolved paths.
     // Those RESOLVED tranches are discarded there; collect the resolution so we

@@ -17,6 +17,7 @@ import type {
   Schedule,
   ScheduleExpr,
   SourceMap,
+  Statement,
   VestingNodeExpr,
   OCTDate,
 } from "@vestlang/types";
@@ -29,7 +30,7 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { addPeriod, eq, fracReduce } from "@vestlang/core";
+import { advanceCursor, eq, fracReduce } from "@vestlang/core";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
@@ -112,133 +113,194 @@ export interface StmtResolution {
   cliff: LoweredCliff;
 }
 
-/** Resolve every statement against runtime — the shared input to 4a and 4b. */
-export const resolveStatements = (
-  program: Program,
+/** Resolve one ordinary (non-chained) statement: its start comes from its own
+ *  `FROM` expression, resolved through the normal selector path. This is the body
+ *  that used to be the whole of `resolveStatements`; the chaining walk below now
+ *  calls it for every statement that isn't a THEN tail. */
+const resolveNonChained = (
+  stmt: Extract<Statement, { chained?: false }>,
   ctx: EvaluationContext,
   totalShares: number,
-): StmtResolution[] =>
-  program.map((stmt) => {
-    // A chained THEN segment has no start of its own — it begins where the
-    // previous segment ended. Computing that handoff is the sequencing pass,
-    // which isn't wired up yet, so a chain can be parsed and printed but not
-    // evaluated.
-    if (stmt.chained) {
-      throw new Error(
-        "THEN-chained vesting can't be evaluated yet: a chained segment's start is supplied by the sequencing pass, which is not implemented.",
-      );
-    }
-    const percentage = amountToFraction(stmt.amount, totalShares);
-    const res = evaluateScheduleExpr(stmt.expr, ctx);
+): StmtResolution => {
+  const percentage = amountToFraction(stmt.amount, totalShares);
+  const res = evaluateScheduleExpr(stmt.expr, ctx);
 
-    if (isPickedResolved(res)) {
-      const schedule = res.picked;
-      const p = schedule.periodicity;
-      const periodicity = {
-        type: p.type,
-        length: p.length,
-        occurrences: p.occurrences,
-      };
-      return {
-        percentage,
-        periodicity,
-        start: {
-          state: "RESOLVED",
-          date: res.meta.date,
-          ...startBase(schedule.vesting_start),
-        },
-        cliff: lowerCliff(
-          p.cliff,
-          res.meta.date,
-          p.type,
-          p.length,
-          p.occurrences,
-          ctx,
-        ),
-      };
-    }
-
-    // Start did not fully resolve. Periodicity is best-effort for the
-    // unresolved arm: the winning schedule if partially picked, else the first.
-    const sched = res.type === "PICKED" ? res.picked : firstSchedule(stmt.expr);
-    const p = sched.periodicity;
-    const blockers: Blocker[] =
-      res.type === "PICKED"
-        ? res.meta.type === "UNRESOLVED"
-          ? res.meta.blockers
-          : []
-        : res.blockers;
+  if (isPickedResolved(res)) {
+    const schedule = res.picked;
+    const p = schedule.periodicity;
     const periodicity = {
       type: p.type,
       length: p.length,
       occurrences: p.occurrences,
     };
-
-    // An unfired *atomic* EVENT start (a bare SINGLETON named event, not a
-    // combinator or a system anchor) lowers into the template as an EVENT
-    // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
-    // IMPOSSIBLE and partially-picked combinators). A `vestingStart`-relative
-    // duration cliff lowers anchor-free and rides along on the pending statement;
-    // a cliff that genuinely needs the firing date (event cliff, cross-unit) keeps
-    // the whole statement UNRESOLVED so it isn't silently dropped.
-    const sb = startBase(sched.vesting_start);
-    if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
-      const cliff = lowerDeferredCliff(
-        p.cliff,
-        p.type,
-        p.length,
-        p.occurrences,
-      );
-      if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
-        return {
-          percentage,
-          periodicity,
-          start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
-          cliff,
-        };
-      }
-    }
-
-    // A combinator-over-anchors start (EARLIER_OF/LATER_OF) that references a
-    // named EVENT collapses to one synthetic event. It selects an *anchor*, not a
-    // structure, so the fixed downstream grid still lowers into the template with
-    // one deferred event. A pure-date combinator (no named event) fails this test
-    // and keeps its normal resolution. IMPOSSIBLE is excluded by the res.type
-    // guards. As on the atomic path, a `vestingStart`-relative duration cliff
-    // lowers anchor-free and rides along; a cliff that needs the firing date keeps
-    // the statement UNRESOLVED. The pending shape differs by arm: LATER_OF
-    // surfaces as PICKED with UNRESOLVED meta; EARLIER_OF and a fully-pending
-    // LATER_OF surface as UNRESOLVED.
-    const vs = sched.vesting_start;
-    if (
-      (res.type === "UNRESOLVED" ||
-        (res.type === "PICKED" && res.meta.type === "UNRESOLVED")) &&
-      isCombinator(vs) &&
-      referencesNamedEvent(vs)
-    ) {
-      const cliff = lowerDeferredCliff(
-        p.cliff,
-        p.type,
-        p.length,
-        p.occurrences,
-      );
-      if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
-        return {
-          percentage,
-          periodicity,
-          start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
-          cliff,
-        };
-      }
-    }
-
     return {
       percentage,
       periodicity,
-      start: { state: "UNRESOLVED", blockers },
-      cliff: { state: "NONE" },
+      start: {
+        state: "RESOLVED",
+        date: res.meta.date,
+        ...startBase(schedule.vesting_start),
+      },
+      cliff: lowerCliff(
+        p.cliff,
+        res.meta.date,
+        p.type,
+        p.length,
+        p.occurrences,
+        ctx,
+      ),
     };
-  });
+  }
+
+  // Start did not fully resolve. Periodicity is best-effort for the
+  // unresolved arm: the winning schedule if partially picked, else the first.
+  const sched = res.type === "PICKED" ? res.picked : firstSchedule(stmt.expr);
+  const p = sched.periodicity;
+  const blockers: Blocker[] =
+    res.type === "PICKED"
+      ? res.meta.type === "UNRESOLVED"
+        ? res.meta.blockers
+        : []
+      : res.blockers;
+  const periodicity = {
+    type: p.type,
+    length: p.length,
+    occurrences: p.occurrences,
+  };
+
+  // An unfired *atomic* EVENT start (a bare SINGLETON named event, not a
+  // combinator or a system anchor) lowers into the template as an EVENT
+  // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
+  // IMPOSSIBLE and partially-picked combinators). A `vestingStart`-relative
+  // duration cliff lowers anchor-free and rides along on the pending statement;
+  // a cliff that genuinely needs the firing date (event cliff, cross-unit) keeps
+  // the whole statement UNRESOLVED so it isn't silently dropped.
+  const sb = startBase(sched.vesting_start);
+  if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
+    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
+    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
+      return {
+        percentage,
+        periodicity,
+        start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
+        cliff,
+      };
+    }
+  }
+
+  // A combinator-over-anchors start (EARLIER_OF/LATER_OF) that references a
+  // named EVENT collapses to one synthetic event. It selects an *anchor*, not a
+  // structure, so the fixed downstream grid still lowers into the template with
+  // one deferred event. A pure-date combinator (no named event) fails this test
+  // and keeps its normal resolution. IMPOSSIBLE is excluded by the res.type
+  // guards. As on the atomic path, a `vestingStart`-relative duration cliff
+  // lowers anchor-free and rides along; a cliff that needs the firing date keeps
+  // the statement UNRESOLVED. The pending shape differs by arm: LATER_OF
+  // surfaces as PICKED with UNRESOLVED meta; EARLIER_OF and a fully-pending
+  // LATER_OF surface as UNRESOLVED.
+  const vs = sched.vesting_start;
+  if (
+    (res.type === "UNRESOLVED" ||
+      (res.type === "PICKED" && res.meta.type === "UNRESOLVED")) &&
+    isCombinator(vs) &&
+    referencesNamedEvent(vs)
+  ) {
+    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
+    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
+      return {
+        percentage,
+        periodicity,
+        start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
+        cliff,
+      };
+    }
+  }
+
+  return {
+    percentage,
+    periodicity,
+    start: { state: "UNRESOLVED", blockers },
+    cliff: { state: "NONE" },
+  };
+};
+
+/**
+ * Resolve every statement against runtime — the shared input to 4a and 4b.
+ *
+ * Statements joined by THEN form a "chain": each tail picks up the timeline
+ * exactly where the previous segment ended, so the author never hand-writes the
+ * handoff dates. We walk the program left to right carrying a `cursor` — the date
+ * the previous segment finished on — and hand each tail that date as its start.
+ * The cursor is advanced with core's own `advanceCursor`, so a chain's dates match
+ * what the canonical compiler would produce, to the day.
+ */
+export const resolveStatements = (
+  program: Program,
+  ctx: EvaluationContext,
+  totalShares: number,
+): StmtResolution[] => {
+  const dom = ctx.vesting_day_of_month;
+  const out: StmtResolution[] = [];
+  // Where the next THEN tail would start. Undefined means there's no live date
+  // chain to continue — either we're at the first statement, or the previous one
+  // was anchored to an event rather than a date.
+  let cursor: OCTDate | undefined;
+
+  for (const stmt of program) {
+    if (stmt.chained) {
+      // A THEN tail carries no start of its own; it begins at the cursor. If we
+      // don't have one, the chain's head was a named event, and sequencing dates
+      // off an event is a separate (phase 3) problem we don't handle yet.
+      if (cursor === undefined) {
+        throw new Error(
+          "event-origin THEN chains aren't supported yet: a chain whose head resolves to a named event can't be sequenced as a date template.",
+        );
+      }
+      const p = stmt.expr.periodicity;
+      out.push({
+        percentage: amountToFraction(stmt.amount, totalShares),
+        periodicity: {
+          type: p.type,
+          length: p.length,
+          occurrences: p.occurrences,
+        },
+        // The handoff date is this tail's start. A cliff on the tail therefore
+        // measures from the handoff, exactly as a head cliff measures from the
+        // head's start — no special casing needed.
+        start: { state: "RESOLVED", date: cursor, base: "DATE" },
+        cliff: lowerCliff(
+          p.cliff,
+          cursor,
+          p.type,
+          p.length,
+          p.occurrences,
+          ctx,
+        ),
+      });
+      cursor = advanceCursor(cursor, p.occurrences, p.length, p.type, dom);
+      continue;
+    }
+
+    const resolution = resolveNonChained(stmt, ctx, totalShares);
+    out.push(resolution);
+    // A non-chained statement begins a fresh component, so the chain restarts
+    // here rather than continuing the previous one. Only a concrete date gives a
+    // following tail something to chain from; an event or unresolved start leaves
+    // nothing, so we drop the cursor.
+    cursor =
+      resolution.start.state === "RESOLVED" && resolution.start.base === "DATE"
+        ? advanceCursor(
+            resolution.start.date,
+            resolution.periodicity.occurrences,
+            resolution.periodicity.length,
+            resolution.periodicity.type,
+            dom,
+          )
+        : undefined;
+  }
+
+  return out;
+};
 
 export type TemplateBuild =
   | {
@@ -325,7 +387,7 @@ export const buildTemplate = (
   const sourceMap: SourceMap = {};
   const synthByDef = new Map<string, string>();
   let synthOrdinal = 0;
-  // Core dates are plain ISO strings (OCTDate); addPeriod returns the same.
+  // Core dates are plain ISO strings (OCTDate); advanceCursor returns the same.
   let startDate: string | undefined;
   let cursor: string | undefined;
 
@@ -379,7 +441,7 @@ export const buildTemplate = (
         // A second independent DATE grid that doesn't chain — not one template.
         return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
       }
-      cursor = addPeriod(r.start.date, occurrences * length, type, dom);
+      cursor = advanceCursor(r.start.date, occurrences, length, type, dom);
     }
 
     const cliff: Cliff | undefined =

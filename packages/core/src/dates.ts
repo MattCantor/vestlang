@@ -89,6 +89,20 @@ export const addPeriod = (
   }
 };
 
+// Where the next segment of a graded (multi-tranche) schedule begins. A segment
+// covers `occurrences` periods of `period` units each, so its end — and the start
+// of whatever follows it — is that whole span stepped forward from the anchor.
+// The canonical compiler and the evaluator's chaining pre-pass both call this, so
+// the short-month clamping quirk (Jan 31 handoff lands on Feb 28, see #34) has a
+// single place to be fixed rather than two that could drift apart.
+export const advanceCursor = (
+  anchor: OCTDate,
+  occurrences: number,
+  period: number,
+  periodType: PeriodType,
+  dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
+): OCTDate => addPeriod(anchor, occurrences * period, periodType, dayOfMonth);
+
 // Comparisons on ISO YYYY-MM-DD strings (lexicographic == calendar order).
 export const lt = (a: OCTDate, b: OCTDate): boolean => a < b;
 export const gt = (a: OCTDate, b: OCTDate): boolean => a > b;
