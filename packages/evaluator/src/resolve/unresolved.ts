@@ -42,11 +42,13 @@ export const unresolvedInstallments = (
   stmt: Statement,
   ctx: EvaluationContext,
 ): InstallmentSet => {
-  // Same restriction as the resolver: a chained THEN segment has no start until
-  // the sequencing pass fills it in, so it can't be materialized yet.
+  // Defensive: a chained THEN segment has no start of its own to re-resolve, so
+  // it must never reach this start-from-scratch producer. Its handoff date is set
+  // by the cursor pre-pass, and the unresolved arm routes tails through that
+  // resolution instead of calling here. If this ever throws, that routing broke.
   if (stmt.chained) {
     throw new Error(
-      "THEN-chained vesting can't be evaluated yet: a chained segment's start is supplied by the sequencing pass, which is not implemented.",
+      "unresolvedInstallments received a chained THEN tail; chained tails are resolved by the cursor pre-pass and should be materialized from their resolution, not re-resolved here.",
     );
   }
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);

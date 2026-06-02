@@ -19,7 +19,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { allocateExact } from "./allocate";
-import { addPeriod, gt } from "./dates";
+import { addPeriod, advanceCursor, gt } from "./dates";
 import { fracAdd, fracMul, fracSub, ONE, ZERO } from "./fractions";
 import { foldToGrantDate } from "./fold";
 import {
@@ -151,9 +151,10 @@ const expandStatement = (
     // Validator guarantees dateCursor is defined when any DATE statement exists.
     const anchor = dateCursor as OCTDate;
     const events = expandAnchored(statement, anchor, ONE, dom);
-    const nextCursor = addPeriod(
+    const nextCursor = advanceCursor(
       anchor,
-      statement.occurrences * statement.period,
+      statement.occurrences,
+      statement.period,
       statement.period_type,
       dom,
     );
