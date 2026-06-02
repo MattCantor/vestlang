@@ -129,4 +129,61 @@ describe("@vestlang/linter", () => {
       expect(flagged[0].severity).toBe("error");
     });
   });
+
+  describe("cliff-exceeds-span", () => {
+    const flaggedOf = (src: string) =>
+      diagnosticsOf(src).filter((d) => d.ruleId === "cliff-exceeds-span");
+
+    it("warns when the cliff outruns its own grid span", () => {
+      // span = 4 × 3 = 12 months; an 18-month cliff lands 6 months past the end.
+      const flagged = flaggedOf(`
+        VEST FROM EVENT grant OVER 12 months EVERY 3 months CLIFF 18 months
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("warning");
+      expect(flagged[0].path).toEqual([
+        "Program",
+        0,
+        "expr",
+        "periodicity",
+        "cliff",
+      ]);
+    });
+
+    it("is clean when the cliff lands exactly on the last tranche", () => {
+      // span = 12 months, cliff = 12 months: the whole segment vests at its
+      // natural end, not past it.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT grant OVER 12 months EVERY 1 month CLIFF 12 months
+        `),
+      ).toEqual([]);
+    });
+
+    it("is clean for an ordinary in-grid cliff", () => {
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT grant OVER 48 months EVERY 1 month CLIFF 1 year
+        `),
+      ).toEqual([]);
+    });
+
+    it("skips a cross-unit cliff it can't compare without an anchor", () => {
+      // A days cliff over a months grid has no static span comparison.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT grant OVER 2 months EVERY 1 month CLIFF 100 days
+        `),
+      ).toEqual([]);
+    });
+
+    it("flags a THEN tail whose cliff outruns its own segment", () => {
+      const flagged = flaggedOf(`
+        VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month
+        THEN VEST OVER 4 months EVERY 1 month CLIFF 18 months
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("warning");
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import {
   AndCondition,
+  ChainedSchedule,
   Condition,
   EarlierOfSchedule,
   EarlierOfVestingNode,
@@ -41,7 +42,7 @@ export interface LintContext {
 export type Visitor = Partial<{
   Program: (node: Program) => void;
   Statement: (node: Statement, path: NodePath) => void;
-  Schedule: (node: Schedule, path: NodePath) => void;
+  Schedule: (node: Schedule | ChainedSchedule, path: NodePath) => void;
   ScheduleSelector: (
     node: EarlierOfSchedule | LaterOfSchedule,
     path: NodePath,

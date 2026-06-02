@@ -27,6 +27,7 @@ function walkScheduleExpr(
 ) {
   if (e.type === "SINGLETON") {
     const schedule = e;
+    v.Schedule?.(schedule, path);
     if (schedule.vesting_start)
       walkVestingNodeExpr(
         schedule.vesting_start,
