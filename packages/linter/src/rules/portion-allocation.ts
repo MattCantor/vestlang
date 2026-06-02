@@ -19,9 +19,10 @@ const gcd = (a: number, b: number): number => {
 
 // Sum a list of portions exactly, keeping the result reduced so the message
 // can name the fraction without float drift.
-function sumPortions(
-  portions: { numerator: number; denominator: number }[],
-): { numerator: number; denominator: number } {
+function sumPortions(portions: { numerator: number; denominator: number }[]): {
+  numerator: number;
+  denominator: number;
+} {
   let num = 0;
   let den = 1;
   for (const p of portions) {
@@ -34,8 +35,7 @@ function sumPortions(
   return { numerator: num, denominator: den };
 }
 
-const pct = (num: number, den: number) =>
-  `${Math.round((num / den) * 100)}%`;
+const pct = (num: number, den: number) => `${Math.round((num / den) * 100)}%`;
 
 export const rulePortionAllocation: RuleModule = {
   meta,
@@ -59,10 +59,7 @@ export const rulePortionAllocation: RuleModule = {
         if (hasQuantity) {
           program.forEach((s, i) => {
             const a = s.amount;
-            if (
-              a.type === "PORTION" &&
-              a.numerator === a.denominator
-            ) {
+            if (a.type === "PORTION" && a.numerator === a.denominator) {
               ctx.report({
                 ruleId: id,
                 message:
