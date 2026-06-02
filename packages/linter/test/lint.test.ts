@@ -60,7 +60,7 @@ describe("@vestlang/linter", () => {
   describe("portion-allocation", () => {
     it("errors when bare statements over-allocate (default 100% each)", () => {
       const diagnostics = diagnosticsOf(`
-        [VEST OVER 2 years EVERY 1 year, VEST OVER 2 years EVERY 1 year]
+        VEST OVER 2 years EVERY 1 year PLUS VEST OVER 2 years EVERY 1 year
       `);
       const flagged = diagnostics.filter(
         (d) => d.ruleId === "portion-allocation",
@@ -71,7 +71,7 @@ describe("@vestlang/linter", () => {
 
     it("is clean when portions sum to exactly 100%", () => {
       const diagnostics = diagnosticsOf(`
-        [1/2 VEST OVER 2 years EVERY 1 year, 1/2 VEST OVER 2 years EVERY 1 year]
+        1/2 VEST OVER 2 years EVERY 1 year PLUS 1/2 VEST OVER 2 years EVERY 1 year
       `);
       expect(
         diagnostics.filter((d) => d.ruleId === "portion-allocation"),
@@ -80,7 +80,7 @@ describe("@vestlang/linter", () => {
 
     it("errors when explicit portions over-allocate (sum 5/4)", () => {
       const diagnostics = diagnosticsOf(`
-        [3/4 VEST OVER 2 years EVERY 1 year, 1/2 VEST OVER 2 years EVERY 1 year]
+        3/4 VEST OVER 2 years EVERY 1 year PLUS 1/2 VEST OVER 2 years EVERY 1 year
       `);
       const flagged = diagnostics.filter(
         (d) => d.ruleId === "portion-allocation",
@@ -91,7 +91,7 @@ describe("@vestlang/linter", () => {
 
     it("warns when portions under-allocate (sum 1/2)", () => {
       const diagnostics = diagnosticsOf(`
-        [1/4 VEST OVER 2 years EVERY 1 year, 1/4 VEST OVER 2 years EVERY 1 year]
+        1/4 VEST OVER 2 years EVERY 1 year PLUS 1/4 VEST OVER 2 years EVERY 1 year
       `);
       const flagged = diagnostics.filter(
         (d) => d.ruleId === "portion-allocation",
@@ -111,7 +111,7 @@ describe("@vestlang/linter", () => {
 
     it("does not flag quantity programs (out of scope)", () => {
       const diagnostics = diagnosticsOf(`
-        [100 VEST OVER 2 years EVERY 1 year, 100 VEST OVER 2 years EVERY 1 year]
+        100 VEST OVER 2 years EVERY 1 year PLUS 100 VEST OVER 2 years EVERY 1 year
       `);
       expect(
         diagnostics.filter((d) => d.ruleId === "portion-allocation"),
@@ -120,7 +120,7 @@ describe("@vestlang/linter", () => {
 
     it("errors on a bare statement mixed with a quantity statement", () => {
       const diagnostics = diagnosticsOf(`
-        [100 VEST OVER 2 years EVERY 1 year, VEST OVER 2 years EVERY 1 year]
+        100 VEST OVER 2 years EVERY 1 year PLUS VEST OVER 2 years EVERY 1 year
       `);
       const flagged = diagnostics.filter(
         (d) => d.ruleId === "portion-allocation",

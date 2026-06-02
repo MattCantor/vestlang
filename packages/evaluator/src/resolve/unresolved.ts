@@ -42,6 +42,13 @@ export const unresolvedInstallments = (
   stmt: Statement,
   ctx: EvaluationContext,
 ): InstallmentSet => {
+  // Same restriction as the resolver: a chained THEN segment has no start until
+  // the sequencing pass fills it in, so it can't be materialized yet.
+  if (stmt.chained) {
+    throw new Error(
+      "THEN-chained vesting can't be evaluated yet: a chained segment's start is supplied by the sequencing pass, which is not implemented.",
+    );
+  }
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
   const res = evaluateScheduleExpr(stmt.expr, ctx);
 

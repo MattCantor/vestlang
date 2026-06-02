@@ -238,7 +238,7 @@ template (no fan-out) — `vest evaluate --program`, 100 shares:
 Two independent absolute-date grids on one grant can't be a single canonical template, so
 the program resolves to bare dated amounts with the reason — `vest evaluate --program`:
 
-`[0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months, 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months]` over 100 shares:
+`0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months` over 100 shares:
 
 | Amount | Date | State |
 |---:|:---|:---|

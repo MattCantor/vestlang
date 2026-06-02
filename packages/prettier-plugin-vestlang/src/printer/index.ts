@@ -2,7 +2,7 @@ import type { Program, Statement } from "@vestlang/types";
 import { AstPath, Doc as PrettierDoc, doc, Printer } from "prettier";
 import { toDoc, type Doc } from "@vestlang/render";
 
-const { group, indent, line, softline, ifBreak, hardline } = doc.builders;
+const { group, indent, line, softline, hardline } = doc.builders;
 
 /**
  * Map the renderer's prettier-free Doc IR onto prettier's own `doc.builders`.
@@ -21,8 +21,6 @@ function toPrettier(d: Doc): PrettierDoc {
       return line;
     case "softline":
       return softline;
-    case "ifBreak":
-      return ifBreak(toPrettier(d.broken), toPrettier(d.flat));
   }
 }
 

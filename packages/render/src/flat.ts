@@ -16,7 +16,5 @@ export function printFlat(doc: Doc): string {
       return " ";
     case "softline":
       return "";
-    case "ifBreak":
-      return printFlat(doc.flat);
   }
 }

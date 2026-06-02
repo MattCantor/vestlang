@@ -29,8 +29,8 @@ describe("Start & basics", () => {
     });
   });
 
-  it("list form parses with trailing comma", () => {
-    const ast = parse(`[ VEST FROM EVENT a, VEST FROM EVENT b, ]`);
+  it("PLUS composes statements into a flat list", () => {
+    const ast = parse(`VEST FROM EVENT a PLUS VEST FROM EVENT b`);
     expect(ast).toHaveLength(2);
 
     const first = ast[0].expr;
@@ -48,6 +48,62 @@ describe("Start & basics", () => {
       );
     const secondVestingStart = second.vesting_start as VestingNode;
     expect(secondVestingStart.base.value).toBe("b");
+  });
+});
+
+describe("THEN / PLUS composition", () => {
+  it("a THEN chain flattens to a head plus chained tails", () => {
+    const ast = asJSON(
+      parse(
+        `100 VEST FROM EVENT grant THEN 200 VEST OVER 12 months EVERY 1 month`,
+      ),
+    );
+    expect(ast).toHaveLength(2);
+
+    // The head carries its own start and is not chained.
+    expect(ast[0].chained).toBeUndefined();
+    expect(ast[0].expr.vesting_start.base.value).toBe("grant");
+
+    // The tail is marked chained and has no start of its own.
+    expect(ast[1].chained).toBe(true);
+    expect(ast[1].expr.vesting_start).toBeNull();
+    expect(ast[1].expr.periodicity).toEqual({
+      type: "MONTHS",
+      length: 1,
+      occurrences: 12,
+    });
+  });
+
+  it("every segment after the head is chained", () => {
+    const ast = parse(`VEST THEN VEST THEN VEST`);
+    expect(ast.map((s) => s.chained ?? false)).toEqual([false, true, true]);
+  });
+
+  it("THEN binds tighter than PLUS: A PLUS B THEN C is A PLUS (B THEN C)", () => {
+    const ast = parse(
+      `VEST FROM EVENT a PLUS VEST FROM EVENT b THEN VEST OVER 12 months EVERY 1 month`,
+    );
+    // Two parallel components flatten to three statements; only the segment
+    // after THEN is chained — C continues B, not the whole PLUS group.
+    expect(ast.map((s) => s.chained ?? false)).toEqual([false, false, true]);
+  });
+
+  it("FROM after THEN is a teaching error pointing at PLUS", () => {
+    expect(() =>
+      parse(`VEST FROM EVENT a THEN VEST FROM EVENT b`),
+    ).toThrowError(/PLUS/);
+  });
+
+  it("a group after THEN is a teaching error, not a raw token failure", () => {
+    expect(() => parse(`VEST FROM EVENT a THEN [ VEST ]`)).toThrowError(
+      /parallel group/,
+    );
+  });
+
+  it("the retired bracket list no longer parses", () => {
+    expect(() =>
+      parse(`[ VEST FROM EVENT a, VEST FROM EVENT b ]`),
+    ).toThrowError();
   });
 });
 
@@ -195,12 +251,13 @@ describe("Misc", () => {
     expect(() => parse(`VEST hello`)).toThrowError(); // no grammar path allows stray 'hello'
   });
 
-  it("whitespace/newlines around commas tolerated in lists", () => {
-    const ast = parse(`[
+  it("whitespace/newlines around PLUS and THEN are tolerated", () => {
+    const ast = parse(`
       VEST FROM EVENT a
-      ,
+      THEN VEST OVER 12 months EVERY 1 month
+      PLUS
       VEST FROM EVENT b
-    ]`);
-    expect(ast).toHaveLength(2);
+    `);
+    expect(ast.map((s) => s.chained ?? false)).toEqual([false, true, false]);
   });
 });

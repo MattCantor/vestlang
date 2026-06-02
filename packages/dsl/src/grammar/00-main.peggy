@@ -97,19 +97,27 @@
 }
 
 Start
-  = _ x:(list:VestStmtList { return list; }
-  / stmt:VestStmt { return [stmt]; }
-  ) _ EOF { return x; }
+  = _ p:Program _ EOF { return p; }
+
+// A program is one or more parallel components joined by PLUS. Each component is
+// a chain of one or more segments joined by THEN. We flatten the whole thing to
+// a single statement list: a chain contributes its head followed by its tails,
+// and PLUS just concatenates the components. The THEN tails carry a `chained`
+// flag so a later pass can tell where one component ends and the next begins.
+Program
+  = head:Chain tail:(_ "PLUS"i _ c:Chain { return c; })* {
+      return [head, ...tail].flat();
+    }
+
+Chain
+  = head:VestStmt tail:(_ "THEN"i _ t:VestTail { return t; })* {
+      return [head, ...tail];
+    }
 
 VestStmt
   = _ a:Amount? _"VEST"i _ s:ScheduleExpr _ {
       const amt = a ?? mkPortion(1, 1); // default 100%
       return { amount: amt, expr: s };
     }
-
-VestStmtList
-  = "[" _ head:VestStmt tail:(CommaSep VestStmt)* _ CommaSep? _ "]" {
-    return collectTwoOrMore(head, tail)
-  }
 
 EOF = !.

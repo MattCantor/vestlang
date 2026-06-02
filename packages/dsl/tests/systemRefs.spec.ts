@@ -39,10 +39,10 @@ describe("Bareword system references", () => {
     expect(bare).toEqual(kw);
   });
 
-  it("composed grantDate-anchored specified cliff parses as a 2-statement list", () => {
+  it("composed grantDate-anchored specified cliff parses as a 2-component program", () => {
     const ast = parse(
-      `[ .3 VEST FROM grantDate OVER 12 months EVERY 12 months,` +
-        ` .7 VEST FROM grantDate + 12 months OVER 36 months EVERY 1 month ]`,
+      `.3 VEST FROM grantDate OVER 12 months EVERY 12 months` +
+        ` PLUS .7 VEST FROM grantDate + 12 months OVER 36 months EVERY 1 month`,
     );
     expect(ast).toHaveLength(2);
     const a = ast[0].expr;

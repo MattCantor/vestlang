@@ -36,7 +36,8 @@ const corpus = [
   "VEST FROM EVENT start OR(BEFORE EVENT a, AND(BEFORE EVENT b, AFTER EVENT c))",
   "VEST FROM LATER OF(EVENT a, EVENT b, EVENT c)",
   "VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
-  "[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]",
+  "1/4 VEST CLIFF 12 months PLUS 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month",
+  "100 VEST FROM EVENT grant OVER 12 months EVERY 1 month THEN 200 VEST OVER 24 months EVERY 1 month",
 ];
 
 const widths = [WIDE, 80, 40, 20];
@@ -108,16 +109,14 @@ describe("canonical two-shape layout", () => {
     `);
   });
 
-  it("breaks a program one statement per line, each statement deciding for itself", async () => {
+  it("breaks a program at PLUS, each component deciding for itself", async () => {
     const prog =
-      "[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]";
+      "1/4 VEST CLIFF 12 months PLUS 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month";
     expect(await fmt(prog, 40)).toMatchInlineSnapshot(`
-      "[
-        1/4 VEST CLIFF 12 months,
-        3/4 VEST
-          FROM EVENT cliff
-          OVER 36 months EVERY 1 month,
-      ]
+      "1/4 VEST CLIFF 12 months
+      PLUS 3/4 VEST
+        FROM EVENT cliff
+        OVER 36 months EVERY 1 month
       "
     `);
   });

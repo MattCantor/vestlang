@@ -48,6 +48,7 @@ export {
   RawVestingPeriod,
   Schedule,
   RawSchedule,
+  ChainedSchedule,
   LaterOfSchedule,
   EarlierOfSchedule,
   ScheduleExpr,

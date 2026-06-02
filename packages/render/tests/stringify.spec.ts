@@ -284,13 +284,32 @@ describe("complex examples", () => {
  * ------------------------ */
 
 describe("program (multiple statements)", () => {
-  it("stringifies program with multiple statements", () => {
-    const result = roundTrip(`[
-      1/4 VEST CLIFF 12 months,
+  it("joins parallel components with PLUS", () => {
+    const result = roundTrip(`
+      1/4 VEST CLIFF 12 months
+      PLUS
       3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month
-    ]`);
+    `);
     expect(result).toBe(
-      "[ 1/4 VEST CLIFF 12 months, 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month ]",
+      "1/4 VEST CLIFF 12 months PLUS 3/4 VEST FROM EVENT cliff OVER 36 months EVERY 1 month",
+    );
+  });
+
+  it("chains segments with THEN; the tail prints no FROM", () => {
+    const result = roundTrip(
+      `100 VEST FROM EVENT grant OVER 12 months EVERY 1 month THEN 200 VEST OVER 24 months EVERY 1 month`,
+    );
+    expect(result).toBe(
+      "100 VEST FROM EVENT grant OVER 12 months EVERY 1 month THEN 200 VEST OVER 24 months EVERY 1 month",
+    );
+  });
+
+  it("THEN binds tighter than PLUS", () => {
+    const result = roundTrip(
+      `VEST FROM EVENT a PLUS VEST FROM EVENT b THEN VEST OVER 12 months EVERY 1 month`,
+    );
+    expect(result).toBe(
+      "VEST FROM EVENT a PLUS VEST FROM EVENT b THEN VEST OVER 12 months EVERY 1 month",
     );
   });
 });
@@ -344,13 +363,21 @@ describe("round-trip invariants", () => {
     expect(second).toBe(first);
   });
 
-  it("round-trip preserves semantics for complex schedule", () => {
-    const src = `[
-      1/4 VEST CLIFF 12 months,
+  it("round-trip preserves semantics for a parallel program", () => {
+    const src = `
+      1/4 VEST CLIFF 12 months
+      PLUS
       3/4 VEST
         FROM EVENT cliffEnd
         OVER 36 months EVERY 1 month
-    ]`;
+    `;
+    const first = roundTrip(src);
+    const second = roundTrip(first);
+    expect(second).toBe(first);
+  });
+
+  it("round-trip is idempotent for a THEN chain", () => {
+    const src = `100 VEST FROM EVENT grant OVER 12 months EVERY 1 month THEN 200 VEST OVER 24 months EVERY 1 month`;
     const first = roundTrip(src);
     const second = roundTrip(first);
     expect(second).toBe(first);
