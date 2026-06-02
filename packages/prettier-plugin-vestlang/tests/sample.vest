@@ -1,4 +1,1 @@
-VEST SCHEDULE
-  FROM EVENT ipo
-  OVER 48 months
-  EVERY 1 month
+VEST FROM EVENT ipo OVER 48 months EVERY 1 month CLIFF 12 months
