@@ -1,5 +1,6 @@
 import type {
   Amount,
+  ChainedSchedule,
   Condition,
   Constraint,
   Duration,
@@ -13,15 +14,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import {
-  group,
-  ifBreak,
-  indent,
-  join,
-  line,
-  softline,
-  type Doc,
-} from "./doc.js";
+import { group, indent, join, line, softline, type Doc } from "./doc.js";
 
 /**
  * The single AST → Doc traversal. Both renderings descend from here: the flat
@@ -46,15 +39,24 @@ export function toDoc(node: Statement | Program): Doc {
 function toDocProgram(p: Program): Doc {
   if (p.length === 0) return "";
   if (p.length === 1) return toDocStatement(p[0]);
-  // `[ s1, s2 ]` when it fits; one statement per line with a trailing comma
-  // when it doesn't.
-  return group([
-    "[",
-    indent([line, join([",", line], p.map(toDocStatement))]),
-    ifBreak(","),
-    line,
-    "]",
-  ]);
+
+  // The flat statement list folds two structures together: a `chained` statement
+  // continues the chain begun by the statement before it, and any other
+  // statement opens a fresh one. Rebuild that grouping so the chains print with
+  // THEN between their segments and PLUS between the chains.
+  const chains: Statement[][] = [];
+  for (const s of p) {
+    if (s.chained && chains.length > 0) chains[chains.length - 1].push(s);
+    else chains.push([s]);
+  }
+
+  return group(join([line, kw("PLUS"), " "], chains.map(toDocChain)));
+}
+
+/** One chain: its segments joined by THEN (or just the segment, if it stands alone). */
+function toDocChain(segments: Statement[]): Doc {
+  if (segments.length === 1) return toDocStatement(segments[0]);
+  return group(join([line, kw("THEN"), " "], segments.map(toDocStatement)));
 }
 
 function toDocStatement(s: Statement): Doc {
@@ -63,15 +65,19 @@ function toDocStatement(s: Statement): Doc {
   if (!isEmpty(amount)) head.push(amount, " ");
   head.push(kw("VEST"));
 
-  // A singleton schedule becomes the expandable stanza: VEST on its own line,
-  // then each clause indented under it. A schedule selector is not a stanza —
-  // it rides next to VEST and breaks via its own paren-group.
-  if (s.expr.type === "SINGLETON") {
-    const clauses = scheduleClauses(s.expr);
-    if (clauses.length === 0) return group(head);
-    return group([head, indent(clauses.flatMap((c) => [line, c]))]);
-  }
+  // A chained tail is always a plain singleton body (it just has no FROM clause
+  // to emit), and a singleton head expands the same way. A selector head is not
+  // a stanza — it rides next to VEST and breaks via its own paren-group.
+  if (s.chained) return stanza(head, scheduleClauses(s.expr));
+  if (s.expr.type === "SINGLETON") return stanza(head, scheduleClauses(s.expr));
   return group([...head, " ", toDocScheduleExpr(s.expr)]);
+}
+
+/** VEST on its own line, then each clause indented under it; collapses to one
+ *  line when it fits. With no clauses, just the bare head. */
+function stanza(head: Doc[], clauses: Doc[]): Doc {
+  if (clauses.length === 0) return group(head);
+  return group([head, indent(clauses.flatMap((c) => [line, c]))]);
 }
 
 function toDocScheduleExpr(e: ScheduleExpr): Doc {
@@ -93,13 +99,15 @@ function toDocScheduleExpr(e: ScheduleExpr): Doc {
  * cadence (OVER…EVERY, one unbreakable unit), and an optional CLIFF. Returned
  * as a list so the statement can lay them inline or one-per-line.
  */
-function scheduleClauses(s: Schedule): Doc[] {
+function scheduleClauses(s: Schedule | ChainedSchedule): Doc[] {
   const clauses: Doc[] = [];
 
   // FROM clause:
+  //   - a chained tail has no start (it continues from the prior segment), so
+  //     there's nothing to emit
   //   - omit entirely if it's the default grantDate with no offsets/conditions
   //   - sugar `EVENT grantDate +N` back to the bare `FROM N` the grammar accepts
-  if (!isDefaultVestingStart(s.vesting_start)) {
+  if (s.vesting_start && !isDefaultVestingStart(s.vesting_start)) {
     const sugared = sugaredAnchorDuration(s.vesting_start, "grantDate");
     clauses.push([
       kw("FROM"),

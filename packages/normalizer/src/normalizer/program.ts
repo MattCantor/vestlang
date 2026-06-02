@@ -1,6 +1,7 @@
 import { normalizeVestingNode } from "./core.js";
 import { NormalizeAndSort } from "./utils.js";
 import {
+  ChainedSchedule,
   Duration,
   Offsets,
   RawSchedule,
@@ -24,10 +25,35 @@ type SYSTEM_EVENT = "grantDate" | "vestingStart";
  * `amount` comes already canonical from the grammar
  */
 export function normalizeStatement(s: RawStatement): Statement {
+  // A THEN tail has no start of its own — it continues from the previous
+  // segment's end. Leave its start null rather than filling in the grant date
+  // the way an ordinary statement's absent FROM is filled.
+  if (s.chained) {
+    return {
+      chained: true,
+      amount: s.amount,
+      expr: normalizeChainedSchedule(s.expr),
+    };
+  }
   return {
     amount: s.amount,
     expr: normalizeScheduleExpr(s.expr),
   };
+}
+
+/**
+ * Normalize a chained tail: same cliff/periodicity handling as a schedule, but
+ * the start stays null (the resolver supplies the handoff date later).
+ */
+function normalizeChainedSchedule(s: ChainedSchedule<"raw">): ChainedSchedule {
+  const periodicity = s.periodicity.cliff
+    ? {
+        ...s.periodicity,
+        cliff: normalizeCliff(s.periodicity.cliff),
+      }
+    : ({ ...s.periodicity } as VestingPeriod);
+
+  return { type: "SINGLETON", vesting_start: null, periodicity };
 }
 
 /**

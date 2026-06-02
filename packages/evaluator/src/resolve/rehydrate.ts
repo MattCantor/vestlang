@@ -51,13 +51,18 @@ export interface RehydrateResult {
  */
 export const reparseDefinition = (definition: string): VestingNodeExpr => {
   const program = normalizeProgram(parse(`VEST FROM ${definition}`));
-  const expr = program[0].expr;
-  if (expr.type !== "SINGLETON") {
+  const stmt = program[0];
+  // The wrapper is a single ordinary `VEST FROM …` statement, so it is never a
+  // chained tail; the guard is what lets us read its start as non-null.
+  if (stmt.chained) {
+    throw new Error("reparseDefinition: unexpected chained statement");
+  }
+  if (stmt.expr.type !== "SINGLETON") {
     throw new Error(
-      `reparseDefinition: expected a SINGLETON schedule, got ${expr.type}`,
+      `reparseDefinition: expected a SINGLETON schedule, got ${stmt.expr.type}`,
     );
   }
-  return expr.vesting_start;
+  return stmt.expr.vesting_start;
 };
 
 /** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements. */

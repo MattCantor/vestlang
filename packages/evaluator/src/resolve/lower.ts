@@ -119,6 +119,15 @@ export const resolveStatements = (
   totalShares: number,
 ): StmtResolution[] =>
   program.map((stmt) => {
+    // A chained THEN segment has no start of its own — it begins where the
+    // previous segment ended. Computing that handoff is the sequencing pass,
+    // which isn't wired up yet, so a chain can be parsed and printed but not
+    // evaluated.
+    if (stmt.chained) {
+      throw new Error(
+        "THEN-chained vesting can't be evaluated yet: a chained segment's start is supplied by the sequencing pass, which is not implemented.",
+      );
+    }
     const percentage = amountToFraction(stmt.amount, totalShares);
     const res = evaluateScheduleExpr(stmt.expr, ctx);
 

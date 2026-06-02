@@ -226,7 +226,8 @@ describe("inferSchedule — superposition", () => {
       date: "2025-06-15",
       amount: 10000,
     });
-    expect(result.dsl).toMatch(/\[/);
+    // Two components (the uniform plus the one-off bonus) compose with PLUS.
+    expect(result.dsl).toMatch(/PLUS/);
   });
 
   it("two cadences (quarterly yr 1 + monthly yr 2+) → two UNIFORMs", () => {
@@ -457,8 +458,8 @@ describe("inferSchedule — round-trip", () => {
       policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     },
     {
-      name: "multi-statement program (list syntax)",
-      dsl: "[24000 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 1 month, 24000 VEST FROM DATE 2025-06-01]",
+      name: "multi-statement program (PLUS composition)",
+      dsl: "24000 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 1 month PLUS 24000 VEST FROM DATE 2025-06-01",
       grantDate: "2024-01-01",
       grantQuantity: 48000,
       policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",

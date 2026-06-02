@@ -16,8 +16,7 @@ export type Doc =
   | { kind: "group"; contents: Doc }
   | { kind: "indent"; contents: Doc }
   | { kind: "line" }
-  | { kind: "softline" }
-  | { kind: "ifBreak"; broken: Doc; flat: Doc };
+  | { kind: "softline" };
 
 export function group(contents: Doc): Doc {
   return { kind: "group", contents };
@@ -32,11 +31,6 @@ export const line: Doc = { kind: "line" };
 
 /** Nothing when flat, a newline when its group breaks. */
 export const softline: Doc = { kind: "softline" };
-
-/** `broken` when the enclosing group breaks, `flat` otherwise (default ""). */
-export function ifBreak(broken: Doc, flat: Doc = ""): Doc {
-  return { kind: "ifBreak", broken, flat };
-}
 
 /** Intersperse `sep` between `items`. */
 export function join(sep: Doc, items: Doc[]): Doc {

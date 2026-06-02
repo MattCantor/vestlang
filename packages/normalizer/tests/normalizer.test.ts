@@ -17,10 +17,11 @@ function norm(src: string): Program {
   return normalizeProgram(ast);
 }
 
-/** Throw error if the first statement is not a singleton */
+/** Throw error if the first statement is not a singleton (and not a chained
+ *  tail, which carries no start of its own — these tests never use one). */
 function getSingleton(program: Program) {
   const stmt = program[0];
-  if (!stmt || stmt.expr.type !== "SINGLETON") {
+  if (!stmt || stmt.chained || stmt.expr.type !== "SINGLETON") {
     throw new Error("Expected first statement to be a SINGLETON");
   }
   return stmt.expr;

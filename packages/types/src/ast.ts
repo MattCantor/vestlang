@@ -193,10 +193,22 @@ export interface AmountPortion extends BaseAmount {
 }
 export type Amount = AmountQuantity | AmountPortion;
 
-export interface Statement<P extends Phase = "normalized"> {
-  amount: Amount;
-  expr: ScheduleExpr<P>;
+// A segment written after THEN. It continues the chain from the previous
+// segment's end, so it has no start of its own — the null `vesting_start` says
+// so, and the resolver fills the handoff date in at evaluation time. It is also
+// always a plain schedule, never a selector (a tail can't fan out the way a head
+// can), which is why we narrow `Schedule` rather than `ScheduleExpr`.
+export interface ChainedSchedule<P extends Phase = "normalized">
+  extends Omit<Schedule<P>, "vesting_start"> {
+  vesting_start: null;
 }
+
+// A statement is either an ordinary one with its own start, or a chained tail.
+// The `chained` flag is the discriminant, so reading the start of a tail without
+// first checking the flag is a type error rather than a runtime surprise.
+export type Statement<P extends Phase = "normalized"> =
+  | { chained?: false; amount: Amount; expr: ScheduleExpr<P> }
+  | { chained: true; amount: Amount; expr: ChainedSchedule<P> };
 
 export type RawStatement = Statement<"raw">;
 
