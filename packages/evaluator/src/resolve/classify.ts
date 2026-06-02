@@ -263,15 +263,23 @@ const unresolvedArm = (
   let sawPending = false; // an unfired-but-satisfiable portion
   let sawResolvedLive = false; // a fully-resolved portion
   program.forEach((stmt, i) => {
-    // A THEN tail has no start of its own to re-resolve here — the cursor pre-pass
-    // already handed it one (the date the previous segment ended on). In phase 2
-    // that's always a concrete date, so treat the tail like any other
-    // fully-resolved sibling and let the resolved producer materialize its
-    // tranches, rather than routing it through the start-from-scratch path below
-    // (which has nothing to work with). Event-origin tails are phase 3.
+    // A THEN tail has no start of its own to re-resolve here; the cursor pre-pass
+    // already handed it one, so we work from that resolution rather than the
+    // start-from-scratch path below (which has nothing to go on).
     if (stmt.chained) {
-      sawResolvedLive = true;
-      resolvedResolutions.push(build.resolutions[i]);
+      const tail = build.resolutions[i];
+      if (tail.start.state === "RESOLVED") {
+        // A date chain, or a chain off a fired event: the tail has a concrete
+        // date, so let the resolved producer materialize its tranches.
+        sawResolvedLive = true;
+        resolvedResolutions.push(tail);
+      } else {
+        // A chain off an event that hasn't fired: the tail can't vest yet. It
+        // contributes no tranches, only the blocker for what it's waiting on.
+        sawPending = true;
+        if (tail.start.state === "UNRESOLVED")
+          blockers.push(...tail.start.blockers);
+      }
       return;
     }
     const ev = unresolvedInstallments(stmt, ctx);
