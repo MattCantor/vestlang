@@ -111,6 +111,11 @@ export interface StmtResolution {
     | { state: "SYNTHETIC_EVENT"; expr: VestingNodeExpr; blockers: Blocker[] }
     | { state: "UNRESOLVED"; blockers: Blocker[] };
   cliff: LoweredCliff;
+  // True for a THEN tail (a segment that continues the previous one). The
+  // start above was injected by the chaining walk rather than read off the
+  // statement's own FROM, and buildTemplate uses this to word the right error
+  // when an event-anchored chain can't become a single template.
+  chained?: boolean;
 }
 
 /** Resolve one ordinary (non-chained) statement: its start comes from its own
@@ -224,15 +229,57 @@ const resolveNonChained = (
   };
 };
 
+// How the next THEN tail should begin. The chaining walk recomputes this after
+// every statement and hands it to the following tail.
+type ChainAnchor =
+  // A live date chain: the tail starts on `cursor` as a plain DATE.
+  | { kind: "DATE"; cursor: OCTDate }
+  // A chain whose head is an event that has already fired. The tail still steps
+  // forward by calendar math (off `cursor`), but it stays anchored to the same
+  // event so the firing guard in buildTemplate recognizes the whole run as one
+  // event-origin chain rather than a date template.
+  | { kind: "EVENT"; eventId: string; cursor: OCTDate }
+  // A chain whose head is an event with no date yet (unfired atomic event, or a
+  // selector still waiting on one). There's nothing to hand the tail, so the
+  // tail can't vest until the event arrives. We carry the head's blockers so the
+  // tail can report what it's waiting on.
+  | { kind: "PENDING"; blockers: Blocker[] }
+  // No chain in progress: we're at the first statement, or a prior statement
+  // didn't resolve to anything a tail could continue from.
+  | undefined;
+
+/** The anchor a following THEN tail inherits from the statement just resolved. */
+const anchorAfter = (
+  r: StmtResolution,
+  dom: EvaluationContext["vesting_day_of_month"],
+): ChainAnchor => {
+  const { occurrences, length, type } = r.periodicity;
+  if (r.start.state === "RESOLVED") {
+    const cursor = advanceCursor(r.start.date, occurrences, length, type, dom);
+    return r.start.base === "EVENT"
+      ? { kind: "EVENT", eventId: r.start.eventId!, cursor }
+      : { kind: "DATE", cursor };
+  }
+  // PENDING_EVENT / SYNTHETIC_EVENT / UNRESOLVED: the start has no date, so any
+  // tail behind it is pending on whatever the head is waiting on.
+  return { kind: "PENDING", blockers: r.start.blockers };
+};
+
 /**
  * Resolve every statement against runtime — the shared input to 4a and 4b.
  *
  * Statements joined by THEN form a "chain": each tail picks up the timeline
  * exactly where the previous segment ended, so the author never hand-writes the
- * handoff dates. We walk the program left to right carrying a `cursor` — the date
- * the previous segment finished on — and hand each tail that date as its start.
- * The cursor is advanced with core's own `advanceCursor`, so a chain's dates match
+ * handoff dates. We walk the program left to right carrying a `ChainAnchor` that
+ * describes where the next tail starts, and hand each tail that start. Cursor
+ * dates are advanced with core's own `advanceCursor`, so a chain's dates match
  * what the canonical compiler would produce, to the day.
+ *
+ * A chain headed on a fired event resolves its tails to concrete dates but keeps
+ * them anchored to that event; head and tails then read as the same event firing
+ * at different dates, which can't be one template, so it routes to events-only.
+ * A chain headed on an unfired event has no dates to hand out, so its tails stay
+ * unresolved until the event arrives.
  */
 export const resolveStatements = (
   program: Program,
@@ -241,62 +288,72 @@ export const resolveStatements = (
 ): StmtResolution[] => {
   const dom = ctx.vesting_day_of_month;
   const out: StmtResolution[] = [];
-  // Where the next THEN tail would start. Undefined means there's no live date
-  // chain to continue — either we're at the first statement, or the previous one
-  // was anchored to an event rather than a date.
-  let cursor: OCTDate | undefined;
+  let anchor: ChainAnchor;
 
   for (const stmt of program) {
     if (stmt.chained) {
-      // A THEN tail carries no start of its own; it begins at the cursor. If we
-      // don't have one, the chain's head was a named event, and sequencing dates
-      // off an event is a separate (phase 3) problem we don't handle yet.
-      if (cursor === undefined) {
+      // The grammar only ever emits a tail after a head or another tail, so a
+      // tail with no anchor is an internal bug, not a malformed program.
+      if (anchor === undefined) {
         throw new Error(
-          "event-origin THEN chains aren't supported yet: a chain whose head resolves to a named event can't be sequenced as a date template.",
+          "a chained THEN tail has no preceding statement to continue from; the chaining walk reached a tail with no live anchor.",
         );
       }
       const p = stmt.expr.periodicity;
+      const periodicity = {
+        type: p.type,
+        length: p.length,
+        occurrences: p.occurrences,
+      };
+      const percentage = amountToFraction(stmt.amount, totalShares);
+
+      if (anchor.kind === "PENDING") {
+        // The head's event hasn't fired, so there's no handoff date. The tail is
+        // unresolved on that event; later tails in the same chain stay pending
+        // too, so we leave the anchor untouched.
+        out.push({
+          percentage,
+          periodicity,
+          start: { state: "UNRESOLVED", blockers: anchor.blockers },
+          cliff: { state: "NONE" },
+          chained: true,
+        });
+        continue;
+      }
+
+      const date = anchor.cursor;
       out.push({
-        percentage: amountToFraction(stmt.amount, totalShares),
-        periodicity: {
-          type: p.type,
-          length: p.length,
-          occurrences: p.occurrences,
-        },
+        percentage,
+        periodicity,
         // The handoff date is this tail's start. A cliff on the tail therefore
         // measures from the handoff, exactly as a head cliff measures from the
-        // head's start — no special casing needed.
-        start: { state: "RESOLVED", date: cursor, base: "DATE" },
-        cliff: lowerCliff(
-          p.cliff,
-          cursor,
-          p.type,
-          p.length,
-          p.occurrences,
-          ctx,
-        ),
+        // head's start, with no special casing. An event-origin tail keeps the
+        // head's event id so buildTemplate can tell the chain apart from two
+        // independent portions that happen to share an event.
+        start:
+          anchor.kind === "EVENT"
+            ? {
+                state: "RESOLVED",
+                date,
+                base: "EVENT",
+                eventId: anchor.eventId,
+              }
+            : { state: "RESOLVED", date, base: "DATE" },
+        cliff: lowerCliff(p.cliff, date, p.type, p.length, p.occurrences, ctx),
+        chained: true,
       });
-      cursor = advanceCursor(cursor, p.occurrences, p.length, p.type, dom);
+      anchor = {
+        ...anchor,
+        cursor: advanceCursor(date, p.occurrences, p.length, p.type, dom),
+      };
       continue;
     }
 
     const resolution = resolveNonChained(stmt, ctx, totalShares);
     out.push(resolution);
     // A non-chained statement begins a fresh component, so the chain restarts
-    // here rather than continuing the previous one. Only a concrete date gives a
-    // following tail something to chain from; an event or unresolved start leaves
-    // nothing, so we drop the cursor.
-    cursor =
-      resolution.start.state === "RESOLVED" && resolution.start.base === "DATE"
-        ? advanceCursor(
-            resolution.start.date,
-            resolution.periodicity.occurrences,
-            resolution.periodicity.length,
-            resolution.periodicity.type,
-            dom,
-          )
-        : undefined;
+    // from this statement rather than continuing the previous one.
+    anchor = anchorAfter(resolution, dom);
   }
 
   return out;
@@ -428,9 +485,18 @@ export const buildTemplate = (
       if (!existing) {
         eventFirings.push({ event_id: eventId, date: firingDate });
       } else if (!eq(existing.date, firingDate)) {
+        // A chained tail produces this collision by design: a THEN chain off an
+        // event walks its segments forward from the event's firing, so the head
+        // and each tail land on the same event at different dates. That's a valid
+        // sequence, just not a single date template, so it falls to events-only
+        // (and would become a template if event chaining is ever supported).
+        // Without the chain, this is a genuine clash: two independent portions
+        // both floating to one event but wanting it on different days.
         return events({
           kind: "OVERLAPPING_ABSOLUTE_STARTS",
-          detail: `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
+          detail: r.chained
+            ? `An event-origin THEN chain anchored on "${eventId}" sequences its segments to different dates, which is not a single template; it classifies to events-only and would promote to a template if event chaining is later supported.`
+            : `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
         });
       }
     } else {
