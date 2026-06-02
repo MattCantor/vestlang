@@ -56,4 +56,77 @@ describe("@vestlang/linter", () => {
       expect(diagnostics).toEqual([]);
     });
   });
+
+  describe("portion-allocation", () => {
+    it("errors when bare statements over-allocate (default 100% each)", () => {
+      const diagnostics = diagnosticsOf(`
+        [VEST OVER 2 years EVERY 1 year, VEST OVER 2 years EVERY 1 year]
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("error");
+    });
+
+    it("is clean when portions sum to exactly 100%", () => {
+      const diagnostics = diagnosticsOf(`
+        [1/2 VEST OVER 2 years EVERY 1 year, 1/2 VEST OVER 2 years EVERY 1 year]
+      `);
+      expect(
+        diagnostics.filter((d) => d.ruleId === "portion-allocation"),
+      ).toEqual([]);
+    });
+
+    it("errors when explicit portions over-allocate (sum 5/4)", () => {
+      const diagnostics = diagnosticsOf(`
+        [3/4 VEST OVER 2 years EVERY 1 year, 1/2 VEST OVER 2 years EVERY 1 year]
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("error");
+    });
+
+    it("warns when portions under-allocate (sum 1/2)", () => {
+      const diagnostics = diagnosticsOf(`
+        [1/4 VEST OVER 2 years EVERY 1 year, 1/4 VEST OVER 2 years EVERY 1 year]
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("warning");
+    });
+
+    it("leaves a single bare statement alone (default 100% is correct)", () => {
+      const diagnostics = diagnosticsOf(`
+        VEST OVER 12 months EVERY 1 month
+      `);
+      expect(
+        diagnostics.filter((d) => d.ruleId === "portion-allocation"),
+      ).toEqual([]);
+    });
+
+    it("does not flag quantity programs (out of scope)", () => {
+      const diagnostics = diagnosticsOf(`
+        [100 VEST OVER 2 years EVERY 1 year, 100 VEST OVER 2 years EVERY 1 year]
+      `);
+      expect(
+        diagnostics.filter((d) => d.ruleId === "portion-allocation"),
+      ).toEqual([]);
+    });
+
+    it("errors on a bare statement mixed with a quantity statement", () => {
+      const diagnostics = diagnosticsOf(`
+        [100 VEST OVER 2 years EVERY 1 year, VEST OVER 2 years EVERY 1 year]
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("error");
+    });
+  });
 });
