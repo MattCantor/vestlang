@@ -10,7 +10,7 @@ import {
 } from "@vestlang/evaluator";
 import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
-import { stringify } from "@vestlang/stringify";
+import { stringify } from "@vestlang/render";
 import type {
   EvaluationContextInput,
   OCTDate,

@@ -141,7 +141,7 @@ export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
 
 /**
  * One externalized gate definition: the DSL the synthetic `event_id` stands in
- * for, plus an optional display name. `definition` is `@vestlang/stringify`
+ * for, plus an optional display name. `definition` is `@vestlang/render`
  * output — re-resolvable AND legible. Populated when a combinator-over-anchors
  * start mints a synthetic event; `{}` otherwise.
  */

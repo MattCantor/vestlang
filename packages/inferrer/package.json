@@ -20,7 +20,7 @@
   "dependencies": {
     "@vestlang/core": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
-    "@vestlang/stringify": "workspace:*",
+    "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {

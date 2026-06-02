@@ -50,7 +50,7 @@
     "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
-    "@vestlang/stringify": "workspace:*",
+    "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
     "rimraf": "^6.0.1",
     "tsup": "^8.0.0",

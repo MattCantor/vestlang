@@ -1,4 +1,4 @@
-import { stringify } from "@vestlang/stringify";
+import { stringify } from "@vestlang/render";
 import type {
   AllocationType,
   OCTDate,

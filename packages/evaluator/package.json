@@ -21,7 +21,7 @@
     "@vestlang/core": "workspace:*",
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
-    "@vestlang/stringify": "workspace:*",
+    "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {
