@@ -13,13 +13,27 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { join, type Doc } from "./doc.js";
+import {
+  group,
+  ifBreak,
+  indent,
+  join,
+  line,
+  softline,
+  type Doc,
+} from "./doc.js";
 
 /**
  * The single AST → Doc traversal. Both renderings descend from here: the flat
  * (infinite-width) print is the canonical string, the width-aware print is the
  * prettier formatter. The sugar collapse and pluralization live here and
  * nowhere else, so the two outputs can't disagree.
+ *
+ * The layout is adaptive and two-shape: a statement is either its one-line
+ * sentence form or its fully-expanded stanza (VEST alone, then FROM / the
+ * cadence / CLIFF each on its own indented line), never a partial mix. The
+ * break is all-or-nothing because the statement is one group; selectors and
+ * conditions are their own groups, so they expand independently.
  *
  * Operates on the NORMALIZED AST (vesting starts resolved to nodes, cliffs to
  * VestingNodeExpr). The prettier plugin normalizes in its parser before
@@ -32,22 +46,39 @@ export function toDoc(node: Statement | Program): Doc {
 function toDocProgram(p: Program): Doc {
   if (p.length === 0) return "";
   if (p.length === 1) return toDocStatement(p[0]);
-  // Multiple statements: `[ s1, s2 ]`.
-  return ["[", " ", join(", ", p.map(toDocStatement)), " ", "]"];
+  // `[ s1, s2 ]` when it fits; one statement per line with a trailing comma
+  // when it doesn't.
+  return group([
+    "[",
+    indent([line, join([",", line], p.map(toDocStatement))]),
+    ifBreak(","),
+    line,
+    "]",
+  ]);
 }
 
 function toDocStatement(s: Statement): Doc {
-  const parts: Doc[] = [];
-  parts.push(toDocAmount(s.amount));
-  parts.push(kw("VEST"));
-  parts.push(toDocScheduleExpr(s.expr));
-  return spaced(parts);
+  const head: Doc[] = [];
+  const amount = toDocAmount(s.amount);
+  if (!isEmpty(amount)) head.push(amount, " ");
+  head.push(kw("VEST"));
+
+  // A singleton schedule becomes the expandable stanza: VEST on its own line,
+  // then each clause indented under it. A schedule selector is not a stanza —
+  // it rides next to VEST and breaks via its own paren-group.
+  if (s.expr.type === "SINGLETON") {
+    const clauses = scheduleClauses(s.expr);
+    if (clauses.length === 0) return group(head);
+    return group([head, indent(clauses.flatMap((c) => [line, c]))]);
+  }
+  return group([...head, " ", toDocScheduleExpr(s.expr)]);
 }
 
 function toDocScheduleExpr(e: ScheduleExpr): Doc {
   switch (e.type) {
     case "SINGLETON":
-      return toDocSchedule(e);
+      // Inline form (e.g. as a selector item): no stanza breaking.
+      return spaced(scheduleClauses(e));
     case "LATER_OF":
     case "EARLIER_OF":
       return parenGroup(
@@ -57,33 +88,46 @@ function toDocScheduleExpr(e: ScheduleExpr): Doc {
   }
 }
 
-function toDocSchedule(s: Schedule): Doc {
-  const parts: Doc[] = [];
+/**
+ * The clauses of a singleton schedule, in grammar order: an optional FROM, the
+ * cadence (OVER…EVERY, one unbreakable unit), and an optional CLIFF. Returned
+ * as a list so the statement can lay them inline or one-per-line.
+ */
+function scheduleClauses(s: Schedule): Doc[] {
+  const clauses: Doc[] = [];
 
   // FROM clause:
   //   - omit entirely if it's the default grantDate with no offsets/conditions
   //   - sugar `EVENT grantDate +N` back to the bare `FROM N` the grammar accepts
   if (!isDefaultVestingStart(s.vesting_start)) {
     const sugared = sugaredAnchorDuration(s.vesting_start, "grantDate");
-    parts.push(kw("FROM"));
-    parts.push(sugared ?? toDocVestingNodeExpr(s.vesting_start));
+    clauses.push([
+      kw("FROM"),
+      " ",
+      sugared ?? toDocVestingNodeExpr(s.vesting_start),
+    ]);
   }
 
-  parts.push(toDocPeriodicity(s.periodicity));
+  const cadence = toDocPeriodicity(s.periodicity);
+  if (!isEmpty(cadence)) clauses.push(cadence);
 
   // CLIFF: same bare-duration sugar, anchored on vestingStart.
   if (s.periodicity.cliff) {
     const sugared = sugaredAnchorDuration(s.periodicity.cliff, "vestingStart");
-    parts.push(kw("CLIFF"));
-    parts.push(sugared ?? toDocVestingNodeExpr(s.periodicity.cliff));
+    clauses.push([
+      kw("CLIFF"),
+      " ",
+      sugared ?? toDocVestingNodeExpr(s.periodicity.cliff),
+    ]);
   }
 
-  return spaced(parts);
+  return clauses;
 }
 
 function toDocPeriodicity(p: VestingPeriod): Doc {
   if (p.length === 0) return "";
   const total = p.length * p.occurrences;
+  // OVER and EVERY are one clause and never split across lines.
   return `${kw("OVER")} ${total} ${unitFor(total, p.type)} ${kw("EVERY")} ${p.length} ${unitFor(p.length, p.type)}`;
 }
 
@@ -194,8 +238,18 @@ function unitFor(count: number, type: "MONTHS" | "DAYS"): string {
   return Math.abs(count) === 1 ? lower.slice(0, -1) : lower;
 }
 
+/**
+ * `KW(a, b)` when it fits; open paren, one item per indented line, close paren
+ * when it doesn't. Its own group, so it breaks independently of its context.
+ */
 function parenGroup(keyword: Doc, items: Doc[]): Doc {
-  return [keyword, "(", join(", ", items), ")"];
+  return group([
+    keyword,
+    "(",
+    indent([softline, join([",", line], items)]),
+    softline,
+    ")",
+  ]);
 }
 
 function isEmpty(d: Doc): boolean {

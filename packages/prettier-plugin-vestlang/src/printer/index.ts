@@ -2,7 +2,7 @@ import type { Program, Statement } from "@vestlang/types";
 import { AstPath, Doc as PrettierDoc, doc, Printer } from "prettier";
 import { toDoc, type Doc } from "@vestlang/render";
 
-const { group, indent, line, softline, ifBreak } = doc.builders;
+const { group, indent, line, softline, ifBreak, hardline } = doc.builders;
 
 /**
  * Map the renderer's prettier-free Doc IR onto prettier's own `doc.builders`.
@@ -29,6 +29,9 @@ function toPrettier(d: Doc): PrettierDoc {
 export const printer: Printer = {
   print(path: AstPath): PrettierDoc {
     const node = path.node as Statement | Program;
-    return toPrettier(toDoc(node));
+    // The trailing newline is a formatter convention and lives only here — the
+    // IR stays hardline-free so the flat (stringify) path can't be forced to
+    // wrap. Width-aware breaking is driven by prettier's built-in printWidth.
+    return [toPrettier(toDoc(node)), hardline];
   },
 };
