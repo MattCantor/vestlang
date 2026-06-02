@@ -5,6 +5,9 @@ dist/
 *.log
 
 # Feature design-scratch — kept local, not tracked
+docs/scratch/
+
+# Legacy per-file scratch entries (migrate into docs/scratch/ on main)
 docs/carta-conditional-vesting.md
 docs/carta-vesting-question-email.md
 docs/core-extended-split.md
