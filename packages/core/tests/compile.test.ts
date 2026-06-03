@@ -326,6 +326,81 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 });
 
+describe("compile — month-end chain matches its un-split grid (#34)", () => {
+  // Splitting a schedule into chained segments shouldn't change the dates it
+  // vests on. Start a monthly schedule on Jan 31: the first hop clamps to Feb 28
+  // (February has no 31st), and a naive chain would then anchor on the 28th and
+  // stay there. Carrying the Jan 31 origin through the chain springs the later
+  // tranches back onto the month-end the way a single un-split schedule does.
+
+  // Head: one tranche (Feb 28). Tail: two more (Mar, Apr), chaining off the head.
+  const chain: VestingScheduleTemplate = {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: DATE_BASE,
+        occurrences: 1,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 3 },
+      },
+      {
+        order: 2,
+        vesting_base: DATE_BASE,
+        occurrences: 2,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 2, denominator: 3 },
+      },
+    ],
+  };
+
+  // The same schedule written as one statement of three tranches.
+  const unsplit: VestingScheduleTemplate = {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: DATE_BASE,
+        occurrences: 3,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  };
+
+  const janEnd: VestingRuntime = { startDate: "2025-01-31" };
+
+  it("chains onto Feb 28, Mar 31, Apr 30 — not stuck on the 28th", () => {
+    expect(compile(chain, 3000, janEnd)).toEqual([
+      { date: "2025-02-28", amount: "1000" },
+      { date: "2025-03-31", amount: "1000" },
+      { date: "2025-04-30", amount: "1000" },
+    ]);
+  });
+
+  it("produces identical dates and amounts to the un-split schedule", () => {
+    expect(compile(chain, 3000, janEnd)).toEqual(
+      compile(unsplit, 3000, janEnd),
+    );
+  });
+
+  it("leaves a day-of-month that always fits untouched (the 15th)", () => {
+    // A mid-month start never clamps, so the chain and the un-split schedule were
+    // already identical; this pins that the origin threading didn't disturb it.
+    const midMonth: VestingRuntime = { startDate: "2025-01-15" };
+    const chained = compile(chain, 3000, midMonth);
+    expect(chained.map((e) => e.date)).toEqual([
+      "2025-02-15",
+      "2025-03-15",
+      "2025-04-15",
+    ]);
+    expect(chained).toEqual(compile(unsplit, 3000, midMonth));
+  });
+});
+
 describe("compile — grant_date handling (DATE-anchored)", () => {
   const monthlyNoCliff: VestingScheduleTemplate = {
     id: "t1",

@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { addMonthsRule, addDays, addPeriod, lt, gt, eq } from "../src/dates";
+import {
+  addMonthsRule,
+  addDays,
+  addPeriod,
+  advanceCursor,
+  lt,
+  gt,
+  eq,
+} from "../src/dates";
 
 // Day-of-month + overflow cases mirror evaluator/tests/time.addMonths.test.ts,
 // adapted to the direct VestingDayOfMonth parameter.
@@ -50,6 +58,41 @@ describe("addMonthsRule — VESTING_START_DAY_OR_LAST_DAY_OF_MONTH", () => {
 
   it("defaults to VESTING_START_DAY policy when omitted", () => {
     expect(addMonthsRule("2024-03-31", 1)).toBe("2024-04-30");
+  });
+});
+
+describe("addMonthsRule — origin carries the day-of-month across a clamp", () => {
+  // When a chain hands off on a short month the cursor gets clamped (Jan 31 + 1mo
+  // is Feb 28). Stepping further from that Feb 28 would normally stick on the 28th.
+  // Passing the chain's first date (Jan 31) as the origin tells the stepper which
+  // day to aim for, so the schedule springs back to the 31st where it fits.
+  it("steps from Feb 28 but lands on Mar 31 when origin is Jan 31", () => {
+    expect(
+      addMonthsRule(
+        "2025-02-28",
+        1,
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "2025-01-31",
+      ),
+    ).toBe("2025-03-31");
+  });
+
+  it("clamps the origin day to April's last day (30)", () => {
+    expect(
+      addMonthsRule(
+        "2025-02-28",
+        2,
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "2025-01-31",
+      ),
+    ).toBe("2025-04-30");
+  });
+
+  it("without an origin, the day comes from the date being stepped from", () => {
+    // No origin argument: Feb 28 stays the reference, so March holds the 28th.
+    expect(
+      addMonthsRule("2025-02-28", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
+    ).toBe("2025-03-28");
   });
 });
 
@@ -109,6 +152,40 @@ describe("addPeriod", () => {
   it("YEARS = months × 12 (with day-of-month clamping)", () => {
     expect(addPeriod("2024-02-29", 1, "YEARS")).toBe("2025-02-28");
     expect(addPeriod("2024-01-15", 2, "YEARS")).toBe("2026-01-15");
+  });
+
+  it("forwards the origin to the month stepper", () => {
+    expect(
+      addPeriod(
+        "2025-02-28",
+        1,
+        "MONTHS",
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "2025-01-31",
+      ),
+    ).toBe("2025-03-31");
+  });
+});
+
+describe("advanceCursor — origin forwarding", () => {
+  // advanceCursor steps a whole segment (occurrences × period) and hands the
+  // origin straight through. A 1-occurrence monthly segment from Feb 28 with the
+  // chain origin on Jan 31 ends on Mar 31, not Mar 28.
+  it("carries the chain origin through a segment hop", () => {
+    expect(
+      advanceCursor(
+        "2025-02-28",
+        1,
+        1,
+        "MONTHS",
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "2025-01-31",
+      ),
+    ).toBe("2025-03-31");
+  });
+
+  it("defaults the origin to the anchor when omitted", () => {
+    expect(advanceCursor("2025-02-28", 1, 1, "MONTHS")).toBe("2025-03-28");
   });
 });
 
