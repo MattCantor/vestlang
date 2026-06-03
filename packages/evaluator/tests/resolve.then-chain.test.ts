@@ -365,6 +365,93 @@ describe("resolveToCore — a sub-annual cliff on a month-end tail", () => {
   });
 });
 
+describe("resolveToCore — split-invariance across origins and periods", () => {
+  // The capstone guard for #34. Splitting a uniformly graded chain into a head and
+  // a tail must not move a single date or a single share: it has to compile to
+  // exactly what the same schedule written as ONE un-split statement compiles to.
+  //
+  // The oracle is that un-split compile, never a hand-built date array. The whole
+  // bug was in core's date stepper, so checking the split chain against
+  // addPeriod(origin, i, ...) would just be grading the modified stepper against
+  // itself. Comparing two independent ways of asking core to lay out the same grid
+  // doesn't have that blind spot.
+  //
+  // The matrix walks the day-of-month origins that can clamp on a short month — 29,
+  // 30, 31, plus a leap-year Feb 29 — against a monthly step and a yearly (12-month)
+  // step. Some cells genuinely drifted before the fix and others are controls that
+  // were always fine; both have to hold now.
+  //
+  // Genuine drift cells:
+  //   - monthly off Jan 29/30/31: the head->tail handoff clamps to Feb 28, and the
+  //     pre-fix tail stayed stuck on the 28th instead of springing back.
+  //   - yearly off the leap Feb 29: the day only comes back in the next leap year
+  //     (2028-02-29); a pre-fix tail handed Feb 28 never recovered the 29th.
+  // The rest preserve their day across the step and should sit still.
+  const monthEndPolicy = {
+    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  } as const;
+
+  // Four uniform tranches: a one-tranche head plus a three-tranche tail, every
+  // tranche an identical 1/4 of the grant. The handoff lands after tranche one —
+  // mid-grid — so the tail has to re-derive its day from the (possibly clamped)
+  // boundary. 100000 / 4 = 25000 divides cleanly, so no tranche rounds to zero and
+  // gets dropped, which would desync the two date sequences.
+  const origins: OCTDate[] = [
+    "2025-01-31",
+    "2025-01-30",
+    "2025-01-29",
+    "2024-02-29",
+  ];
+  const periods = [
+    { label: "MONTHS", length: 1 },
+    // The DSL has no YEARS unit; a year is twelve months. The case still reads
+    // "YEARS" because that's the period a reviewer is thinking about.
+    { label: "YEARS", length: 12 },
+  ] as const;
+
+  for (const origin of origins) {
+    for (const { label, length } of periods) {
+      it(`${origin} x ${label}: split chain matches its un-split equivalent`, () => {
+        const split: Program = [
+          head(portion(1, 4), origin, {
+            type: "MONTHS",
+            length,
+            occurrences: 1,
+          }),
+          then(portion(3, 4), { type: "MONTHS", length, occurrences: 3 }),
+        ];
+        const unsplit: Program = [
+          head(portion(1, 1), origin, {
+            type: "MONTHS",
+            length,
+            occurrences: 4,
+          }),
+        ];
+        const ctx = ctxInput(monthEndPolicy);
+        const splitResult = resolveToCore(split, ctx);
+        const unsplitResult = resolveToCore(unsplit, ctx);
+        if (
+          splitResult.kind !== "template" ||
+          unsplitResult.kind !== "template"
+        )
+          throw new Error("expected templates");
+        const splitEvents = compile(
+          splitResult.template,
+          splitResult.totalShares,
+          splitResult.runtime,
+        );
+        const unsplitEvents = compile(
+          unsplitResult.template,
+          unsplitResult.totalShares,
+          unsplitResult.runtime,
+        );
+        expect(splitEvents).toEqual(unsplitEvents);
+        expect(sum(splitEvents)).toBe(100000);
+      });
+    }
+  }
+});
+
 describe("resolveToCore — a lump head chains with the tail coincident", () => {
   // An empty span (occurrences 1, length 0) is a lump: it vests entirely at its
   // start and advances the cursor by nothing, so the tail begins on the same day.
