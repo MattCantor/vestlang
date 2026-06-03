@@ -1,6 +1,6 @@
 # Graded Chain Day-of-Month Drift — Preserve the Origin Day
 
-**Status:** Design Specification
+**Status:** Phased — ready for implementation
 **Issue:** #34 · **Related:** #23 (THEN/PLUS), #35 (cliff-past-segment linter)
 
 A chained DATE schedule should vest on the same days as the identical schedule
@@ -171,15 +171,26 @@ chain and is threaded per chain.
 | Site | Change |
 | --- | --- |
 | `core/dates.ts` | `addMonthsRule` gains optional `origin = iso` and reads the target day from `origin` in its `VESTING_START` branch. `addPeriod` / `advanceCursor` gain the same optional trailing `origin: OCTDate` and forward it. No new helper, no mapping. |
-| `core/compile.ts` | `expandStatement`'s **DATE** branch passes `runtime.startDate` as the origin into `expandAnchored` (grid + cliff date) and the `advanceCursor` handoff. The **EVENT** branch passes nothing (doesn't chain → default origin is its firing anchor). The template arm gets all its dates from core's `compile`, so this is the entire template-arm fix. |
-| `evaluator/resolve/lower.ts` | Carry the chain origin on `ChainAnchor` and stamp it onto each `StmtResolution` (new `origin` field). The three `advanceCursor` sites — `anchorAfter` (head → first handoff), the tail handoff in `resolveStatements`, and the chain-detection cursor in `buildTemplate` — **must all pass the same origin together** (see below). |
-| `evaluator/resolve/classify.ts` | The `events-only` arm materializes grids itself. Pass the per-resolution `origin` into `expandResolution` (grid + cliff), `cliffDateOf`, and `loadedResolvedInstallments`. |
-| `evaluator/resolve/cliff.ts` | `lowerCliff` / `measureDuration` must measure against the **same** origin as the grid that later replays the lowered cliff offset, or a tail cliff on a month-end chain lumps onto the wrong day. This is a consistency requirement, not an independent fix. |
+| `core/compile.ts` | `expandStatement`'s **DATE** branch passes `runtime.startDate` as the origin into `expandAnchored`'s **grid** and the `advanceCursor` handoff. The cliff date stays a durational offset from the segment anchor (origin-blind). The **EVENT** branch passes nothing (doesn't chain → default origin is its firing anchor). The template arm gets all its dates from core's `compile`, so this is the entire template-arm fix. |
+| `evaluator/resolve/lower.ts` | Carry the chain origin on `ChainAnchor` and stamp it onto each **tail** `StmtResolution` (new `origin` field); non-tail resolutions carry their own start as origin (the default), so the chain head and independent grids stay byte-unchanged. The three `advanceCursor` sites — `anchorAfter` (head → first handoff), the tail handoff in `resolveStatements`, and the chain-detection cursor in `buildTemplate` — **must all pass the same origin together** (see below). |
+| `evaluator/resolve/classify.ts` | The `events-only` arm materializes grids itself. Thread `origin` into the **grids** of `expandResolution` and `loadedResolvedInstallments`, and into `expandResolution`'s pre-cliff count. The cliff **date** in `expandResolution` / `cliffDateOf` stays origin-blind. Default to `r.origin ?? r.start.date` so independent (non-tail) grids anchor on their own start. |
+| `evaluator/resolve/cliff.ts` | The cliff **date** stays durational and origin-blind: `measureDuration` keeps probing from the segment anchor, unchanged. Only `lowerCliff`'s pre-cliff occurrence **count** takes the origin, so it rides the same sprung grid core re-partitions on — otherwise its baked `percentage` disagrees with that partition and the boundary tranche misallocates. Date math origin-blind, occurrence counting origin-aware. |
 
 **EVENT-origin THEN chains** (which route to `events-only`) take their origin from the
 **firing date**, not from `startDate`. The pre-pass already holds the firing date as
 the chain's origin in `anchorAfter`, so it's the same threading with a different origin
 value.
+
+**Cliffs ride along but stay durational.** A cliff's date is a duration from its own
+segment's anchor and never springs — the clamped `min(anchorDay, lastDay)` from the
+handoff is the correct cliff date, landing between grid points if it falls there. Core
+already commits to durational (not positional) cliffs, so this is no new semantic. The
+one origin-sensitivity is the pre-cliff occurrence *count*: it must be taken on the
+sprung grid — the same grid the lump later partitions — or the lowered `percentage`
+and the replayed partition disagree and the boundary tranche misallocates. It only
+bites the intersection of {sub-annual cliff} × {on a tail} × {month-end chain}; a
+12-month cliff preserves the day and the count never diverges. Counting is
+origin-aware; cliff-date math is not.
 
 **No change:** `evaluator/resolve/unresolved.ts` (drift-free — it steps from a fixed
 start and throws on chained tails; passes no origin) and `lowerDeferredCliff`
@@ -195,47 +206,158 @@ side and Mar 28 on the other, the `eq` check fails, and a valid chain mis-routes
 `events-only` via `OVERLAPPING_ABSOLUTE_STARTS`. So the three `advanceCursor` calls in
 `lower.ts` are a single atomic change — they all thread the origin or none do.
 
-## Phasing
+## Implementation Phases
 
-**Phase 1 — core.** Add the optional `origin` parameter to `addMonthsRule` /
-`addPeriod` / `advanceCursor` and thread `runtime.startDate` through `expandStatement`
-(DATE branch) / `expandAnchored`. Tests: a month-end chain compiled by core matches the
-un-split grid (Jan 31 → Feb 28, Mar 31, Apr 30); day-≤28, EVENT-anchored, and
-non-`VESTING_START` cases are byte-unchanged (they pass no origin).
+### Phase Dependencies
 
-**Phase 2 — evaluator cursor.** Add `origin` to `StmtResolution` and `ChainAnchor`; set
-it to the chain head in the pre-pass; thread it through the three `advanceCursor` sites
-together. Tests: the pre-pass-dates-equal-core-dates tripwire still holds; a month-end
-chain still classifies to `template` (detection didn't break).
+```
+Phase 1 (core)
+   |
+   v
+Phase 2 (evaluator cursor)
+   |
+   v
+Phase 3 (evaluator materialization)
+   |
+   v
+Phase 4 (capstone: split-invariance)
+```
 
-**Phase 3 — evaluator materialization.** Pass `origin` into `classify.ts` (grid, cliff,
-loaded) and `cliff.ts` (measurement). Tests: an `events-only` month-end chain
-materializes the un-split dates; a tail cliff on a month-end chain lands correctly.
+The chain is strictly linear: each phase consumes the `origin` plumbing the prior phase
+introduced. Phase 2 needs the optional `origin` parameter on the steppers (Phase 1).
+Phase 3 needs `origin` on `StmtResolution` / `ChainAnchor` (Phase 2). Phase 4's invariant
+can only hold once both the template arm (Phase 1) and the events-only arm (Phase 3)
+spring back.
 
-**Capstone — parametric split-invariance.** Generalize the existing drift-free
-tripwire (`resolve.then-chain.test.ts`, the first-of-month 12+12 chain) to a table over
-origin days × period types: `{2025-01-31, 2025-01-30, 2025-01-29, 2024-02-29 (leap)}` ×
-`{MONTHS, YEARS}`, each splitting a chain mid-grid on a boundary that lands in a short
-month. For each cell, assert the split chain and its single-statement un-split
-equivalent produce **identical dates and identical amounts** — both are split-invariant
-(the single running cumulative makes amounts match for an evenly-graded chain; this fix
-makes the dates match too). Put origin + period in the case name so a failure points to
-the exact cell.
+### Phase 1: Core steppers + template arm
 
-The oracle must be the **un-split compile**, never a hand-built date array from
-`addPeriod`: asserting against `addPeriod(origin, i, …)` tests the helper against
-itself — and against the very function this fix modifies. Comparing two compile outputs
-(chained vs. single statement) keeps the oracle independent of the change, because the
-single-statement path never touches the cross-statement handoff. This is the durable
-guard for the invariant; the example-based assertions in Phases 1–2 stay for
-legibility (they name *which* dates, which is what a human wants when a test goes red).
+**Goal:** Thread the chain origin through core so a template-arm month-end chain matches
+its un-split equivalent.
 
-**Characterization test to flip.** `evaluator/tests/resolve.then-chain.test.ts` has a
-`janEnd` case pinning the *current* drifted dates (`…02-28, …03-28, …04-28`) with a
-comment anticipating this fix. Its expectation flips to the sprung-back dates
-(`…02-28, …03-31, …04-30`). That diff is the fix landing, not a regression — keep it
-labeled as such, and keep the bulk of the chain suite on drift-free anchors so it
-stays invariant to this change.
+**Why First:** The steppers (`addMonthsRule` / `addPeriod` / `advanceCursor`) are the
+shared primitive every other phase calls. Their optional `origin` parameter has to exist
+before any evaluator caller can pass it.
+
+**Outputs:**
+- `addMonthsRule` gains optional `origin = iso`; its `VESTING_START` branch reads the
+  target day from `origin` (`min(originDay, lastDay)`).
+- `addPeriod` / `advanceCursor` gain an optional trailing `origin: OCTDate`, forwarded
+  untouched.
+- `expandStatement`'s DATE branch passes `runtime.startDate` into `expandAnchored`'s grid
+  and the `advanceCursor` handoff; the cliff date stays a durational offset (origin-blind);
+  the EVENT branch passes nothing (default origin is its firing anchor).
+
+**Definition of Done:**
+- [ ] A month-end chain compiled by core matches the un-split grid (Jan 31 → Feb 28,
+  Mar 31, Apr 30).
+- [ ] day-≤28, EVENT-anchored, and non-`VESTING_START` cases are byte-unchanged (no origin
+  passed).
+- [ ] Full CI suite green from root (build / typecheck / lint / knip / format:check / test).
+
+---
+
+### Phase 2: Evaluator cursor + chain detection
+
+**Goal:** Carry the chain origin through the evaluator's resolve-time cursor pre-pass
+without breaking chain detection.
+
+**Inputs:**
+- Optional `origin` on the core steppers (Phase 1).
+
+**Outputs:**
+- `origin` field on `StmtResolution` and `ChainAnchor`, set to the chain head
+  (`startDate` for DATE chains, the firing date for EVENT-origin chains); non-tail
+  resolutions carry their own start as origin, so the chain head and independent grids
+  stay byte-unchanged.
+- The three `advanceCursor` sites in `lower.ts` — `anchorAfter` (head → first handoff),
+  the tail handoff in `resolveStatements`, and the chain-detection cursor in
+  `buildTemplate` — thread the same origin **together** as one atomic change, or
+  detection mis-routes a valid chain to `events-only`.
+
+**Definition of Done:**
+- [ ] The pre-pass-dates-equal-core-dates tripwire still holds.
+- [ ] A month-end chain still classifies to `template` (detection didn't break).
+- [ ] Full CI suite green from root.
+
+---
+
+### Phase 3: Evaluator materialization + characterization flip
+
+**Goal:** Spring the dates back on the `events-only` arm and align the pre-cliff count
+with the sprung grid.
+
+**Inputs:**
+- `origin` on `StmtResolution` / `ChainAnchor` (Phase 2).
+
+**Outputs:**
+- `origin` threaded into the grids of `expandResolution` and `loadedResolvedInstallments`
+  (`classify.ts`) and into `expandResolution`'s pre-cliff count, defaulting to
+  `r.origin ?? r.start.date` so independent grids anchor on their own start.
+- `origin` threaded into `lowerCliff`'s pre-cliff occurrence **count** (`cliff.ts`); the
+  cliff *date* math — the selector, `measureDuration`, the cliff-date `addPeriod`,
+  `cliffDateOf` — stays origin-blind, so a durational cliff lands wherever its duration
+  puts it (between grid points if need be).
+- The `janEnd` characterization case flipped from the drifted dates (`…02-28, …03-28,
+  …04-28`) to the sprung-back dates (`…02-28, …03-31, …04-30`), labeled as the fix landing.
+
+**Definition of Done:**
+- [ ] An `events-only` month-end chain materializes the un-split dates.
+- [ ] A *sub-annual* tail cliff on a month-end chain keeps its lump percentage and
+  post-cliff tranche amounts consistent with the sprung grid.
+- [ ] `janEnd` expectation flipped; the rest of the chain suite stays on drift-free anchors
+  and is unchanged.
+- [ ] Full CI suite green from root.
+
+---
+
+### Phase 4: Capstone — parametric split-invariance
+
+**Goal:** Lock the split-invariant with a parametric guard whose oracle is independent of
+the change.
+
+**Inputs:**
+- A fully sprung template arm (Phase 1) and events-only arm (Phase 3).
+
+**Outputs:**
+- Generalize the existing drift-free tripwire (`resolve.then-chain.test.ts`, the
+  first-of-month 12+12 chain) to a table over origin days × period types:
+  `{2025-01-31, 2025-01-30, 2025-01-29, 2024-02-29 (leap)}` × `{MONTHS, YEARS}`, each
+  splitting a chain mid-grid on a boundary that lands in a short month.
+- Each cell built uniformly graded (head amount/occ == tail amount/occ, so a
+  single-statement equivalent exists at all) with totals that are clean multiples of the
+  occurrence count — core drops zero-amount events, so a tranche that rounds to zero on
+  one path but not the other would break even the *date* equality. Origin + period in the
+  case name so a failure points to the exact cell.
+
+**Definition of Done:**
+- [ ] For each cell, the split chain and its single-statement un-split equivalent produce
+  **identical dates and identical amounts**.
+- [ ] The oracle is the un-split **compile**, never a hand-built `addPeriod` array
+  (asserting against `addPeriod(origin, i, …)` would test the modified helper against
+  itself). The example-based assertions in Phases 1–3 stay for legibility — they name
+  *which* dates, which is what a human wants when a test goes red.
+- [ ] Full CI suite green from root.
+
+---
+
+## Phase Checklist
+
+### Phase 1: Core steppers + template arm
+- [ ] `packages/core/src/dates.ts` — `addMonthsRule` (`VESTING_START` branch), `addPeriod`, `advanceCursor`
+- [ ] `packages/core/src/compile.ts` — `expandStatement` DATE branch, `expandAnchored`
+- [ ] core tests — month-end chain vs un-split grid; day-≤28 / EVENT / non-`VESTING_START` unchanged
+
+### Phase 2: Evaluator cursor + chain detection
+- [ ] `packages/evaluator/src/resolve/lower.ts` — `origin` on `StmtResolution` / `ChainAnchor`; `anchorAfter`, `resolveStatements` handoff, `buildTemplate` detection cursor (atomic)
+- [ ] evaluator tests — pre-pass == core-dates tripwire; month-end chain classifies `template`
+
+### Phase 3: Evaluator materialization + characterization flip
+- [ ] `packages/evaluator/src/resolve/classify.ts` — `expandResolution`, `loadedResolvedInstallments` grids + pre-cliff count
+- [ ] `packages/evaluator/src/resolve/cliff.ts` — `lowerCliff` pre-cliff count (cliff-date math origin-blind)
+- [ ] `packages/evaluator/tests/resolve.then-chain.test.ts` — flip `janEnd`
+
+### Phase 4: Capstone — parametric split-invariance
+- [ ] `packages/evaluator/tests/resolve.then-chain.test.ts` — parametric origin × period table
 
 ## Open question / checkpoint
 
