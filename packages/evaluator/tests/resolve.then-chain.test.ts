@@ -14,6 +14,8 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
+import { resolveStatements } from "../src/resolve/lower";
+import { createEvaluationContext } from "../src/utils";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -195,6 +197,48 @@ describe("resolveToCore — month-end day-of-month (#34 fixed in core)", () => {
       ctxInput({ vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH" }),
     );
     if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(dates(events)).toEqual(["2025-02-28", "2025-03-31", "2025-04-30"]);
+  });
+});
+
+describe("resolveToCore — month-end chain, resolve pre-pass agrees with core", () => {
+  // The resolver walks the chain itself to hand each tail its start date, in
+  // parallel to what core's compiler computes. Those two walks have to land on
+  // the same days or a chain misbehaves. A three-segment month-end chain is the
+  // smallest case that catches a drift: the head→tail1 handoff (Jan 31 + 1mo)
+  // clamps to Feb 28, and it's the *next* step off Feb 28 that reveals whether
+  // the day-of-month springs back to the 31st or stays stuck on the 28th.
+  const monthly1 = { type: "MONTHS", length: 1, occurrences: 1 } as const;
+  const janEnd3: Program = [
+    head(portion(1, 3), "2025-01-31", monthly1),
+    then(portion(1, 3), monthly1),
+    then(portion(1, 3), monthly1),
+  ];
+  const defaultPolicy = ctxInput({
+    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  });
+
+  it("resolves each tail's start to the sprung-back day, not the clamped one", () => {
+    // Reach past resolveToCore to the pre-pass itself, so this checks the
+    // resolver's own cursor walk rather than the dates core ends up compiling.
+    const ctx = createEvaluationContext(defaultPolicy);
+    const resolutions = resolveStatements(janEnd3, ctx, ctx.grantQuantity);
+    const starts = resolutions.map((r) =>
+      r.start.state === "RESOLVED" ? r.start.date : null,
+    );
+    // tail2 lands on Mar 31, not Mar 28: the Feb 28 handoff didn't capture the
+    // chain's day-of-month.
+    expect(starts).toEqual(["2025-01-31", "2025-02-28", "2025-03-31"]);
+  });
+
+  it("still classifies to one template and compiles to the un-split grid", () => {
+    // Springing the cursor back must not break the check that decides whether a
+    // segment continues the chain; the whole thing should stay one template.
+    const result = resolveToCore(janEnd3, defaultPolicy);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements).toHaveLength(3);
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(dates(events)).toEqual(["2025-02-28", "2025-03-31", "2025-04-30"]);
   });

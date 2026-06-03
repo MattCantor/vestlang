@@ -285,9 +285,9 @@ without breaking chain detection.
   detection mis-routes a valid chain to `events-only`.
 
 **Definition of Done:**
-- [ ] The pre-pass-dates-equal-core-dates tripwire still holds.
-- [ ] A month-end chain still classifies to `template` (detection didn't break).
-- [ ] Full CI suite green from root.
+- [x] The pre-pass-dates-equal-core-dates tripwire still holds.
+- [x] A month-end chain still classifies to `template` (detection didn't break).
+- [x] Full CI suite green from root.
 
 ---
 
@@ -359,8 +359,8 @@ the change.
 - [x] `packages/evaluator/tests/resolve.then-chain.test.ts` — `janEnd` default-policy flip (template arm; see Phase 1 note)
 
 ### Phase 2: Evaluator cursor + chain detection
-- [ ] `packages/evaluator/src/resolve/lower.ts` — `origin` on `StmtResolution` / `ChainAnchor`; `anchorAfter`, `resolveStatements` handoff, `buildTemplate` detection cursor (atomic)
-- [ ] evaluator tests — pre-pass == core-dates tripwire; month-end chain classifies `template`
+- [x] `packages/evaluator/src/resolve/lower.ts` — `origin` on `StmtResolution` / `ChainAnchor`; `anchorAfter`, `resolveStatements` handoff, `buildTemplate` detection cursor (atomic)
+- [x] evaluator tests — pre-pass == core-dates tripwire; month-end chain classifies `template`
 
 ### Phase 3: Evaluator materialization + characterization flip
 - [ ] `packages/evaluator/src/resolve/classify.ts` — `expandResolution`, `loadedResolvedInstallments` grids + pre-cliff count
