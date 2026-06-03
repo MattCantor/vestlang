@@ -57,10 +57,14 @@ const expandResolution = (
   if (r.start.state !== "RESOLVED") return [];
   const dom = ctx.vesting_day_of_month;
   const anchor = r.start.date;
+  // For a chain tail, `anchor` is the clamped handoff (Feb 28 off a Jan 31 head)
+  // while `origin` keeps the chain's first day (the 31st), so the grid below
+  // springs back to the month-end where it can. A non-tail is its own origin.
+  const origin = r.origin ?? anchor;
   const { type, length: period, occurrences: N } = r.periodicity;
   const stmtFraction = r.percentage;
   const gridDate = (i: number): string =>
-    addPeriod(anchor, i * period, type, dom);
+    addPeriod(anchor, i * period, type, dom, origin);
   const ev = (date: string, fraction: Fraction, occ: number): RawEv => ({
     date,
     fraction,
@@ -167,10 +171,14 @@ const loadedResolvedInstallments = (
   for (const r of resolutions) {
     if (r.start.state !== "RESOLVED") continue;
     const anchor = r.start.date;
+    // Same as expandResolution: a tail's grid takes its day-of-month from the
+    // chain origin so a month-end chain doesn't drift after a short-month
+    // boundary; a non-tail falls back to its own start.
+    const origin = r.origin ?? anchor;
     const { type, length: period, occurrences: N } = r.periodicity;
     const sq = floorSharesAt(totalShares, r.percentage);
     let dates = Array.from({ length: N }, (_, i) =>
-      addPeriod(anchor, (i + 1) * period, type, dom),
+      addPeriod(anchor, (i + 1) * period, type, dom, origin),
     );
     let amounts = allocateVector(sq, N, ctx.allocation_type);
     if (ctx.events.grantDate) {
