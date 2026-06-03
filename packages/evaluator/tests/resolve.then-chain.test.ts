@@ -285,6 +285,86 @@ describe("resolveToCore — a cliff on a tail measures from the handoff", () => 
   });
 });
 
+describe("resolveToCore — events-only month-end chain springs back too", () => {
+  // The template arm already springs month-end chains back (see #34 above), but a
+  // chain headed on a fired event materializes its dates on the events-only arm
+  // instead, by a separate code path. That path has to spring back the same way,
+  // or an event-origin chain would drift where a date chain doesn't. ipo fires on
+  // a 31st, so every handoff is a candidate to clamp.
+  const ctx = ctxInput({
+    events: { grantDate: "2025-01-01", ipo: "2025-01-31" },
+  });
+  const program: Program = [
+    eventHead(portion(1, 3), "ipo", {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 1,
+    }),
+    then(portion(2, 3), { type: "MONTHS", length: 1, occurrences: 2 }),
+  ];
+
+  it("materializes the month-end dates an un-split schedule would", () => {
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    // Head one month after ipo (Feb has no 31st, so Feb 28), then the tail picks
+    // up and returns to the month-end: Mar 31, Apr 30 — not stuck on the 28th.
+    expect(dates(result.installments)).toEqual([
+      "2025-02-28",
+      "2025-03-31",
+      "2025-04-30",
+    ]);
+    expect(total(result.installments)).toBe(100000);
+  });
+});
+
+describe("resolveToCore — a sub-annual cliff on a month-end tail", () => {
+  // A 12-month cliff preserves the day-of-month, so it never reveals drift. A
+  // sub-annual cliff does: its lump fraction is "how many tranches fall before
+  // the cliff", and that count has to be taken on the sprung grid the tail
+  // actually vests on. If it were counted on the clamped handoff grid instead,
+  // the lump would swallow one tranche too many and the amounts would be wrong.
+  //
+  // Head vests 1/4 at the first handoff (Jan 31 + 1mo = Feb 28). The tail runs
+  // six monthly tranches from there, springing back to the month-end: Mar 31,
+  // Apr 30, May 31, Jun 30, Jul 31, Aug 31. Its cliff is three months out. The
+  // cliff date is a plain duration from the handoff (Feb 28 + 3mo = May 28), so
+  // it lands between Apr 30 and May 31. Two tranches precede it (Mar 31, Apr 30),
+  // so the lump is 2/6 of the tail and the remaining four split evenly.
+  const tailCliff = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+    makeDuration(3, "MONTHS", "PLUS"),
+  ]);
+  const program: Program = [
+    head(portion(1, 4), "2025-01-31", {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 1,
+    }),
+    then(portion(3, 4), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 6,
+      cliff: tailCliff,
+    }),
+  ];
+
+  it("counts the pre-cliff tranches on the sprung grid, not the clamped one", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toEqual([
+      { date: "2025-02-28", amount: "25000" }, // head: 1/4
+      { date: "2025-05-28", amount: "25000" }, // cliff lump: 2/6 of the 3/4 tail
+      { date: "2025-05-31", amount: "12500" },
+      { date: "2025-06-30", amount: "12500" },
+      { date: "2025-07-31", amount: "12500" },
+      { date: "2025-08-31", amount: "12500" },
+    ]);
+    expect(sum(events)).toBe(100000);
+  });
+});
+
 describe("resolveToCore — a lump head chains with the tail coincident", () => {
   // An empty span (occurrences 1, length 0) is a lump: it vests entirely at its
   // start and advances the cursor by nothing, so the tail begins on the same day.

@@ -69,6 +69,17 @@ const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
     ? expr.base.value
     : undefined;
 
+// `origin` is the date the whole chain started from, used only to count how many
+// grid occurrences fall on/before the cliff. A chain segment whose anchor was
+// clamped onto a short month (Jan 31 handoff lands on Feb 28) still lays its grid
+// on the chain's original day where the calendar allows it, so the count has to
+// be taken against that sprung grid — the same grid core later partitions the
+// lump on. If the two disagreed, the percentage baked in here wouldn't match how
+// core splits the tranches and the boundary tranche would be misallocated. It
+// defaults to `anchor`, so a head or any non-chained statement (its own origin)
+// is unaffected. The cliff *date* below is left origin-blind on purpose: a cliff
+// is a fixed duration from this segment's anchor, so it lands wherever that
+// duration puts it regardless of how the grid day springs back.
 export const lowerCliff = (
   cliffExpr: VestingNodeExpr | undefined,
   anchor: OCTDate,
@@ -76,6 +87,7 @@ export const lowerCliff = (
   period: number,
   occurrences: number,
   ctx: EvaluationContext,
+  origin: OCTDate = anchor,
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
@@ -116,10 +128,12 @@ export const lowerCliff = (
 
   const dom: VestingDayOfMonth = ctx.vesting_day_of_month;
 
-  // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate.
+  // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate,
+  // counted on the origin-sprung grid (see the note on `origin` above).
   let m = 0;
   for (let i = 1; i <= occurrences; i++) {
-    if (gt(addPeriod(anchor, i * period, periodType, dom), cliffDate)) break;
+    if (gt(addPeriod(anchor, i * period, periodType, dom, origin), cliffDate))
+      break;
     m++;
   }
   if (m === 0) return { state: "NONE" };

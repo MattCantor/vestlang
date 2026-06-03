@@ -369,7 +369,18 @@ export const resolveStatements = (
                 eventId: anchor.eventId,
               }
             : { state: "RESOLVED", date, base: "DATE" },
-        cliff: lowerCliff(p.cliff, date, p.type, p.length, p.occurrences, ctx),
+        // Pass the chain origin so a sub-annual cliff counts its pre-cliff
+        // tranches on the same sprung grid this tail vests on, rather than on
+        // the clamped handoff day.
+        cliff: lowerCliff(
+          p.cliff,
+          date,
+          p.type,
+          p.length,
+          p.occurrences,
+          ctx,
+          anchor.origin,
+        ),
         chained: true,
         // The chain's starting date, not this tail's clamped handoff. Carried so
         // a later materialization can re-derive the original day-of-month.
