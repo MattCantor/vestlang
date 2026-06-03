@@ -248,11 +248,21 @@ before any evaluator caller can pass it.
   the EVENT branch passes nothing (default origin is its firing anchor).
 
 **Definition of Done:**
-- [ ] A month-end chain compiled by core matches the un-split grid (Jan 31 → Feb 28,
+- [x] A month-end chain compiled by core matches the un-split grid (Jan 31 → Feb 28,
   Mar 31, Apr 30).
-- [ ] day-≤28, EVENT-anchored, and non-`VESTING_START` cases are byte-unchanged (no origin
+- [x] day-≤28, EVENT-anchored, and non-`VESTING_START` cases are byte-unchanged (no origin
   passed).
-- [ ] Full CI suite green from root (build / typecheck / lint / knip / format:check / test).
+- [x] Full CI suite green from root (build / typecheck / lint / knip / format:check / test).
+
+**Implementation note (deviation):** the `janEnd` characterization test in
+`evaluator/tests/resolve.then-chain.test.ts` was flipped to the sprung-back dates
+*here*, not in Phase 3 as originally staged. That case classifies to `template` and
+gets its dates from core's `compile`, so the Phase 1 core change is what springs it
+back; leaving it red would have failed Phase 1's "full CI green" gate. Without
+Phase 2, the evaluator's pre-pass and core's detection cursor both call
+`advanceCursor` with no origin, so they still agree and the chain still classifies
+to `template`. Phase 3's job narrows to the genuine `events-only` materialization
+path.
 
 ---
 
@@ -343,9 +353,10 @@ the change.
 ## Phase Checklist
 
 ### Phase 1: Core steppers + template arm
-- [ ] `packages/core/src/dates.ts` — `addMonthsRule` (`VESTING_START` branch), `addPeriod`, `advanceCursor`
-- [ ] `packages/core/src/compile.ts` — `expandStatement` DATE branch, `expandAnchored`
-- [ ] core tests — month-end chain vs un-split grid; day-≤28 / EVENT / non-`VESTING_START` unchanged
+- [x] `packages/core/src/dates.ts` — `addMonthsRule` (`VESTING_START` branch), `addPeriod`, `advanceCursor`
+- [x] `packages/core/src/compile.ts` — `expandStatement` DATE branch, `expandAnchored`
+- [x] core tests — month-end chain vs un-split grid; day-≤28 / EVENT / non-`VESTING_START` unchanged
+- [x] `packages/evaluator/tests/resolve.then-chain.test.ts` — `janEnd` default-policy flip (template arm; see Phase 1 note)
 
 ### Phase 2: Evaluator cursor + chain detection
 - [ ] `packages/evaluator/src/resolve/lower.ts` — `origin` on `StmtResolution` / `ChainAnchor`; `anchorAfter`, `resolveStatements` handoff, `buildTemplate` detection cursor (atomic)

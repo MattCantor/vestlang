@@ -66,17 +66,25 @@ interface RawEvent {
  * each at its own grid date. Because the cliff is a duration (not an occurrence
  * index), the lump lands on the true cliff date even when it falls between grid
  * points. On-grid cliffs reproduce the positional result exactly.
+ *
+ * `origin` is the chain's first date, used only for the grid's day-of-month so a
+ * segment whose anchor was clamped to a short month still vests on the chain's
+ * original day where the calendar allows it. It defaults to `anchor` (the head
+ * segment and EVENT statements are their own origin). The cliff date stays a pure
+ * duration from this segment's anchor — it never reads `origin` — so the lump
+ * lands where its length puts it regardless of how the day-of-month springs.
  */
 const expandAnchored = (
   statement: VestingStatement,
   anchor: OCTDate,
   multiplier: Fraction,
   dom: VestingRuntime["vestingDayOfMonth"],
+  origin: OCTDate = anchor,
 ): RawEvent[] => {
   const N = statement.occurrences;
   const stmtFraction = statement.percentage;
   const gridDate = (i: number): OCTDate =>
-    addPeriod(anchor, i * statement.period, statement.period_type, dom);
+    addPeriod(anchor, i * statement.period, statement.period_type, dom, origin);
   const event = (
     date: OCTDate,
     fraction: Fraction,
@@ -150,13 +158,19 @@ const expandStatement = (
   if (statement.vesting_base.type === "DATE") {
     // Validator guarantees dateCursor is defined when any DATE statement exists.
     const anchor = dateCursor as OCTDate;
-    const events = expandAnchored(statement, anchor, ONE, dom);
+    // Every DATE statement in a template chains from the same starting date, so
+    // that's the origin for the day-of-month. For the head statement anchor and
+    // origin are equal (no effect); for a later segment whose anchor was clamped
+    // onto a short month, the origin pulls the grid back onto the start's day.
+    const origin = runtime.startDate as OCTDate;
+    const events = expandAnchored(statement, anchor, ONE, dom, origin);
     const nextCursor = advanceCursor(
       anchor,
       statement.occurrences,
       statement.period,
       statement.period_type,
       dom,
+      origin,
     );
     return { events, nextCursor };
   }

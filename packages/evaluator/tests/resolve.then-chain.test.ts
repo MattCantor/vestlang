@@ -162,11 +162,12 @@ describe("resolveToCore — core-consistency tripwire (drift-free anchors)", () 
   });
 });
 
-describe("resolveToCore — month-end day-of-month (characterizes #34)", () => {
-  // KNOWN DEFECT (#34): when a chain boundary lands on a short month, core
-  // re-anchors the rest of the chain at the *clamped* date and the day-of-month
-  // drifts. These two tests pin the CURRENT behavior under two policies; when #34
-  // is fixed in core, update the expected dates here — they are not a regression.
+describe("resolveToCore — month-end day-of-month (#34 fixed in core)", () => {
+  // #34: when a chain boundary lands on a short month the handoff date gets
+  // clamped — Jan 31 + 1mo is Feb 28, since February has no 31st. Core used to
+  // re-anchor the rest of the chain on that clamped day and stay there. It now
+  // carries the chain's origin (Jan 31) through every segment, so both policies
+  // below land on the same month-end dates a single un-split schedule would.
   const janEnd: Program = [
     head(portion(1, 3), "2025-01-31", {
       type: "MONTHS",
@@ -176,7 +177,7 @@ describe("resolveToCore — month-end day-of-month (characterizes #34)", () => {
     then(portion(2, 3), { type: "MONTHS", length: 1, occurrences: 2 }),
   ];
 
-  it("default policy: handoff clamps to Feb 28 and the chain stays on the 28th", () => {
+  it("default policy: the chain springs back to the month-end after a Feb handoff", () => {
     const result = resolveToCore(
       janEnd,
       ctxInput({
@@ -185,7 +186,7 @@ describe("resolveToCore — month-end day-of-month (characterizes #34)", () => {
     );
     if (result.kind !== "template") throw new Error("expected template");
     const events = compile(result.template, result.totalShares, result.runtime);
-    expect(dates(events)).toEqual(["2025-02-28", "2025-03-28", "2025-04-28"]);
+    expect(dates(events)).toEqual(["2025-02-28", "2025-03-31", "2025-04-30"]);
   });
 
   it("month-end policy: each tranche returns to the last day of its month", () => {
