@@ -311,12 +311,22 @@ with the sprung grid.
   …04-28`) to the sprung-back dates (`…02-28, …03-31, …04-30`), labeled as the fix landing.
 
 **Definition of Done:**
-- [ ] An `events-only` month-end chain materializes the un-split dates.
-- [ ] A *sub-annual* tail cliff on a month-end chain keeps its lump percentage and
+- [x] An `events-only` month-end chain materializes the un-split dates.
+- [x] A *sub-annual* tail cliff on a month-end chain keeps its lump percentage and
   post-cliff tranche amounts consistent with the sprung grid.
-- [ ] `janEnd` expectation flipped; the rest of the chain suite stays on drift-free anchors
+- [x] `janEnd` expectation flipped; the rest of the chain suite stays on drift-free anchors
   and is unchanged.
-- [ ] Full CI suite green from root.
+- [x] Full CI suite green from root.
+
+**Implementation note (deviation):** `lower.ts`'s tail `lowerCliff` call had to
+pass `anchor.origin` too — not just `classify.ts` / `cliff.ts`. That's the
+unavoidable consequence of `lowerCliff` gaining the `origin` parameter: the
+parameter is useless unless the chain site supplies it. The non-chained
+`resolveNonChained` call is left alone (default `origin = anchor`). The `janEnd`
+flip the phase listed was already done in Phase 1 (that case classifies to
+`template` and sprang back when core changed), so Phase 3's new tests instead
+cover the genuinely-new paths: an events-only month-end chain (event-origin,
+fired) and a sub-annual tail cliff whose pre-cliff count must ride the sprung grid.
 
 ---
 
@@ -340,13 +350,23 @@ the change.
   case name so a failure points to the exact cell.
 
 **Definition of Done:**
-- [ ] For each cell, the split chain and its single-statement un-split equivalent produce
+- [x] For each cell, the split chain and its single-statement un-split equivalent produce
   **identical dates and identical amounts**.
-- [ ] The oracle is the un-split **compile**, never a hand-built `addPeriod` array
+- [x] The oracle is the un-split **compile**, never a hand-built `addPeriod` array
   (asserting against `addPeriod(origin, i, …)` would test the modified helper against
   itself). The example-based assertions in Phases 1–3 stay for legibility — they name
   *which* dates, which is what a human wants when a test goes red.
-- [ ] Full CI suite green from root.
+- [x] Full CI suite green from root.
+
+**Implementation note:** The "YEARS" column is realized as a 12-month `MONTHS` period
+(`length: 12`) — the DSL's `PeriodTag` has no YEARS unit, so a yearly hop is just twelve
+months, the same way the existing `yearly` const is built. Each cell is a uniform
+4-tranche grid: a one-tranche head (`portion(1, 4)`) plus a three-tranche tail
+(`portion(3, 4)`), versus an un-split single statement of four occurrences; every
+tranche is an identical 25000 of the 100000 grant. Two cells exercise genuine drift
+(monthly off Jan 29/30/31, and yearly off the leap Feb 29, which only springs back to
+the 29th in 2028); the rest are controls. The only out-of-CI format warning is on the
+gitignored `.claude/settings.local.json`, unrelated to this change.
 
 ---
 
@@ -363,12 +383,13 @@ the change.
 - [x] evaluator tests — pre-pass == core-dates tripwire; month-end chain classifies `template`
 
 ### Phase 3: Evaluator materialization + characterization flip
-- [ ] `packages/evaluator/src/resolve/classify.ts` — `expandResolution`, `loadedResolvedInstallments` grids + pre-cliff count
-- [ ] `packages/evaluator/src/resolve/cliff.ts` — `lowerCliff` pre-cliff count (cliff-date math origin-blind)
-- [ ] `packages/evaluator/tests/resolve.then-chain.test.ts` — flip `janEnd`
+- [x] `packages/evaluator/src/resolve/classify.ts` — `expandResolution`, `loadedResolvedInstallments` grids + pre-cliff count
+- [x] `packages/evaluator/src/resolve/cliff.ts` — `lowerCliff` pre-cliff count (cliff-date math origin-blind)
+- [x] `packages/evaluator/src/resolve/lower.ts` — tail `lowerCliff` call passes `anchor.origin` (deviation; see note)
+- [x] `packages/evaluator/tests/resolve.then-chain.test.ts` — events-only month-end chain + sub-annual tail cliff (`janEnd` flip already done in Phase 1)
 
 ### Phase 4: Capstone — parametric split-invariance
-- [ ] `packages/evaluator/tests/resolve.then-chain.test.ts` — parametric origin × period table
+- [x] `packages/evaluator/tests/resolve.then-chain.test.ts` — parametric origin × period table
 
 ## Open question / checkpoint
 
