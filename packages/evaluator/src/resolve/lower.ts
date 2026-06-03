@@ -116,6 +116,12 @@ export interface StmtResolution {
   // statement's own FROM, and buildTemplate uses this to word the right error
   // when an event-anchored chain can't become a single template.
   chained?: boolean;
+  // The date the chain this segment belongs to started from, set only on tails.
+  // A tail's own `start` is a clamped handoff (Feb 28 from a Jan 31 head); the
+  // origin keeps the chain's first day-of-month (the 31st) around so the dates
+  // can spring back when materialized. Absent on a non-tail, where the segment is
+  // its own origin and consumers fall back to `start.date`.
+  origin?: OCTDate;
 }
 
 /** Resolve one ordinary (non-chained) statement: its start comes from its own
@@ -231,14 +237,22 @@ const resolveNonChained = (
 
 // How the next THEN tail should begin. The chaining walk recomputes this after
 // every statement and hands it to the following tail.
+// `origin` on the live variants is the date the whole chain started from — the
+// head's start for a date chain, or the firing date for a fired-event chain. Every
+// segment takes its day-of-month from the origin, not from `cursor`. That matters
+// at a month boundary: stepping Jan 31 forward a month clamps to Feb 28 (February
+// has no 31st), and if the next segment read its day off that clamped cursor it
+// would stay on the 28th for the rest of the chain. Carrying the origin lets it
+// spring back to the 31st (or the month's last day) the way an un-split schedule
+// would. See packages/core/src/dates.ts for the matching stepper parameter.
 type ChainAnchor =
   // A live date chain: the tail starts on `cursor` as a plain DATE.
-  | { kind: "DATE"; cursor: OCTDate }
+  | { kind: "DATE"; cursor: OCTDate; origin: OCTDate }
   // A chain whose head is an event that has already fired. The tail still steps
   // forward by calendar math (off `cursor`), but it stays anchored to the same
   // event so the firing guard in buildTemplate recognizes the whole run as one
   // event-origin chain rather than a date template.
-  | { kind: "EVENT"; eventId: string; cursor: OCTDate }
+  | { kind: "EVENT"; eventId: string; cursor: OCTDate; origin: OCTDate }
   // A chain whose head is an event with no date yet (unfired atomic event, or a
   // selector still waiting on one). There's nothing to hand the tail, so the
   // tail can't vest until the event arrives. We carry the head's blockers so the
@@ -255,10 +269,26 @@ const anchorAfter = (
 ): ChainAnchor => {
   const { occurrences, length, type } = r.periodicity;
   if (r.start.state === "RESOLVED") {
-    const cursor = advanceCursor(r.start.date, occurrences, length, type, dom);
+    // This statement heads the chain, so it is its own origin. Passing its start
+    // as the origin makes this first handoff identical to the old call (origin
+    // defaults to the date being stepped from); the origin only changes later
+    // handoffs, once the cursor has been clamped onto a short month.
+    const cursor = advanceCursor(
+      r.start.date,
+      occurrences,
+      length,
+      type,
+      dom,
+      r.start.date,
+    );
     return r.start.base === "EVENT"
-      ? { kind: "EVENT", eventId: r.start.eventId!, cursor }
-      : { kind: "DATE", cursor };
+      ? {
+          kind: "EVENT",
+          eventId: r.start.eventId!,
+          cursor,
+          origin: r.start.date,
+        }
+      : { kind: "DATE", cursor, origin: r.start.date };
   }
   // PENDING_EVENT / SYNTHETIC_EVENT / UNRESOLVED: the start has no date, so any
   // tail behind it is pending on whatever the head is waiting on.
@@ -341,10 +371,23 @@ export const resolveStatements = (
             : { state: "RESOLVED", date, base: "DATE" },
         cliff: lowerCliff(p.cliff, date, p.type, p.length, p.occurrences, ctx),
         chained: true,
+        // The chain's starting date, not this tail's clamped handoff. Carried so
+        // a later materialization can re-derive the original day-of-month.
+        origin: anchor.origin,
       });
       anchor = {
         ...anchor,
-        cursor: advanceCursor(date, p.occurrences, p.length, p.type, dom),
+        // Step the next handoff off the chain origin's day-of-month, so a boundary
+        // that clamped onto a short month doesn't strand the rest of the chain on
+        // the clamped day. The `...anchor` spread keeps `origin` for later tails.
+        cursor: advanceCursor(
+          date,
+          p.occurrences,
+          p.length,
+          p.type,
+          dom,
+          anchor.origin,
+        ),
       };
       continue;
     }
@@ -507,7 +550,21 @@ export const buildTemplate = (
         // A second independent DATE grid that doesn't chain — not one template.
         return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
       }
-      cursor = advanceCursor(r.start.date, occurrences, length, type, dom);
+      // The continuation check above compares each statement's start against this
+      // cursor, so the cursor must step exactly the way the resolve pre-pass did.
+      // Both feed `advanceCursor` the chain origin (the first DATE start). If only
+      // one did, a month-end handoff would produce Mar 31 on one side and Mar 28
+      // on the other, the eq check would miss, and a valid chain would wrongly
+      // split off to events-only. On the first DATE statement startDate is this
+      // start, so the two are equal.
+      cursor = advanceCursor(
+        r.start.date,
+        occurrences,
+        length,
+        type,
+        dom,
+        startDate ?? r.start.date,
+      );
     }
 
     const cliff: Cliff | undefined =
