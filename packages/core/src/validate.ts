@@ -1,7 +1,4 @@
 // Structural + runtime validation for the canonical vesting IR.
-//
-// Ported from OCF-Tools' vesting_compiler/validate.ts. The only changes are the
-// import source (core's own ./types) and the ISO_DATE_PATTERN, inlined here.
 
 import type {
   Cliff,

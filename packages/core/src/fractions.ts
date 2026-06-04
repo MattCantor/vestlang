@@ -1,8 +1,8 @@
 // Exact-rational arithmetic over the canonical `Fraction`.
 //
-// Ported from OCF-Tools' vesting_compiler/fractions.ts. Core computes
-// shares-of-grant in exact rational so a schedule telescopes to the total
-// without float drift; these helpers keep fractions reduced as they combine.
+// Core computes shares-of-grant in exact rational so a schedule telescopes to
+// the total without float drift; these helpers keep fractions reduced as they
+// combine.
 
 import type { Fraction } from "@vestlang/types";
 

@@ -1,9 +1,7 @@
 // Canonical vesting IR — the Carta-aligned interchange. The single shared home
 // for these types; `@vestlang/core` imports them back (type-only).
 //
-// Ported from OCF-Tools' canonical vesting types
-// (~/code/OCF-Tools/types/canonical/vesting/types.ts), which themselves track
-// OCF-Composed-Schemas:
+// Kept consistent with the OCF-Composed-Schemas canonical vesting schema:
 // https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/blob/main/canonical/vesting/types.ts
 //
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
