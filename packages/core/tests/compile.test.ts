@@ -2,8 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 
-// Conformance suite ported from OCF-Tools' vesting_compiler/__tests__/compile.test.ts
-// (the reference for the canonical-IR semantics). `compileVesting` → `compile`.
+// Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).
 
 const sumAmounts = (events: { amount: string }[]): number =>
   events.reduce((acc, e) => acc + Number(e.amount), 0);

@@ -2,10 +2,9 @@
 // count become exact integer installments.
 //
 // The engine is vestlang's own. The allocator, date math, and fold are all
-// vestlang primitives; this file only adds the orchestration that walks the
-// canonical IR. That orchestration is a port of OCF-Tools' compile.ts (the
-// reference for the IR semantics), with the cliff applied by date rather than by
-// occurrence index (see expandAnchored).
+// vestlang primitives; this file adds the orchestration that walks the canonical
+// IR, with the cliff applied by date rather than by occurrence index (see
+// expandAnchored).
 //
 // One engine, two output shapes:
 //   compile(...)             -> { date, amount: string }[]  (OCF/Carta-native)
