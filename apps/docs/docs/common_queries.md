@@ -7,6 +7,8 @@ from tool output rather than model arithmetic.
 
 ## Summary fields on `vestlang_evaluate_as_of`
 
+`vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the flat `installments` + `blockers`; the as-of partitioning is what the MCP layer adds.)
+
 Each statement's response includes a `summary` object:
 
 | Field | Type | Meaning |

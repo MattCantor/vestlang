@@ -3,11 +3,87 @@ title: Abstract Syntax Tree
 sidebar_position: 2
 ---
 
-The DSL compiles into an abstract syntax tree describing the following:
+The DSL compiles into a normalized abstract syntax tree: a **program** of one or more statements, each `{ amount, expr }`. The sections below describe the pieces of a single statement (`amount`, the vesting start, cadence, cliff, selectors, conditions); for focus most examples show just the relevant fragment, while the full compiler output wraps the statements in `{ "program": [ … ] }`.
+
+### Programs
+
+A program is a flat list of statements. `THEN` and `PLUS` are the two ways to compose them:
+
+- A **`THEN`** segment carries `chained: true` and no start of its own (`vesting_start: null`) — it continues from where the previous segment ended.
+- A **`PLUS`** component is an independent statement with its own vesting start and no `chained` flag.
+
+#### Example: THEN chain
+
+##### DSL
+
+```vest
+0.25 VEST OVER 12 months EVERY 1 month
+  THEN 0.75 VEST OVER 36 months EVERY 1 month
+```
+
+##### AST
+
+```json
+{
+  "program": [
+    {
+      "amount": { "type": "PORTION", "numerator": 1, "denominator": 4 },
+      "expr": {
+        "type": "SINGLETON",
+        "vesting_start": { "type": "SINGLETON", "base": { "type": "EVENT", "value": "grantDate" }, "offsets": [] },
+        "periodicity": { "type": "MONTHS", "length": 1, "occurrences": 12 }
+      }
+    },
+    {
+      "chained": true,
+      "amount": { "type": "PORTION", "numerator": 3, "denominator": 4 },
+      "expr": {
+        "type": "SINGLETON",
+        "vesting_start": null,
+        "periodicity": { "type": "MONTHS", "length": 1, "occurrences": 36 }
+      }
+    }
+  ]
+}
+```
+
+#### Example: PLUS components
+
+##### DSL
+
+```vest
+0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months
+  PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months
+```
+
+##### AST
+
+```json
+{
+  "program": [
+    {
+      "amount": { "type": "PORTION", "numerator": 1, "denominator": 2 },
+      "expr": {
+        "type": "SINGLETON",
+        "vesting_start": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
+        "periodicity": { "type": "MONTHS", "length": 12, "occurrences": 1 }
+      }
+    },
+    {
+      "amount": { "type": "PORTION", "numerator": 1, "denominator": 2 },
+      "expr": {
+        "type": "SINGLETON",
+        "vesting_start": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-07-01" }, "offsets": [] },
+        "periodicity": { "type": "MONTHS", "length": 12, "occurrences": 1 }
+      }
+    }
+  ]
+}
+```
 
 ### Periodic Vesting Cadence
 
-The fundamental component of a vesting schedule is a periodic sequence of vesting installments. This periodic sequence one is described by a **number of installments** and the **duration of the step between each installment**.
+The fundamental component of a vesting schedule is a periodic sequence of vesting installments. This periodic sequence is described by a **number of installments** and the **duration of the step between each installment**.
 
 The **duration of the step between each installment** is given by `EVERY <duration>` in the grammar.
 
@@ -25,7 +101,7 @@ Years are converted to months and weeks are converted to days in the normalized 
 
 ```vest
 VEST
-  OVER 48 months EVERY 1 months
+  OVER 4 years EVERY 1 month
 ```
 
 ##### AST
@@ -204,6 +280,10 @@ Given the temporal aspect of vesting schedules, a selector can be thought of as 
 
 Note that in this way `EARLIER OF` acts as an OR logical operator and `LATER OF` acts as an AND logical operator. However, we have purposefully limited ourselves to the `EARLIER OF` and `LATER OF` nomenclature in order to distinguish selectors from conditions, described below.
 
+:::note
+During normalization, selector items are flattened, sorted, and deduped for determinism. Their order in the compiled AST is canonical and carries no meaning — it may differ from the source order (you'll see this in the examples below).
+:::
+
 #### Example: Vesting Start With Selector
 
 ##### DSL
@@ -250,7 +330,7 @@ VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 
 #### Selector over schedules
 
-In the case of a selector in `FROM <vesting-expr>`, the selection is determined based on the resolved vesting start, regardless of the cadence of the vesting installments that folllow
+In the case of a selector in `FROM <vesting-expr>`, the selection is determined based on the resolved vesting start, regardless of the cadence of the vesting installments that follow
 
 ##### DSL
 
@@ -372,7 +452,7 @@ VEST
 
 ### Conditions
 
-Conditons condition one vesting expression on the occurrence of another.
+Conditions condition one vesting expression on the occurrence of another.
 
 We again leverage the temporal aspect of vesting schedules in order to limit ourselves to `BEFORE` and `AFTER` nomenclature. Any condition can optionally utilize the `STRICTLY` keyword to indicate < or >, respectively.
 
@@ -399,7 +479,7 @@ VEST FROM EVENT milestone
         "value": "milestone"
       },
       "offsets": [],
-      "constraints": {
+      "condition": {
         "type": "AND",
         "items": [
           {
@@ -446,9 +526,7 @@ VEST FROM EVENT milestone
 
 ### Amounts
 
-In vestlang the _thing_ that the vesting schedule applies to is left ambiguous. For purposes of this documentation we have discussed vesting schedules in terms of equity-based compensation awards, but in practice it could apply to anything.
-
-Amounts specify **how much** of the grant a statement applies to. Integers imply absolute amounts, decimals in [0, 1] imply a percentage, and fractions imply a portion of total statement amount, supplied downstream. If amount is omitted, the default is 100% (1.0)
+Amounts specify **how much** of the grant a statement covers. A decimal in `[0, 1]` and a fraction are two notations for the same thing — a rational **portion** of the grant (both normalize to a `PORTION`); an integer is an absolute **share count** (`QUANTITY`). A portion is resolved against the grant quantity at evaluation. If the amount is omitted, the default is the whole grant, `1/1`.
 
 #### Example: Omitted Amount
 
@@ -537,7 +615,7 @@ Two-tier vesting refers to a periodic vesting cadence with a standard time-based
 
 The standard two-tier vesting schedule seen in the wild is a 4-year monthly vesting schedule with a 1-year cliff, as well as a cliff on the earlier of an IPO or change in control, so long as the IPO or change in control occurs on prior to the 7th anniversary of the grant date.
 
-This is expressed in vestlang DSL as follows. Note that the `12 months` duration in the cliff statement refers to the resolved vesting start, and we use the `EVENT grantDAte` system event to provide the expiration dates for the cliffs.
+This is expressed in vestlang DSL as follows. Note that the `12 months` duration in the cliff statement refers to the resolved vesting start, and we use the `EVENT grantDate` system event to provide the expiration dates for the cliffs.
 
 ##### DSL
 
@@ -598,10 +676,10 @@ VEST
                 "type": "SINGLETON",
                 "base": {
                   "type": "EVENT",
-                  "value": "CIC"
+                  "value": "cic"
                 },
                 "offsets": [],
-                "constraints": {
+                "condition": {
                   "type": "ATOM",
                   "constraint": {
                     "type": "BEFORE",
@@ -631,7 +709,7 @@ VEST
                   "value": "ipo"
                 },
                 "offsets": [],
-                "constraints": {
+                "condition": {
                   "type": "ATOM",
                   "constraint": {
                     "type": "BEFORE",
