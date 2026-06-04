@@ -437,6 +437,9 @@ importers:
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
+      '@vestlang/linter':
+        specifier: workspace:*
+        version: link:../../packages/linter
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
