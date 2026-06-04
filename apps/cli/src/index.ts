@@ -119,9 +119,20 @@ program
   .command("lint")
   .description("Lint vestlang source and report syntax/semantic issues")
   .option("--stdin", "read input from stdin")
+  .option("--markdown <file>", "lint the ```vest blocks in a markdown file")
+  .option(
+    "--format <fmt>",
+    "output format for --markdown: pretty (default) or editor",
+    "pretty",
+  )
   .argument("[input...]", "DSL text")
-  .action((parts: string[] = [], opts: { stdin?: boolean }) => {
-    lint(parts, opts);
-  });
+  .action(
+    (
+      parts: string[] = [],
+      opts: { stdin?: boolean; markdown?: string; format?: string },
+    ) => {
+      lint(parts, opts);
+    },
+  );
 
 void program.parseAsync();

@@ -10,6 +10,7 @@
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
+    "@vestlang/linter": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {

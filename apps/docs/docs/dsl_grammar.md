@@ -17,14 +17,16 @@ A program is one or more statements, composed two ways:
 - **`THEN`** chains segments in sequence: a `THEN` segment has no start of its own (no `FROM`) — its vesting start is the previous segment's **final installment date**, and its cadence continues from there.
 - **`PLUS`** runs components in parallel: two independent schedules on the same grant, each with its own `FROM`.
 
+Chained — 25% over year 1, then the remaining 75% over years 2–4:
+
 ```vest
-# Chained — 25% over year 1, then the remaining 75% over years 2–4
 0.25 VEST OVER 12 months EVERY 1 month
   THEN 0.75 VEST OVER 36 months EVERY 1 month
 ```
 
+Parallel — two independent grids on one grant:
+
 ```vest
-# Parallel — two independent grids on one grant
 0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months
   PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months
 ```
