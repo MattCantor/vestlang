@@ -28,12 +28,17 @@ export default function prismIncludeLanguages(
     const SELECTORS = /\b(?:EARLIER|LATER|OF)\b/i;
     const CONSTRAINTS = /\b(?:BEFORE|AFTER|STRICTLY|AND|OR)\b/i;
     const ANCHORS = /\b(?:EVENT|DATE)\b/i;
+    const SYSREF = /\b(?:grant[-_]?date|vesting[-_]?start)\b/i;
 
     Prism.languages.vest = {
       verb: { pattern: VERBS },
       selector: { pattern: SELECTORS },
       constraint: { pattern: CONSTRAINTS },
       anchor: { pattern: ANCHORS },
+
+      // System refs: grantDate / vestingStart (before ident so they win)
+      systemref: { pattern: SYSREF },
+
       duration: { pattern: DURATION },
 
       // Dates YYYY-MM-DD
@@ -46,7 +51,7 @@ export default function prismIncludeLanguages(
       ident: { pattern: /\b[A-Za-z_][A-Za-z0-9_-]*\b/ },
 
       // Punctuation
-      punctuation: /[(),+-]/,
+      punctuation: /[(),+\-/]/,
     };
   }
 
