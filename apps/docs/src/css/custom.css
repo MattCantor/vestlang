@@ -57,8 +57,11 @@ pre.language-vest span.token.constraint {
   font-style: italic;
 } /* BEFORE, AFTER, AND, OR, STRICTLY */
 pre.language-vest span.token.anchor {
-  color: #7dcfff !important;
+  color: #2ac3de !important;
 } /* EVENT, DATE */
+pre.language-vest span.token.systemref {
+  color: #9ece6a !important;
+} /* grantDate, vestingStart */
 pre.language-vest span.token.duration {
   color: #bb9af7 !important;
 } /* 1 YEAR, 6 MONTHS */
@@ -66,13 +69,13 @@ pre.language-vest span.token.date {
   color: #565f89 !important;
 } /* 2025-07-01 */
 pre.language-vest span.token.number {
-  color: #565f89 !important;
+  color: #e0af68 !important;
 } /* 0.25, 100 */
 pre.language-vest span.token.ident {
-  color: #565f89 !important;
+  color: #c0caf5 !important;
 } /* event names */
 pre.language-vest span.token.punctuation {
-  color: #2ac3de !important;
+  color: #565f89 !important;
   opacity: 0.6;
 } /* commas, parens */
 
@@ -90,6 +93,9 @@ pre.language-vest span.token.punctuation {
 }
 [data-theme="light"] pre.language-vest span.token.anchor {
   color: #166775 !important;
+}
+[data-theme="light"] pre.language-vest span.token.systemref {
+  color: #33635c !important;
 }
 [data-theme="light"] pre.language-vest span.token.duration {
   color: #b15c00 !important;
