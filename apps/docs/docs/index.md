@@ -4,37 +4,48 @@ slug: /
 sidebar_position: 0
 ---
 
-**Vestlang** is a domain-specific language (DSL) for expressing vesting schedules in a natural, human-readable form.
+# Vestlang
 
-Example:
+**Vestlang is a domain-specific language for writing equity vesting schedules — including the contingent parts — and a canonical engine that resolves them into exact, integer-allocated installments.**
+
+Most vesting is easy to write down: *4 years monthly, 1-year cliff.* The hard part is **contingency** — vesting that waits on an IPO, or starts at the *later of* a date and an event — which usually can't be written down at all until the event happens. Vestlang handles both halves:
+
+- **A DSL** for expressing vesting intent, contingency included — combinators like `LATER OF` / `EARLIER OF`, event gates, and conditional starts. (A combinator is an operator over anchors: "the later of 12 months and `EVENT "ipo"`".)
+- **A canonical engine** (`@vestlang/core`) that resolves that intent against runtime — the grant date, the share count, which events have fired — and allocates exact integer shares with no rounding drift.
+
+The engine's template is a proposed **interchange**: a single, exact schedule format that different cap-table tools can produce and consume, deliberately shaped to track Carta's production cap-table schema. The DSL is where the contingency an interchange *can't* hold gets expressed, then resolved down to it.
 
 ```vest
-VEST
-  OVER 48 months EVERY 1 months
-  CLIFF 12 months
+VEST OVER 4 years EVERY 1 month CLIFF 1 year
 ```
 
-The DSL compiles into a **typed Abstract Syntax Tree (AST)**, which is then evaluated into **Open Cap Table** compatible `vesting` objects, with additional metadata.
+Over 4,800 shares: 1,200 vest at the 1-year cliff, then 100/month for 36 months — 37 installments that telescope to exactly 4,800, the rounded shares summing to the grant with no drift.
 
-An overview of the DSL grammar is available [here](./dsl_grammar.md). An overview of the compiled AST is provided [here](./ast.md).
+## The fidelity ladder
 
-See [here](./evaluation.md) for additional detail regarding the evaluated `vesting` objects and additional metadata.
+Real intent doesn't always fit a clean template, and contingent intent can't always resolve yet. Rather than force-fit or fail, vestlang **classifies** every evaluated schedule into one of four `status` verdicts:
 
-Try it out in the [playground](./playground.mdx)!
+| `status` | When |
+| :--- | :--- |
+| **`template`** | Fits one canonical template — exact installments, structured round-trip, intent preserved. |
+| **`events-only`** | Resolves to concrete dated amounts but can't be one template (e.g. two overlapping independent starts, an event-anchored cliff) — the bare dated amounts the interchange always accepts, plus the reason. |
+| **`unresolved`** | Can't be materialized yet — waiting on an unfired event — reported with `blockers` naming what's missing. |
+| **`impossible`** | A condition can never be satisfied — flagged with the contradiction. |
 
----
+The verdict is the honesty: facts are preserved and intent is reported as it is, never disguised as a template it isn't. A whole multi-statement program collapses to **one** verdict, never a fan-out. See [Evaluation](./evaluation.md) for the full model.
 
-## Vestlang as OCT vesting templating schema
+## Background
 
-The motivation for this project is to facilitate a discussion within the Open Cap Table project regarding templating for vesting schedules.
+A vesting model is really three layers: a **spec** (the schedule definition), a **compiler** (which resolves the spec against runtime), and a **projection** (the resulting stream of dated installments). OCF standardized the projection — a single `{date, amount}` installment — but its earlier templating attempt, a DAG of vesting conditions, saw little adoption. Vestlang explores a different shape: an AST-based spec plus an exact reference compiler, offered as a candidate interchange that cap-table tools could share.
 
-The open cap table project aims to support [arbitrarily-complex trees of dependent vesting conditions](https://open-cap-table-coalition.github.io/Open-Cap-Format-OCF/explainers/Architecture/#lossless-vesting) that mix time-based and event-based vesting. This is accomplished by expressing vesting as a [directed and acyclic graph of Vesting Condition objects](https://open-cap-table-coalition.github.io/Open-Cap-Format-OCF/explainers/VestingTerms/).
+## Explore
 
-In August 2024, a `vesting` schema was [introduced](https://github.com/Open-Cap-Table-Coalition/Open-Cap-Format-OCF/commit/150b8da950b00404d1c348c23ea99e7a09f2ae81) into OCT in order to support creating vesting schedules imperatively by creating an array of vesting installments (date and amount), as an alternative to creating vesting schedules declaratively with the templating system.
+- **[Grammar](./dsl_grammar.md)** — the DSL surface: schedules, anchors, combinators, conditions, and `THEN` / `PLUS` composition.
+- **[AST](./ast.md)** — what a statement compiles to.
+- **[Evaluation](./evaluation.md)** — how intent resolves against runtime, the fidelity ladder, and the installment model.
+- **[Playground](./playground.mdx)** — write a statement and watch it evaluate, live.
 
-The `vesting` schema represents the canonical representation of a single installment of a vesting schedule.
-OCT does not expose a module to convert a declarative vesting schedule into canonical `vesting` installments.
+## Use it
 
-There has been limited industry adoption of the OCT vesting schedule templating system. However, various industry participants have created their own proprietary vesting schedule templating systems in order to create canonical `vesting` installments.
-
-If we still think that OCT should expose a vesting templating system, then this lack of adoption invites trying out a different approach. Vestlang represents an attempt to try out an abstract syntax tree, rather than a DAG.
+- **As a library.** `npm install @vestlang/vestlang` for the full toolkit — parse, evaluate, lint, stringify, infer — or `@vestlang/core` for just the canonical engine. The engine ships dual CJS/ESM, so even CommonJS consumers can depend on it.
+- **From an LLM agent.** The MCP server exposes the whole pipeline as Model Context Protocol tools and publishes the grammar, spec, and examples as resources — the surface for driving vestlang from an agent.

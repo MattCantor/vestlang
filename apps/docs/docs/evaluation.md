@@ -3,325 +3,187 @@ title: Evaluation
 sidebar_position: 3
 ---
 
-Evaluation converts the AST into a sequence of vesting installments that are either **resolved** (with a concrete ISO date), **unresolved** (with a symbolic date and blockers), or **impossible** (with blockers).
+Evaluation resolves a vesting program against runtime — the grant date, the share count, and which events have fired — and produces an **`EvaluatedSchedule`**: a sequence of dated, integer-allocated installments plus a single program-level **`status`** verdict.
 
-The evaluator:
+There are two levels to read, and they're distinct:
 
-1. Attempts to resolve a **vesting start** date
-2. Builds the periodic **dates** (or symbolic dates) for the vesting period
-3. Treats the grant date as a "soft cliff" if any vesting installments precede the grant date (see below)
-4. Applies any explicit **CLIFF** if present (including partial knowledge for `LATER OF` cliffs, see below)
-5. **Allocates** the statement's amount across installments using the configured allocation mode
-6. Emits vesting installments with metadata.
+- **`status`** — the verdict for the whole schedule: `template`, `events-only`, `unresolved`, or `impossible`.
+- **`state`** — each individual installment's own resolution: `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
 
-:::note
-The shape and content of all metadata described below should be viewed as a bogey intended for discussion. All comments welcome!
-:::
+## The evaluator
 
----
+For each statement the evaluator:
+
+1. Resolves the **vesting start** (a concrete date, or symbolic if it waits on an event).
+2. Builds the periodic **installment dates** (concrete or symbolic).
+3. Accrues any installments scheduled before the grant date onto the grant date (see [below](#vesting-start-before-grant-date)).
+4. Applies an explicit **`CLIFF`** if present (including partial knowledge for `LATER OF` cliffs, [below](#partial-knowledge-for-later-of)).
+5. **Allocates** the amount across installments (cumulative round-down by default, exact-rational so the rounded shares telescope to the grant exactly).
+6. **Classifies** the result into a `status` verdict and emits the installments.
+
+A whole multi-statement program collapses to **one** `EvaluatedSchedule` — never a fan-out.
+
+**Allocation is exact.** Amounts are split by cumulative round-down in exact rational arithmetic, so the rounded integers telescope to the grant with no drift. For example `100 VEST OVER 3 months EVERY 1 month` over 100 shares vests `33, 33, 34` — each tranche is `floor(100 × i/3) − vestedSoFar` — summing to exactly 100.
 
 ## Evaluation context
-
-The following evaluation context is supplied the evaluator:
 
 ```ts
 {
   events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>,
   grantQuantity: number,
   asOf: OCTDate,
-  vesting_day_of_month: vesting_day_of_month
-  allocation_type: allocation_type
+  vesting_day_of_month?: VestingDayOfMonth,   // default VESTING_START_DAY_OR_LAST_DAY_OF_MONTH
+  allocation_type?: AllocationType,           // default CUMULATIVE_ROUND_DOWN
 }
 ```
 
-### Events
+- **`events`** — `grantDate` is required; supply any named events the DSL references (e.g. `ipo`). When the vesting start resolves, it's added back as `vestingStart` so a cliff can refer to it.
+- **`grantQuantity`** — the share count the amounts allocate against.
+- **`asOf`** — the date a scenario is evaluated against. Required at the library boundary; the CLI and MCP front-ends default it to today. It decides whether a time-limited condition has elapsed: a deadline still in the future keeps a pending event `unresolved` rather than `impossible`.
+- **`vesting_day_of_month`** / **`allocation_type`** — optional OCF convention fields, with the canonical defaults shown above.
 
-The grant date of the security (`events[grantDate]`) and the quantity of shares (`grantQuantity`) are required.
+All dates are `OCTDate` — an ISO `YYYY-MM-DD` string.
 
-If the vesting start is resolved through the course of the evaluation, `EVENT vestingStart` is added to the `events` record.
+## The fidelity ladder (`status`)
 
-### Vesting Day of Month
+Every evaluated program lands on exactly one `status`. The verdict reports, honestly, how much of the intent the canonical interchange can hold.
 
-`vesting_day_of_month` tracks the OCT schema found [here](https://open-cap-table-coalition.github.io/Open-Cap-Format-OCF/schema_markdown/schema/types/vesting/VestingPeriodInMonths/), and defaults to `VESTING_START_DAY_OR_LAST_DAY_OF_MONTH`.
-
-### Allocation Type
-
-`allocation_type` tracks the OCT schema found [here](https://open-cap-table-coaltion.github.io/Open-Cap-Format-OCF/schema_markdown/schema/enums/AllocationType/), and defaults to `CUMULATIVE_ROUND_DOWN`.
-
-### As Of Date
-
-The `asOf` date is used to determine whether time-limited conditions have occured, and defaults to the current date if not provided.
-
-For instance, consider a vesting schedule that starts if a milestone occurs before a given date in the future:
-
-```vest
-VEST FROM EVENT milestone BEFORE DATE 9999-01-01
-```
-
-If this statement is evaluated with an unresolved `EVENT milestone`, then vesting start will be unresolved. The returned tranche will be `UNRERESOLVED` rather than `IMPOSSIBLE` because the milestone event may occur in the future and the deadline has not yet elapsed.
-
----
-
-## Resolved Schedule
-
-A schedule of resolved installments has the folllowing shape:
+| `status` | Meaning | The schedule carries |
+| :-- | :-- | :-- |
+| **`template`** | Resolvable and fits canonical's one-template shape — the spec is preserved | `template`, `runtime`, `sourceMap`, resolved `installments`, `blockers` |
+| **`events-only`** | Resolves to dated amounts but can't be one template — facts kept, intent lost | resolved `installments`, a `reason`, `blockers` |
+| **`unresolved`** | Pending — can't be materialized yet (an unfired event) | `installments` (symbolic, plus any resolved siblings), `blockers` |
+| **`impossible`** | Unsatisfiable — no event assignment can ever resolve it | impossible `installments`, `blockers` |
 
 ```ts
-{
-  installments: {
-    amount: number,
-    date: OCTDate,
-    meta: {
-      state: "RESOLVED"
-    }
-  },
-  blockers: [] // empty array when installments are resolved
-}
+type EvaluatedSchedule =
+  | { status: "template";    template; runtime; sourceMap; installments; blockers }
+  | { status: "events-only"; installments; reason; blockers }
+  | { status: "unresolved";  installments; blockers }
+  | { status: "impossible";  installments; blockers };
 ```
 
-### Example: Standard Time-Based Vesting
+`sourceMap` (on a `template`) records the DSL behind any synthetic event the lowering had to mint — e.g. when a `FROM EARLIER OF(…)` start is externalized as a single event; it is `{}` for plain schedules.
 
-A time-based vesting schedule without conditions always resolves. The example below assumes a grant date of 2025-01-01.
+### How a program is classified
 
-#### DSL
+A **canonical template** is one ordered chain of installments measured from a single origin — each segment anchored to a date or a named event, with cumulative round-down allocation and duration-based cliffs. It is the shape the interchange holds and that `@vestlang/core` allocates from. Classification decides whether a program collapses to exactly that, and reports honestly when it can't.
 
-```vest
-100 VEST
-  OVER 48 months EVERY 12 months
-```
+A program is a **`template`** when, after its combinators resolve against runtime, it forms one such chain:
 
-#### Vesting Installments
+- one ordered sequence from a single origin — a `THEN` chain, or `PLUS` components that continue that origin — not two independent grids;
+- every anchor is a date or a single coherent event (an *unfired* event is fine — see pending, below);
+- cumulative allocation (`CUMULATIVE_ROUND_DOWN` or `CUMULATIVE_ROUNDING`);
+- any cliff is a duration, not an event;
+- no unsatisfiable condition.
 
-| Amount | Date       | State    |
-| :----- | :--------- | :------- |
-| 25     | 2026-01-01 | RESOLVED |
-| 25     | 2027-01-01 | RESOLVED |
-| 25     | 2028-01-01 | RESOLVED |
-| 25     | 2029-01-01 | RESOLVED |
+It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Exactly three things force this:
 
-## Unresolved Schedule
+- **overlapping absolute starts** — two independent starts that don't chain into one origin (a `PLUS` of two different dates, or one event anchoring portions that land on different dates);
+- **event-anchored cliff** — the canonical cliff is a duration, so a cliff gated on an event has no template form;
+- **loaded allocation** — a front/back-weighted mode; the interchange has no allocation field, so only cumulative survives.
 
-A schedule of unrsolved installments has the following shape:
+It is **`unresolved`** when a start or cliff genuinely can't resolve yet (an unfired event with no partial-knowledge floor), and **`impossible`** when a condition can never be satisfied.
+
+:::note
+**Pending templates.** A `template` can still be waiting on runtime: an event-anchored start that hasn't fired lowers to a `template` whose projection is empty until the event arrives, carrying `blockers`. "Representable as a template" and "fully projected" are separate — read pending from `blockers`, never from `status`.
+:::
+
+### `template`
+
+A statement (or `THEN` chain) that resolves to a single canonical schedule. `100 VEST OVER 48 months EVERY 12 months`, grant date 2025-01-01:
+
+| Amount | Date | State |
+| --- | --- | --- |
+| 25 | 2026-01-01 | RESOLVED |
+| 25 | 2027-01-01 | RESOLVED |
+| 25 | 2028-01-01 | RESOLVED |
+| 25 | 2029-01-01 | RESOLVED |
+
+`status: template`.
+
+### `events-only`
+
+Two independent absolute starts on one grant can't be one template, so the program keeps the dated facts and reports why. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months`, 100 shares:
+
+| Amount | Date | State |
+| --- | --- | --- |
+| 50 | 2026-01-01 | RESOLVED |
+| 50 | 2026-07-01 | RESOLVED |
+
+`status: events-only` — *reason: "Two independent absolute-date vesting grids on one grant."*
+
+## Installment states
+
+Within a schedule, each installment carries its own `state`.
+
+### Resolved
 
 ```ts
-{
-  installments: {
-    amount: number,
-    meta: {
-      state: "UNRESOLVED",
-      date: SymbolicDate,
-      unresolved: string[] // the unresolved portion of the DSL statement
-    }
-  },
-  blockers: Blocker[]
-}
+{ amount: number, date: OCTDate, meta: { state: "RESOLVED" } }
 ```
 
-### Blockers
+### Unresolved
 
-Unresolved installments include one of the following blockers:
+An installment whose date can't be fixed yet has no `date`; instead `meta` carries a **symbolic date** and the unresolved DSL fragment, and the schedule's `blockers` name what's missing.
+
+```ts
+{ amount: number, meta: { state: "UNRESOLVED", symbolicDate: SymbolicDate, unresolved: string } }
+```
+
+`100 VEST FROM EVENT milestone` (milestone unfired):
+
+| Amount | Symbolic date | State | Unresolved |
+| --- | --- | --- | --- |
+| 100 | `{ type: UNRESOLVED_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
+
+Blocker: `{ type: "EVENT_NOT_YET_OCCURRED", event: "milestone" }`.
+
+A **symbolic date** takes one of three forms:
+
+```ts
+{ type: "UNRESOLVED_VESTING_START" }                          // the start itself is unknown
+{ type: "START_PLUS", unit: "DAYS" | "MONTHS", steps: number } // a known offset from an unknown start
+{ type: "UNRESOLVED_CLIFF", date: OCTDate }                    // grid date known, cliff gate unfired
+```
+
+The **`unresolved` blockers**:
 
 ```ts
 type UnresolvedBlocker =
-  | {
-      type: "EVENT_NOT_YET_OCCURRED";
-      event: string;
-    }
-  | {
-      type: "UNRESOLVED_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
-      blockers: Blocker[];
-    }
-  | {
-      type: "DATE_NOT_YET_OCCURRED";
-      date: OCTDate;
-    }
-  | {
-      type: "UNRESOLVED_CONDITION";
-      condition: Omit<VestingNode, "type">;
-    };
+  | { type: "EVENT_NOT_YET_OCCURRED"; event: string }
+  | { type: "DATE_NOT_YET_OCCURRED"; date: OCTDate }
+  | { type: "UNRESOLVED_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF"; blockers: Blocker[] }
+  | { type: "UNRESOLVED_CONDITION"; condition: Omit<VestingNode, "type"> };
 ```
 
-### Symbolic Dates
+### Impossible
 
-Unresolved installments contain the one of the following symbolic dates:
-
-#### Before Vesting Date
+A condition that can never be satisfied — no event assignment resolves it.
 
 ```ts
-{
-  type: "UNRESOLVED_VESTING_START";
-}
+{ amount: number, meta: { state: "IMPOSSIBLE", unresolved: string } }
 ```
 
-##### DSL
+`100 VEST FROM EVENT milestone BEFORE DATE 2025-01-01`, evaluated after the deadline has passed (the event never fired, so the start can never occur):
 
-```vest
-100 VEST FROM EVENT milestone
-```
+| Amount | State | Unresolved |
+| --- | --- | --- |
+| 100 | IMPOSSIBLE | `EVENT milestone BEFORE DATE 2025-01-01` |
 
-##### Vesting Installments
-
-###### Installments
-
-| Amount | Date                                | Status     | Unresolved        |
-| :----- | :---------------------------------- | :--------- | :---------------- |
-| 100    | `{type: UNRESOLVED_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
-
-###### Blockers
-
-```json
-{
-  "type": "EVENT_NOT_YET_OCCURRED",
-  "event": "milestone"
-}
-```
-
-#### Start Plus
-
-```ts
-{
-  type: "START_PLUS",
-  unit: "DAYS" | "MONTHS",
-  steps: number
-}
-```
-
-##### DSL
-
-```vest
-100 VEST FROM LATER OF(
-  DATE 2025-01-01,
-  EVENT milestone2
-)
-  OVER 48 months EVERY 12 months
-```
-
-##### Vesting Installments
-
-###### Installments
-
-| Amount | Date                                            | State      | Unresolved         |
-| :----- | :---------------------------------------------- | :--------- | :----------------- |
-| 25     | `{ type: START_PLUS, unit: MONTHS, steps: 0 }`  | UNRESOLVED | `EVENT milestone2` |
-| 25     | `{ type: START_PLUS, unit: MONTHS, steps: 12 }` | UNRESOLVED | `EVENT milestone2` |
-| 25     | `{ type: START_PLUS, unit: MONTHS, steps: 24 }` | UNRESOLVED | `EVENT milestone2` |
-| 25     | `{ type: START_PLUS, unit: MONTHS, steps: 36 }` | UNRESOLVED | `EVENT milestone2` |
-
-###### Blockers
-
-```json
-{
-  "type": "EVENT_NOT_YET_OCCURRED",
-  "event": "milestone2"
-}
-```
-
-#### Maybe Before Cliff
-
-```ts
-{
-  type: "UNRESOLVED_CLIFF",
-  date: OCTDate
-}
-```
-
-##### DSL
-
-```vest
-100 VEST
-  OVER 48 months EVERY 12 months
-  CLIFF EVENT milestone
-```
-
-##### Vesting Installments
-
-###### Installments
-
-| Amount | Date                                           | State      | Unresolved        |
-| :----- | :--------------------------------------------- | :--------- | :---------------- |
-| 25     | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: UNRESOLVED_CLIFF, date: 2027-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: UNRESOLVED_CLIFF, date: 2028-01-01 }` | UNRESOLVED | `EVENT milestone` |
-| 25     | `{ type: UNRESOLVED_CLIFF, date: 2029-01-01 }` | UNRESOLVED | `EVENT milestone` |
-
-###### Blockers
-
-```json
-{
-  "type": "EVENT_NOT_YET_OCCURRED",
-  "event": "milestone"
-}
-```
-
-## Impossible Installments
-
-Impossible installments have the following shape:
-
-```ts
-{
-  amount: number,
-  meta: {
-    state: "IMPOSSIBLE",
-    blockers: string[] // the impossible portion of the DSL statement
-  }
-}
-```
-
-#### Blockers
-
-Impossible installments include one of the following blockers:
-
-```ts
-type ImpossibleBlocker =
-  | {
-      type: "IMPOSSIBLE_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
-      blockers: ImpossibleBlocker[];
-    }
-  | {
-      type: "IMPOSSIBLE_CONDITION";
-      condition: Omit<VestingNode, "type">;
-    };
-```
-
-#### DSL
-
-```vest
-100 VEST FROM EVENT milestone BEFORE DATE 2025-01-01
-```
-
-#### Vesting Installments
-
-##### Installments
-
-| Amount | State      | Unresolved                               |
-| :----- | :--------- | :--------------------------------------- |
-| 100    | IMPOSSIBLE | `EVENT milestone BEFORE DATE 2025-01-01` |
-
-##### Blockers
+Blocker (the `condition` is the offending node, minus its `type`):
 
 ```json
 {
   "type": "IMPOSSIBLE_CONDITION",
   "condition": {
-    "base": {
-      "type": "EVENT",
-      "value": "milestone"
-    },
+    "base": { "type": "EVENT", "value": "milestone" },
     "offsets": [],
-    "constraints": {
+    "condition": {
       "type": "ATOM",
       "constraint": {
         "type": "BEFORE",
-        "base": {
-          "type": "SINGLETON",
-          "base": {
-            "type": "DATE",
-            "value": "2025-01-01"
-          },
-          "offsets": []
-        },
+        "base": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
         "strict": false
       }
     }
@@ -329,70 +191,45 @@ type ImpossibleBlocker =
 }
 ```
 
----
+```ts
+type ImpossibleBlocker =
+  | { type: "IMPOSSIBLE_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF"; blockers: ImpossibleBlocker[] }
+  | { type: "IMPOSSIBLE_CONDITION"; condition: Omit<VestingNode, "type"> };
+```
 
-## Special Cases
+## Special cases
 
-### Partial Knowledge for LATER OF selectors
+### Partial knowledge for `LATER OF`
 
-In the case of a `LATER OF` selector, if some but not all items are resolved, we preserve the information gleaned from the resolved items.
-
-By way of example, consider a 4-year quarterly vesting schedule, with a cliff at the later of 12 months from the vesting start and a milestone event. The grant is made on 2025-01-01 over 100 shares.
-
-This vesting schedule is described with the following statement:
+When a `LATER OF` selector has some but not all items resolved, the resolved items still constrain the result. Consider a 4-year quarterly schedule whose cliff is the *later* of 12 months and a milestone, granted 2025-01-01 over 100 shares:
 
 ```vest
 100 VEST
   OVER 48 months EVERY 3 months
-  CLIFF LATER OF(
-    +12 months,
-    EVENT milestone
-  )
+  CLIFF LATER OF( +12 months, EVENT milestone )
 ```
 
-If this statement is evaluated at a time when `EVENT milestone` is not resolved, the vesting start will be unresolved.
+With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff *later* than the 12-month floor, so we already know nothing vests before that floor. The schedule is `unresolved`, yet every installment carries the 12-month cliff:
 
-Nonetheless, since this is a `LATER OF` statement we know that a that a 12 month cliff will always apply:
-
-| Amount | Symbolic Date                                | State      | Unresolved      |
-| ------ | -------------------------------------------- | ---------- | --------------- |
-| 25     | `{type: UNRESOLVED_CLIFF, date: 2026-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2026-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: UNRESOLVED_CLIFF, date: 2027-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2027-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: UNRESOLVED_CLIFF, date: 2028-01-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-04-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-07-01}` | UNRESOLVED | EVENT milestone |
-| 6      | `{type: UNRESOLVED_CLIFF, date: 2028-10-01}` | UNRESOLVED | EVENT milestone |
-| 7      | `{type: UNRESOLVED_CLIFF, date: 2029-01-01}` | UNRESOLVED | EVENT milestone |
+| Amount | Symbolic date | State | Unresolved |
+| --- | --- | --- | --- |
+| 25 | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
+| 6 | `{ type: UNRESOLVED_CLIFF, date: 2026-04-01 }` | UNRESOLVED | EVENT milestone |
+| … | … *(through 2029-01-01)* | … | … |
 
 ### Vesting start before grant date
 
-Awards are often granted with a vesting start that precedes the grant date in order to provide vesting credit for services that have already been provided. In these situations the evaluator accrues vesting amounts until the grant date.
-
-For instance, consider an award over 100 shares granted on 2025-01-01 with a 4-year quarterly vesting schedule commencing on 2024-01-01. All four vesting installments in calendar year 2024 are accrued and vest on the grant date.
+Awards are often granted with a vesting start that precedes the grant date, to give credit for service already provided. The evaluator accrues every installment before the grant date onto the grant date. A 4-year quarterly schedule starting 2024-01-01, granted 2025-01-01 over 100 shares:
 
 ```vest
 100 VEST FROM DATE 2024-01-01
   OVER 48 months EVERY 3 months
 ```
 
-| Amount | Date       | State    |
-| :----- | :--------- | :------- |
-| 25     | 2025-01-01 | RESOLVED |
-| 6      | 2025-04-01 | RESOLVED |
-| 6      | 2025-07-01 | RESOLVED |
-| 6      | 2025-10-01 | RESOLVED |
-| 7      | 2026-01-01 | RESOLVED |
-| 6      | 2026-04-01 | RESOLVED |
-| 6      | 2026-07-01 | RESOLVED |
-| 6      | 2026-10-01 | RESOLVED |
-| 7      | 2027-01-01 | RESOLVED |
-| 6      | 2027-04-01 | RESOLVED |
-| 6      | 2027-07-01 | RESOLVED |
-| 6      | 2027-10-01 | RESOLVED |
-| 7      | 2028-01-01 | RESOLVED |
+The four 2024 installments accrue and vest together on the grant date:
+
+| Amount | Date | State |
+| --- | --- | --- |
+| 25 | 2025-01-01 | RESOLVED *(accrued 2024 catch-up)* |
+| 6 | 2025-04-01 | RESOLVED |
+| … | … *(through 2028-01-01)* | … |

@@ -29,6 +29,7 @@ const program = normalizeProgram(parse("VEST OVER 4 years EVERY 1 month CLIFF 1 
 const schedule = evaluateStatement(program[0], {
   events: { grantDate: "2025-01-01" },
   grantQuantity: 4800,
+  asOf: "2026-04-16",
 });
 // → 1,200 shares vest at the 1-year cliff (2026-01-01), then 100/month for 36 months.
 //   37 installments that telescope exactly to 4,800 (the rounded shares sum to the
@@ -42,18 +43,15 @@ const schedule = evaluateStatement(program[0], {
 The pipeline turns a DSL string into a classified, exactly-allocated schedule:
 
 ```
-DSL string ──parse──▶ raw AST ──normalize──▶ Program (rich AST)
-                                                 │
-                       resolve combinators vs. runtime, then CLASSIFY
-                                                 │
-              ┌──────────────────────────────────┼──────────────────────────────────┐
-              ▼                                   ▼                                   ▼
-          TEMPLATE                           EVENTS-ONLY                      UNRESOLVED
-   fits one canonical template      resolves, but can't be one template    blocked on an
-   → core compiles exact shares     → bare dated amounts + the reason      unfired event
-              └──────────────────────────────────┼──────────────────────────────────┘
-                                                  ▼
-                                          EvaluatedSchedule
+DSL string ──parse──▶ raw AST ──normalizeProgram──▶ Program (rich AST)
+                                   │
+                 resolve combinators vs. runtime, then CLASSIFY
+                                   ▼
+                          EvaluatedSchedule, status ∈
+                            template     — fits one canonical template
+                            events-only  — dated facts, not one template (+ reason)
+                            unresolved   — waiting on an unfired event
+                            impossible   — a contradiction; can never resolve
 ```
 
 ### Two layers: *resolve* vs. *substitute*
@@ -68,7 +66,7 @@ The codebase splits along one precise line:
 - **The front-end (`@vestlang/evaluator`, the "extended" layer) *resolves*.** Combinators
   let runtime *select the structure itself* — `LATER OF(12mo, EVENT "ipo")` becomes a
   different schedule depending on which date wins. The resolver evaluates that against
-  runtime and then **classifies** the result into one of three interchange-fidelity levels.
+  runtime and then **classifies** the result into one of four `status` verdicts.
 
 Think of it like a source language and an IR: the DSL expresses *contingency and intent*
 that the resolved interchange can't *hold*; the engine is the exact, validated target that
@@ -76,17 +74,18 @@ multiple producers can share.
 
 ### The fidelity ladder
 
-Every resolved program lands on exactly one level:
+Every evaluated program lands on exactly one `status`:
 
-| Level | When | What you get |
+| `status` | When | What you get |
 |---|---|---|
 | **`template`** | The program fits one canonical template | Exact installments; structured round-trip; intent preserved (best case) |
-| **`events-only`** | It resolves to concrete dated amounts but *can't* be one template — two overlapping independent absolute starts, a loaded allocation mode (front/back-weighted), an event-anchored cliff | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
-| **`unresolved`** | It can't be materialized yet — an unfired event, or a self-contradictory condition | Amounts with symbolic/absent dates + `blockers` naming what's missing |
+| **`events-only`** | It resolves to concrete dated amounts but *can't* be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
+| **`unresolved`** | It can't be materialized yet — waiting on an unfired event | Amounts with symbolic/absent dates + `blockers` naming what's missing |
+| **`impossible`** | A condition can never be satisfied — e.g. an event required `BEFORE` a date already in the past | Installments flagged `IMPOSSIBLE` + `blockers` naming the contradiction |
 
-A program collapses to **one** template (or one events-only / unresolved verdict) — never a
-fan-out to N. At the individual installment level, each row carries a `state` of `RESOLVED`,
-`UNRESOLVED`, or `IMPOSSIBLE`.
+A program collapses to **one** verdict — `template`, `events-only`, `unresolved`, or
+`impossible` — never a fan-out to N. The program-level `status` is the headline; each
+installment also carries its own `state` of `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
 
 ---
 
@@ -127,12 +126,13 @@ const program = normalizeProgram(parse('VEST OVER 4 years EVERY 1 month CLIFF 1 
 const schedule = evaluateStatement(program[0], {
   events: { grantDate: "2025-01-01" },     // grantDate is required
   grantQuantity: 4800,
-  // optional: asOf, vesting_day_of_month, allocation_type
+  asOf: "2026-04-16",                       // the scenario date (required)
+  // optional: vesting_day_of_month, allocation_type
 });
 
-schedule.fidelity;      // "template" | "events-only" | "unresolved"
+schedule.status;        // "template" | "events-only" | "unresolved" | "impossible"
 schedule.installments;  // [{ amount, date, meta: { state } }, ...]
-schedule.blockers;      // [] unless something is unresolved
+schedule.blockers;      // [] unless something is unresolved or impossible
 ```
 
 `evaluateStatement` classifies one statement at a time. To collapse a whole multi-statement
@@ -148,24 +148,7 @@ template — e.g. another cap-table tool consuming the interchange — and just 
 allocation, skipping the DSL entirely. It ships dual CJS/ESM (the rest of the toolkit is
 ESM-only) so even CommonJS consumers can depend on the engine.
 
-### 2. From the CLI
-
-```bash
-# Per-statement evaluation
-node apps/cli/dist/index.js evaluate -q 4800 -g 2025-01-01 \
-  "VEST OVER 4 years EVERY 1 month CLIFF 1 year"
-
-# Collapse a whole program into one schedule + its fidelity verdict
-node apps/cli/dist/index.js evaluate --program -q 100 -g 2025-01-01 "[ ... , ... ]"
-
-# Supply named events the DSL references
-node apps/cli/dist/index.js evaluate -q 4800 -g 2025-01-01 -e ipo=2026-06-15 \
-  "VEST OVER 4 years EVERY 1 month CLIFF LATER OF(+12 months, EVENT ipo)"
-```
-
-Other commands: `inspect` (raw AST), `compile` (normalized AST), `asOf`, `lint`.
-
-### 3. As an MCP server
+### 2. As an MCP server
 
 `apps/mcp-server` exposes the full pipeline as Model Context Protocol tools —
 `vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_program`,
