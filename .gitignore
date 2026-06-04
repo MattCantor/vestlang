@@ -11,3 +11,7 @@ docs/scratch/
 docs/carta-conditional-vesting.md
 docs/carta-vesting-question-email.md
 docs/core-extended-split.md
+
+# Local Claude Code context — kept local, not for the public repo
+/CLAUDE.md
+/.claude/
