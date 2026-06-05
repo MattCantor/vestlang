@@ -7,6 +7,7 @@ import { splitCoincidentCliffs } from "./coincidentCliff.js";
 import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
 import { POLICY_CANDIDATES } from "./policy.js";
+import { segmentSequential } from "./sequential.js";
 import type {
   CliffUniformComponent,
   Component,
@@ -16,7 +17,11 @@ import type {
   TrancheInput,
   UniformComponent,
 } from "./types.js";
-import { residualAgainstInput, type VerifyContext } from "./verify.js";
+import {
+  programStatus,
+  residualAgainstInput,
+  type VerifyContext,
+} from "./verify.js";
 
 function sortInput(tranches: TrancheInput[]): TrancheInput[] {
   return [...tranches].sort((a, b) => a.date.localeCompare(b.date));
@@ -69,6 +74,9 @@ interface Attempt {
   residual: number;
   policy: VestingDayOfMonth;
   cadencesTried: string[];
+  /** Per-segment continuation flags for a sequential attempt (Phase 3 will turn
+   * the marked tails into `THEN`); absent for the ordinary parallel cover. */
+  continuation?: boolean[];
 }
 
 function runOne(
@@ -126,6 +134,108 @@ function runOne(
   };
 }
 
+/** Build the sequential (one-schedule-whose-rate-changes) candidate for a policy,
+ * or null if the stream isn't a forward chain. Runs alongside `runOne` and
+ * competes in the same selection. */
+function runSequential(
+  sorted: TrancheInput[],
+  policy: VestingDayOfMonth,
+  totalQuantity: number,
+  grantDate: OCTDate,
+  asOf: OCTDate,
+): Attempt | null {
+  const seq = segmentSequential(sorted, policy);
+  if (seq === null) return null;
+
+  // The segments are produced in cursor order already, so no re-sort is needed.
+  const program: Program = seq.components.map((c) => buildStatement(c, policy));
+  const verifyCtx: VerifyContext = {
+    grantDate,
+    totalQuantity,
+    asOf,
+    vestingDayOfMonth: policy,
+  };
+  const { residual } = residualAgainstInput(program, sorted, verifyCtx);
+
+  return {
+    program,
+    components: seq.components,
+    foldCount: seq.components.filter((c) => c.kind === "CLIFF_UNIFORM").length,
+    preGrantFolds: 0,
+    preGrantStarts: [],
+    residual,
+    policy,
+    cadencesTried: seq.cadencesTried,
+    continuation: seq.continuation,
+  };
+}
+
+/** Rank of a collapse verdict for tiebreaking — higher is better. A schedule the
+ * interchange can hold as one template beats a flat events-only list; anything
+ * that doesn't even reproduce (unresolved/impossible) ranks last and is only ever
+ * reached through the residual gate anyway. */
+function verdictRank(status: string): number {
+  if (status === "template") return 2;
+  if (status === "events-only") return 1;
+  return 0;
+}
+
+/**
+ * Pick the winning attempt by a strict, in-order tiebreak:
+ *   1. smallest residual — a hard gate, so a candidate that doesn't reproduce the
+ *      stream exactly never wins on the strength of a nicer shape;
+ *   2. best verdict (template over events-only) — recovering a reusable schedule
+ *      is the whole point, so it outranks a shorter flat decomposition;
+ *   3. shortest program — fewest statements among equally-good candidates.
+ * Equal on all three keeps the earlier attempt, so adding the sequential
+ * candidate never disturbs a case the parallel cover already handled identically.
+ *
+ * The verdict needs a program-collapse call, so we only spend it on candidates
+ * that clear the residual gate (the rest can't win on residual regardless).
+ */
+function selectBest(
+  attempts: Attempt[],
+  grantDate: OCTDate,
+  totalQuantity: number,
+  asOf: OCTDate,
+): Attempt {
+  const verdictOf = (a: Attempt): number =>
+    a.residual < 1e-6
+      ? verdictRank(
+          programStatus(a.program, {
+            grantDate,
+            totalQuantity,
+            asOf,
+            vestingDayOfMonth: a.policy,
+          }),
+        )
+      : 0;
+
+  let best = attempts[0];
+  let bestVerdict = verdictOf(best);
+  for (let i = 1; i < attempts.length; i++) {
+    const cur = attempts[i];
+    if (cur.residual < best.residual - 1e-9) {
+      best = cur;
+      bestVerdict = verdictOf(cur);
+      continue;
+    }
+    if (cur.residual > best.residual + 1e-9) continue;
+
+    const curVerdict = verdictOf(cur);
+    if (curVerdict > bestVerdict) {
+      best = cur;
+      bestVerdict = curVerdict;
+    } else if (
+      curVerdict === bestVerdict &&
+      cur.program.length < best.program.length
+    ) {
+      best = cur;
+    }
+  }
+  return best;
+}
+
 export function inferSchedule(input: InferInput): InferResult {
   if (input.tranches.length === 0) {
     throw new Error("inferSchedule: tranches must not be empty");
@@ -138,7 +248,6 @@ export function inferSchedule(input: InferInput): InferResult {
   const grantDateKnown = input.grantDate !== undefined;
   const grantDate = input.grantDate ?? firstDate;
 
-  let best: Attempt | null = null;
   const notes: string[] = [];
 
   // The day-of-month convention is either fixed to a provided hint or searched
@@ -150,32 +259,36 @@ export function inferSchedule(input: InferInput): InferResult {
     ? [input.policy]
     : POLICY_CANDIDATES;
 
+  // Each policy yields the ordinary parallel cover and, when the stream reads as
+  // one forward chain, a sequential alternative. The cover is pushed first so a
+  // tie resolves in its favor — the sequential candidate only ever displaces it
+  // by genuinely doing better (recovering a template the cover couldn't).
+  const attempts: Attempt[] = [];
   for (const policy of policies) {
-    const attempt = runOne(
+    attempts.push(
+      runOne(
+        sorted,
+        policy,
+        totalQuantity,
+        grantDate,
+        lastDate,
+        grantDateKnown,
+      ),
+    );
+    const seq = runSequential(
       sorted,
       policy,
       totalQuantity,
       grantDate,
       lastDate,
-      grantDateKnown,
     );
-    if (best === null) {
-      best = attempt;
-      continue;
-    }
-    const aSize = attempt.program.length;
-    const bSize = best.program.length;
-    if (attempt.residual < best.residual - 1e-9) {
-      best = attempt;
-    } else if (
-      Math.abs(attempt.residual - best.residual) <= 1e-9 &&
-      aSize < bSize
-    ) {
-      best = attempt;
-    }
+    if (seq !== null) attempts.push(seq);
   }
 
-  if (best === null) throw new Error("inferSchedule: no attempt succeeded");
+  if (attempts.length === 0) {
+    throw new Error("inferSchedule: no attempt succeeded");
+  }
+  let best: Attempt = selectBest(attempts, grantDate, totalQuantity, lastDate);
 
   if (best.residual >= 1e-6) {
     const fallbackComponents = explicitListFallback(sorted);

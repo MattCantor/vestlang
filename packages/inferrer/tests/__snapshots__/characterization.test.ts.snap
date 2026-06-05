@@ -6,12 +6,11 @@ exports[`inferrer characterization — sequential/THEN baseline > C1: monthly gr
     "cliffFolds": 0,
     "preGrantFolds": 0,
     "singles": 0,
-    "uniforms": 2,
+    "uniforms": 3,
   },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month",
-  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "dsl": "200 VEST FROM DATE 2023-11-01 OVER 2 months EVERY 1 month PLUS 400 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-03-01 OVER 2 months EVERY 1 month",
   "residual": 0,
-  "status": "events-only",
+  "status": "template",
 }
 `;
 
