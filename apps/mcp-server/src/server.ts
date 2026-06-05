@@ -47,8 +47,8 @@ Typical workflows:
   multi-statement program fits a single canonical template or falls back to bare
   events (e.g. overlapping independent starts).
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
-  {date, amount} pairs to get the best-fit DSL (matching-pursuit
-  decomposition). Note that the returned diagnostics.vestingDayOfMonth is not
+  {date, amount} pairs to get the best-fit DSL (branch-and-bound
+  minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
   encoded in the DSL — pass it back as EvaluationContext when evaluating the
   returned DSL.
 
@@ -334,13 +334,13 @@ export function createServer(): McpServer {
     },
   );
 
-  /* infer_schedule: {date, amount}[] → DSL via matching-pursuit decomposition */
+  /* infer_schedule: {date, amount}[] → DSL via branch-and-bound exact cover */
   server.registerTool(
     "vestlang_infer_schedule",
     {
       title: "Infer vestlang from tranche array",
       description:
-        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Uses matching-pursuit decomposition — greedy extraction of uniform-periodic components, then a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as EvaluationContext, or they will get a slightly different schedule.",
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Decomposes the stream by branch-and-bound minimum-cardinality exact cover — the fewest uniform trains, cliffs, and one-off pulses that reproduce it (a greedy seed sets the bound, then the search tries to beat it), with a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as EvaluationContext, or they will get a slightly different schedule.",
       inputSchema: z
         .object({
           tranches: z

@@ -357,7 +357,7 @@ export function inferSchedule(input: InferInput): InferResult {
     );
     if (fallbackResidual < best.residual) {
       notes.push(
-        "matching-pursuit left nonzero residual; emitted explicit list fallback",
+        "exact-cover search left nonzero residual; emitted explicit list fallback",
       );
       best = { ...fallbackAttempt, residual: fallbackResidual };
     }

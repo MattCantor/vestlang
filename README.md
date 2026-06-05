@@ -101,7 +101,7 @@ umbrella at build time and never published on their own.
 | `@vestlang/dsl` | — | PEG grammar + parser |
 | `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
 | `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
-| `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (matching-pursuit) |
+| `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (branch-and-bound exact cover) |
 | `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
 
 Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`.
@@ -233,9 +233,11 @@ the program resolves to bare dated amounts with the reason — `vest evaluate --
 ### The inverse: tranches → DSL
 
 `inferSchedule` reconstructs a best-fit vestlang program from an observed array of
-`{ date, amount }` tranches via matching-pursuit decomposition (it peels off the
-largest recognizable component — a uniform run, a cliff — then re-fits the remainder),
-returning the `dsl`, the decomposition, and diagnostics (residual error, detected policies).
+`{ date, amount }` tranches by **branch-and-bound minimum-cardinality exact cover**:
+it covers the stream with the fewest components — uniform trains, cliffs, one-off
+pulses. A greedy pass (take the largest fitting component, subtract, repeat) seeds an
+upper bound, then the search tries to beat it. It returns the `dsl`, the decomposition,
+and diagnostics (residual error, detected policies).
 
 It recovers more than parallel components. When the tranches read as **one schedule
 whose rate or cadence changes over time** — back-to-back segments on a continuing grid,
