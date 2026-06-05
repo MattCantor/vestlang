@@ -18,45 +18,42 @@ exports[`inferrer characterization — sequential/THEN baseline > C1: monthly gr
 exports[`inferrer characterization — sequential/THEN baseline > C2: three-month cliff, then a monthly tail 1`] = `
 {
   "decomposition": {
-    "cliffFolds": 0,
+    "cliffFolds": 1,
     "preGrantFolds": 0,
-    "singles": 1,
-    "uniforms": 1,
+    "singles": 0,
+    "uniforms": 0,
   },
-  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-02-01",
-  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months",
   "residual": 0,
-  "status": "events-only",
+  "status": "template",
 }
 `;
 
 exports[`inferrer characterization — sequential/THEN baseline > C3: cliff, then monthly, then a slower monthly tail 1`] = `
 {
   "decomposition": {
-    "cliffFolds": 0,
+    "cliffFolds": 1,
     "preGrantFolds": 0,
-    "singles": 1,
-    "uniforms": 2,
+    "singles": 0,
+    "uniforms": 1,
   },
-  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 150 VEST FROM DATE 2024-05-01 OVER 3 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-02-01",
-  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months PLUS 150 VEST FROM DATE 2024-05-01 OVER 3 months EVERY 1 month",
   "residual": 0,
-  "status": "events-only",
+  "status": "template",
 }
 `;
 
 exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + monthly head, then a quarterly tail 1`] = `
 {
   "decomposition": {
-    "cliffFolds": 0,
+    "cliffFolds": 1,
     "preGrantFolds": 0,
-    "singles": 1,
-    "uniforms": 2,
+    "singles": 0,
+    "uniforms": 1,
   },
-  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 300 VEST FROM DATE 2024-05-01 OVER 6 months EVERY 3 months PLUS 200 VEST FROM DATE 2024-02-01",
-  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months PLUS 300 VEST FROM DATE 2024-05-01 OVER 6 months EVERY 3 months",
   "residual": 0,
-  "status": "events-only",
+  "status": "template",
 }
 `;
 
