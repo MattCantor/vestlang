@@ -46,4 +46,4 @@ export {
   rehydratePersisted,
 } from "./sidecar.js";
 export type { Sidecar, PersistedArtifact } from "./sidecar.js";
-export type { ResolveResult } from "./types.js";
+export type { ResolveResult, NonTemplateReason } from "./types.js";
