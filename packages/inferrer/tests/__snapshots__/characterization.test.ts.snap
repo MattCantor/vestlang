@@ -1,0 +1,120 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`inferrer characterization — sequential/THEN baseline > C1: monthly grant whose rate doubles mid-stream, then returns 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 0,
+    "uniforms": 2,
+  },
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C2: three-month cliff, then a monthly tail 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 1,
+    "uniforms": 1,
+  },
+  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-02-01",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C3: cliff, then monthly, then a slower monthly tail 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 1,
+    "uniforms": 2,
+  },
+  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 150 VEST FROM DATE 2024-05-01 OVER 3 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-02-01",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + monthly head, then a quarterly tail 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 1,
+    "uniforms": 2,
+  },
+  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 300 VEST FROM DATE 2024-05-01 OVER 6 months EVERY 3 months PLUS 200 VEST FROM DATE 2024-02-01",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C5: two monthly grants on different days (1st and 15th) — two schedules 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 0,
+    "uniforms": 2,
+  },
+  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-01-15 OVER 4 months EVERY 1 month",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C6: three monthly grants on different days (1st, 10th, 20th) 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 0,
+    "uniforms": 3,
+  },
+  "dsl": "300 VEST FROM DATE 2024-01-01 OVER 3 months EVERY 1 month PLUS 180 VEST FROM DATE 2024-01-10 OVER 3 months EVERY 1 month PLUS 90 VEST FROM DATE 2024-01-20 OVER 3 months EVERY 1 month",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C7: almost a clean chain, but the last tranche is off by 5 — no exact fit 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 1,
+    "uniforms": 2,
+  },
+  "dsl": "602 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month PLUS 199 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS 4 VEST FROM DATE 2024-05-01",
+  "reason": "Two independent absolute-date vesting grids on one grant.",
+  "residual": 0,
+  "status": "events-only",
+}
+`;
+
+exports[`inferrer characterization — sequential/THEN baseline > C8: a plain six-month monthly grant (one template, not a longer chain) 1`] = `
+{
+  "decomposition": {
+    "cliffFolds": 0,
+    "preGrantFolds": 0,
+    "singles": 0,
+    "uniforms": 1,
+  },
+  "dsl": "600 VEST FROM DATE 2024-01-01 OVER 6 months EVERY 1 month",
+  "residual": 0,
+  "status": "template",
+}
+`;
