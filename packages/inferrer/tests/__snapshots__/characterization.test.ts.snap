@@ -8,7 +8,7 @@ exports[`inferrer characterization — sequential/THEN baseline > C1: monthly gr
     "singles": 0,
     "uniforms": 3,
   },
-  "dsl": "200 VEST FROM DATE 2023-11-01 OVER 2 months EVERY 1 month PLUS 400 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-03-01 OVER 2 months EVERY 1 month",
+  "dsl": "200 VEST FROM DATE 2023-11-01 OVER 2 months EVERY 1 month THEN 400 VEST OVER 2 months EVERY 1 month THEN 200 VEST OVER 2 months EVERY 1 month",
   "residual": 0,
   "status": "template",
 }
@@ -36,7 +36,7 @@ exports[`inferrer characterization — sequential/THEN baseline > C3: cliff, the
     "singles": 0,
     "uniforms": 1,
   },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months PLUS 150 VEST FROM DATE 2024-05-01 OVER 3 months EVERY 1 month",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 150 VEST OVER 3 months EVERY 1 month",
   "residual": 0,
   "status": "template",
 }
@@ -50,7 +50,7 @@ exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + mo
     "singles": 0,
     "uniforms": 1,
   },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months PLUS 300 VEST FROM DATE 2024-05-01 OVER 6 months EVERY 3 months",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 300 VEST OVER 6 months EVERY 3 months",
   "residual": 0,
   "status": "template",
 }

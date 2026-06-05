@@ -129,6 +129,29 @@ describe("inferSchedule — cliff", () => {
     expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toMatch(/OVER 48 months/i);
   });
+
+  it("cliff head that drops to a slower rate → cliff statement THEN a tail", () => {
+    // A three-month cliff (300 = 3×100), then a monthly tail, then the tail slows
+    // down. The cliff abuts the tail on the grid, so it's one schedule whose rate
+    // changes: a cliff statement followed by a THEN continuation, not two grants.
+    const tranches: TrancheInput[] = [
+      { date: d("2024-02-01"), amount: 300 },
+      { date: d("2024-03-01"), amount: 100 },
+      { date: d("2024-04-01"), amount: 100 },
+      { date: d("2024-05-01"), amount: 100 },
+      { date: d("2024-06-01"), amount: 50 },
+      { date: d("2024-07-01"), amount: 50 },
+      { date: d("2024-08-01"), amount: 50 },
+    ];
+
+    const result = inferSchedule({ tranches, grantDate: d("2023-11-01") });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.cliffFolds).toBe(1);
+    expect(result.dsl).toContain("CLIFF");
+    expect(result.dsl).toContain("THEN");
+    expect(result.dsl).not.toContain("PLUS");
+  });
 });
 
 describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
@@ -228,6 +251,10 @@ describe("inferSchedule — superposition", () => {
   });
 
   it("two cadences (quarterly yr 1 + monthly yr 2+) → two UNIFORMs", () => {
+    // The quarterly year does NOT hand off cleanly to the monthly tail: stepping
+    // one quarter past the last quarterly tranche lands in April, but the monthly
+    // run starts in February. The segments overlap rather than abut, so this isn't
+    // one forward chain — it stays two stacked grids (PLUS), not a THEN chain.
     const tranches: TrancheInput[] = [
       { date: d("2024-04-01"), amount: 2500 },
       { date: d("2024-07-01"), amount: 2500 },

@@ -1,6 +1,11 @@
 import { stringify } from "@vestlang/render";
-import type { OCTDate, Program, VestingDayOfMonth } from "@vestlang/types";
-import { buildStatement } from "./atoms.js";
+import type {
+  OCTDate,
+  Program,
+  Status,
+  VestingDayOfMonth,
+} from "@vestlang/types";
+import { asChainedTail, buildStatement } from "./atoms.js";
 import { minimalCtx, walk } from "./cadence.js";
 import { foldCliffs } from "./cliffFold.js";
 import { splitCoincidentCliffs } from "./coincidentCliff.js";
@@ -18,6 +23,7 @@ import type {
   UniformComponent,
 } from "./types.js";
 import {
+  collapseAgainstInput,
   programStatus,
   residualAgainstInput,
   type VerifyContext,
@@ -74,9 +80,14 @@ interface Attempt {
   residual: number;
   policy: VestingDayOfMonth;
   cadencesTried: string[];
-  /** Per-segment continuation flags for a sequential attempt (Phase 3 will turn
-   * the marked tails into `THEN`); absent for the ordinary parallel cover. */
+  /** Per-segment continuation flags for a sequential attempt — the marked tails
+   * are emitted as `THEN`. Absent for the ordinary parallel cover. */
   continuation?: boolean[];
+  /** Program-level verdict, precomputed for the sequential attempt (its residual
+   * already comes from a collapse, which hands the verdict back at the same time).
+   * Absent for the parallel cover, whose verdict is computed lazily during
+   * selection. */
+  status?: Status;
 }
 
 function runOne(
@@ -148,14 +159,21 @@ function runSequential(
   if (seq === null) return null;
 
   // The segments are produced in cursor order already, so no re-sort is needed.
-  const program: Program = seq.components.map((c) => buildStatement(c, policy));
+  // Each continuation segment is emitted as a THEN tail (no FROM date); the head
+  // keeps its own start. A chained tail can't be evaluated on its own, so this
+  // program is scored by collapsing the whole chain rather than statement by
+  // statement.
+  const program: Program = seq.components.map((c, i) => {
+    const stmt = buildStatement(c, policy);
+    return seq.continuation[i] ? asChainedTail(stmt) : stmt;
+  });
   const verifyCtx: VerifyContext = {
     grantDate,
     totalQuantity,
     asOf,
     vestingDayOfMonth: policy,
   };
-  const { residual } = residualAgainstInput(program, sorted, verifyCtx);
+  const { residual, status } = collapseAgainstInput(program, sorted, verifyCtx);
 
   return {
     program,
@@ -167,6 +185,7 @@ function runSequential(
     policy,
     cadencesTried: seq.cadencesTried,
     continuation: seq.continuation,
+    status,
   };
 }
 
@@ -180,18 +199,29 @@ function verdictRank(status: string): number {
   return 0;
 }
 
+/** How many statements carry their own explicit start. A THEN chain has one (the
+ * head); an N-statement PLUS list has N. Fewer is better: the chained form reads
+ * as one schedule and computes its handoffs from the chain origin, so it can't
+ * miss a clamped month-end the way a written-down date can. */
+function explicitStarts(program: Program): number {
+  return program.filter((s) => !s.chained).length;
+}
+
 /**
  * Pick the winning attempt by a strict, in-order tiebreak:
  *   1. smallest residual — a hard gate, so a candidate that doesn't reproduce the
  *      stream exactly never wins on the strength of a nicer shape;
  *   2. best verdict (template over events-only) — recovering a reusable schedule
  *      is the whole point, so it outranks a shorter flat decomposition;
- *   3. shortest program — fewest statements among equally-good candidates.
- * Equal on all three keeps the earlier attempt, so adding the sequential
- * candidate never disturbs a case the parallel cover already handled identically.
+ *   3. shortest program — fewest statements among equally-good candidates;
+ *   4. fewest explicit starts — the THEN chain over the abutting PLUS list when
+ *      they're otherwise tied (same residual, verdict, and length).
+ * Equal on all four keeps the earlier attempt, so adding the sequential candidate
+ * never disturbs a case the parallel cover already handled identically.
  *
- * The verdict needs a program-collapse call, so we only spend it on candidates
- * that clear the residual gate (the rest can't win on residual regardless).
+ * The verdict needs a program-collapse call; the sequential attempt already has
+ * one (stored on it), and for the rest we only spend the call on candidates that
+ * clear the residual gate (the others can't win on residual regardless).
  */
 function selectBest(
   attempts: Attempt[],
@@ -199,17 +229,18 @@ function selectBest(
   totalQuantity: number,
   asOf: OCTDate,
 ): Attempt {
-  const verdictOf = (a: Attempt): number =>
-    a.residual < 1e-6
-      ? verdictRank(
-          programStatus(a.program, {
-            grantDate,
-            totalQuantity,
-            asOf,
-            vestingDayOfMonth: a.policy,
-          }),
-        )
-      : 0;
+  const verdictOf = (a: Attempt): number => {
+    if (a.residual >= 1e-6) return 0;
+    const status =
+      a.status ??
+      programStatus(a.program, {
+        grantDate,
+        totalQuantity,
+        asOf,
+        vestingDayOfMonth: a.policy,
+      });
+    return verdictRank(status);
+  };
 
   let best = attempts[0];
   let bestVerdict = verdictOf(best);
@@ -223,12 +254,21 @@ function selectBest(
     if (cur.residual > best.residual + 1e-9) continue;
 
     const curVerdict = verdictOf(cur);
-    if (curVerdict > bestVerdict) {
+    if (curVerdict !== bestVerdict) {
+      if (curVerdict > bestVerdict) {
+        best = cur;
+        bestVerdict = curVerdict;
+      }
+      continue;
+    }
+
+    // Same residual and verdict: prefer the shorter program, then the one with
+    // fewer explicit starts (the THEN chain over the equivalent PLUS list).
+    if (cur.program.length < best.program.length) {
       best = cur;
-      bestVerdict = curVerdict;
     } else if (
-      curVerdict === bestVerdict &&
-      cur.program.length < best.program.length
+      cur.program.length === best.program.length &&
+      explicitStarts(cur.program) < explicitStarts(best.program)
     ) {
       best = cur;
     }

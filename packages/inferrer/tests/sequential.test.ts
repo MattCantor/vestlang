@@ -128,6 +128,11 @@ describe("inferSchedule — sequential recovery end to end", () => {
     expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
     expect(inferred.decomposition.uniforms.length).toBe(3);
 
+    // The segments are written as one schedule (THEN), not as separate dated
+    // grants (PLUS): the head carries the start, the continuations don't.
+    expect(inferred.dsl).toContain("THEN");
+    expect(inferred.dsl).not.toContain("PLUS");
+
     // Collapse the emitted DSL the way a consumer would and confirm the program
     // reads as one reusable template, not a flat events-only list.
     const program = normalizeProgram(parse(inferred.dsl));
@@ -139,5 +144,84 @@ describe("inferSchedule — sequential recovery end to end", () => {
     };
     const [schedule] = evaluateProgram(program, ctx);
     expect(schedule.status).toBe("template");
+  });
+
+  it("emits a head followed by chained tails, never the other way round", () => {
+    // The renderer reads a chain off the flat statement list by looking for the
+    // first un-chained statement and treating the chained ones after it as its
+    // continuation. So the head must come first and every later segment must be
+    // chained — that's the shape THEN encoding depends on.
+    const program = normalizeProgram(
+      parse(inferSchedule({ tranches: RATE_CHANGE }).dsl),
+    );
+    expect(program.map((s) => s.chained ?? false)).toEqual([false, true, true]);
+  });
+
+  it("renders a cliff head handing off to a chained tail", () => {
+    // The cliff (head, with its own start) is followed by a THEN tail at a new
+    // cadence — one schedule, not a cliff grant plus a separate quarterly grant.
+    const cliffThenQuarterly: TrancheInput[] = [
+      { date: "2024-02-01", amount: 300 },
+      { date: "2024-03-01", amount: 100 },
+      { date: "2024-04-01", amount: 100 },
+      { date: "2024-05-01", amount: 100 },
+      { date: "2024-08-01", amount: 150 },
+      { date: "2024-11-01", amount: 150 },
+    ];
+    const inferred = inferSchedule({
+      tranches: cliffThenQuarterly,
+      grantDate: "2023-11-01",
+    });
+    expect(inferred.dsl).toContain("CLIFF");
+    expect(inferred.dsl).toContain("THEN");
+    expect(inferred.dsl).not.toContain("PLUS");
+  });
+});
+
+describe("inferSchedule — THEN survives month-end clamping", () => {
+  // A monthly rate change where the handoff lands on February. The head ends on a
+  // 31st-of-the-month grid, so its next slot springs back to Feb 29; the rate then
+  // doubles. This is the case THEN exists for: written as a dated PLUS list the
+  // tail would carry an explicit start that the clamping pushes a day off the
+  // running grid, breaking the schedule into two; written as THEN the tail has no
+  // date of its own and just continues the grid.
+  const MONTH_END: TrancheInput[] = [
+    { date: "2023-12-31", amount: 100 },
+    { date: "2024-01-31", amount: 100 },
+    { date: "2024-02-29", amount: 200 },
+    { date: "2024-03-31", amount: 200 },
+  ];
+  const GRANT = "2023-11-30";
+
+  function collapse(dsl: string, dom: string) {
+    const ctx: EvaluationContextInput = {
+      events: { grantDate: GRANT },
+      grantQuantity: 600,
+      asOf: "2030-01-01",
+      vesting_day_of_month:
+        dom as EvaluationContextInput["vesting_day_of_month"],
+    };
+    return evaluateProgram(normalizeProgram(parse(dsl)), ctx)[0];
+  }
+
+  it("recovers the stream as one template", () => {
+    const inferred = inferSchedule({ tranches: MONTH_END, grantDate: GRANT });
+    expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(inferred.dsl).toContain("THEN");
+    expect(
+      collapse(inferred.dsl, inferred.diagnostics.vestingDayOfMonth).status,
+    ).toBe("template");
+  });
+
+  it("the equivalent dated PLUS list cannot be one template", () => {
+    // What the inferrer would have emitted before THEN encoding: the tail's start
+    // is computed by stepping one month back from its first installment (Feb 29 →
+    // Jan 29), which no longer lines up with the head's grid (Jan 31). The two
+    // statements read as independent grids → events-only.
+    const dated =
+      "200 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 400 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
+    expect(collapse(dated, "31_OR_LAST_DAY_OF_MONTH").status).toBe(
+      "events-only",
+    );
   });
 });

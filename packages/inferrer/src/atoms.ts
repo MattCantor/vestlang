@@ -110,3 +110,29 @@ export function buildStatement(
   if (c.kind === "SINGLE_TRANCHE") return buildSingle(c);
   return buildCliffUniform(c);
 }
+
+/**
+ * Re-express a built statement as a THEN continuation: drop its FROM anchor and
+ * mark it chained, so the evaluator picks its start up from where the previous
+ * segment ended rather than from a date we wrote down. Keeping the date out is
+ * what makes a chain survive month-end clamping — a written-down handoff can land
+ * a day off the running cursor, but a chained tail can't.
+ *
+ * Only a plain dated segment can become a tail; a selector head or an existing
+ * tail has nothing to continue from, so those are caller bugs.
+ */
+export function asChainedTail(stmt: Statement): Statement {
+  if (stmt.chained) return stmt;
+  if (stmt.expr.type !== "SINGLETON") {
+    throw new Error("asChainedTail: only a plain singleton segment can chain");
+  }
+  return {
+    chained: true,
+    amount: stmt.amount,
+    expr: {
+      type: "SINGLETON",
+      vesting_start: null,
+      periodicity: stmt.expr.periodicity,
+    },
+  };
+}

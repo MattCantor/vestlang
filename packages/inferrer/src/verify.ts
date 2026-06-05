@@ -17,6 +17,24 @@ export interface VerifyContext {
   vestingDayOfMonth: VestingDayOfMonth;
 }
 
+/** Total absolute disagreement, date by date, between what the program produced
+ * and the input stream. Zero means the program reproduces the stream exactly. */
+function residualBetween(
+  produced: Map<string, number>,
+  input: TrancheInput[],
+): number {
+  const expected = new Map<string, number>();
+  for (const t of input) {
+    expected.set(t.date, (expected.get(t.date) ?? 0) + t.amount);
+  }
+  let residual = 0;
+  const keys = new Set<string>([...produced.keys(), ...expected.keys()]);
+  for (const k of keys) {
+    residual += Math.abs((produced.get(k) ?? 0) - (expected.get(k) ?? 0));
+  }
+  return residual;
+}
+
 export function residualAgainstInput(
   program: Program,
   input: TrancheInput[],
@@ -40,19 +58,7 @@ export function residualAgainstInput(
     }
   }
 
-  const expected = new Map<string, number>();
-  for (const t of input) {
-    const key = t.date;
-    expected.set(key, (expected.get(key) ?? 0) + t.amount);
-  }
-
-  let residual = 0;
-  const keys = new Set<string>([...produced.keys(), ...expected.keys()]);
-  for (const k of keys) {
-    const got = produced.get(k) ?? 0;
-    const want = expected.get(k) ?? 0;
-    residual += Math.abs(got - want);
-  }
+  const residual = residualBetween(produced, input);
 
   const installments: ResolvedInstallment[] = [];
   for (const [key, amount] of produced.entries()) {
@@ -67,6 +73,40 @@ export function residualAgainstInput(
   installments.sort((a, b) => a.date.localeCompare(b.date));
 
   return { residual, installments };
+}
+
+/**
+ * Residual and verdict for a program scored as one whole, via the same collapse
+ * `evaluate_program` performs. `residualAgainstInput` evaluates each statement on
+ * its own, which a THEN chain can't survive — a chained tail has no start of its
+ * own and throws when evaluated alone. Collapsing the program threads the chain's
+ * handoffs, so it's the only way to score a candidate that uses THEN. The one
+ * collapse hands back both the installments to diff and the program-level verdict.
+ */
+export function collapseAgainstInput(
+  program: Program,
+  input: TrancheInput[],
+  ctx: VerifyContext,
+): { residual: number; status: Status } {
+  const [schedule] = evaluateProgram(program, {
+    events: { grantDate: ctx.grantDate },
+    grantQuantity: ctx.totalQuantity,
+    asOf: ctx.asOf,
+    vesting_day_of_month: ctx.vestingDayOfMonth,
+  });
+
+  const produced = new Map<string, number>();
+  for (const inst of schedule.installments) {
+    if (inst.meta.state !== "RESOLVED" || inst.date === undefined) {
+      return { residual: Number.POSITIVE_INFINITY, status: schedule.status };
+    }
+    produced.set(inst.date, (produced.get(inst.date) ?? 0) + inst.amount);
+  }
+
+  return {
+    residual: residualBetween(produced, input),
+    status: schedule.status,
+  };
 }
 
 /**
