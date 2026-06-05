@@ -1,7 +1,9 @@
 import { stringify } from "@vestlang/render";
 import type { OCTDate, Program, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
+import { minimalCtx, walk } from "./cadence.js";
 import { foldCliffs } from "./cliffFold.js";
+import { splitCoincidentCliffs } from "./coincidentCliff.js";
 import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
 import { POLICY_CANDIDATES } from "./policy.js";
@@ -18,6 +20,34 @@ import { residualAgainstInput, type VerifyContext } from "./verify.js";
 
 function sortInput(tranches: TrancheInput[]): TrancheInput[] {
   return [...tranches].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** The date of a component's earliest installment — for a folded cliff, that's
+ * the cliff date (cliffSteps periods after the walked-back vesting start). */
+function firstInstallmentDate(
+  c: Component,
+  policy: VestingDayOfMonth,
+): OCTDate {
+  if (c.kind === "SINGLE_TRANCHE") return c.date;
+  if (c.kind === "UNIFORM") return c.startDate;
+  return walk(c.grantDate, c.cadence, c.cliffSteps, minimalCtx(policy));
+}
+
+/** Emit components in cursor-chain order: each segment's first installment is
+ * non-decreasing, so an abutting head (e.g. a folded cliff) precedes the tail it
+ * continues into. The evaluator's continuation check folds such a chain into one
+ * template; out of order, it would read the head as a separate overlapping grid.
+ * Safe regardless of whether the segments actually abut — a non-abutting handoff
+ * simply stays events-only. */
+function orderByCursorChain(
+  components: Component[],
+  policy: VestingDayOfMonth,
+): Component[] {
+  return [...components].sort((a, b) =>
+    firstInstallmentDate(a, policy).localeCompare(
+      firstInstallmentDate(b, policy),
+    ),
+  );
 }
 
 function explicitListFallback(sorted: TrancheInput[]): Component[] {
@@ -50,6 +80,11 @@ function runOne(
   grantDateKnown: boolean,
 ): Attempt {
   const { components, cadencesTried } = decompose(sorted, policy);
+  // Under CRD, decompose emits a cliff as a coincident lump on a train (a pulse
+  // sharing the train's first date) rather than a lump one period before it. The
+  // fold passes only recognize the latter, so normalize the former into it first;
+  // otherwise the cliff never folds and reads as two overlapping grids.
+  const reshaped = splitCoincidentCliffs(components, policy);
   // foldPreGrant answers "did vesting start before the grant date?" — a question
   // that is unanswerable without a real grant date. When none was supplied (the
   // grant date was defaulted to the first tranche), skip it entirely: detecting
@@ -59,14 +94,17 @@ function runOne(
   // the inferrer can separate — a cliff from pre-grant accrual being the case in
   // point, since the two are numerically identical until a grant date splits them.
   const pg = grantDateKnown
-    ? foldPreGrant(sorted, components, grantDate, totalQuantity, asOf, policy)
-    : { components, foldCount: 0, vestingStarts: [] as OCTDate[] };
+    ? foldPreGrant(sorted, reshaped, grantDate, totalQuantity, asOf, policy)
+    : { components: reshaped, foldCount: 0, vestingStarts: [] as OCTDate[] };
   const { components: folded, foldCount } = foldCliffs(
     pg.components,
     policy,
     grantDateKnown ? grantDate : null,
   );
-  const program: Program = folded.map((c) => buildStatement(c, policy));
+  // Emit in cursor-chain order so a folded cliff head precedes its tail; the
+  // evaluator only chains abutting statements that arrive in cursor order.
+  const ordered = orderByCursorChain(folded, policy);
+  const program: Program = ordered.map((c) => buildStatement(c, policy));
 
   const verifyCtx: VerifyContext = {
     grantDate,

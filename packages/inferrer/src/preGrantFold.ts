@@ -1,7 +1,7 @@
-import { evaluateStatement } from "@vestlang/evaluator";
 import type { OCTDate, Statement, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { minimalCtx, walk } from "./cadence.js";
+import { resolvedInstallmentMap } from "./installments.js";
 import type {
   Component,
   SingleTrancheComponent,
@@ -13,9 +13,8 @@ const EPSILON = 1e-6;
 
 type AmtMap = Map<string, number>;
 
-/** Evaluate a single statement and collapse its installments to a date→amount
- * map. Returns null if any installment is unresolved (the statement references
- * something the bare grant context can't satisfy), so callers reject it. */
+/** Evaluate a single statement against the grant context and collapse it to a
+ * date→amount map; null if anything is unresolved. */
 function evalToMap(
   stmt: Statement,
   grantDate: OCTDate,
@@ -23,19 +22,12 @@ function evalToMap(
   asOf: OCTDate,
   policy: VestingDayOfMonth,
 ): AmtMap | null {
-  const result = evaluateStatement(stmt, {
+  return resolvedInstallmentMap(stmt, {
     events: { grantDate },
     grantQuantity: totalQuantity,
     asOf,
     vesting_day_of_month: policy,
   });
-  const m: AmtMap = new Map();
-  for (const inst of result.installments) {
-    if (inst.meta.state !== "RESOLVED") return null;
-    const key = inst.date as unknown as string;
-    m.set(key, (m.get(key) ?? 0) + inst.amount);
-  }
-  return m;
 }
 
 function mapsEqual(a: AmtMap, b: AmtMap): boolean {
