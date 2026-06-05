@@ -19,6 +19,7 @@
     "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
+    "@vestlang/recover": "workspace:*",
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
     "zod": "^3.23.8"
