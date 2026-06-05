@@ -15,7 +15,7 @@ type ResourceSpec = {
   path: string;
 };
 
-const RESOURCES: ResourceSpec[] = [
+export const RESOURCES: ResourceSpec[] = [
   {
     name: "grammar",
     uri: "vestlang://docs/grammar",
@@ -55,11 +55,11 @@ const RESOURCES: ResourceSpec[] = [
   {
     name: "examples",
     uri: "vestlang://examples/valid-statements",
-    title: "Example Vestlang Statements",
+    title: "Vestlang Examples by Intent",
     description:
-      "A curated list of valid vestlang statements covering immediate, time-based, milestone-based, and conditional vesting. Use as pattern reference when generating new statements.",
-    mimeType: "text/plain",
-    path: "packages/dsl/tests/validStatements.vest",
+      "Curated intent→syntax examples (time-based, milestone/event starts, selectors, conditions, cliffs, parallel schedules) — a supporting pattern reference. vestlang://docs/grammar is authoritative for syntax and constraints; validate composed statements with vestlang_lint.",
+    mimeType: "text/markdown",
+    path: "apps/docs/docs/examples.md",
   },
   {
     name: "common-queries",

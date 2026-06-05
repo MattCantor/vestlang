@@ -1,6 +1,6 @@
 ---
 title: Abstract Syntax Tree
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 The DSL compiles into a normalized abstract syntax tree: a **program** of one or more statements, each `{ amount, expr }`. The sections below describe the pieces of a single statement (`amount`, the vesting start, cadence, cliff, selectors, conditions); for focus most examples show just the relevant fragment, while the full compiler output wraps the statements in `{ "program": [ … ] }`.
