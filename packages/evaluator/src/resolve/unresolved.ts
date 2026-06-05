@@ -64,11 +64,7 @@ export const unresolvedInstallments = (
 
   // PICKED
   const { type, length, occurrences } = res.picked.periodicity;
-  const amounts = allocateVector(
-    statementQuantity,
-    occurrences,
-    ctx.allocation_type,
-  );
+  const amounts = allocateVector(statementQuantity, occurrences);
 
   // Unresolved vesting start (a LATER_OF whose winner didn't resolve).
   if (res.meta.type === "UNRESOLVED")

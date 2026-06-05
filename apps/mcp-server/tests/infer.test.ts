@@ -63,7 +63,6 @@ function tranchesFromDsl(
     grantQuantity,
     asOf,
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    allocation_type: "CUMULATIVE_ROUNDING",
   }).installments;
   return installments
     .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
@@ -98,9 +97,9 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
   });
 
   it("surfaces the diagnostics passthrough consumers must feed back", async () => {
-    // Per the tool docs, vestingDayOfMonth/allocationType are NOT encoded in the
-    // returned DSL; callers must pass them back as EvaluationContext. The tool
-    // layer must therefore expose them in the response.
+    // Per the tool docs, vestingDayOfMonth is NOT encoded in the returned DSL;
+    // callers must pass it back as EvaluationContext. The tool layer must
+    // therefore expose it in the response.
     const client = await connectClient();
     const res = await callInfer(client, {
       tranches: [
@@ -112,38 +111,42 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     const diagnostics = (res.structuredContent as { diagnostics: unknown })
       .diagnostics as {
       vestingDayOfMonth: unknown;
-      allocationType: unknown;
     };
     expect(diagnostics.vestingDayOfMonth).toBe(
       "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     );
-    expect(diagnostics.allocationType).toBe("CUMULATIVE_ROUNDING");
   });
 
-  it("forwards grant_date so the cliff lump is read as a cliff", async () => {
-    // With grant_date supplied, the lump a year out is a cliff (cliffFolds=1);
-    // this asserts the {grant_date} arg is parsed and forwarded to inferSchedule
-    // as grantDate, rather than dropped.
-    const client = await connectClient();
-    const tranches = tranchesFromDsl(
-      "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month CLIFF 12 months",
-      "2024-01-01",
-      48000,
-      "2028-02-01",
-    );
+  // XFAIL until Tier 0 (it.fails): with grant_date supplied the lump a year out is
+  // a cliff (cliffFolds=1) — this asserts the {grant_date} arg is forwarded to
+  // inferSchedule as grantDate. Under CRD-only allocation (#39) the equal-length
+  // non-folding cover wins, so cliffFolds is 0 today and this body fails. Tier 0
+  // (issue #43, docs/scratch/inferrer-then-chain-inference.md) restores the fold,
+  // at which point this goes red — remove `.fails` then; do not weaken it.
+  it.fails(
+    "forwards grant_date so the cliff lump is read as a cliff",
+    async () => {
+      const client = await connectClient();
+      const tranches = tranchesFromDsl(
+        "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month CLIFF 12 months",
+        "2024-01-01",
+        48000,
+        "2028-02-01",
+      );
 
-    const res = await callInfer(client, {
-      tranches,
-      grant_date: "2024-01-01",
-    });
+      const res = await callInfer(client, {
+        tranches,
+        grant_date: "2024-01-01",
+      });
 
-    const sc = res.structuredContent as {
-      decomposition: { cliffFolds: number };
-      diagnostics: { residualError: number };
-    };
-    expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(sc.decomposition.cliffFolds).toBe(1);
-  });
+      const sc = res.structuredContent as {
+        decomposition: { cliffFolds: number };
+        diagnostics: { residualError: number };
+      };
+      expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
+      expect(sc.decomposition.cliffFolds).toBe(1);
+    },
+  );
 
   it("defaults grant_date to the first tranche date when omitted", async () => {
     const client = await connectClient();

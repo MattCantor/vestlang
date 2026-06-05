@@ -127,7 +127,7 @@ const schedule = evaluateStatement(program[0], {
   events: { grantDate: "2025-01-01" },     // grantDate is required
   grantQuantity: 4800,
   asOf: "2026-04-16",                       // the scenario date (required)
-  // optional: vesting_day_of_month, allocation_type
+  // optional: vesting_day_of_month
 });
 
 schedule.status;        // "template" | "events-only" | "unresolved" | "impossible"

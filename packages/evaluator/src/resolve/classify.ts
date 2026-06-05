@@ -21,8 +21,6 @@ import type { Fraction } from "@vestlang/types";
 import {
   addPeriod,
   allocateExact,
-  allocateVector,
-  floorSharesAt,
   foldToGrantDate,
   fracAdd,
   fracMul,
@@ -113,29 +111,6 @@ const expandResolution = (
   return out;
 };
 
-/** The cliff date for a resolved statement (time-based or a fired event), if any. */
-const cliffDateOf = (
-  r: StmtResolution,
-  ctx: EvaluationContext,
-): string | undefined => {
-  if (r.start.state !== "RESOLVED") return undefined;
-  if (r.cliff.state === "RESOLVED") {
-    return addPeriod(
-      r.start.date,
-      r.cliff.cliff.length,
-      r.cliff.cliff.period_type,
-      ctx.vesting_day_of_month,
-    );
-  }
-  if (r.cliff.state === "EVENT") return ctx.events[r.cliff.eventId];
-  return undefined;
-};
-
-/** The two cumulative modes telescope as a single running fraction; the four
- *  loaded modes don't. Mirrors buildTemplate's split. */
-const isCumulative = (mode: string): boolean =>
-  mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
-
 /** Aggregate amounts dated before the grant onto the grant date (the implicit
  *  cliff core.compile applies). Amounts are already integers, so this is an exact
  *  regroup of a date-sorted series — no re-allocation. No-op without a grant date. */
@@ -155,57 +130,13 @@ const foldResolvedToGrantDate = (
 };
 
 /**
- * Loaded (non-cumulative) allocation: each statement is an independent N-way
- * split (allocateVector, the exact integer base+remainder that matches the legacy
- * allocator), mapped onto its grid, with the grant-date and cliff lumps folded.
- * There's no single running cumulative here; loaded modes don't telescope across
- * statements.
+ * Dated tranches for every resolved statement: expand each to dated
+ * fraction-events, sort, and allocate with one running cumulative (core's
+ * allocator). Pre-grant tranches fold onto the grant date — the same implicit
+ * cliff core.compile applies. Statements whose start didn't resolve contribute
+ * nothing (expandResolution skips them).
  */
-const loadedResolvedInstallments = (
-  resolutions: StmtResolution[],
-  ctx: EvaluationContext,
-  totalShares: number,
-): ResolvedInstallment[] => {
-  const dom = ctx.vesting_day_of_month;
-  const byDate = new Map<string, number>();
-  for (const r of resolutions) {
-    if (r.start.state !== "RESOLVED") continue;
-    const anchor = r.start.date;
-    // Same as expandResolution: a tail's grid takes its day-of-month from the
-    // chain origin so a month-end chain doesn't drift after a short-month
-    // boundary; a non-tail falls back to its own start.
-    const origin = r.origin ?? anchor;
-    const { type, length: period, occurrences: N } = r.periodicity;
-    const sq = floorSharesAt(totalShares, r.percentage);
-    let dates = Array.from({ length: N }, (_, i) =>
-      addPeriod(anchor, (i + 1) * period, type, dom, origin),
-    );
-    let amounts = allocateVector(sq, N, ctx.allocation_type);
-    if (ctx.events.grantDate) {
-      ({ dates, amounts } = foldToGrantDate(
-        dates,
-        amounts,
-        ctx.events.grantDate,
-      ));
-    }
-    const cliffDate = cliffDateOf(r, ctx);
-    if (cliffDate && gt(cliffDate, anchor)) {
-      ({ dates, amounts } = foldToGrantDate(dates, amounts, cliffDate));
-    }
-    dates.forEach((d, i) => byDate.set(d, (byDate.get(d) ?? 0) + amounts[i]));
-  }
-  return [...byDate.entries()]
-    .filter(([, amt]) => amt !== 0)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([date, amount]) => makeResolvedInstallment(date, amount));
-};
-
-/**
- * Cumulative allocation: expand every resolved statement to dated fraction-events,
- * sort, and allocate with one running cumulative (core's allocator). Pre-grant
- * tranches fold onto the grant date — the same implicit cliff core.compile applies.
- */
-const cumulativeResolvedInstallments = (
+const resolvedInstallments = (
   resolutions: StmtResolution[],
   ctx: EvaluationContext,
   totalShares: number,
@@ -233,18 +164,6 @@ const cumulativeResolvedInstallments = (
   }
   return foldResolvedToGrantDate(installments, ctx);
 };
-
-/** Dated tranches for every resolved statement, allocated per the runtime mode.
- *  Statements whose start didn't resolve contribute nothing (expandResolution and
- *  the loaded loop both skip them). */
-const resolvedInstallments = (
-  resolutions: StmtResolution[],
-  ctx: EvaluationContext,
-  totalShares: number,
-): ResolvedInstallment[] =>
-  isCumulative(ctx.allocation_type)
-    ? cumulativeResolvedInstallments(resolutions, ctx, totalShares)
-    : loadedResolvedInstallments(resolutions, ctx, totalShares);
 
 const eventsArm = (
   resolutions: StmtResolution[],

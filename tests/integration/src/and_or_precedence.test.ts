@@ -39,7 +39,6 @@ const ctx_input: EvaluationContextInput = {
   },
   grantQuantity: 100,
   asOf: today,
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
 };
 
 const evaluate = (stmt: string, events: Record<string, OCTDate>) => {

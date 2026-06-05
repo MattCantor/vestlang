@@ -1,4 +1,4 @@
-import type { AllocationType, VestingDayOfMonth } from "@vestlang/types";
+import type { VestingDayOfMonth } from "@vestlang/types";
 
 function numericDays(): VestingDayOfMonth[] {
   const out: VestingDayOfMonth[] = [];
@@ -14,13 +14,4 @@ export const POLICY_CANDIDATES: readonly VestingDayOfMonth[] = [
   "30_OR_LAST_DAY_OF_MONTH",
   "31_OR_LAST_DAY_OF_MONTH",
   ...numericDays(),
-];
-
-export const ALLOCATION_CANDIDATES: readonly AllocationType[] = [
-  "CUMULATIVE_ROUNDING",
-  "CUMULATIVE_ROUND_DOWN",
-  "FRONT_LOADED",
-  "BACK_LOADED",
-  "FRONT_LOADED_TO_SINGLE_TRANCHE",
-  "BACK_LOADED_TO_SINGLE_TRANCHE",
 ];

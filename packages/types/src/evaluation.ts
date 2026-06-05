@@ -2,21 +2,20 @@ import type { VestingRuntime, VestingScheduleTemplate } from "./canonical.js";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
-import { AllocationType, VestingDayOfMonth } from "./oct_types.js";
+import { VestingDayOfMonth } from "./oct_types.js";
 
 export interface EvaluationContext {
   events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>;
   grantQuantity: number;
   asOf: OCTDate;
   vesting_day_of_month: VestingDayOfMonth;
-  allocation_type: AllocationType;
 }
 
 export type EvaluationContextInput = Omit<
   EvaluationContext,
-  "vesting_day_of_month" | "allocation_type"
+  "vesting_day_of_month"
 > &
-  Partial<Pick<EvaluationContext, "vesting_day_of_month" | "allocation_type">>;
+  Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
 
 export type SymbolicDate =
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }

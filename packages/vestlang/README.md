@@ -20,7 +20,6 @@ const schedule = evaluateStatement(program[0], {
   events: { grantDate: "2024-01-01" },
   grantQuantity: 10000,
   asOf: "2028-01-01",
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
 });
 
 console.log(schedule.fidelity);     // "template" | "events-only" | "unresolved"

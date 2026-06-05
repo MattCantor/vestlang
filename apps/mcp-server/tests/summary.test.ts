@@ -11,7 +11,6 @@ const ctx = (
   events: { grantDate: "2025-01-01" },
   grantQuantity: 100000,
   asOf: "2026-04-16",
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
   ...overrides,
 });
 

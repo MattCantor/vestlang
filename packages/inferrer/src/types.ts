@@ -1,6 +1,6 @@
 import type { PeriodTag, Program } from "@vestlang/types";
 import type { OCTDate } from "@vestlang/types";
-import type { AllocationType, VestingDayOfMonth } from "@vestlang/types";
+import type { VestingDayOfMonth } from "@vestlang/types";
 
 export interface TrancheInput {
   date: OCTDate;
@@ -10,8 +10,8 @@ export interface TrancheInput {
 export interface InferInput {
   tranches: TrancheInput[];
   grantDate?: OCTDate;
-  /** Optional provenance hints. When provided, that dimension is fixed instead of
-   * searched (both → 1×1, partial → narrowed, neither → full 32×6 search).
+  /** Optional provenance hint. When provided, the day-of-month convention is
+   * fixed instead of searched (→ 1-policy search; omitted → full 32-policy search).
    *
    * A hint is trusted as ground truth and EXCLUDES other conventions from the
    * search. If a hint is wrong but still admits a residual-0 fit, the result is a
@@ -19,10 +19,9 @@ export interface InferInput {
    * a full search would find. (We deliberately do not second-guess a fitting
    * decomposition; residual is the only correctness signal, and once two
    * conventions both reproduce the installments, neither is "wrong" — the data
-   * doesn't record which one made it.) Provide hints only when you know the
+   * doesn't record which one made it.) Provide a hint only when you know the
    * provenance. */
   policy?: VestingDayOfMonth;
-  allocationType?: AllocationType;
 }
 
 export interface UniformComponent {
@@ -70,7 +69,6 @@ export interface InferResult {
     residualError: number;
     totalQuantity: number;
     vestingDayOfMonth: VestingDayOfMonth;
-    allocationType: AllocationType;
     cadenceTried: string[];
     notes: string[];
   };

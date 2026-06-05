@@ -1,4 +1,4 @@
-export type { AllocationType, VestingDayOfMonth } from "./oct_types.js";
+export type { VestingDayOfMonth } from "./oct_types.js";
 export type {
   PeriodType,
   VestingScheduleTemplate,

@@ -133,28 +133,6 @@ describe("assemble — events-only status", () => {
     ]);
     expect(sum(out.installments)).toBe(100000);
   });
-
-  it("a loaded allocation mode → events-only + reason, still telescopes", () => {
-    const program: Program = [
-      stmt(
-        portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
-        {
-          type: "MONTHS",
-          length: 1,
-          occurrences: 4,
-        },
-      ),
-    ];
-    const [out] = evaluateProgram(
-      program,
-      ctxInput({ allocation_type: "FRONT_LOADED" }),
-    );
-    expect(out.status).toBe("events-only");
-    if (out.status !== "events-only") throw new Error("expected events-only");
-    expect(out.reason).toMatch(/FRONT_LOADED/);
-    expect(sum(out.installments)).toBe(100000);
-  });
 });
 
 describe("assemble — program collapse regression (evaluateProgram)", () => {

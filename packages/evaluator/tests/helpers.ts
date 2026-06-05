@@ -26,7 +26,6 @@ export const baseCtx = (
   vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
   grantQuantity: 100,
   asOf: "2025-06-01",
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
   ...overrides,
 });
 

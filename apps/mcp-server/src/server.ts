@@ -48,9 +48,9 @@ Typical workflows:
   events (e.g. overlapping independent starts).
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL (matching-pursuit
-  decomposition). Note that the returned diagnostics.vestingDayOfMonth and
-  diagnostics.allocationType are not encoded in the DSL — pass them back as
-  EvaluationContext when evaluating the returned DSL.
+  decomposition). Note that the returned diagnostics.vestingDayOfMonth is not
+  encoded in the DSL — pass it back as EvaluationContext when evaluating the
+  returned DSL.
 
 Dates are YYYY-MM-DD. Statements that reference named events (e.g.
 EVENT "ipo") require those events to appear in the events map — otherwise
@@ -99,15 +99,6 @@ const VESTING_DAY_OF_MONTH = z.enum([
   "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
 ]);
 
-const ALLOCATION_TYPE = z.enum([
-  "CUMULATIVE_ROUNDING",
-  "CUMULATIVE_ROUND_DOWN",
-  "FRONT_LOADED",
-  "BACK_LOADED",
-  "FRONT_LOADED_TO_SINGLE_TRANCHE",
-  "BACK_LOADED_TO_SINGLE_TRANCHE",
-]);
-
 const DSL_INPUT = z
   .string()
   .min(1, "dsl must not be empty")
@@ -129,9 +120,6 @@ const EVAL_CONTEXT_FIELDS = {
   vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
     "OCT VestingDayOfMonth. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
   ),
-  allocation_type: ALLOCATION_TYPE.optional().describe(
-    "OCT AllocationType. Defaults to CUMULATIVE_ROUND_DOWN.",
-  ),
 };
 
 /* ------------------------
@@ -152,7 +140,6 @@ function buildContext(input: {
   events?: Record<string, string>;
   as_of?: string;
   vesting_day_of_month?: z.infer<typeof VESTING_DAY_OF_MONTH>;
-  allocation_type?: z.infer<typeof ALLOCATION_TYPE>;
 }): EvaluationContextInput {
   const events: Record<string, OCTDate> = {};
   for (const [name, date] of Object.entries(input.events ?? {})) {
@@ -165,7 +152,6 @@ function buildContext(input: {
     asOf: input.as_of ?? today(),
     vesting_day_of_month:
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    allocation_type: input.allocation_type ?? "CUMULATIVE_ROUND_DOWN",
   };
 }
 
@@ -354,7 +340,7 @@ export function createServer(): McpServer {
     {
       title: "Infer vestlang from tranche array",
       description:
-        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Uses matching-pursuit decomposition — greedy extraction of uniform-periodic components, then a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth and allocationType, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth and diagnostics.allocationType are NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass these values back as EvaluationContext, or they will get a slightly different schedule.",
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Uses matching-pursuit decomposition — greedy extraction of uniform-periodic components, then a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as EvaluationContext, or they will get a slightly different schedule.",
       inputSchema: z
         .object({
           tranches: z
@@ -451,7 +437,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or a loaded allocation mode — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
+        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
       inputSchema: z
         .object({
           dsl: DSL_INPUT,

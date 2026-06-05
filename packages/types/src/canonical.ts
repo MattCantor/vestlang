@@ -11,7 +11,7 @@
 // exists to delete.
 
 import type { OCTDate } from "./helpers.js";
-import type { AllocationType, VestingDayOfMonth } from "./oct_types.js";
+import type { VestingDayOfMonth } from "./oct_types.js";
 
 // From enums/PeriodType.schema.json
 // The OCF/Carta interchange period unit, which includes YEARS. Distinct from the
@@ -82,10 +82,10 @@ export interface Cliff {
 //   - grantDate    — when provided, scheduled amounts dated before grantDate are
 //                    held back and emitted as a single aggregate on grantDate
 //                    (an implicit cliff at grant date).
-//   - vestingDayOfMonth / allocationType — additive-optional convention fields;
-//                    omitted ⇒ the canonical defaults (allocation →
-//                    CUMULATIVE_ROUND_DOWN; day-of-month →
-//                    VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
+//   - vestingDayOfMonth — additive-optional convention field; omitted ⇒ the
+//                    canonical default (VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
+//                    Allocation is always CUMULATIVE_ROUND_DOWN — the interchange
+//                    has no allocation field.
 export interface VestingRuntime {
   startDate?: OCTDate;
   eventFirings?: Array<{
@@ -95,5 +95,4 @@ export interface VestingRuntime {
   }>;
   grantDate?: OCTDate;
   vestingDayOfMonth?: VestingDayOfMonth;
-  allocationType?: AllocationType;
 }

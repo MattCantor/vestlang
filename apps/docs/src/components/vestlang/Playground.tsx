@@ -66,7 +66,6 @@ export default function Playground(): ReactNode {
         grantQuantity: quantity,
         asOf: todayISO,
         vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-        allocation_type: "CUMULATIVE_ROUND_DOWN",
       };
 
       const results = normalized.map((s) => evaluateStatement(s, ctx));

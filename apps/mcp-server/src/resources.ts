@@ -39,7 +39,7 @@ export const RESOURCES: ResourceSpec[] = [
     uri: "vestlang://docs/evaluation",
     title: "Vestlang Evaluation Semantics",
     description:
-      "Explains the evaluation pipeline: evaluation context, resolved/unresolved/impossible installment states, blockers, and allocation modes. Fetch this when interpreting vestlang_evaluate or vestlang_evaluate_as_of output.",
+      "Explains the evaluation pipeline: evaluation context, resolved/unresolved/impossible installment states, blockers, and cumulative round-down allocation. Fetch this when interpreting vestlang_evaluate or vestlang_evaluate_as_of output.",
     mimeType: "text/markdown",
     path: "apps/docs/docs/evaluation.md",
   },

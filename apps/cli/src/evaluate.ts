@@ -30,7 +30,6 @@ export function evaluate(
     grantQuantity: quantity,
     asOf: validateDate(getTodayISO()),
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    allocation_type: "CUMULATIVE_ROUND_DOWN",
   };
 
   const ast = parse(input(parts, opts.stdin));

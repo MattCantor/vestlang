@@ -37,19 +37,12 @@ import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import type { NonTemplateReason } from "./types.js";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
-const DEFAULT_ALLOCATION = "CUMULATIVE_ROUND_DOWN";
 
 // The normalizer's internal anchors (packages/normalizer .. program.ts SYSTEM_EVENT).
 // They always resolve to a concrete date, so a start expressed relative to one
 // (e.g. `FROM +12 months` = `grantDate + 12mo`) is an absolute service-time DATE,
 // not a floating milestone, so it must not register an event firing.
 const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
-
-/** The two cumulative modes telescope as a single running fraction. The four
- *  loaded modes don't, so they can't compile to one template and route to
- *  events-only instead. */
-const isCumulativeAllocation = (mode: string): boolean =>
-  mode === "CUMULATIVE_ROUND_DOWN" || mode === "CUMULATIVE_ROUNDING";
 
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`. */
 const amountToFraction = (a: Amount, totalShares: number): Fraction =>
@@ -477,12 +470,6 @@ export const buildTemplate = (
     return unresolved();
   if (resolutions.some((r) => r.cliff.state === "UNRESOLVED"))
     return unresolved();
-  // Loaded (non-cumulative) allocation isn't a single cumulative across the
-  // template, and the interchange has no allocation field, so route to
-  // events-only.
-  if (!isCumulativeAllocation(ctx.allocation_type)) {
-    return events({ kind: "LOADED_ALLOCATION", mode: ctx.allocation_type });
-  }
   const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT");
   if (eventCliff && eventCliff.cliff.state === "EVENT") {
     return events({ kind: "EVENT_CLIFF", eventId: eventCliff.cliff.eventId });
@@ -600,9 +587,6 @@ export const buildTemplate = (
     ...(ctx.events.grantDate ? { grantDate: ctx.events.grantDate } : {}),
     ...(ctx.vesting_day_of_month !== DEFAULT_DAY_OF_MONTH
       ? { vestingDayOfMonth: ctx.vesting_day_of_month }
-      : {}),
-    ...(ctx.allocation_type !== DEFAULT_ALLOCATION
-      ? { allocationType: ctx.allocation_type }
       : {}),
   };
 

@@ -227,16 +227,15 @@ const compileRaw = (
   });
 
   // Step 3: single-cumulative allocation. The cumulative fraction accumulates
-  // across all events; amount = alloc(totalShares × cumulative) − vestedSoFar,
+  // across all events; amount = floor(totalShares × cumulative) − vestedSoFar,
   // telescoping to sum exactly to totalShares (when all EVENT statements fire).
-  const mode = runtime.allocationType ?? "CUMULATIVE_ROUND_DOWN";
   let cumulative: Fraction = ZERO;
   let vestedSoFar = 0;
   const dates: OCTDate[] = [];
   const amounts: number[] = [];
   for (const raw of rawEvents) {
     cumulative = fracAdd(cumulative, raw.fractionOfGrant);
-    const amount = allocateExact(totalShares, cumulative, vestedSoFar, mode);
+    const amount = allocateExact(totalShares, cumulative, vestedSoFar);
     if (amount === 0) continue;
     vestedSoFar += amount;
     dates.push(raw.date);
