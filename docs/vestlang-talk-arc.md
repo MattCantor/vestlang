@@ -230,9 +230,12 @@ the brightest component in the residual, subtract a scaled copy of the
 instrument's response, recurse on what's left, accumulate the pieces. Naming the
 isomorphism is the talk's nerd payoff and the moment the title pays off.
 *(Accuracy guardrail: keep "Fourier / frequency domain" as spoken metaphor only —
-the method is time-domain matching pursuit, not an FFT. Deconvolution /
-matching-pursuit / spectroscopy language is all literally correct; don't claim a
-transform you don't run.)*
+nothing here runs a transform. The greedy loop the animation shows — brightest
+component, subtract, recurse — is literally matching pursuit / CLEAN, so the
+spectroscopy language holds for that step. Just don't sell it as the whole method:
+the inferrer uses that greedy pass to seed a branch-and-bound search for the
+fewest-component cover. Seed is literally CLEAN; the optimizer that picks the final
+decomposition is branch-and-bound.)*
 
 ### Beat 9 — Watch it decompose **[NEW — Act III centerpiece, anim A3 = A1/A2 run backward]**
 Take the **Beat-1 curve itself** — the 4-yr/1-yr (25%) cliff — now as raw

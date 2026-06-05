@@ -79,7 +79,7 @@ multi-statement program into a **single** schedule and reports its program-level
 
 ### Inference (the inverse of evaluation)
 
-- `inferSchedule(input)` - Reconstruct a vestlang program from observed `{ date, amount }` vesting tranches via matching-pursuit decomposition. Returns `{ dsl, program, decomposition, diagnostics }`, where `diagnostics` reports the residual error and any fallbacks taken.
+- `inferSchedule(input)` - Reconstruct a vestlang program from observed `{ date, amount }` vesting tranches by branch-and-bound minimum-cardinality exact cover (a greedy seed sets the bound, then the search looks for a smaller cover). Returns `{ dsl, program, decomposition, diagnostics }`, where `diagnostics` reports the residual error and any fallbacks taken.
 
 ### Stringify
 
