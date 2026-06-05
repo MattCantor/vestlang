@@ -1,6 +1,6 @@
 ---
 title: Evaluation
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 Evaluation resolves a vesting program against runtime — the grant date, the share count, and which events have fired — and produces an **`EvaluatedSchedule`**: a sequence of dated, integer-allocated installments plus a single program-level **`status`** verdict.

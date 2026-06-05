@@ -31,9 +31,12 @@ exposes the full vestlang pipeline (parse, compile, evaluate, lint, stringify)
 as tools, and publishes the grammar/spec/examples as resources.
 
 Typical workflows:
-- Natural language → vestlang: fetch the vestlang://docs/grammar and
-  vestlang://examples/valid-statements resources, compose a statement, then
-  validate with vestlang_lint before showing it.
+- Natural language → vestlang: vestlang://docs/grammar is the authoritative
+  syntax and constraints — fetch it first. vestlang://examples/valid-statements
+  is a small set of intent→syntax patterns; use it as a pattern reference, not
+  the source of truth. Compose a statement, then always validate with
+  vestlang_lint (and vestlang_parse for syntax) before showing it — on any
+  diagnostic, fix and re-validate.
 - Vestlang → plain English: call vestlang_compile to inspect the normalized
   AST, then explain it to the user.
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
