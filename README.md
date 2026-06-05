@@ -237,6 +237,15 @@ the program resolves to bare dated amounts with the reason — `vest evaluate --
 largest recognizable component — a uniform run, a cliff — then re-fits the remainder),
 returning the `dsl`, the decomposition, and diagnostics (residual error, detected policies).
 
+It recovers more than parallel components. When the tranches read as **one schedule
+whose rate or cadence changes over time** — back-to-back segments on a continuing grid,
+each picking up where the last left off — the inferrer emits a single `THEN` chain
+rather than a stack of independent dated grids. So a stream like `100, 100, 200, 200, 100, 100`
+(a monthly rate that doubles for two months, then returns) comes back as one schedule
+that classifies as `template`, not as overlapping grids stuck at `events-only`. The chain
+form also leaves the month-end handoffs to the engine, so a rate change that lands on a
+short month (the 31st springing back to Feb 28/29) still stitches into one template.
+
 ---
 
 ## Development
