@@ -1,8 +1,9 @@
-import { evaluateStatement } from "@vestlang/evaluator";
+import { evaluateProgram, evaluateStatement } from "@vestlang/evaluator";
 import type {
   OCTDate,
   Program,
   ResolvedInstallment,
+  Status,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import type { TrancheInput } from "./types.js";
@@ -66,4 +67,25 @@ export function residualAgainstInput(
   installments.sort((a, b) => a.date.localeCompare(b.date));
 
   return { residual, installments };
+}
+
+/**
+ * Collapse the whole program into one schedule and report its verdict — the same
+ * `template` / `events-only` answer a consumer sees from `evaluate_program`.
+ *
+ * `residualAgainstInput` (above) evaluates each statement on its own; this asks
+ * the harder question of whether the statements stitch back into a single
+ * canonical template (every later start landing on the running cursor) or fall
+ * apart into independent dated amounts. We use it to prefer a candidate that
+ * recovers a template over one that only reproduces the numbers. The built
+ * statements are evaluated as-is, exactly like the per-statement residual does.
+ */
+export function programStatus(program: Program, ctx: VerifyContext): Status {
+  const [schedule] = evaluateProgram(program, {
+    events: { grantDate: ctx.grantDate },
+    grantQuantity: ctx.totalQuantity,
+    asOf: ctx.asOf,
+    vesting_day_of_month: ctx.vestingDayOfMonth,
+  });
+  return schedule.status;
 }
