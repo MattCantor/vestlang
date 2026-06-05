@@ -309,9 +309,12 @@ Steps to animate (each = one turn of CLEAN's loop):
 This is "with just the numbers, here's the structure you can pull out." Beat 10
 shows that structure has a ceiling — and how context raises it.
 
-Accuracy guardrail: keep "Fourier / frequency domain" as a SPOKEN metaphor only.
-The method is time-domain matching pursuit, not an FFT. Deconvolution /
-matching-pursuit / spectroscopy language is all literally correct.
+Accuracy guardrail: keep "Fourier / frequency domain" as a SPOKEN metaphor only —
+nothing here runs a transform. The greedy peak → subtract → recurse loop the
+animation shows is literally matching pursuit / CLEAN, so the spectroscopy language
+holds for that step. Just don't sell it as the whole method: the inferrer uses that
+greedy pass only to seed a branch-and-bound search for the minimum-component cover.
+Seed is literally CLEAN; the optimizer is branch-and-bound.
 
 ----
 
