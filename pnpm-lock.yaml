@@ -176,6 +176,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/recover':
+        specifier: workspace:*
+        version: link:../../packages/recover
       '@vestlang/render':
         specifier: workspace:*
         version: link:../../packages/render

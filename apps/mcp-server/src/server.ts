@@ -4,10 +4,10 @@ import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
   evaluateStatement,
-  evaluateProgram,
   evaluateStatementAsOf,
   presentSchedule,
 } from "@vestlang/evaluator";
+import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
@@ -455,7 +455,10 @@ export function createServer(): McpServer {
       const parsed = parseWithDiagnostics(params.dsl);
       if (!parsed.ok) return jsonResult({ error: parsed.error });
       const ctx = buildContext(params);
-      const [schedule] = evaluateProgram(parsed.program, ctx);
+      // The recovering entry: an events-only program whose realized projection
+      // has a single-template form is rescued back to a template, transparently.
+      const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
+      const schedule = outcome.schedule;
       const { representable, pending } = presentSchedule(schedule);
       return jsonResult({
         status: schedule.status,
@@ -466,6 +469,20 @@ export function createServer(): McpServer {
           : {}),
         installments: schedule.installments,
         blockers: schedule.blockers,
+        // On a rescue, `status` is now "template"; the original events-only
+        // reason and the recovered DSL ride here instead. Absent means no
+        // recovery happened. The compiled template/runtime stay server-side.
+        ...(outcome.rescued
+          ? {
+              recovered: {
+                from: outcome.recovered.from,
+                reason: outcome.recovered.reason,
+                dsl: outcome.recovered.dsl,
+                vestingDayOfMonth: outcome.recovered.vestingDayOfMonth,
+                residualError: outcome.recovered.residualError,
+              },
+            }
+          : {}),
       });
     },
   );
