@@ -42,7 +42,6 @@ export function minimalCtx(policy: VestingDayOfMonth): EvaluationContext {
     grantQuantity: 0,
     asOf: "1970-01-01",
     vesting_day_of_month: policy,
-    allocation_type: "CUMULATIVE_ROUNDING",
   };
 }
 

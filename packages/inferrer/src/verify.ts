@@ -1,6 +1,5 @@
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  AllocationType,
   OCTDate,
   Program,
   ResolvedInstallment,
@@ -15,7 +14,6 @@ export interface VerifyContext {
   totalQuantity: number;
   asOf: OCTDate;
   vestingDayOfMonth: VestingDayOfMonth;
-  allocationType: AllocationType;
 }
 
 export function residualAgainstInput(
@@ -31,7 +29,6 @@ export function residualAgainstInput(
       grantQuantity: ctx.totalQuantity,
       asOf: ctx.asOf,
       vesting_day_of_month: ctx.vestingDayOfMonth,
-      allocation_type: ctx.allocationType,
     });
     for (const inst of result.installments) {
       if (inst.meta.state !== "RESOLVED") {

@@ -33,14 +33,13 @@ A whole multi-statement program collapses to **one** `EvaluatedSchedule` — nev
   grantQuantity: number,
   asOf: OCTDate,
   vesting_day_of_month?: VestingDayOfMonth,   // default VESTING_START_DAY_OR_LAST_DAY_OF_MONTH
-  allocation_type?: AllocationType,           // default CUMULATIVE_ROUND_DOWN
 }
 ```
 
 - **`events`** — `grantDate` is required; supply any named events the DSL references (e.g. `ipo`). When the vesting start resolves, it's added back as `vestingStart` so a cliff can refer to it.
 - **`grantQuantity`** — the share count the amounts allocate against.
 - **`asOf`** — the date a scenario is evaluated against. Required at the library boundary; the CLI and MCP front-ends default it to today. It decides whether a time-limited condition has elapsed: a deadline still in the future keeps a pending event `unresolved` rather than `impossible`.
-- **`vesting_day_of_month`** / **`allocation_type`** — optional OCF convention fields, with the canonical defaults shown above.
+- **`vesting_day_of_month`** — an optional OCF convention field, with the canonical default shown above. Allocation is always cumulative round-down — the interchange has no allocation field.
 
 All dates are `OCTDate` — an ISO `YYYY-MM-DD` string.
 
@@ -73,15 +72,15 @@ A program is a **`template`** when, after its combinators resolve against runtim
 
 - one ordered sequence from a single origin — a `THEN` chain, or `PLUS` components that continue that origin — not two independent grids;
 - every anchor is a date or a single coherent event (an *unfired* event is fine — see pending, below);
-- cumulative allocation (`CUMULATIVE_ROUND_DOWN` or `CUMULATIVE_ROUNDING`);
 - any cliff is a duration, not an event;
 - no unsatisfiable condition.
 
-It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Exactly three things force this:
+(Allocation is not a condition: the engine is always cumulative round-down.)
+
+It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Exactly two things force this:
 
 - **overlapping absolute starts** — two independent starts that don't chain into one origin (a `PLUS` of two different dates, or one event anchoring portions that land on different dates);
-- **event-anchored cliff** — the canonical cliff is a duration, so a cliff gated on an event has no template form;
-- **loaded allocation** — a front/back-weighted mode; the interchange has no allocation field, so only cumulative survives.
+- **event-anchored cliff** — the canonical cliff is a duration, so a cliff gated on an event has no template form.
 
 It is **`unresolved`** when a start or cliff genuinely can't resolve yet (an unfired event with no partial-knowledge floor), and **`impossible`** when a condition can never be satisfied.
 

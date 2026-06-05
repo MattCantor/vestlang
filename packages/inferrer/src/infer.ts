@@ -1,15 +1,10 @@
 import { stringify } from "@vestlang/render";
-import type {
-  AllocationType,
-  OCTDate,
-  Program,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { OCTDate, Program, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { foldCliffs } from "./cliffFold.js";
 import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
-import { ALLOCATION_CANDIDATES, POLICY_CANDIDATES } from "./policy.js";
+import { POLICY_CANDIDATES } from "./policy.js";
 import type {
   CliffUniformComponent,
   Component,
@@ -43,24 +38,18 @@ interface Attempt {
   preGrantStarts: OCTDate[];
   residual: number;
   policy: VestingDayOfMonth;
-  allocationType: AllocationType;
   cadencesTried: string[];
 }
 
 function runOne(
   sorted: TrancheInput[],
   policy: VestingDayOfMonth,
-  allocationType: AllocationType,
   totalQuantity: number,
   grantDate: OCTDate,
   asOf: OCTDate,
   grantDateKnown: boolean,
 ): Attempt {
-  const { components, cadencesTried } = decompose(
-    sorted,
-    policy,
-    allocationType,
-  );
+  const { components, cadencesTried } = decompose(sorted, policy);
   // foldPreGrant answers "did vesting start before the grant date?" — a question
   // that is unanswerable without a real grant date. When none was supplied (the
   // grant date was defaulted to the first tranche), skip it entirely: detecting
@@ -70,15 +59,7 @@ function runOne(
   // the inferrer can separate — a cliff from pre-grant accrual being the case in
   // point, since the two are numerically identical until a grant date splits them.
   const pg = grantDateKnown
-    ? foldPreGrant(
-        sorted,
-        components,
-        grantDate,
-        totalQuantity,
-        asOf,
-        policy,
-        allocationType,
-      )
+    ? foldPreGrant(sorted, components, grantDate, totalQuantity, asOf, policy)
     : { components, foldCount: 0, vestingStarts: [] as OCTDate[] };
   const { components: folded, foldCount } = foldCliffs(
     pg.components,
@@ -92,7 +73,6 @@ function runOne(
     totalQuantity,
     asOf,
     vestingDayOfMonth: policy,
-    allocationType,
   };
   const { residual } = residualAgainstInput(program, sorted, verifyCtx);
 
@@ -104,7 +84,6 @@ function runOne(
     preGrantStarts: pg.vestingStarts,
     residual,
     policy,
-    allocationType,
     cadencesTried,
   };
 }
@@ -124,43 +103,37 @@ export function inferSchedule(input: InferInput): InferResult {
   let best: Attempt | null = null;
   const notes: string[] = [];
 
-  // Each dimension is either fixed to a provided hint or searched over all
-  // candidates. Both-hinted is a 1×1 search; neither is the full 32×6; partial
-  // narrows one dimension. The winner-selection and explicit-list fallback below
-  // are identical regardless of how many attempts there are — a wrong hint simply
-  // yields no clean fit and falls back, rather than being silently widened.
+  // The day-of-month convention is either fixed to a provided hint or searched
+  // over all candidates (a 1-policy vs full 32-policy search). The
+  // winner-selection and explicit-list fallback below are identical regardless of
+  // how many attempts there are — a wrong hint simply yields no clean fit and
+  // falls back, rather than being silently widened.
   const policies: readonly VestingDayOfMonth[] = input.policy
     ? [input.policy]
     : POLICY_CANDIDATES;
-  const allocations: readonly AllocationType[] = input.allocationType
-    ? [input.allocationType]
-    : ALLOCATION_CANDIDATES;
 
   for (const policy of policies) {
-    for (const alloc of allocations) {
-      const attempt = runOne(
-        sorted,
-        policy,
-        alloc,
-        totalQuantity,
-        grantDate,
-        lastDate,
-        grantDateKnown,
-      );
-      if (best === null) {
-        best = attempt;
-        continue;
-      }
-      const aSize = attempt.program.length;
-      const bSize = best.program.length;
-      if (attempt.residual < best.residual - 1e-9) {
-        best = attempt;
-      } else if (
-        Math.abs(attempt.residual - best.residual) <= 1e-9 &&
-        aSize < bSize
-      ) {
-        best = attempt;
-      }
+    const attempt = runOne(
+      sorted,
+      policy,
+      totalQuantity,
+      grantDate,
+      lastDate,
+      grantDateKnown,
+    );
+    if (best === null) {
+      best = attempt;
+      continue;
+    }
+    const aSize = attempt.program.length;
+    const bSize = best.program.length;
+    if (attempt.residual < best.residual - 1e-9) {
+      best = attempt;
+    } else if (
+      Math.abs(attempt.residual - best.residual) <= 1e-9 &&
+      aSize < bSize
+    ) {
+      best = attempt;
     }
   }
 
@@ -179,7 +152,6 @@ export function inferSchedule(input: InferInput): InferResult {
       preGrantStarts: [],
       residual: 0,
       policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      allocationType: "CUMULATIVE_ROUNDING",
       cadencesTried: best.cadencesTried,
     };
     const { residual: fallbackResidual } = residualAgainstInput(
@@ -190,7 +162,6 @@ export function inferSchedule(input: InferInput): InferResult {
         totalQuantity,
         asOf: lastDate,
         vestingDayOfMonth: fallbackAttempt.policy,
-        allocationType: fallbackAttempt.allocationType,
       },
     );
     if (fallbackResidual < best.residual) {
@@ -234,7 +205,6 @@ export function inferSchedule(input: InferInput): InferResult {
       residualError: best.residual,
       totalQuantity,
       vestingDayOfMonth: best.policy,
-      allocationType: best.allocationType,
       cadenceTried: best.cadencesTried,
       notes,
     },

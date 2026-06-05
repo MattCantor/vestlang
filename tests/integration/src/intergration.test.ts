@@ -19,7 +19,6 @@ const createCtx = (grantQuantity: number = 100) =>
     },
     grantQuantity: grantQuantity,
     asOf: today,
-    allocation_type: "CUMULATIVE_ROUND_DOWN",
   }) as EvaluationContextInput;
 
 const evaluate = (stmt: string, grantQuantity: number = 100) => {

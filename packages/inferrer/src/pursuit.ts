@@ -2,7 +2,6 @@ import type {
   EvaluationContext,
   OCTDate,
   VestingDayOfMonth,
-  AllocationType,
 } from "@vestlang/types";
 import { allocateVector } from "@vestlang/core";
 import {
@@ -37,13 +36,9 @@ function toResidual(tranches: TrancheInput[]): Residual {
 /** allocateVector fingerprints are monotonic in the total: increasing T never
  * decreases any position's share. So the set of T for which fingerprint <= mass
  * pointwise is a prefix [n, maxT]. Binary-search that maximal feasible T. */
-function maxFeasibleTotal(
-  mass: number[],
-  n: number,
-  mode: AllocationType,
-): number {
+function maxFeasibleTotal(mass: number[], n: number): number {
   const fitsAt = (T: number): boolean => {
-    const fp = allocateVector(T, n, mode);
+    const fp = allocateVector(T, n);
     for (let k = 0; k < n; k++) {
       if (fp[k] - mass[k] > EPSILON) return false;
     }
@@ -99,7 +94,7 @@ interface TrainAtom {
   coverMass: number; // total mass this atom removes
 }
 
-/** Generate candidate train atoms covering `target`, for the given allocation.
+/** Generate candidate train atoms covering `target`.
  *
  * For each cadence and each on-grid run starting at `target`, the only totals
  * worth trying are:
@@ -112,7 +107,6 @@ function trainAtomsCovering(
   target: OCTDate,
   cadences: Cadence[],
   ctx: EvaluationContext,
-  mode: AllocationType,
 ): TrainAtom[] {
   const atoms: TrainAtom[] = [];
   const has = (d: OCTDate) => (residual.get(d) ?? 0) > EPSILON;
@@ -134,19 +128,19 @@ function trainAtomsCovering(
       const mass = positions.map(massAt);
       const sum = mass.reduce((a, b) => a + b, 0);
 
-      // The train's total T must satisfy: allocateVector(T, n, mode)[k] <= mass[k]
+      // The train's total T must satisfy: allocateVector(T, n)[k] <= mass[k]
       // for every position k (so the leftover stays non-negative). Fingerprints are
       // monotonic in T, so there is a unique MAXIMAL feasible T — the train that
       // explains as much mass as possible while leaving only non-negative lumps.
       // Find it by binary search. We also keep T = sum (the pure-train hypothesis,
       // which fits exactly when the run has no coincident lump).
       const candidateTotals = new Set<number>();
-      const maxT = maxFeasibleTotal(mass, n, mode);
+      const maxT = maxFeasibleTotal(mass, n);
       if (maxT >= n) candidateTotals.add(maxT);
       if (Math.round(sum) >= n) candidateTotals.add(Math.round(sum));
 
       for (const total of candidateTotals) {
-        const fp = allocateVector(total, n, mode);
+        const fp = allocateVector(total, n);
         let fits = true;
         for (let k = 0; k < n; k++) {
           if (fp[k] - mass[k] > EPSILON || fp[k] <= 0) {
@@ -193,14 +187,13 @@ export interface DecomposeResult {
 }
 
 /** Minimum-cardinality exact cover of the installment residual by UNIFORM trains
- * and SINGLE_TRANCHE pulses, via branch-and-bound. The allocation `mode` defines
- * the rounding fingerprint a train must match, so jittery (rounded) trains are
- * recognized as single uniforms rather than fragmenting. Cliff folding happens
- * downstream in foldCliffs; this stage stays cliff-agnostic. */
+ * and SINGLE_TRANCHE pulses, via branch-and-bound. Trains must match the
+ * cumulative round-down fingerprint, so jittery (rounded) trains are recognized
+ * as single uniforms rather than fragmenting. Cliff folding happens downstream in
+ * foldCliffs; this stage stays cliff-agnostic. */
 export function decompose(
   tranches: TrancheInput[],
   policy: VestingDayOfMonth,
-  mode: AllocationType,
 ): DecomposeResult {
   const ctx = minimalCtx(policy);
   const root = toResidual(tranches);
@@ -217,7 +210,7 @@ export function decompose(
   };
 
   // Greedy seed for an initial upper bound (also a valid answer if search is capped).
-  const seed = greedyCover(root, estimate, ctx, mode);
+  const seed = greedyCover(root, estimate, ctx);
   let best: Component[] = seed;
   let bestCost = seed.length;
 
@@ -239,13 +232,10 @@ export function decompose(
 
     const target = dates[0];
     const localRanked = estimate(dates);
-    const atoms = trainAtomsCovering(
-      residual,
-      target,
-      localRanked,
-      ctx,
-      mode,
-    ).slice(0, MAX_BRANCH);
+    const atoms = trainAtomsCovering(residual, target, localRanked, ctx).slice(
+      0,
+      MAX_BRANCH,
+    );
 
     // Branch: cover `target` with each candidate train.
     for (const atom of atoms) {
@@ -284,7 +274,6 @@ function greedyCover(
   root: Residual,
   estimate: (dates: OCTDate[]) => Cadence[],
   ctx: EvaluationContext,
-  mode: AllocationType,
 ): Component[] {
   const residual = new Map(root);
   const components: Component[] = [];
@@ -294,7 +283,7 @@ function greedyCover(
     const cadences = estimate(dates);
     let bestAtom: TrainAtom | null = null;
     for (const target of dates) {
-      const atoms = trainAtomsCovering(residual, target, cadences, ctx, mode);
+      const atoms = trainAtomsCovering(residual, target, cadences, ctx);
       if (
         atoms.length &&
         (bestAtom === null || atoms[0].coverMass > bestAtom.coverMass)

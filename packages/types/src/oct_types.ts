@@ -1,11 +1,3 @@
-export type AllocationType =
-  | "CUMULATIVE_ROUNDING"
-  | "CUMULATIVE_ROUND_DOWN"
-  | "FRONT_LOADED"
-  | "BACK_LOADED"
-  | "FRONT_LOADED_TO_SINGLE_TRANCHE"
-  | "BACK_LOADED_TO_SINGLE_TRANCHE";
-
 export type VestingDayOfMonth =
   | "01"
   | "02"

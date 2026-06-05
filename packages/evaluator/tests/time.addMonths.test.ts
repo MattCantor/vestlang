@@ -7,7 +7,6 @@ const ctx = (v: VestingDayOfMonth): EvaluationContext => ({
   vesting_day_of_month: v,
   grantQuantity: 100,
   asOf: "2024-01-31",
-  allocation_type: "CUMULATIVE_ROUND_DOWN",
 });
 
 const applyTest = (x: {

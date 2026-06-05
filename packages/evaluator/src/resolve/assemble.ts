@@ -27,11 +27,6 @@ const reasonToString = (r: NonTemplateReason): string => {
         r.detail ??
         `Event-anchored cliff on "${r.eventId}" has no template form.`
       );
-    case "LOADED_ALLOCATION":
-      return (
-        r.detail ??
-        `Loaded allocation mode "${r.mode}" has no canonical template form.`
-      );
   }
 };
 

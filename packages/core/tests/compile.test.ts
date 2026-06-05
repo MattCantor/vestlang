@@ -793,12 +793,4 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     });
     expect(firstOfMonth[0].date).toBe("2025-02-01");
   });
-
-  it("CUMULATIVE_ROUNDING runtime convention still telescopes to totalShares", () => {
-    const events = compile(monthly12, 100, {
-      startDate: "2025-01-01",
-      allocationType: "CUMULATIVE_ROUNDING",
-    });
-    expect(sumAmounts(events)).toBe(100);
-  });
 });

@@ -23,7 +23,6 @@ function stubCtx(rule: VestingDayOfMonth): EvaluationContext {
     grantQuantity: 0,
     asOf: "1970-01-01",
     vesting_day_of_month: rule,
-    allocation_type: "CUMULATIVE_ROUND_DOWN",
   };
 }
 
@@ -128,7 +127,6 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
     asOf: "9999-12-31",
     vesting_day_of_month:
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    allocation_type: "CUMULATIVE_ROUND_DOWN",
   };
 
   const { installments, blockers } = evaluateStatement(program[0], ctx);
