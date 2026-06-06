@@ -32,6 +32,14 @@ import { group, indent, join, line, softline, type Doc } from "./doc.js";
  * Operates on the NORMALIZED AST (vesting starts resolved to nodes, cliffs to
  * VestingNodeExpr). The prettier plugin normalizes in its parser before
  * handing nodes here.
+ *
+ * The per-node `switch`es below recurse the AST themselves rather than using the
+ * shared `@vestlang/walk` traversal, and that's deliberate. This is a
+ * paramorphism: the output depends on the *original* node, not just its
+ * children — `isDefaultVestingStart` and `sugaredAnchorDuration` look at a
+ * node's own fields to decide whether to drop or sugar a clause, which a fold
+ * over children alone can't see. Each arm also emits a different `Doc` shape, so
+ * a generic "visit every node" walk would buy nothing here.
  */
 export function toDoc(node: Statement | Program): Doc {
   return Array.isArray(node) ? toDocProgram(node) : toDocStatement(node);
