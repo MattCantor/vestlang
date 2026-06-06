@@ -102,6 +102,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
     start: VestingNode,
     periodicity: VestingPeriod,
   ) => ({
+    type: "STATEMENT" as const,
     amount,
     expr: makeSingletonSchedule(start, periodicity),
   });
@@ -139,7 +140,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
 
   it("[resolving, void] → unresolved yet projected (resolved tranches present)", () => {
     const voidStart: VestingNode = {
-      type: "SINGLETON",
+      type: "NODE",
       base: makeVestingBaseEvent("a"),
       offsets: [],
       condition: {

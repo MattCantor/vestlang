@@ -30,12 +30,14 @@ export function normalizeStatement(s: RawStatement): Statement {
   // the way an ordinary statement's absent FROM is filled.
   if (s.chained) {
     return {
+      type: "STATEMENT",
       chained: true,
       amount: s.amount,
       expr: normalizeChainedSchedule(s.expr),
     };
   }
   return {
+    type: "STATEMENT",
     amount: s.amount,
     expr: normalizeScheduleExpr(s.expr),
   };
@@ -53,20 +55,20 @@ function normalizeChainedSchedule(s: ChainedSchedule<"raw">): ChainedSchedule {
       }
     : ({ ...s.periodicity } as VestingPeriod);
 
-  return { type: "SINGLETON", vesting_start: null, periodicity };
+  return { type: "SCHEDULE", vesting_start: null, periodicity };
 }
 
 /**
  * Normalize a ScheduleExpr
- * - SINGLETON schedule
- * - Selectors (EARLIER_OF/LATER_OF) over Schedules
+ * - a single schedule
+ * - a selector (EARLIER OF / LATER OF) over schedules
  */
 function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
   switch (e.type) {
-    case "SINGLETON":
+    case "SCHEDULE":
       return normalizeSchedule(e);
-    case "EARLIER_OF":
-    case "LATER_OF":
+    case "SCHEDULE_EARLIER_OF":
+    case "SCHEDULE_LATER_OF":
       return NormalizeAndSort(e, normalizeScheduleExpr);
     default:
       throw new Error(
@@ -82,7 +84,7 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  */
 function normalizeSchedule(s: RawSchedule): Schedule {
   const startNode = s.vesting_start ?? {
-    type: "SINGLETON",
+    type: "NODE",
     base: {
       type: "EVENT",
       value: "grantDate",
@@ -108,20 +110,20 @@ function normalizeNode(
   switch (c.type) {
     case "DURATION":
       return {
-        type: "SINGLETON",
+        type: "NODE",
         base: {
           type: "EVENT",
           value: durationRef,
         },
         offsets: [c],
       };
-    case "LATER_OF":
-    case "EARLIER_OF":
+    case "NODE_LATER_OF":
+    case "NODE_EARLIER_OF":
       return NormalizeAndSort(
         c,
         durationRef === "grantDate" ? normalizeVestingStart : normalizeCliff,
       );
-    case "SINGLETON":
+    case "NODE":
       return normalizeVestingNodeExpr(c);
     default:
       throw new Error(
@@ -141,14 +143,14 @@ function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
 /**
  * Normalizes a `vesting_start` or `cliff` expression
  * - BARE or CONSTRAINED vesting node
- * - Selectors (EARLIER_OF/LATER_OF) over `vesting_start` or `cliff` expressions
+ * - a selector (EARLIER OF / LATER OF) over `vesting_start` or `cliff` expressions
  */
 function normalizeVestingNodeExpr(e: VestingNodeExpr): VestingNodeExpr {
   switch (e.type) {
-    case "SINGLETON":
+    case "NODE":
       return normalizeVestingNode(e);
-    case "EARLIER_OF":
-    case "LATER_OF":
+    case "NODE_EARLIER_OF":
+    case "NODE_LATER_OF":
       return NormalizeAndSort(e, normalizeVestingNodeExpr);
     default:
       throw new Error(

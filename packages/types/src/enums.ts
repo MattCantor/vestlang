@@ -5,7 +5,20 @@ export type ConstraintTag = "BEFORE" | "AFTER";
 export type VBaseTag = "DATE" | "EVENT";
 
 // enums/VestlangExpressionType.schema.json
-export type ExprTag = "SINGLETON" | "EARLIER_OF" | "LATER_OF";
+//
+// The `type` tags an expression node can carry. There are two parallel families
+// — one for schedule-level expressions, one for vesting-node-level expressions —
+// and they are kept distinct on purpose: a single value can tell you both the
+// shape of a node and which layer it belongs to, so one tree walk can dispatch
+// on `type` alone without ever confusing a schedule with a node.
+export type ScheduleExprTag =
+  | "SCHEDULE"
+  | "SCHEDULE_EARLIER_OF"
+  | "SCHEDULE_LATER_OF";
+
+export type NodeExprTag = "NODE" | "NODE_EARLIER_OF" | "NODE_LATER_OF";
+
+export type ExprTag = ScheduleExprTag | NodeExprTag;
 
 // enums/PeriodType.schema.json
 // existing OCT schema

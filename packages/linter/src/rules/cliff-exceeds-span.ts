@@ -9,13 +9,13 @@ const meta = {
   severity: "warning" as const,
 };
 
-// The cliff offset of a plain `vestingStart + <duration>` cliff: a bare singleton
-// on the vestingStart anchor with one positive duration and no condition. Any
+// The cliff offset of a plain `vestingStart + <duration>` cliff: a single vesting
+// node on the vestingStart anchor with one positive duration and no condition. Any
 // richer shape (an event anchor, a condition, a selector, multiple offsets) isn't
 // a single comparable duration, so we don't second-guess it here.
 function startRelativeOffset(expr: VestingNodeExpr): Duration | undefined {
   if (
-    expr.type !== "SINGLETON" ||
+    expr.type !== "NODE" ||
     expr.base.type !== "EVENT" ||
     expr.base.value !== "vestingStart" ||
     expr.condition !== undefined ||

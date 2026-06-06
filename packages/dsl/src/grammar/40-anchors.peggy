@@ -33,7 +33,7 @@ VestingNode
     condition:(_ OrExpr)? {
       const offs = offsets.map(o => o[1])
       const node = {
-        type: "SINGLETON",
+        type: "NODE",
         base,
         offsets: normalizeOffsets(offs)
       }

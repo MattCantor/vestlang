@@ -14,15 +14,15 @@ describe("evaluateVestingNodeExpr selectors", () => {
   it("EARLIER_OF resolves to earliest resolved item", () => {
     const ctx = baseCtx();
     const expr = {
-      type: "EARLIER_OF",
+      type: "NODE_EARLIER_OF",
       items: [
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: makeVestingBaseDate("2024-03-01"),
           offsets: [],
         },
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: makeVestingBaseDate("2024-02-01"),
           offsets: [],
         },
@@ -36,15 +36,15 @@ describe("evaluateVestingNodeExpr selectors", () => {
   it("LATER_OF returns PICKED with UNRESOLVED meta when partially resolved", () => {
     const ctx = baseCtx();
     const expr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: makeVestingBaseDate("2024-02-01"),
           offsets: [],
         },
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: { type: "EVENT", value: "laterEvent" },
           offsets: [],
         },
@@ -61,15 +61,15 @@ describe("evaluateVestingNodeExpr selectors", () => {
   it("LATER_OF returns UNRESOLVED_SELECTOR when two or more items unresolved", () => {
     const ctx = baseCtx();
     const expr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: { type: "EVENT", value: "event1" },
           offsets: [],
         },
         {
-          type: "SINGLETON",
+          type: "NODE",
           base: { type: "EVENT", value: "event2" },
           offsets: [],
         },
@@ -99,7 +99,7 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
   const ctx = baseCtx();
   const schedule = makeSingletonSchedule(
     {
-      type: "SINGLETON",
+      type: "NODE",
       base: makeVestingBaseDate("2024-02-01"),
       offsets: [],
     },

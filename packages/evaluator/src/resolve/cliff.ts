@@ -63,7 +63,7 @@ const measureDuration = (
 
 /** A bare, non-`vestingStart` event anchor: no time-based cliff field. */
 const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
-  expr.type === "SINGLETON" &&
+  expr.type === "NODE" &&
   expr.base.type === "EVENT" &&
   expr.base.value !== "vestingStart"
     ? expr.base.value
@@ -155,14 +155,14 @@ export const lowerCliff = (
 };
 
 /** A `vestingStart + <duration>` cliff's offset, when the expression is exactly
- *  that: a bare SINGLETON on the `vestingStart` anchor with one positive duration
+ *  that: a single node on the `vestingStart` anchor with one positive duration
  *  offset and no condition. Any other shape (a different anchor, a condition, a
  *  combinator, multiple offsets) returns undefined. */
 const vestingStartOffset = (
   expr: VestingNodeExpr,
 ): { value: number; unit: PeriodTag } | undefined => {
   if (
-    expr.type !== "SINGLETON" ||
+    expr.type !== "NODE" ||
     expr.base.type !== "EVENT" ||
     expr.base.value !== "vestingStart" ||
     expr.condition !== undefined ||

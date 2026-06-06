@@ -172,7 +172,7 @@ export function evaluateScheduleExpr(
   ctx: EvaluationContext,
 ): PickReturn<Schedule> {
   switch (expr.type) {
-    case "SINGLETON": {
+    case "SCHEDULE": {
       const res = evaluateVestingNodeExpr(expr.vesting_start, ctx);
       if (res.type === "PICKED") {
         return {
@@ -184,14 +184,14 @@ export function evaluateScheduleExpr(
       return res;
     }
 
-    case "EARLIER_OF": {
+    case "SCHEDULE_EARLIER_OF": {
       const candidates = expr.items.map((item) =>
         evaluateScheduleExpr(item, ctx),
       );
       return handleSelector(candidates, EARLIER_POLICY);
     }
 
-    case "LATER_OF": {
+    case "SCHEDULE_LATER_OF": {
       const candidates = expr.items.map((item) =>
         evaluateScheduleExpr(item, ctx),
       );
@@ -205,7 +205,7 @@ export function evaluateVestingNodeExpr(
   ctx: EvaluationContext,
 ): PickReturn<VestingNode> {
   switch (expr.type) {
-    case "SINGLETON": {
+    case "NODE": {
       const res = evaluateVestingNode(expr, ctx);
 
       if (res.type === "RESOLVED") {
@@ -214,14 +214,14 @@ export function evaluateVestingNodeExpr(
       return res;
     }
 
-    case "EARLIER_OF": {
+    case "NODE_EARLIER_OF": {
       const candidates = expr.items.map((item) =>
         evaluateVestingNodeExpr(item, ctx),
       );
       return handleSelector(candidates, EARLIER_POLICY);
     }
 
-    case "LATER_OF": {
+    case "NODE_LATER_OF": {
       const candidates = expr.items.map((item) =>
         evaluateVestingNodeExpr(item, ctx),
       );

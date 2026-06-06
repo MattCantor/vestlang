@@ -9,7 +9,7 @@ import type {
   Amount,
   Blocker,
   EvaluationContextInput,
-  Schedule,
+  Statement,
 } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
@@ -50,12 +50,13 @@ const findsEventNotOccurred = (bs: Blocker[], event: string): boolean =>
 // `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")`. `+12mo` desugars to
 // the `grantDate` system anchor (→ DATE); `EVENT "ipo"` is the genuine condition
 // that earns the synthetic event.
-const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
+const stageAStmt = (): Statement => ({
+  type: "STATEMENT",
   amount: portion(1, 1),
   expr: {
-    type: "SINGLETON",
+    type: "SCHEDULE",
     vesting_start: {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("grantDate"), [
           makeDuration(12, "MONTHS", "PLUS"),

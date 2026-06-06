@@ -74,7 +74,7 @@ describe("lowerCliff", () => {
   it("unresolved cliff (unfired event via combinator) → UNRESOLVED with blockers", () => {
     // LATER_OF over two unfired events → no resolvable date.
     const cliff: VestingNodeExpr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("a")),
         makeSingletonNode(makeVestingBaseEvent("b")),
@@ -90,7 +90,7 @@ describe("lowerCliff", () => {
     // must stay UNRESOLVED rather than collapse to the floor (which would over-vest).
     const noIpo = baseCtx({ events: { grantDate: "2025-01-01" } });
     const cliff: VestingNodeExpr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
           makeDuration(12, "MONTHS", "PLUS"),
@@ -176,7 +176,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
 
   it("combinator cliff is not a bare duration → UNRESOLVED", () => {
     const cliff: VestingNodeExpr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
           makeDuration(12, "MONTHS", "PLUS"),

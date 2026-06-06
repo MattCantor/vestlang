@@ -37,7 +37,7 @@ function vestingNodeToString(node: VestingNode): string {
 }
 
 function blockerConditionToString(c: Omit<VestingNode, "type">): string {
-  return `${vestingNodeToString({ ...c, type: "SINGLETON" })}`;
+  return `${vestingNodeToString({ ...c, type: "NODE" })}`;
 }
 
 function conditionToString(c: Condition): string {

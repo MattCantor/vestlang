@@ -37,6 +37,7 @@ const stmt = (
   start: VestingNode,
   periodicity: VestingPeriod,
 ) => ({
+  type: "STATEMENT" as const,
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });

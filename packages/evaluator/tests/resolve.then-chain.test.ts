@@ -45,6 +45,7 @@ const head = (
   from: OCTDate,
   periodicity: VestingPeriod,
 ): Statement => ({
+  type: "STATEMENT",
   amount,
   expr: makeSingletonSchedule(
     makeSingletonNode(makeVestingBaseDate(from)),
@@ -60,6 +61,7 @@ const eventHead = (
   periodicity: VestingPeriod,
   offsetMonths?: number,
 ): Statement => ({
+  type: "STATEMENT",
   amount,
   expr: makeSingletonSchedule(
     makeSingletonNode(
@@ -75,9 +77,10 @@ const eventHead = (
 // A THEN tail: it has no start of its own (vesting_start is null); the resolver
 // fills in the handoff date — the moment the previous segment ended.
 const then = (amount: Amount, periodicity: VestingPeriod): Statement => ({
+  type: "STATEMENT",
   chained: true,
   amount,
-  expr: { type: "SINGLETON", vesting_start: null, periodicity },
+  expr: { type: "SCHEDULE", vesting_start: null, periodicity },
 });
 
 const dates = (events: { date: OCTDate }[]) => events.map((e) => e.date);

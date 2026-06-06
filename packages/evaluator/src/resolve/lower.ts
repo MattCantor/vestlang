@@ -50,10 +50,10 @@ const amountToFraction = (a: Amount, totalShares: number): Fraction =>
     ? fracReduce({ numerator: a.value, denominator: totalShares })
     : fracReduce({ numerator: a.numerator, denominator: a.denominator });
 
-/** First SINGLETON schedule of an expression (descend combinators' items[0]). */
+/** First single schedule of an expression (descend combinators' items[0]). */
 const firstSchedule = (expr: ScheduleExpr): Schedule => {
   let e = expr;
-  while (e.type !== "SINGLETON") e = e.items[0];
+  while (e.type !== "SCHEDULE") e = e.items[0];
   return e;
 };
 
@@ -64,22 +64,22 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
 const startBase = (
   vs: VestingNodeExpr,
 ): { base: "DATE" | "EVENT"; eventId?: string } =>
-  vs.type === "SINGLETON" &&
+  vs.type === "NODE" &&
   vs.base.type === "EVENT" &&
   !SYSTEM_EVENTS.has(vs.base.value)
     ? { base: "EVENT", eventId: vs.base.value }
     : { base: "DATE" };
 
-/** A start expression that selects an anchor (EARLIER_OF/LATER_OF), not a leaf. */
+/** A start expression that selects an anchor (EARLIER OF / LATER OF), not a leaf. */
 const isCombinator = (e: VestingNodeExpr): boolean =>
-  e.type === "EARLIER_OF" || e.type === "LATER_OF";
+  e.type === "NODE_EARLIER_OF" || e.type === "NODE_LATER_OF";
 
 /** Does the expression reference ≥1 genuine named EVENT (not a system anchor)?
  *  The synthetic-event admission test: a combinator anchor earns a synthetic
  *  event only if its definition names a real condition. Guards against smuggling
  *  a pure-date combinator (which resolves directly) into the synthetic path. */
 const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
-  e.type === "SINGLETON"
+  e.type === "NODE"
     ? e.base.type === "EVENT" && !SYSTEM_EVENTS.has(e.base.value)
     : e.items.some(referencesNamedEvent);
 
@@ -172,7 +172,7 @@ const resolveNonChained = (
     occurrences: p.occurrences,
   };
 
-  // An unfired *atomic* EVENT start (a bare SINGLETON named event, not a
+  // An unfired *atomic* EVENT start (a bare single node naming an event, not a
   // combinator or a system anchor) lowers into the template as an EVENT
   // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
   // IMPOSSIBLE and partially-picked combinators). A `vestingStart`-relative

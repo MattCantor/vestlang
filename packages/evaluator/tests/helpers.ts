@@ -54,7 +54,7 @@ export const makeSingletonNode = (
   base: VestingBaseDate | VestingBaseEvent,
   offsets: Offsets = [],
 ): VestingNode => ({
-  type: "SINGLETON",
+  type: "NODE",
   base,
   offsets,
 });
@@ -93,7 +93,7 @@ export const makeConstrainedNodeWithAtomCondition = (
   offsets: Offsets = [],
 ): VestingNode & { condition: AtomCondition } => {
   return {
-    type: "SINGLETON",
+    type: "NODE",
     base: makeVestingBaseDate(baseDate),
     condition: makeAtomCondition(
       makeConstraint(
@@ -120,7 +120,7 @@ export const makeSingletonSchedule = (
   vesting_start: VestingNode,
   periodicity: VestingPeriod,
 ): Schedule => ({
-  type: "SINGLETON",
+  type: "SCHEDULE",
   vesting_start,
   periodicity,
 });

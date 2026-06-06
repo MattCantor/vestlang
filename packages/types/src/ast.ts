@@ -5,7 +5,7 @@ import {
   OffsetTag,
   PeriodTag,
 } from "./enums.js";
-import { EarlierOf, LaterOf, OCTDate, TwoOrMore } from "./helpers.js";
+import { OCTDate, Selector, TwoOrMore } from "./helpers.js";
 
 // The DSL AST exists in two phases, tracked by this parameter:
 //   "raw"        — straight off the parser: a vesting start may be null and a
@@ -75,7 +75,7 @@ export type VestingBase = VestingBaseDate | VestingBaseEvent;
 
 // primitives/types/vestlang/VestingNode.schema.json
 export interface VestingNode {
-  type: "SINGLETON";
+  type: "NODE";
   base: VestingBase;
   offsets: Offsets;
   condition?: Condition;
@@ -85,9 +85,9 @@ export type ConstrainedVestingNode = VestingNode & {
   condition: Condition;
 };
 
-export type LaterOfVestingNode = LaterOf<VestingNodeExpr>;
+export type LaterOfVestingNode = Selector<VestingNodeExpr, "NODE_LATER_OF">;
 
-export type EarlierOfVestingNode = EarlierOf<VestingNodeExpr>;
+export type EarlierOfVestingNode = Selector<VestingNodeExpr, "NODE_EARLIER_OF">;
 
 export type VestingNodeExpr =
   | VestingNode
@@ -151,7 +151,7 @@ export type RawVestingPeriod = VestingPeriod<"raw">;
  * ------------------------ */
 
 export interface Schedule<P extends Phase = "normalized"> {
-  type: "SINGLETON";
+  type: "SCHEDULE";
   vesting_start: P extends "normalized"
     ? VestingNodeExpr
     : VestingNodeExpr | null;
@@ -160,12 +160,14 @@ export interface Schedule<P extends Phase = "normalized"> {
 
 export type RawSchedule = Schedule<"raw">;
 
-export type LaterOfSchedule<P extends Phase = "normalized"> = LaterOf<
-  ScheduleExpr<P>
+export type LaterOfSchedule<P extends Phase = "normalized"> = Selector<
+  ScheduleExpr<P>,
+  "SCHEDULE_LATER_OF"
 >;
 
-export type EarlierOfSchedule<P extends Phase = "normalized"> = EarlierOf<
-  ScheduleExpr<P>
+export type EarlierOfSchedule<P extends Phase = "normalized"> = Selector<
+  ScheduleExpr<P>,
+  "SCHEDULE_EARLIER_OF"
 >;
 
 export type ScheduleExpr<P extends Phase = "normalized"> =
@@ -204,11 +206,24 @@ export interface ChainedSchedule<P extends Phase = "normalized">
 }
 
 // A statement is either an ordinary one with its own start, or a chained tail.
-// The `chained` flag is the discriminant, so reading the start of a tail without
-// first checking the flag is a type error rather than a runtime surprise.
+// Two discriminants do two jobs here. The shared `type: "STATEMENT"` tag lets a
+// generic tree walk recognise a statement among all the other node kinds. The
+// `chained` flag tells the two statement variants apart, so reading the start of
+// a tail without first checking the flag is a type error rather than a runtime
+// surprise.
 export type Statement<P extends Phase = "normalized"> =
-  | { chained?: false; amount: Amount; expr: ScheduleExpr<P> }
-  | { chained: true; amount: Amount; expr: ChainedSchedule<P> };
+  | {
+      type: "STATEMENT";
+      chained?: false;
+      amount: Amount;
+      expr: ScheduleExpr<P>;
+    }
+  | {
+      type: "STATEMENT";
+      chained: true;
+      amount: Amount;
+      expr: ChainedSchedule<P>;
+    };
 
 export type RawStatement = Statement<"raw">;
 

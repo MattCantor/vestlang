@@ -18,14 +18,14 @@ function walkStatement(node: Statement, v: Visitor, path: NodePath) {
   walkScheduleExpr(node.expr, v, path.concat("expr"));
 }
 
-// Accepts a chained tail too: it's a start-less singleton, and the
+// Accepts a chained tail too: it's a start-less single schedule, and the
 // vesting_start guard below simply skips the absent start.
 function walkScheduleExpr(
   e: ScheduleExpr | ChainedSchedule,
   v: Visitor,
   path: NodePath,
 ) {
-  if (e.type === "SINGLETON") {
+  if (e.type === "SCHEDULE") {
     const schedule = e;
     v.Schedule?.(schedule, path);
     if (schedule.vesting_start)
@@ -46,7 +46,7 @@ function walkScheduleExpr(
 }
 
 function walkVestingNodeExpr(e: VestingNodeExpr, v: Visitor, path: NodePath) {
-  if (e.type === "SINGLETON") {
+  if (e.type === "NODE") {
     const vestingNode = e;
     v.VestingNode?.(vestingNode, path);
     if (vestingNode.condition)

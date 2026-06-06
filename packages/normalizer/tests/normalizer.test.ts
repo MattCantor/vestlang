@@ -17,12 +17,12 @@ function norm(src: string): Program {
   return normalizeProgram(ast);
 }
 
-/** Throw error if the first statement is not a singleton (and not a chained
- *  tail, which carries no start of its own — these tests never use one). */
+/** Throw error if the first statement is not a single schedule (and not a
+ *  chained tail, which carries no start of its own — these tests never use one). */
 function getSingleton(program: Program) {
   const stmt = program[0];
-  if (!stmt || stmt.chained || stmt.expr.type !== "SINGLETON") {
-    throw new Error("Expected first statement to be a SINGLETON");
+  if (!stmt || stmt.chained || stmt.expr.type !== "SCHEDULE") {
+    throw new Error("Expected first statement to be a single SCHEDULE");
   }
   return stmt.expr;
 }
@@ -31,7 +31,8 @@ function getSingleton(program: Program) {
 function getVestingStartItems(p: Program) {
   const vesting_start = getSingleton(p).vesting_start;
   return vesting_start &&
-    (vesting_start.type === "EARLIER_OF" || vesting_start.type === "LATER_OF")
+    (vesting_start.type === "NODE_EARLIER_OF" ||
+      vesting_start.type === "NODE_LATER_OF")
     ? vesting_start.items
     : [];
 }
@@ -43,13 +44,13 @@ function getVestingStartItems(p: Program) {
 describe("Produces default", () => {
   it("Produces default grantDate event from null vesting_start", () => {
     const out = norm("VEST");
-    if (out[0].expr.type !== "SINGLETON")
+    if (out[0].expr.type !== "SCHEDULE")
       throw new Error(
-        `Expected ${JSON.stringify(out[0].expr, null, 2)} to have type "SINGLETON"`,
+        `Expected ${JSON.stringify(out[0].expr, null, 2)} to have type "SCHEDULE"`,
       );
     const vs = out[0].expr.vesting_start;
     expect(vs).toEqual({
-      type: "SINGLETON",
+      type: "NODE",
       base: {
         type: "EVENT",
         value: "grantDate",
@@ -59,14 +60,14 @@ describe("Produces default", () => {
   });
   it("Produces default vestingStart event from cliff with duration", () => {
     const out = norm("VEST CLIFF 6 months");
-    if (out[0].expr.type !== "SINGLETON")
+    if (out[0].expr.type !== "SCHEDULE")
       throw new Error(
-        `Expected ${JSON.stringify(out[0].expr, null, 2)} to have type "SINGLETON"`,
+        `Expected ${JSON.stringify(out[0].expr, null, 2)} to have type "SCHEDULE"`,
       );
     const cliff = out[0].expr.periodicity.cliff;
-    if (cliff?.type !== "SINGLETON")
+    if (cliff?.type !== "NODE")
       throw new Error(
-        `Expected ${JSON.stringify(out[0].expr, null, 2)} to have type "SINGLETON"`,
+        `Expected ${JSON.stringify(out[0].expr, null, 2)} cliff to have type "NODE"`,
       );
     expect(cliff.base).toEqual({
       type: "EVENT",
@@ -99,7 +100,7 @@ describe("selectors: flatten, dedupe, collapse", () => {
     expect(items.length).toBe(2);
 
     // Ensure there is no nested selector remaining at top-level items
-    expect(items.every((x) => x.type === "SINGLETON")).toBe(true);
+    expect(items.every((x) => x.type === "NODE")).toBe(true);
   });
 
   it("collapses to singleton after dedupe when both items are identical", () => {
@@ -114,7 +115,8 @@ describe("selectors: flatten, dedupe, collapse", () => {
     // After normalization, vesting_start should not be a selector anymore
     const vesting_start = getSingleton(out).vesting_start;
     expect(
-      vesting_start.type === "LATER_OF" || vesting_start.type === "EARLIER_OF",
+      vesting_start.type === "NODE_LATER_OF" ||
+        vesting_start.type === "NODE_EARLIER_OF",
     ).toBe(false);
   });
 });
@@ -133,7 +135,7 @@ describe("constraints: dedupe + singleton collapse", () => {
     `);
 
     const vesting_start = getSingleton(out).vesting_start;
-    if (vesting_start.type !== "SINGLETON") {
+    if (vesting_start.type !== "NODE") {
       throw new Error(
         `Expected ${JSON.stringify(vesting_start)} start to be constrainted`,
       );
@@ -147,7 +149,7 @@ describe("constraints: dedupe + singleton collapse", () => {
     // After dedupe, AND has 1 item -> collapses to that item (ATOM)
     expect(c.type).toBe("ATOM");
     expect((c as AtomCondition).constraint.type).toBe("BEFORE");
-    expect((c as AtomCondition).constraint.base.type).toBe("SINGLETON");
+    expect((c as AtomCondition).constraint.base.type).toBe("NODE");
   });
 });
 
@@ -166,8 +168,8 @@ describe("constraints: flatten AND", () => {
     `);
 
     const vs = getSingleton(out).vesting_start;
-    if (vs.type !== "SINGLETON")
-      throw new Error(`Expected ${JSON.stringify(vs)} type to be "SINGLETON"`);
+    if (vs.type !== "NODE")
+      throw new Error(`Expected ${JSON.stringify(vs)} type to be "NODE"`);
     if (!vs.condition)
       throw new Error(`Expected ${JSON.stringify(vs)} to have constraints`);
     const c = vs.condition;
@@ -195,11 +197,11 @@ describe("selectors (vesting_start): flatten + dedupe", () => {
     `);
 
     const vs = getSingleton(out).vesting_start;
-    expect(vs.type).toBe("LATER_OF");
+    expect(vs.type).toBe("NODE_LATER_OF");
     expect((vs as LaterOfVestingNode).items.length).toBe(2);
     // Top-level items are vesting nodes (selector was flattened)
     expect(
-      (vs as LaterOfVestingNode).items.every((x) => x.type === "SINGLETON"),
+      (vs as LaterOfVestingNode).items.every((x) => x.type === "NODE"),
     ).toBe(true);
   });
 });
@@ -212,8 +214,10 @@ describe("selectors (vesting_start): singleton collapse", () => {
     `);
 
     const vs = getSingleton(out).vesting_start;
-    expect(vs.type === "LATER_OF" || vs.type === "EARLIER_OF").toBe(false);
-    expect(vs.type === "SINGLETON").toBe(true);
+    expect(vs.type === "NODE_LATER_OF" || vs.type === "NODE_EARLIER_OF").toBe(
+      false,
+    );
+    expect(vs.type === "NODE").toBe(true);
   });
 });
 
@@ -232,10 +236,10 @@ describe("cliff: selector dedupe + collapse", () => {
     const cliff = getSingleton(out).periodicity.cliff;
     expect(cliff).toBeTruthy();
     // After dedupe, selector collapses to node
-    expect(cliff!.type === "EARLIER_OF" || cliff!.type === "LATER_OF").toBe(
-      false,
-    );
-    expect(cliff!.type === "SINGLETON").toBe(true);
+    expect(
+      cliff!.type === "NODE_EARLIER_OF" || cliff!.type === "NODE_LATER_OF",
+    ).toBe(false);
+    expect(cliff!.type === "NODE").toBe(true);
   });
 });
 

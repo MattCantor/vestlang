@@ -98,10 +98,10 @@ export const unresolvedInstallments = (
     return makeUnresolvedCliffSchedule(dates, amounts, resCliff.blockers);
   if (isPickedResolved(resCliff)) return EMPTY; // resolved cliff, so fully resolved
 
-  // PICKED with an unresolved node: a LATER_OF whose best branch resolved.
+  // PICKED with an unresolved node: a LATER OF whose best branch resolved.
   const blockers: Blocker[] = (resCliff as PickedUnresolved<VestingNode>).meta
     .blockers;
-  if (cliff.type === "LATER_OF") {
+  if (cliff.type === "NODE_LATER_OF") {
     const probed = probeLaterOf(cliff, overlayCtx);
     if (probed) {
       const folded = foldToGrantDate(dates, amounts, probed);

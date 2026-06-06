@@ -14,7 +14,7 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
         "occurrences": 12,
         "type": "MONTHS",
       },
-      "type": "SINGLETON",
+      "type": "SCHEDULE",
       "vesting_start": {
         "items": [
           {
@@ -23,7 +23,7 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
               "value": "2025-01-01",
             },
             "offsets": [],
-            "type": "SINGLETON",
+            "type": "NODE",
           },
           {
             "base": {
@@ -38,12 +38,13 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
                 "value": 1,
               },
             ],
-            "type": "SINGLETON",
+            "type": "NODE",
           },
         ],
-        "type": "LATER_OF",
+        "type": "NODE_LATER_OF",
       },
     },
+    "type": "STATEMENT",
   },
 ]
 `;

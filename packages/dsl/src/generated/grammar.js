@@ -263,7 +263,7 @@ function peg$parse(input, options) {
   }
   function peg$f5(a, s) {
     const amt = a ?? mkPortion(1, 1); // default 100%
-    return { amount: amt, expr: s };
+    return { type: "STATEMENT", amount: amt, expr: s };
   }
   function peg$f6() {    return "AND";  }
   function peg$f7() {    return "OR";  }
@@ -319,7 +319,7 @@ function peg$parse(input, options) {
   function peg$f29(base, offsets, condition) {
     const offs = offsets.map(o => o[1])
     const node = {
-      type: "SINGLETON",
+      type: "NODE",
       base,
       offsets: normalizeOffsets(offs)
     }
@@ -351,7 +351,7 @@ function peg$parse(input, options) {
   }
   function peg$f35(op, head, tail) {
     return {
-      type: op.toUpperCase() === "EARLIER" ? "EARLIER_OF" : "LATER_OF",
+      type: op.toUpperCase() === "EARLIER" ? "NODE_EARLIER_OF" : "NODE_LATER_OF",
       items: collectTwoOrMore(head, tail)
     };
   }
@@ -410,20 +410,20 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f42(a) {
-    if (a.type === "SINGLETON" && a.base.type === "EVENT" && a.base.value === "vestingStart") {
+    if (a.type === "NODE" && a.base.type === "EVENT" && a.base.value === "vestingStart") {
       throw new SyntaxError('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
     }
     return a
   }
   function peg$f43(a) {
-    if (a.type === "SINGLETON" && a.base.type === "EVENT" && a.base.value === "grantDate") {
+    if (a.type === "NODE" && a.base.type === "EVENT" && a.base.value === "grantDate") {
       throw new SyntaxError('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
     }
     return a
   }
   function peg$f44(f, p, c) {
     const base = {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: f,
       periodicity: p,
     };
@@ -437,13 +437,13 @@ function peg$parse(input, options) {
     error("FROM can't follow THEN: a THEN segment continues from the previous segment's end and has no start of its own. To start an independent schedule, use PLUS with its own FROM.")
   }
   function peg$f47(a, p, c) {
-    const expr = { type: "SINGLETON", vesting_start: null, periodicity: p };
+    const expr = { type: "SCHEDULE", vesting_start: null, periodicity: p };
     if (c) expr.periodicity.cliff = c;
-    return { chained: true, amount: a ?? mkPortion(1, 1), expr };
+    return { type: "STATEMENT", chained: true, amount: a ?? mkPortion(1, 1), expr };
   }
   function peg$f48(op, head, tail) {
     return {
-      type: op.toUpperCase() === "EARLIER" ? "EARLIER_OF" : "LATER_OF",
+      type: op.toUpperCase() === "EARLIER" ? "SCHEDULE_EARLIER_OF" : "SCHEDULE_LATER_OF",
       items: collectTwoOrMore(head, tail)
     };
   }
@@ -2688,7 +2688,7 @@ function peg$parse(input, options) {
   }
   function mkVestingNode(duration, context) {
     return {
-      type: "SINGLETON",
+      type: "NODE",
       base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
       offsets: normalizeOffsets([duration]),
     }
@@ -2698,12 +2698,12 @@ function peg$parse(input, options) {
     if (x && typeof x === "object" && x.type === "DURATION") {
       return mkVestingNode(x, context)
     }
-    
-    // Pass through singleton vesting nodes
-    if (x && (x.type === "SINGLETON")) return x;
+
+    // Pass through a plain vesting node (anything that isn't a selector)
+    if (x && (x.type === "NODE")) return x;
 
     // Recurse into selectors and coerce their items
-    if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {
+    if (x && (x.type === "NODE_EARLIER_OF" || x.type === "NODE_LATER_OF") && Array.isArray(x.items)) {
       return {
         type: x.type,
         items: x.items.map((item) => coerceToVestingNode(item, context))
