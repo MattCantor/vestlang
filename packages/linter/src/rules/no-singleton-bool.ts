@@ -11,8 +11,12 @@ export const ruleNoSingletonBool: RuleModule = {
   meta,
   create(ctx) {
     const { id, severity } = meta;
+    // Note: on a *normalized* program this never fires — the normalizer already
+    // collapses a one-item AND/OR to its child before the linter runs. It would
+    // only catch something if a rule ran against the raw AST. Tracked in #53;
+    // left in place, not relied upon.
     return {
-      AndCondition(node, path) {
+      AND(node, path) {
         if (node.items.length === 1) {
           ctx.report({
             ruleId: id,
@@ -22,7 +26,7 @@ export const ruleNoSingletonBool: RuleModule = {
           });
         }
       },
-      OrCondition(node, path) {
+      OR(node, path) {
         if (node.items.length === 1) {
           ctx.report({
             ruleId: id,

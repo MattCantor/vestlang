@@ -1,9 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreWorkspaces": ["apps/docs"],
-  "ignore": [
-    "docs/**",
-    "packages/linter/src/rules/no-vestingStart-in-from-statement.ts"
-  ],
+  "ignore": ["docs/**"],
   "ignoreDependencies": ["prettier-plugin-pegjs"]
 }

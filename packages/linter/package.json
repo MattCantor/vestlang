@@ -20,7 +20,8 @@
   "dependencies": {
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
-    "@vestlang/types": "workspace:*"
+    "@vestlang/types": "workspace:*",
+    "@vestlang/walk": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

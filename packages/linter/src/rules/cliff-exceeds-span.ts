@@ -34,7 +34,7 @@ export const ruleCliffExceedsSpan: RuleModule = {
   create(ctx) {
     const { id, severity } = meta;
     return {
-      Schedule(node, path) {
+      SCHEDULE(node, path) {
         const { type, length, occurrences, cliff } = node.periodicity;
         if (!cliff) return;
 

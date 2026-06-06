@@ -309,6 +309,9 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
+      '@vestlang/walk':
+        specifier: workspace:*
+        version: link:../walk
     devDependencies:
       rimraf:
         specifier: ^6.0.1

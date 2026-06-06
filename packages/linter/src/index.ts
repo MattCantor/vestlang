@@ -1,19 +1,24 @@
 import { Program, RawProgram } from "@vestlang/types";
+import { walk, type AstNode } from "@vestlang/walk";
 import {
   Diagnostic,
   LintContext,
   LintResult,
+  NodePath,
   RuleModule,
   SourcePosition,
 } from "./types.js";
 import { stableKey } from "./utils.js";
 import { buildInRules } from "./rules/index.js";
-import { walkProgram } from "./walker.js";
 import { normalizeProgram } from "@vestlang/normalizer";
 
 export interface LintOptions {
   rules?: Array<RuleModule>;
 }
+
+// Every node-level hook has this shape once we've forgotten which exact node
+// kind it subscribed to — which is all the driver needs to fan a node out to it.
+type NodeHook = (node: AstNode, path: NodePath) => void;
 
 export function lintProgram(
   program: Program,
@@ -26,27 +31,27 @@ export function lintProgram(
     stableKey,
   };
 
-  const rules = (opts.rules ?? Array.from(buildInRules)).map((r) => ({
-    mod: r,
-    visitor: r.create(ctx),
-  }));
-
-  // Compose visitors: for each walker hook, call all rule visitors
-  const composed = new Proxy(
-    {},
-    {
-      get(_t, prop: string) {
-        return (...args: unknown[]) => {
-          for (const r of rules) {
-            const fn = (r.visitor as Record<string, unknown>)[prop];
-            if (typeof fn === "function") fn.apply(r.mod, args);
-          }
-        };
-      },
-    },
+  const visitors = (opts.rules ?? Array.from(buildInRules)).map((r) =>
+    r.create(ctx),
   );
 
-  walkProgram(program, composed);
+  // Program-level rules look at the whole statement list at once. The shared
+  // walk only ever hands us individual nodes (a program is a bare array, not a
+  // node), so these hooks are driven separately, up front.
+  for (const v of visitors) v.Program?.(program);
+
+  // Everything else: walk each statement and, at every node, invoke whichever
+  // rules subscribed to that node's `type`. The walk owns the recursion; rules
+  // only say which kinds they care about. `["Program", i]` seeds the path so
+  // diagnostics point at `["Program", i, "expr", …]`.
+  const dispatch = (node: AstNode, path: NodePath) => {
+    for (const v of visitors) {
+      const hook = (v as Record<string, NodeHook | undefined>)[node.type];
+      hook?.(node, path);
+    }
+  };
+  program.forEach((stmt, i) => walk(stmt, dispatch, ["Program", i]));
+
   return { diagnostics };
 }
 
