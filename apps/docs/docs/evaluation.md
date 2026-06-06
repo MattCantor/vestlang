@@ -77,10 +77,12 @@ A program is a **`template`** when, after its combinators resolve against runtim
 
 (Allocation is not a condition: the engine is always cumulative round-down.)
 
-It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Exactly two things force this:
+It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Two things force this:
 
 - **overlapping absolute starts** — two independent starts that don't chain into one origin (a `PLUS` of two different dates, or one event anchoring portions that land on different dates);
 - **event-anchored cliff** — the canonical cliff is a duration, so a cliff gated on an event has no template form.
+
+The first is a verdict about *structure*: some overlapping-start programs project a stream that does have a single-template form, and the default program surfaces recover those to `template` (see [Template recovery](#template-recovery) below). The event-anchored cliff is contingent — its date depends on a firing — and is never recovered.
 
 It is **`unresolved`** when a start or cliff genuinely can't resolve yet (an unfired event with no partial-knowledge floor), and **`impossible`** when a condition can never be satisfied.
 
@@ -103,14 +105,28 @@ A statement (or `THEN` chain) that resolves to a single canonical schedule. `100
 
 ### `events-only`
 
-Two independent absolute starts on one grant can't be one template, so the program keeps the dated facts and reports why. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months`, 100 shares:
+Two absolute-date grids that interleave into a stream with no single-template form keep the dated facts and report why. `0.5 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2024-01-15 OVER 4 months EVERY 1 month`, 800 shares — one grid on the 1st, one on the 15th:
+
+| Amount | Date | State |
+| --- | --- | --- |
+| 100 | 2024-02-01 | RESOLVED |
+| 100 | 2024-02-15 | RESOLVED |
+| … | … *(6 more, alternating)* | … |
+
+`status: events-only` — *reason: "Two independent absolute-date vesting grids on one grant."*
+
+### Template recovery
+
+`events-only` is a verdict about *authored structure*, not the realized numbers. When two overlapping grids actually project a stream with a single-template form, the default program surfaces — `evaluateProgramWithRecovery`, the MCP `vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and, when it reproduces the projection exactly, publish `template` with a `recovered` note instead.
+
+`0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months`, 100 shares — the two grids are really one 6-month cadence:
 
 | Amount | Date | State |
 | --- | --- | --- |
 | 50 | 2026-01-01 | RESOLVED |
 | 50 | 2026-07-01 | RESOLVED |
 
-`status: events-only` — *reason: "Two independent absolute-date vesting grids on one grant."*
+`status: template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. The raw classifier (`evaluateProgram`) still reports `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
 
 ## Installment states
 

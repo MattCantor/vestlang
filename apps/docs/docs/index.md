@@ -28,11 +28,13 @@ Real intent doesn't always fit a clean template, and contingent intent can't alw
 | `status` | When |
 | :--- | :--- |
 | **`template`** | Fits one canonical template — exact installments, structured round-trip, intent preserved. |
-| **`events-only`** | Resolves to concrete dated amounts but can't be one template (e.g. two overlapping independent starts, an event-anchored cliff) — the bare dated amounts the interchange always accepts, plus the reason. |
+| **`events-only`** | Resolves to concrete dated amounts but can't be one template (e.g. an event-anchored cliff, or independent absolute starts that interleave into no single grid) — the bare dated amounts the interchange always accepts, plus the reason. |
 | **`unresolved`** | Can't be materialized yet — waiting on an unfired event — reported with `blockers` naming what's missing. |
 | **`impossible`** | A condition can never be satisfied — flagged with the contradiction. |
 
 The verdict is the honesty: facts are preserved and intent is reported as it is, never disguised as a template it isn't. A whole multi-statement program collapses to **one** verdict, never a fan-out. See [Evaluation](./evaluation.md) for the full model.
+
+`events-only` is a verdict about *authored structure*, though — and some events-only programs project a stream that *does* have a single-template form. The default program surfaces re-infer it and, when it reproduces the projection exactly, publish `template` with a `recovered` note: [template recovery](./evaluation.md#template-recovery).
 
 ## Background
 

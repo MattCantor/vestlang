@@ -83,7 +83,9 @@ VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo
 ```
 
 Two independent schedules on one grant, run in parallel with `PLUS`. Overlapping absolute
-starts also resolve to **events-only**:
+starts classify **events-only** — but when their projection has a single-template form the
+default program surfaces **recover** them to a template (see [Template
+recovery](./evaluation.md#template-recovery)):
 
 ```vest
 0.5 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 1 month

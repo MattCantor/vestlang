@@ -79,13 +79,23 @@ Every evaluated program lands on exactly one `status`:
 | `status` | When | What you get |
 |---|---|---|
 | **`template`** | The program fits one canonical template | Exact installments; structured round-trip; intent preserved (best case) |
-| **`events-only`** | It resolves to concrete dated amounts but *can't* be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
+| **`events-only`** | It resolves to concrete dated amounts that *can't* be one template — e.g. an event-anchored cliff, or independent absolute starts that interleave into no single grid | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
 | **`unresolved`** | It can't be materialized yet — waiting on an unfired event | Amounts with symbolic/absent dates + `blockers` naming what's missing |
 | **`impossible`** | A condition can never be satisfied — e.g. an event required `BEFORE` a date already in the past | Installments flagged `IMPOSSIBLE` + `blockers` naming the contradiction |
 
 A program collapses to **one** verdict — `template`, `events-only`, `unresolved`, or
 `impossible` — never a fan-out to N. The program-level `status` is the headline; each
 installment also carries its own `state` of `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+
+**Template recovery.** `events-only` is a verdict about *authored structure*, not the
+realized numbers — and some events-only programs project a stream that *does* have a
+single-template form (two overlapping absolute-date grids that are really one cadence, say).
+The default program-evaluation surfaces — `evaluateProgramWithRecovery`, the MCP
+`vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and,
+when it reproduces the projection exactly, publish `template` with a `recovered` note, turning
+a lossy `events-only` back into a clean canonical form. The rescue is sound only for
+firing-invariant programs (no event anchors), so contingent schedules are never collapsed; the
+raw classifier (`evaluateProgram`) still reports the structural verdict.
 
 ---
 
@@ -102,6 +112,7 @@ umbrella at build time and never published on their own.
 | `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
 | `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
 | `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (branch-and-bound exact cover) |
+| `@vestlang/recover` | — | Template recovery: composes evaluator + inferrer to rescue an `events-only` program into a template when its projection has one |
 | `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
 
 Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`.
@@ -137,7 +148,9 @@ schedule.blockers;      // [] unless something is unresolved or impossible
 
 `evaluateStatement` classifies one statement at a time. To collapse a whole multi-statement
 program into a **single** schedule and read its program-level fidelity verdict, use
-`evaluateProgram(program, ctx)`. The engine itself is reachable as `core`:
+`evaluateProgramWithRecovery(program, ctx)` — the default, which also recovers an `events-only`
+program into a template when its projection has one — or `evaluateProgram(program, ctx)` for the
+raw classifier verdict. The engine itself is reachable as `core`:
 
 ```ts
 import { core } from "@vestlang/vestlang"; // or: import * as core from "@vestlang/core"
@@ -216,19 +229,38 @@ template (no fan-out) — `vest evaluate --program`, 100 shares:
 
 `fidelity: template`.
 
-### Two overlapping absolute starts → `events-only`
+### Two overlapping absolute starts → recovered to `template`
 
-Two independent absolute-date grids on one grant can't be a single canonical template, so
-the program resolves to bare dated amounts with the reason — `vest evaluate --program`:
-
-`0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months` over 100 shares:
+Two independent absolute-date grids classify `events-only` on structure alone — but their
+realized projection can still have a single-template form, and the default program surfaces
+recover it. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months` over 100 shares — `vest evaluate --program`:
 
 | Amount | Date | State |
 |---:|:---|:---|
 | 50 | 2026-01-01 | RESOLVED |
 | 50 | 2026-07-01 | RESOLVED |
 
-`fidelity: events-only` — *"Two independent absolute-date vesting grids on one grant."*
+`status: template` — **recovered** from `events-only`, because the two grids are really one
+6-month cadence: `100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months`. The raw
+classifier (`evaluateProgram`) still reports `events-only`; recovery is a property of the
+default program surfaces and only fires when the inferred template reproduces the projection
+exactly.
+
+### Genuinely `events-only` (no recovery)
+
+When the grids interleave into a stream with no single-template form, recovery correctly
+declines and the verdict stays `events-only`. Two monthly grids on different days of the
+month — the 1st and the 15th — `0.5 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2024-01-15 OVER 4 months EVERY 1 month`:
+
+| Amount | Date | State |
+|---:|:---|:---|
+| 100 | 2024-02-01 | RESOLVED |
+| 100 | 2024-02-15 | RESOLVED |
+| … | … *(6 more, alternating)* | … |
+
+`status: events-only` — *"Two independent absolute-date vesting grids on one grant."* (An
+event-anchored cliff, `CLIFF EVENT ipo`, is the other genuine case — a cliff with no fixed
+date has no template form.)
 
 ### The inverse: tranches → DSL
 
@@ -247,6 +279,10 @@ rather than a stack of independent dated grids. So a stream like `100, 100, 200,
 that classifies as `template`, not as overlapping grids stuck at `events-only`. The chain
 form also leaves the month-end handoffs to the engine, so a rate change that lands on a
 short month (the 31st springing back to Feb 28/29) still stitches into one template.
+
+This inverse is the engine behind **template recovery** above: when an `events-only` program
+projects a stream the inferrer can re-cover as one template, the default program surfaces feed
+the projection back through `inferSchedule` and re-classify the result.
 
 ---
 
