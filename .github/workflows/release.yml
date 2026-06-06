@@ -1,10 +1,16 @@
 name: Release
 
+# Manual-only until the first publish is bootstrapped. Trusted Publishing (OIDC)
+# can't CREATE a package that doesn't exist yet — @vestlang/vestlang has never
+# been published, so an automatic publish 404s. To enable auto-release: publish
+# once with a token (`cd packages/vestlang && npm publish --access public`),
+# configure the package's trusted publisher on npmjs.com (repo MattCantor/vestlang,
+# workflow release.yml), then restore the push trigger below.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/vestlang/package.json"
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "packages/vestlang/package.json"
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
