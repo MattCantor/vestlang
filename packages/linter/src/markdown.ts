@@ -9,12 +9,12 @@
 
 import { lintText } from "./index.js";
 import type { LintOptions } from "./index.js";
-import type { Diagnostic, LintSeverity } from "./types.js";
+import type { Diagnostic, DiagnosticSeverity } from "./types.js";
 
 export interface MarkdownDiagnostic {
   ruleId: string;
   message: string;
-  severity: LintSeverity;
+  severity: DiagnosticSeverity;
   /** 1-based line, absolute in the Markdown file. */
   line: number;
   /** 1-based column, absolute in the Markdown file. */

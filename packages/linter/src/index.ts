@@ -69,8 +69,15 @@ export function lintText(
 ): LintResult {
   try {
     const raw = parseVestlang(source) as RawProgram;
-    const canonical = normalizeProgram(raw);
-    return lintProgram(canonical, opts);
+    // The normalizer dedupes duplicate selector arms (and the like) as part of
+    // canonicalization. It reports each drop through this sink so we can surface
+    // it — the catch the dead `no-duplicate-selector-items` rule couldn't make,
+    // because by the time `lintProgram` sees a normalized program the duplicates
+    // are already gone. (`lintProgram` on its own never produces these.)
+    const fromNormalizer: Diagnostic[] = [];
+    const canonical = normalizeProgram(raw, (d) => fromNormalizer.push(d));
+    const { diagnostics } = lintProgram(canonical, opts);
+    return { diagnostics: [...fromNormalizer, ...diagnostics] };
   } catch (err: unknown) {
     const e = err as {
       name?: string;

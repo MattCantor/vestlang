@@ -1,5 +1,5 @@
 import { normalizeVestingNode } from "./core.js";
-import { NormalizeAndSort } from "./utils.js";
+import { NormalizeAndSort, type DedupeReport } from "./utils.js";
 import {
   ChainedSchedule,
   Duration,
@@ -24,7 +24,10 @@ type SYSTEM_EVENT = "grantDate" | "vestingStart";
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
-export function normalizeStatement(s: RawStatement): Statement {
+export function normalizeStatement(
+  s: RawStatement,
+  report?: DedupeReport,
+): Statement {
   // A THEN tail has no start of its own — it continues from the previous
   // segment's end. Leave its start null rather than filling in the grant date
   // the way an ordinary statement's absent FROM is filled.
@@ -33,13 +36,13 @@ export function normalizeStatement(s: RawStatement): Statement {
       type: "STATEMENT",
       chained: true,
       amount: s.amount,
-      expr: normalizeChainedSchedule(s.expr),
+      expr: normalizeChainedSchedule(s.expr, report),
     };
   }
   return {
     type: "STATEMENT",
     amount: s.amount,
-    expr: normalizeScheduleExpr(s.expr),
+    expr: normalizeScheduleExpr(s.expr, report),
   };
 }
 
@@ -47,11 +50,14 @@ export function normalizeStatement(s: RawStatement): Statement {
  * Normalize a chained tail: same cliff/periodicity handling as a schedule, but
  * the start stays null (the resolver supplies the handoff date later).
  */
-function normalizeChainedSchedule(s: ChainedSchedule<"raw">): ChainedSchedule {
+function normalizeChainedSchedule(
+  s: ChainedSchedule<"raw">,
+  report?: DedupeReport,
+): ChainedSchedule {
   const periodicity = s.periodicity.cliff
     ? {
         ...s.periodicity,
-        cliff: normalizeCliff(s.periodicity.cliff),
+        cliff: normalizeCliff(s.periodicity.cliff, report),
       }
     : ({ ...s.periodicity } as VestingPeriod);
 
@@ -63,13 +69,20 @@ function normalizeChainedSchedule(s: ChainedSchedule<"raw">): ChainedSchedule {
  * - a single schedule
  * - a selector (EARLIER OF / LATER OF) over schedules
  */
-function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
+function normalizeScheduleExpr(
+  e: RawScheduleExpr,
+  report?: DedupeReport,
+): ScheduleExpr {
   switch (e.type) {
     case "SCHEDULE":
-      return normalizeSchedule(e);
+      return normalizeSchedule(e, report);
     case "SCHEDULE_EARLIER_OF":
     case "SCHEDULE_LATER_OF":
-      return NormalizeAndSort(e, normalizeScheduleExpr);
+      return NormalizeAndSort(
+        e,
+        (x) => normalizeScheduleExpr(x, report),
+        report,
+      );
     default:
       throw new Error(
         `normalizeScheduleExpr: unexpected ScheduleExpr type ${(e as { type?: string })?.type}`,
@@ -82,7 +95,7 @@ function normalizeScheduleExpr(e: RawScheduleExpr): ScheduleExpr {
  * - Normalizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: RawSchedule): Schedule {
+function normalizeSchedule(s: RawSchedule, report?: DedupeReport): Schedule {
   const startNode = s.vesting_start ?? {
     type: "NODE",
     base: {
@@ -91,12 +104,12 @@ function normalizeSchedule(s: RawSchedule): Schedule {
     },
     offsets: [] as Offsets,
   };
-  const vesting_start = normalizeVestingStart(startNode);
+  const vesting_start = normalizeVestingStart(startNode, report);
 
   const periodicity = s.periodicity.cliff
     ? {
         ...s.periodicity,
-        cliff: normalizeCliff(s.periodicity.cliff),
+        cliff: normalizeCliff(s.periodicity.cliff, report),
       }
     : ({ ...s.periodicity } as VestingPeriod);
 
@@ -106,6 +119,7 @@ function normalizeSchedule(s: RawSchedule): Schedule {
 function normalizeNode(
   c: Duration | VestingNodeExpr,
   durationRef: SYSTEM_EVENT,
+  report?: DedupeReport,
 ): VestingNodeExpr {
   switch (c.type) {
     case "DURATION":
@@ -121,10 +135,13 @@ function normalizeNode(
     case "NODE_EARLIER_OF":
       return NormalizeAndSort(
         c,
-        durationRef === "grantDate" ? normalizeVestingStart : normalizeCliff,
+        durationRef === "grantDate"
+          ? (x) => normalizeVestingStart(x, report)
+          : (x) => normalizeCliff(x, report),
+        report,
       );
     case "NODE":
-      return normalizeVestingNodeExpr(c);
+      return normalizeVestingNodeExpr(c, report);
     default:
       throw new Error(
         `normalizeCliff: unexpected cliff type ${(c as { type?: string })?.type}`,
@@ -132,12 +149,18 @@ function normalizeNode(
   }
 }
 
-function normalizeVestingStart(c: Duration | VestingNodeExpr): VestingNodeExpr {
-  return normalizeNode(c, "grantDate");
+function normalizeVestingStart(
+  c: Duration | VestingNodeExpr,
+  report?: DedupeReport,
+): VestingNodeExpr {
+  return normalizeNode(c, "grantDate", report);
 }
 
-function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
-  return normalizeNode(c, "vestingStart");
+function normalizeCliff(
+  c: Duration | VestingNodeExpr,
+  report?: DedupeReport,
+): VestingNodeExpr {
+  return normalizeNode(c, "vestingStart", report);
 }
 
 /**
@@ -145,13 +168,20 @@ function normalizeCliff(c: Duration | VestingNodeExpr): VestingNodeExpr {
  * - BARE or CONSTRAINED vesting node
  * - a selector (EARLIER OF / LATER OF) over `vesting_start` or `cliff` expressions
  */
-function normalizeVestingNodeExpr(e: VestingNodeExpr): VestingNodeExpr {
+function normalizeVestingNodeExpr(
+  e: VestingNodeExpr,
+  report?: DedupeReport,
+): VestingNodeExpr {
   switch (e.type) {
     case "NODE":
       return normalizeVestingNode(e);
     case "NODE_EARLIER_OF":
     case "NODE_LATER_OF":
-      return NormalizeAndSort(e, normalizeVestingNodeExpr);
+      return NormalizeAndSort(
+        e,
+        (x) => normalizeVestingNodeExpr(x, report),
+        report,
+      );
     default:
       throw new Error(
         `normalizeVestingNodeExpr: unexpected VestingNode type ${(e as { type?: string })?.type}`,
