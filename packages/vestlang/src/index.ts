@@ -16,6 +16,12 @@ export {
 } from "@vestlang/evaluator";
 export type { VestedResult, SchedulePresentation } from "@vestlang/evaluator";
 
+// Recover — the default program-eval surface: it runs the evaluator, then
+// rescues an events-only verdict back to a template when the projection soundly
+// has one. `evaluateProgram` above stays available for the recovery-free path.
+export { evaluateProgramWithRecovery } from "@vestlang/recover";
+export type { RecoveryOutcome, RecoveredTemplate } from "@vestlang/recover";
+
 // Linter
 export { lintProgram, lintText } from "@vestlang/linter";
 export type { LintOptions, LintResult, Diagnostic } from "@vestlang/linter";

@@ -444,6 +444,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/recover':
+        specifier: workspace:*
+        version: link:../recover
       '@vestlang/render':
         specifier: workspace:*
         version: link:../render
