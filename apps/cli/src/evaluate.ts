@@ -1,8 +1,6 @@
-import {
-  evaluateStatement,
-  evaluateProgram,
-  presentSchedule,
-} from "@vestlang/evaluator";
+import { evaluateStatement, presentSchedule } from "@vestlang/evaluator";
+import { evaluateProgramWithRecovery } from "@vestlang/recover";
+import type { RecoveredTemplate } from "@vestlang/recover";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
@@ -36,15 +34,34 @@ export function evaluate(
   const normalized = normalizeProgram(ast);
 
   // --program collapses every statement into ONE schedule and reports the
-  // program-level verdict (`status`); the default classifies each
-  // statement on its own.
-  const results = opts.program
-    ? evaluateProgram(normalized, ctx)
-    : normalized.map((s) => evaluateStatement(s, ctx));
+  // program-level verdict (`status`); the default classifies each statement on
+  // its own. The collapsed path also runs template recovery: an events-only
+  // program whose realized projection has a single-template form is rescued back
+  // to a template (the same behavior as the MCP tool and library default).
+  if (opts.program) {
+    const outcome = evaluateProgramWithRecovery(normalized, ctx);
+    printSchedule(outcome.schedule, true);
+    if (outcome.rescued) printRecovered(outcome.recovered);
+    return;
+  }
 
-  results.forEach((r) => {
-    printSchedule(r, opts.program === true);
-  });
+  normalized
+    .map((s) => evaluateStatement(s, ctx))
+    .forEach((r) => printSchedule(r, false));
+}
+
+// When recovery fired, the schedule above prints as a plain `template`; this
+// note says where it came from and shows the recovered DSL (which the engine
+// can re-project, given the day-of-month convention — it isn't in the DSL text).
+function printRecovered(recovered: RecoveredTemplate): void {
+  console.log();
+  console.log(`recovered: ${recovered.from} → template`);
+  console.log(`  was: ${recovered.reason}`);
+  console.log(`  dsl: ${recovered.dsl}`);
+  console.log(
+    `  vestingDayOfMonth: ${recovered.vestingDayOfMonth} (residual ${recovered.residualError})`,
+  );
+  console.log();
 }
 
 function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {

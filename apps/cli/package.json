@@ -17,6 +17,7 @@
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
+    "@vestlang/recover": "workspace:*",
     "commander": "^14.0.1",
     "tsx": "^4.20.5"
   },

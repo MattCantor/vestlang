@@ -75,6 +75,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/recover':
+        specifier: workspace:*
+        version: link:../../packages/recover
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types
