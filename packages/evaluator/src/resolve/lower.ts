@@ -77,7 +77,16 @@ const isCombinator = (e: VestingNodeExpr): boolean =>
 /** Does the expression reference ≥1 genuine named EVENT (not a system anchor)?
  *  The synthetic-event admission test: a combinator anchor earns a synthetic
  *  event only if its definition names a real condition. Guards against smuggling
- *  a pure-date combinator (which resolves directly) into the synthetic path. */
+ *  a pure-date combinator (which resolves directly) into the synthetic path.
+ *
+ *  This reads like a job for `@vestlang/walk`'s `some` (recover uses it for a
+ *  near-identical "is there an event in here?" check), but it isn't one. It only
+ *  walks the anchor itself: the node's own base, and the arms of an EARLIER/LATER
+ *  OF. It deliberately does NOT look inside a node's BEFORE/AFTER condition. A
+ *  shared `some` descends every edge, so it would also count an event gated in a
+ *  constraint — widening what qualifies as a referenced event and changing which
+ *  starts get a synthetic event. That's a semantic call about the start anchor,
+ *  not a generic tree walk, so the recursion stays here and stays narrow. */
 const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
   e.type === "NODE"
     ? e.base.type === "EVENT" && !SYSTEM_EVENTS.has(e.base.value)
