@@ -20,7 +20,7 @@ describe("Start & basics", () => {
       numerator: 1,
       denominator: 1,
     });
-    expect(stmt.expr.type).toBe("SINGLETON");
+    expect(stmt.expr.type).toBe("SCHEDULE");
     expect(stmt.expr.vesting_start).toBeNull();
     expect(stmt.expr.periodicity).toEqual({
       type: "DAYS",
@@ -34,17 +34,17 @@ describe("Start & basics", () => {
     expect(ast).toHaveLength(2);
 
     const first = ast[0].expr;
-    if (first.type !== "SINGLETON")
+    if (first.type !== "SCHEDULE")
       throw new Error(
-        `${JSON.stringify(first)} expected to have type "SINGLETON`,
+        `${JSON.stringify(first)} expected to have type "SCHEDULE`,
       );
     const firstVestingStart = first.vesting_start as VestingNode;
     expect(firstVestingStart.base.value).toBe("a");
 
     const second = ast[1].expr;
-    if (second.type !== "SINGLETON")
+    if (second.type !== "SCHEDULE")
       throw new Error(
-        `${JSON.stringify(second)} expected to have type "SINGLETON"`,
+        `${JSON.stringify(second)} expected to have type "SCHEDULE"`,
       );
     const secondVestingStart = second.vesting_start as VestingNode;
     expect(secondVestingStart.base.value).toBe("b");
@@ -132,14 +132,14 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   it("parses a single ATOM constraint attached to a node", () => {
     const s = first(`VEST FROM EVENT a BEFORE EVENT b + 10 days`);
     const node = s.expr.vesting_start;
-    expect(node.type).toBe("SINGLETON");
+    expect(node.type).toBe("NODE");
     expect(node.condition).toMatchObject({
       type: "ATOM",
       constraint: {
         type: "BEFORE",
         strict: false,
         base: {
-          type: "SINGLETON",
+          type: "NODE",
           base: { type: "EVENT", value: "b" },
           offsets: [
             { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },
@@ -152,7 +152,7 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   it("canonicalizes offsets: sum per unit, explicit sign, drop zeros", () => {
     const s = first(`VEST FROM EVENT a + 2 months - 1 months + 10 days`);
     const start = s.expr.vesting_start;
-    expect(start.type).toBe("SINGLETON");
+    expect(start.type).toBe("NODE");
     expect(start.offsets).toEqual([
       { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
       { type: "DURATION", value: 10, unit: "DAYS", sign: "PLUS" },

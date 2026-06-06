@@ -10,22 +10,19 @@ export type {
   Cliff,
   VestingRuntime,
 } from "./canonical.js";
-export type {
-  TwoOrMore,
-  SelectorTag,
-  EarlierOf,
-  LaterOf,
-  OCTDate,
-} from "./helpers.js";
+export type { TwoOrMore, SelectorTag, Selector, OCTDate } from "./helpers.js";
 export type {
   ConstraintTag,
   VBaseTag,
   ExprTag,
+  ScheduleExprTag,
+  NodeExprTag,
   PeriodTag,
   OffsetTag,
   ConditionTag,
   AmountTag,
 } from "./enums.js";
+export { selectorKeyword } from "./display.js";
 export {
   Duration,
   DurationMonth,

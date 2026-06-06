@@ -68,7 +68,7 @@ export function NormalizeAndSort<
   // Normalize children (nested selectors or vesting nodes or schedules
   let items = expression.items.map(normalizeFN);
 
-  // Flatten same-op: EARLIER_OF(EARLIER_OF(...), x) -> EARLIER_OF(...)
+  // Flatten same-op: EARLIER OF ( EARLIER OF (...), x ) -> EARLIER OF (...)
   items = items.flatMap((item) =>
     item.type === expression.type
       ? (item as unknown as { items: N[] }).items

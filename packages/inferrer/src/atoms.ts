@@ -16,7 +16,7 @@ import type {
 
 function bareDate(date: OCTDate): VestingNodeExpr {
   return {
-    type: "SINGLETON",
+    type: "NODE",
     base: { type: "DATE", value: date },
     offsets: [],
   };
@@ -46,9 +46,10 @@ function buildUniform(
     occurrences: c.occurrences,
   };
   return {
+    type: "STATEMENT",
     amount: { type: "QUANTITY", value: total },
     expr: {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: bareDate(vestingStart),
       periodicity,
     },
@@ -62,9 +63,10 @@ function buildSingle(c: SingleTrancheComponent): Statement {
     occurrences: 1,
   };
   return {
+    type: "STATEMENT",
     amount: { type: "QUANTITY", value: c.amount },
     expr: {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: bareDate(c.date),
       periodicity,
     },
@@ -80,7 +82,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
     length: c.cadence.length,
     occurrences: totalSteps,
     cliff: {
-      type: "SINGLETON",
+      type: "NODE",
       base: { type: "EVENT", value: "vestingStart" },
       offsets: [
         {
@@ -93,9 +95,10 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
     },
   };
   return {
+    type: "STATEMENT",
     amount: { type: "QUANTITY", value: total },
     expr: {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: bareDate(c.grantDate),
       periodicity,
     },
@@ -123,14 +126,15 @@ export function buildStatement(
  */
 export function asChainedTail(stmt: Statement): Statement {
   if (stmt.chained) return stmt;
-  if (stmt.expr.type !== "SINGLETON") {
-    throw new Error("asChainedTail: only a plain singleton segment can chain");
+  if (stmt.expr.type !== "SCHEDULE") {
+    throw new Error("asChainedTail: only a plain single segment can chain");
   }
   return {
+    type: "STATEMENT",
     chained: true,
     amount: stmt.amount,
     expr: {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: null,
       periodicity: stmt.expr.periodicity,
     },

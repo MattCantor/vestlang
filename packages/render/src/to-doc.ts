@@ -14,6 +14,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+import { selectorKeyword } from "@vestlang/types";
 import { group, indent, join, line, softline, type Doc } from "./doc.js";
 
 /**
@@ -65,11 +66,12 @@ function toDocStatement(s: Statement): Doc {
   if (!isEmpty(amount)) head.push(amount, " ");
   head.push(kw("VEST"));
 
-  // A chained tail is always a plain singleton body (it just has no FROM clause
-  // to emit), and a singleton head expands the same way. A selector head is not
-  // a stanza — it rides next to VEST and breaks via its own paren-group.
+  // A chained tail is always a plain single-schedule body (it just has no FROM
+  // clause to emit), and a single-schedule head expands the same way. A selector
+  // head is not a stanza — it rides next to VEST and breaks via its own
+  // paren-group.
   if (s.chained) return stanza(head, scheduleClauses(s.expr));
-  if (s.expr.type === "SINGLETON") return stanza(head, scheduleClauses(s.expr));
+  if (s.expr.type === "SCHEDULE") return stanza(head, scheduleClauses(s.expr));
   return group([...head, " ", toDocScheduleExpr(s.expr)]);
 }
 
@@ -82,13 +84,13 @@ function stanza(head: Doc[], clauses: Doc[]): Doc {
 
 function toDocScheduleExpr(e: ScheduleExpr): Doc {
   switch (e.type) {
-    case "SINGLETON":
+    case "SCHEDULE":
       // Inline form (e.g. as a selector item): no stanza breaking.
       return spaced(scheduleClauses(e));
-    case "LATER_OF":
-    case "EARLIER_OF":
+    case "SCHEDULE_LATER_OF":
+    case "SCHEDULE_EARLIER_OF":
       return parenGroup(
-        kw(e.type.replace("_", " ")),
+        kw(selectorKeyword(e.type)),
         e.items.map(toDocScheduleExpr),
       );
   }
@@ -148,12 +150,12 @@ function toDocAmount(a: Amount): Doc {
 
 export function toDocVestingNodeExpr(node: VestingNodeExpr): Doc {
   switch (node.type) {
-    case "SINGLETON":
+    case "NODE":
       return toDocVestingNode(node);
-    case "EARLIER_OF":
-    case "LATER_OF":
+    case "NODE_EARLIER_OF":
+    case "NODE_LATER_OF":
       return parenGroup(
-        kw(node.type.replace("_", " ")),
+        kw(selectorKeyword(node.type)),
         node.items.map(toDocVestingNodeExpr),
       );
   }
@@ -204,7 +206,7 @@ function toDocVestingBase(base: VestingBase): Doc {
  * ------------------------ */
 
 function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
-  if (vs.type !== "SINGLETON") return false;
+  if (vs.type !== "NODE") return false;
   if (vs.base.type !== "EVENT") return false;
   if (vs.base.value !== "grantDate") return false;
   if (vs.offsets && vs.offsets.length > 0) return false;
@@ -222,7 +224,7 @@ function sugaredAnchorDuration(
   node: VestingNodeExpr,
   systemEvent: "grantDate" | "vestingStart",
 ): string | null {
-  if (node.type !== "SINGLETON") return null;
+  if (node.type !== "NODE") return null;
   if (node.base.type !== "EVENT") return null;
   if (node.base.value !== systemEvent) return null;
   if (node.condition) return null;

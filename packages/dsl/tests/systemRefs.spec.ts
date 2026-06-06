@@ -9,7 +9,7 @@ describe("Bareword system references", () => {
   it("accepts bareword grantDate in FROM (no EVENT keyword)", () => {
     const stmt = first(`VEST FROM grantDate OVER 12 months EVERY 12 months`);
     const vs = stmt.expr.vesting_start as VestingNode;
-    expect(vs.type).toBe("SINGLETON");
+    expect(vs.type).toBe("NODE");
     expect(vs.base).toEqual({ type: "EVENT", value: "grantDate" });
     expect(vs.offsets).toEqual([]);
   });
@@ -47,8 +47,8 @@ describe("Bareword system references", () => {
     expect(ast).toHaveLength(2);
     const a = ast[0].expr;
     const b = ast[1].expr;
-    if (a.type !== "SINGLETON" || b.type !== "SINGLETON")
-      throw new Error("expected SINGLETON exprs");
+    if (a.type !== "SCHEDULE" || b.type !== "SCHEDULE")
+      throw new Error("expected SCHEDULE exprs");
     const aStart = a.vesting_start as VestingNode;
     const bStart = b.vesting_start as VestingNode;
     expect(aStart.base).toEqual({ type: "EVENT", value: "grantDate" });

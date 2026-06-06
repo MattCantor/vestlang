@@ -70,7 +70,7 @@
   }
   function mkVestingNode(duration, context) {
     return {
-      type: "SINGLETON",
+      type: "NODE",
       base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
       offsets: normalizeOffsets([duration]),
     }
@@ -80,12 +80,12 @@
     if (x && typeof x === "object" && x.type === "DURATION") {
       return mkVestingNode(x, context)
     }
-    
-    // Pass through singleton vesting nodes
-    if (x && (x.type === "SINGLETON")) return x;
+
+    // Pass through a plain vesting node (anything that isn't a selector)
+    if (x && (x.type === "NODE")) return x;
 
     // Recurse into selectors and coerce their items
-    if (x && (x.type === "EARLIER_OF" || x.type === "LATER_OF") && Array.isArray(x.items)) {
+    if (x && (x.type === "NODE_EARLIER_OF" || x.type === "NODE_LATER_OF") && Array.isArray(x.items)) {
       return {
         type: x.type,
         items: x.items.map((item) => coerceToVestingNode(item, context))
@@ -117,7 +117,7 @@ Chain
 VestStmt
   = _ a:Amount? _"VEST"i _ s:ScheduleExpr _ {
       const amt = a ?? mkPortion(1, 1); // default 100%
-      return { amount: amt, expr: s };
+      return { type: "STATEMENT", amount: amt, expr: s };
     }
 
 EOF = !.

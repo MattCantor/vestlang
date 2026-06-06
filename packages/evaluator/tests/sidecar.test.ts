@@ -7,7 +7,11 @@
 // no sidecar at all.
 
 import { describe, it, expect } from "vitest";
-import type { Amount, EvaluationContextInput, Schedule } from "@vestlang/types";
+import type {
+  Amount,
+  EvaluationContextInput,
+  Statement,
+} from "@vestlang/types";
 import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
@@ -47,12 +51,13 @@ const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 // `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")`: `+12mo` is the
 // grantDate system anchor (→ DATE), `EVENT "ipo"` the genuine condition that
 // earns the synthetic event.
-const stageAStmt = (): { amount: Amount; expr: Schedule } => ({
+const stageAStmt = (): Statement => ({
+  type: "STATEMENT",
   amount: portion(1, 1),
   expr: {
-    type: "SINGLETON",
+    type: "SCHEDULE",
     vesting_start: {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("grantDate"), [
           makeDuration(12, "MONTHS", "PLUS"),
@@ -82,10 +87,11 @@ const storedArtifact = () => {
 
 // A plain time-based template with NO synthetic events: `100% MONTHLY OVER 48
 // FROM EVENT "grantDate"` — a pure system anchor, no genuine condition.
-const plainStmt = (): { amount: Amount; expr: Schedule } => ({
+const plainStmt = (): Statement => ({
+  type: "STATEMENT",
   amount: portion(1, 1),
   expr: {
-    type: "SINGLETON",
+    type: "SCHEDULE",
     vesting_start: makeSingletonNode(makeVestingBaseEvent("grantDate")),
     periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
   },

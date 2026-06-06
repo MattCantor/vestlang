@@ -22,7 +22,7 @@ import {
 // `EVENT <event> BEFORE DATE <deadline>` — void once the event fires after the
 // deadline (no witness assignment can satisfy it).
 const eventBeforeDate = (event: string, deadline: OCTDate): VestingNode => ({
-  type: "SINGLETON",
+  type: "NODE",
   base: makeVestingBaseEvent(event),
   offsets: [],
   condition: {
@@ -48,7 +48,7 @@ const fourYearsAnnual: VestingPeriod = {
 };
 
 const laterOfEvents = (a: string, b: string): VestingNodeExpr => ({
-  type: "LATER_OF",
+  type: "NODE_LATER_OF",
   items: [
     makeSingletonNode(makeVestingBaseEvent(a)),
     makeSingletonNode(makeVestingBaseEvent(b)),
@@ -78,6 +78,7 @@ const stmt = (
   start: VestingNode,
   periodicity: VestingPeriod,
 ) => ({
+  type: "STATEMENT" as const,
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });
@@ -180,7 +181,7 @@ describe("resolveToCore — atomic unfired EVENT → template", () => {
 describe("resolveToCore — unresolved (can't materialize yet)", () => {
   it("unresolved cliff (LATER_OF over unfired events) → unresolved with blockers", () => {
     const cliff: VestingNodeExpr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("a")),
         makeSingletonNode(makeVestingBaseEvent("b")),
@@ -433,7 +434,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
 
   it("unfired LATER_OF(+12mo, EVENT ipo) start carries the cliff as a pending template", () => {
     const start: VestingNodeExpr = {
-      type: "LATER_OF",
+      type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
           makeDuration(12, "MONTHS", "PLUS"),
@@ -443,9 +444,10 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     };
     const program: Program = [
       {
+        type: "STATEMENT",
         amount: fullGrant,
         expr: {
-          type: "SINGLETON",
+          type: "SCHEDULE",
           vesting_start: start,
           periodicity: monthly48,
         },

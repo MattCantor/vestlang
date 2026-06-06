@@ -11,6 +11,7 @@ import type {
   OCTDate,
   Program,
   Schedule,
+  Statement,
   VestingNode,
   VestingPeriod,
 } from "@vestlang/types";
@@ -43,6 +44,7 @@ const stmt = (
   start: VestingNode,
   periodicity: VestingPeriod,
 ) => ({
+  type: "STATEMENT" as const,
   amount,
   expr: makeSingletonSchedule(start, periodicity),
 });
@@ -277,12 +279,13 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   const ipo = () => makeSingletonNode(makeVestingBaseEvent("ipo"));
 
   const combinatorStmt = (
-    sel: "LATER_OF" | "EARLIER_OF",
+    sel: "NODE_LATER_OF" | "NODE_EARLIER_OF",
     amount: Amount,
-  ): { amount: Amount; expr: Schedule } => ({
+  ): Statement => ({
+    type: "STATEMENT",
     amount,
     expr: {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: { type: sel, items: [plus12mo(), ipo()] },
       periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
     },
@@ -290,7 +293,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
 
   it("LATER OF(+12mo, EVENT ipo), ipo unfired → template + synthetic event", () => {
     const out = evaluateStatement(
-      combinatorStmt("LATER_OF", portion(1, 1)),
+      combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput(),
     );
     if (out.status !== "template")
@@ -318,16 +321,17 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     // resolving early to a system-anchored offset. (Closed-world early resolution
     // of EARLIER_OF is not attempted.)
     const earlierStmt = {
+      type: "STATEMENT",
       amount: portion(1, 1),
       expr: {
-        type: "SINGLETON",
+        type: "SCHEDULE",
         vesting_start: {
-          type: "EARLIER_OF",
+          type: "NODE_EARLIER_OF",
           items: [makeSingletonNode(makeVestingBaseDate("2030-01-01")), ipo()],
         },
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
-    } as { amount: Amount; expr: Schedule };
+    } as Statement;
     const out = evaluateStatement(
       earlierStmt,
       ctxInput({ asOf: "2025-06-01" }),
@@ -342,8 +346,8 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
 
   it("two portions on the same anchor share one event_id + one source-map entry", () => {
     const program: Program = [
-      combinatorStmt("LATER_OF", portion(3, 4)),
-      combinatorStmt("LATER_OF", portion(1, 4)),
+      combinatorStmt("NODE_LATER_OF", portion(3, 4)),
+      combinatorStmt("NODE_LATER_OF", portion(1, 4)),
     ];
     const [out] = evaluateProgram(program, ctxInput());
     if (out.status !== "template")
@@ -359,7 +363,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
 
   it("100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo) → synthetic event", () => {
     const out = evaluateStatement(
-      combinatorStmt("LATER_OF", portion(1, 1)),
+      combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput({ grantQuantity: 4800 }),
     );
     if (out.status !== "template")
@@ -379,11 +383,12 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     // resolves to a single DATE anchor (the later). Template, no source map.
     const out = evaluateStatement(
       {
+        type: "STATEMENT",
         amount: portion(1, 1),
         expr: {
-          type: "SINGLETON",
+          type: "SCHEDULE",
           vesting_start: {
-            type: "LATER_OF",
+            type: "NODE_LATER_OF",
             items: [
               makeSingletonNode(makeVestingBaseEvent("grantDate"), [
                 makeDuration(12, "MONTHS", "PLUS"),
@@ -410,9 +415,9 @@ describe("assemble — unresolved status", () => {
   // the future under asOf, no named event to externalize) stays `unresolved`.
   it("pure-date LATER OF with a future DATE arm → unresolved + blockers", () => {
     const laterOfSchedule: Schedule = {
-      type: "SINGLETON",
+      type: "SCHEDULE",
       vesting_start: {
-        type: "LATER_OF",
+        type: "NODE_LATER_OF",
         items: [
           makeSingletonNode(makeVestingBaseDate("2030-01-01")),
           makeSingletonNode(makeVestingBaseEvent("grantDate"), [
@@ -422,7 +427,9 @@ describe("assemble — unresolved status", () => {
       },
       periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
     };
-    const program: Program = [{ amount: portion(1, 1), expr: laterOfSchedule }];
+    const program: Program = [
+      { type: "STATEMENT", amount: portion(1, 1), expr: laterOfSchedule },
+    ];
     // asOf before the literal 2030 arm: LATER_OF can't resolve (all-arms policy),
     // and with no named event there's nothing to externalize → unresolved.
     const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" }));
@@ -438,7 +445,7 @@ describe("assemble — impossible status", () => {
   // `EVENT a BEFORE DATE 2025-01-01` with a firing after the deadline: no witness
   // assignment can ever satisfy it → the whole (single-statement) grant is void.
   const voidStart: VestingNode = {
-    type: "SINGLETON",
+    type: "NODE",
     base: makeVestingBaseEvent("a"),
     offsets: [],
     condition: {

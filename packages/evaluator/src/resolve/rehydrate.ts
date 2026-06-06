@@ -57,9 +57,9 @@ export const reparseDefinition = (definition: string): VestingNodeExpr => {
   if (stmt.chained) {
     throw new Error("reparseDefinition: unexpected chained statement");
   }
-  if (stmt.expr.type !== "SINGLETON") {
+  if (stmt.expr.type !== "SCHEDULE") {
     throw new Error(
-      `reparseDefinition: expected a SINGLETON schedule, got ${stmt.expr.type}`,
+      `reparseDefinition: expected a single schedule, got ${stmt.expr.type}`,
     );
   }
   return stmt.expr.vesting_start;

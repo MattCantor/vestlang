@@ -64,7 +64,7 @@ function statementHasEventBase(stmt: Statement): boolean {
 function scheduleExprHasEventBase(
   expr: ScheduleExpr | Statement["expr"],
 ): boolean {
-  if (expr.type !== "SINGLETON") {
+  if (expr.type !== "SCHEDULE") {
     // LATER OF / EARLIER OF over schedules — recurse the arms.
     return expr.items.some(scheduleExprHasEventBase);
   }
@@ -75,7 +75,7 @@ function scheduleExprHasEventBase(
 }
 
 function nodeExprHasEventBase(node: VestingNodeExpr): boolean {
-  if (node.type !== "SINGLETON") {
+  if (node.type !== "NODE") {
     // LATER OF / EARLIER OF over nodes — recurse the arms.
     return node.items.some(nodeExprHasEventBase);
   }
