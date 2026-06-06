@@ -1,11 +1,6 @@
 import type { NonTemplateReason, ResolveResult } from "@vestlang/evaluator";
-import type {
-  Condition,
-  Program,
-  ScheduleExpr,
-  Statement,
-  VestingNodeExpr,
-} from "@vestlang/types";
+import type { Program } from "@vestlang/types";
+import { some } from "@vestlang/walk";
 
 // The events arm of the classifier's verdict — the only shape recovery acts on.
 type EventsResult = Extract<ResolveResult, { kind: "events" }>;
@@ -48,49 +43,11 @@ function isOverlappingAbsoluteStarts(reason: NonTemplateReason): boolean {
 
 // True if any vesting anchor reachable from the program is an EVENT.
 //
-// "Reachable" is broader than the start anchor: an EVENT can hide in a cliff, in
-// a BEFORE/AFTER condition's reference node, and inside LATER OF / EARLIER OF
-// selector arms — so this is a full recursive walk, not a start+cliff peek.
+// An EVENT doesn't only show up as the start — it can hide in a cliff, in the
+// reference node of a BEFORE/AFTER gate, and inside the arms of a LATER OF /
+// EARLIER OF selector. Rather than re-spell that recursion by hand (and risk
+// missing a spot), we let the shared walker visit every node and just ask at
+// each one whether it's an EVENT.
 export function hasEventBase(program: Program): boolean {
-  return program.some(statementHasEventBase);
-}
-
-function statementHasEventBase(stmt: Statement): boolean {
-  // A chained tail (`vesting_start: null`) has no start of its own, but it can
-  // still carry an event-gated cliff, so the same walk covers both arms.
-  return scheduleExprHasEventBase(stmt.expr);
-}
-
-function scheduleExprHasEventBase(
-  expr: ScheduleExpr | Statement["expr"],
-): boolean {
-  if (expr.type !== "SCHEDULE") {
-    // LATER OF / EARLIER OF over schedules — recurse the arms.
-    return expr.items.some(scheduleExprHasEventBase);
-  }
-  const start = expr.vesting_start;
-  if (start !== null && nodeExprHasEventBase(start)) return true;
-  const cliff = expr.periodicity.cliff;
-  return cliff !== undefined && nodeExprHasEventBase(cliff);
-}
-
-function nodeExprHasEventBase(node: VestingNodeExpr): boolean {
-  if (node.type !== "NODE") {
-    // LATER OF / EARLIER OF over nodes — recurse the arms.
-    return node.items.some(nodeExprHasEventBase);
-  }
-  if (node.base.type === "EVENT") return true;
-  return node.condition !== undefined && conditionHasEventBase(node.condition);
-}
-
-function conditionHasEventBase(condition: Condition): boolean {
-  switch (condition.type) {
-    case "ATOM":
-      // The constraint's reference node is itself a vesting node — descend it.
-      // (This is the spot the linter's walker stops short of.)
-      return nodeExprHasEventBase(condition.constraint.base);
-    case "AND":
-    case "OR":
-      return condition.items.some(conditionHasEventBase);
-  }
+  return program.some((stmt) => some(stmt, (n) => n.type === "EVENT"));
 }
