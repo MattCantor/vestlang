@@ -16,26 +16,17 @@ import {
   VestingNode,
 } from "@vestlang/types";
 
-export type NodePath = (string | number)[];
-
-export type LintSeverity = "error" | "warning" | "info";
-
-export interface SourcePosition {
-  line: number;
-  column: number;
-}
-export interface SourceLocation {
-  start: SourcePosition;
-  end: SourcePosition;
-}
-export interface Diagnostic {
-  ruleId: string;
-  message: string;
-  severity: LintSeverity;
-  path: NodePath;
-  loc?: SourceLocation;
-  codeFrame?: string;
-}
+// The diagnostic vocabulary now lives in @vestlang/types so the normalizer can
+// emit diagnostics too (see its dedupe warning). Re-exported here because
+// `Diagnostic` is part of the linter's public `LintResult` surface.
+export type {
+  NodePath,
+  DiagnosticSeverity,
+  SourcePosition,
+  SourceLocation,
+  Diagnostic,
+} from "@vestlang/types";
+import type { NodePath, DiagnosticSeverity, Diagnostic } from "@vestlang/types";
 
 export interface LintContext {
   report: (d: Diagnostic) => void;
@@ -75,7 +66,7 @@ export interface RuleModule {
     id: string;
     description: string;
     recommended?: boolean;
-    severity: LintSeverity;
+    severity: DiagnosticSeverity;
   };
   create: (ctx: LintContext) => Visitor;
 }

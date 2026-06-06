@@ -40,6 +40,15 @@ function dedupe<T>(arr: T[]): T[] {
 }
 
 /**
+ * Called once when dedupe drops at least one arm from a selector/bool, with the
+ * node's `type` tag. The normalizer stays silent about it (deduping is part of
+ * canonicalization), but selector call sites pass this so `lintText` can surface
+ * a "duplicate items" warning — the catch the old `no-duplicate-selector-items`
+ * lint rule used to promise but couldn't make on already-normalized input.
+ */
+export type DedupeReport = (droppedFromType: string) => void;
+
+/**
  * Normalize an expression
  * - Recursively normalizes items
  * - Flattens nested same-op selectors
@@ -49,22 +58,22 @@ export function NormalizeAndSort<
   T extends RawScheduleExpr,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
->(expression: E, normalizeFN: (x: T) => N): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
 export function NormalizeAndSort<
   T extends VestingNodeExpr,
   E extends { type: string; items: T[] },
   N extends VestingNodeExpr,
->(expression: E, normalizeFN: (x: T) => N): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
 export function NormalizeAndSort<
   T extends Condition,
   E extends { type: string; items: T[] },
   N extends Condition,
->(expression: E, normalizeFN: (x: T) => N): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
 export function NormalizeAndSort<
   T extends Schedule | VestingNode | Condition,
   E extends { type: string; items: T[] },
   N extends Schedule | VestingNode | Condition,
->(expression: E, normalizeFN: (x: T) => N) {
+>(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport) {
   // Normalize children (nested selectors or vesting nodes or schedules
   let items = expression.items.map(normalizeFN);
 
@@ -77,7 +86,9 @@ export function NormalizeAndSort<
 
   // Sort & dedupe
   items.sort((a, b) => stableKey(a).localeCompare(stableKey(b)));
+  const beforeDedupe = items.length;
   items = dedupe(items);
+  if (report && items.length < beforeDedupe) report(expression.type);
 
   // Collapse singletons
   if (items.length === 1) return items[0];

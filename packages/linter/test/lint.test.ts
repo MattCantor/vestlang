@@ -1,12 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type {
-  EarlierOfVestingNode,
-  Program,
-  VestingNode,
-} from "@vestlang/types";
-import { lintProgram } from "../src/index.js";
+import { lintProgram, lintText } from "../src/index.js";
 
 function diagnosticsOf(src: string) {
   const raw = parse(src);
@@ -238,42 +233,43 @@ describe("@vestlang/linter", () => {
         "cliff",
       ]);
     });
+  });
 
-    it("reports a duplicate selector arm with the plain keyword", () => {
-      // The normalizer dedupes selector arms before the linter ever runs, so a
-      // duplicate can't arrive through parse → normalize. We hand-build the
-      // normalized program (lintProgram's contract is just "a normalized
-      // program") to exercise the rule and pin its message wording: the user
-      // sees "EARLIER OF", not the internal "NODE_EARLIER_OF" tag.
-      const arm: VestingNode = {
-        type: "NODE",
-        base: { type: "DATE", value: "2025-01-01" },
-        offsets: [],
-      };
-      const selector: EarlierOfVestingNode = {
-        type: "NODE_EARLIER_OF",
-        items: [arm, arm],
-      };
-      const program: Program = [
-        {
-          type: "STATEMENT",
-          amount: { type: "QUANTITY", value: 100 },
-          expr: {
-            type: "SCHEDULE",
-            vesting_start: selector,
-            periodicity: { type: "MONTHS", occurrences: 4, length: 1 },
-          },
-        },
-      ];
+  // A duplicate selector arm can't reach `lintProgram` — the normalizer dedupes
+  // it during canonicalization, before the linter runs. So the warning is raised
+  // by the normalizer itself and surfaced through `lintText`, which threads a
+  // sink into `normalizeProgram` and merges what comes back.
+  describe("duplicate selector arm (via lintText)", () => {
+    const lint = (src: string) => lintText(src, parse).diagnostics;
 
-      expect(lintProgram(program).diagnostics).toEqual([
+    it("warns on a repeated selector arm, with the plain keyword", () => {
+      const flagged = lint(
+        `VEST FROM EARLIER OF (DATE 2025-01-01, DATE 2025-01-01)`,
+      ).filter((d) => d.ruleId === "no-duplicate-selector-items");
+      expect(flagged).toEqual([
         {
           ruleId: "no-duplicate-selector-items",
           message: "EARLIER OF contains duplicate items",
           severity: "warning",
-          path: ["Program", 0, "expr", "vesting_start", "items", 1],
+          path: ["Program", 0],
         },
       ]);
+    });
+
+    it("stays silent on distinct selector arms", () => {
+      expect(
+        lint(`VEST FROM EARLIER OF (DATE 2025-01-01, DATE 2025-06-01)`).filter(
+          (d) => d.ruleId === "no-duplicate-selector-items",
+        ),
+      ).toEqual([]);
+    });
+
+    it("does not surface the warning through lintProgram on a normalized program", () => {
+      // The duplicate is already gone by the time lintProgram sees the program.
+      const program = normalizeProgram(
+        parse(`VEST FROM EARLIER OF (DATE 2025-01-01, DATE 2025-01-01)`),
+      );
+      expect(lintProgram(program).diagnostics).toEqual([]);
     });
   });
 });

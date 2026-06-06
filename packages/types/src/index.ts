@@ -23,6 +23,13 @@ export type {
   AmountTag,
 } from "./enums.js";
 export { selectorKeyword } from "./display.js";
+export type {
+  NodePath,
+  DiagnosticSeverity,
+  SourcePosition,
+  SourceLocation,
+  Diagnostic,
+} from "./diagnostic.js";
 export {
   Duration,
   DurationMonth,
