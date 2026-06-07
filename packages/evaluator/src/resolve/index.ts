@@ -5,13 +5,47 @@
 // evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
 
 import type { EvaluationContextInput, Finding, Program } from "@vestlang/types";
-import { assertValidVestingScheduleTemplate } from "@vestlang/core";
+import {
+  assertValidVestingScheduleTemplate,
+  MAX_INSTALLMENTS,
+} from "@vestlang/core";
 import { fracCmp, fracSum, ONE } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
+
+// Resolution is the cheap, non-materializing pass: one StmtResolution per
+// statement carrying a scalar `occurrences`, never an array of that length. So
+// the sum is the exact installment count and can be checked before any branch
+// (template/events/unresolved) expands one element per occurrence.
+const sumOccurrences = (rs: StmtResolution[]): number =>
+  rs.reduce((sum, r) => sum + r.periodicity.occurrences, 0);
+
+const assertOccurrenceSumWithinCap = (total: number): void => {
+  if (total > MAX_INSTALLMENTS) {
+    throw new Error(
+      `schedule expands to ${total} installments, exceeds the limit of ${MAX_INSTALLMENTS}`,
+    );
+  }
+};
+
+/** Bound a whole program's materialization. `resolveToCore`'s cap sees only the
+ *  statements of one call; a per-statement evaluator (the MCP `vestlang_evaluate`
+ *  family) maps it over each statement separately, so a program that is
+ *  individually-small but collectively huge would slip past. Resolve the whole
+ *  program once and sum — the same exact measure `resolveToCore` uses, so the
+ *  per-statement and whole-program tools agree. */
+export const assertProgramInstallmentCap = (
+  program: Program,
+  ctxInput: EvaluationContextInput,
+): void => {
+  const ctx = createEvaluationContext(ctxInput);
+  assertOccurrenceSumWithinCap(
+    sumOccurrences(resolveStatements(program, ctx, ctx.grantQuantity)),
+  );
+};
 
 export const resolveToCore = (
   program: Program,
@@ -20,6 +54,12 @@ export const resolveToCore = (
   const ctx = createEvaluationContext(ctxInput);
   const totalShares = ctx.grantQuantity;
   const resolutions = resolveStatements(program, ctx, totalShares);
+
+  // Bound the materialization before any branch expands one element per
+  // occurrence. The same limit is enforced in core's template validator for
+  // direct compile consumers.
+  assertOccurrenceSumWithinCap(sumOccurrences(resolutions));
+
   const build = buildTemplate(resolutions, ctx, totalShares);
 
   let verdict: ResolveVerdict;

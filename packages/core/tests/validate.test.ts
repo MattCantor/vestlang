@@ -4,6 +4,7 @@ import {
   validateVestingRuntime,
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
+  MAX_INSTALLMENTS,
 } from "../src/validate";
 import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
@@ -38,6 +39,20 @@ const validTemplate: VestingScheduleTemplate = {
 
 const pathsOf = (errors: { path: string }[]) => errors.map((e) => e.path);
 
+const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
+  id: "tmpl-cap",
+  statements: [
+    {
+      order: 1,
+      vesting_base: { type: "DATE" },
+      occurrences,
+      period: 1,
+      period_type: "MONTHS",
+      percentage: { numerator: 1, denominator: 1 },
+    },
+  ],
+});
+
 describe("validateVestingScheduleTemplate", () => {
   it("accepts a well-formed template", () => {
     const result = validateVestingScheduleTemplate(validTemplate);
@@ -52,6 +67,38 @@ describe("validateVestingScheduleTemplate", () => {
     });
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("id");
+  });
+
+  it("accepts a schedule at the installment cap", () => {
+    const result = validateVestingScheduleTemplate(
+      oneStatement(MAX_INSTALLMENTS),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("rejects a schedule that expands past the installment cap", () => {
+    const result = validateVestingScheduleTemplate(
+      oneStatement(MAX_INSTALLMENTS + 1),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
+      true,
+    );
+  });
+
+  it("bounds the total across statements, not just one", () => {
+    const half = Math.ceil(MAX_INSTALLMENTS / 2) + 1;
+    const result = validateVestingScheduleTemplate({
+      id: "tmpl-sum",
+      statements: [
+        { ...oneStatement(half).statements[0], order: 1 },
+        { ...oneStatement(half).statements[0], order: 2 },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
+      true,
+    );
   });
 
   it("rejects an empty statements array", () => {

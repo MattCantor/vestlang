@@ -12,7 +12,7 @@ export {
 // installments) before assemble flattens the reason to a string, then assemble a
 // result it already holds without re-resolving. Most callers should stick to
 // evaluateStatement/evaluateProgram above.
-export { resolveToCore } from "./resolve/index.js";
+export { resolveToCore, assertProgramInstallmentCap } from "./resolve/index.js";
 export { assemble } from "./resolve/assemble.js";
 export type { ResolveResult, NonTemplateReason } from "./resolve/index.js";
 export {

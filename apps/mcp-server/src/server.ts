@@ -3,6 +3,7 @@ import { z } from "zod";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
+  assertProgramInstallmentCap,
   evaluateStatement,
   evaluateStatementAsOf,
   formatFinding,
@@ -218,6 +219,18 @@ function toolError(message: string) {
   };
 }
 
+// Surface an engine-side throw (e.g. the installment cap) the same way a parse
+// failure is surfaced: a result carrying an `error`, not an exception. Keeps the
+// evaluate tools' error shape uniform for consumers.
+function evaluationError(err: unknown) {
+  return jsonResult({
+    error: {
+      ruleId: "evaluation-error",
+      message: err instanceof Error ? err.message : String(err),
+    },
+  });
+}
+
 function jsonResult<T>(output: T) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
@@ -421,9 +434,13 @@ export function createServer(): McpServer {
       const parsed = parseWithDiagnostics(params.dsl);
       if (!parsed.ok) return jsonResult({ error: parsed.error });
       const ctx = buildContext(params);
-      const schedules = parsed.program.map((stmt) =>
-        evaluateStatement(stmt, ctx),
-      );
+      let schedules;
+      try {
+        assertProgramInstallmentCap(parsed.program, ctx);
+        schedules = parsed.program.map((stmt) => evaluateStatement(stmt, ctx));
+      } catch (err) {
+        return evaluationError(err);
+      }
       return jsonResult({
         statements: schedules.map((s, i) => {
           const { representable, pending, valid } = presentSchedule(s);
@@ -475,7 +492,12 @@ export function createServer(): McpServer {
       const ctx = buildContext(params);
       // The recovering entry: an events-only program whose realized projection
       // has a single-template form is rescued back to a template, transparently.
-      const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
+      let outcome;
+      try {
+        outcome = evaluateProgramWithRecovery(parsed.program, ctx);
+      } catch (err) {
+        return evaluationError(err);
+      }
       const schedule = outcome.schedule;
       const { representable, pending, valid } = presentSchedule(schedule);
       return jsonResult({
@@ -539,9 +561,15 @@ export function createServer(): McpServer {
       const parsed = parseWithDiagnostics(params.dsl);
       if (!parsed.ok) return jsonResult({ error: parsed.error });
       const ctx = buildContext(params);
-      const results = parsed.program.map((stmt) =>
-        evaluateStatementAsOf(stmt, ctx),
-      );
+      let results;
+      try {
+        assertProgramInstallmentCap(parsed.program, ctx);
+        results = parsed.program.map((stmt) =>
+          evaluateStatementAsOf(stmt, ctx),
+        );
+      } catch (err) {
+        return evaluationError(err);
+      }
       return jsonResult({
         as_of: ctx.asOf,
         statements: results.map((r, i) => ({
@@ -587,9 +615,15 @@ export function createServer(): McpServer {
       const parsed = parseWithDiagnostics(params.dsl);
       if (!parsed.ok) return jsonResult({ error: parsed.error });
       const ctx = buildContext({ ...params, as_of: params.to });
-      const results = parsed.program.map((stmt) =>
-        evaluateStatementAsOf(stmt, ctx),
-      );
+      let results;
+      try {
+        assertProgramInstallmentCap(parsed.program, ctx);
+        results = parsed.program.map((stmt) =>
+          evaluateStatementAsOf(stmt, ctx),
+        );
+      } catch (err) {
+        return evaluationError(err);
+      }
       return jsonResult({
         from: params.from,
         to: params.to,
