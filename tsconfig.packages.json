@@ -25,6 +25,9 @@
       "path": "packages/evaluator",
     },
     {
+      "path": "packages/utils",
+    },
+    {
       "path": "tests/integration",
     },
   ],

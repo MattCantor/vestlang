@@ -5,12 +5,8 @@
 // evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
 
 import type { EvaluationContextInput, Finding, Program } from "@vestlang/types";
-import {
-  assertValidVestingScheduleTemplate,
-  fracCmp,
-  fracSum,
-  ONE,
-} from "@vestlang/core";
+import { assertValidVestingScheduleTemplate } from "@vestlang/core";
+import { fracCmp, fracSum, ONE } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";

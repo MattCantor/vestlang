@@ -22,7 +22,6 @@ export type {
   ConditionTag,
   AmountTag,
 } from "./enums.js";
-export { selectorKeyword } from "./display.js";
 export type {
   NodePath,
   DiagnosticSeverity,

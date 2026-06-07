@@ -18,18 +18,15 @@ import type {
   SymbolicInstallment,
 } from "@vestlang/types";
 import type { Fraction } from "@vestlang/types";
+import { addPeriod, allocateExact, foldToGrantDate, gt } from "@vestlang/core";
 import {
-  addPeriod,
-  allocateExact,
-  foldToGrantDate,
   fracAdd,
   fracMul,
   fracReduce,
   fracSub,
-  gt,
   ONE,
   ZERO,
-} from "@vestlang/core";
+} from "@vestlang/utils";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";

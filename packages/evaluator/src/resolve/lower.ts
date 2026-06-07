@@ -30,7 +30,8 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { advanceCursor, eq, fracReduce, ZERO } from "@vestlang/core";
+import { advanceCursor, eq } from "@vestlang/core";
+import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";

@@ -14,7 +14,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { selectorKeyword } from "@vestlang/types";
+import { selectorKeyword } from "@vestlang/utils";
 import { group, indent, join, line, softline, type Doc } from "./doc.js";
 
 /**

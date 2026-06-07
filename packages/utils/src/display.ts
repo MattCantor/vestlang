@@ -1,4 +1,4 @@
-import { NodeExprTag, ScheduleExprTag } from "./enums.js";
+import type { NodeExprTag, ScheduleExprTag } from "@vestlang/types";
 
 // The internal `type` tag of a selector node distinguishes the schedule layer
 // from the node layer (e.g. SCHEDULE_EARLIER_OF vs NODE_EARLIER_OF), but a

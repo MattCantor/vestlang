@@ -5,8 +5,8 @@ import {
   type SourceLocation,
   type ScheduleExprTag,
   type NodeExprTag,
-  selectorKeyword,
 } from "@vestlang/types";
+import { selectorKeyword } from "@vestlang/utils";
 import { normalizeStatement } from "./program.js";
 import type { FindingSink, NormalizationFinding } from "./utils.js";
 
