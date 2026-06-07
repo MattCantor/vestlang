@@ -12,6 +12,13 @@ import type {
 // ISO 8601 YYYY-MM-DD. Capture groups are harmless for the .test() used here.
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+// Upper bound on the installments a single schedule may materialize, summed
+// across its statements. Vesting that expands past this is almost always a
+// fat-fingered cadence (`OVER 1000000 months EVERY 1 month`); without the bound,
+// building the array is a denial-of-service (stack overflow / OOM). The
+// evaluator enforces the same limit before it expands; see resolveToCore.
+export const MAX_INSTALLMENTS = 10_000;
+
 export interface ValidationError {
   path: string;
   message: string;
@@ -166,6 +173,17 @@ export const validateVestingScheduleTemplate = (
     t.statements.forEach((s, i) => {
       validateStatement(s, `statements[${i}]`, errors);
     });
+
+    const totalOccurrences = t.statements.reduce(
+      (sum, s) => sum + (isPositiveInt(s.occurrences) ? s.occurrences : 0),
+      0,
+    );
+    if (totalOccurrences > MAX_INSTALLMENTS) {
+      errors.push({
+        path: "statements",
+        message: `schedule expands to ${totalOccurrences} installments, exceeds the limit of ${MAX_INSTALLMENTS}`,
+      });
+    }
 
     const ordersSeen = new Map<number, number[]>();
     t.statements.forEach((s, i) => {
