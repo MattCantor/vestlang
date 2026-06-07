@@ -18,6 +18,11 @@ export default tseslint.config(
       "**/build/**",
       "**/coverage/**",
       "**/node_modules/**",
+      // Nested git worktrees the harness checks out inside the repo. They're
+      // gitignored, but ESLint doesn't read .gitignore, so without this it would
+      // descend into a worktree's copy of the tree (e.g. an apps/docs .tsx that
+      // isn't in tsconfig.lint.json) and the type-aware rules would throw.
+      "**/.claude/**",
       "packages/dsl/src/generated/**",
       "apps/docs/**",
       "docs/**",
