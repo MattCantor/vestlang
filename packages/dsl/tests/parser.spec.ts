@@ -244,6 +244,28 @@ describe("Over/Every validations", () => {
       occurrences: 1,
     });
   });
+
+  // The keyword and its plural `s` are both case-insensitive, so an all-caps
+  // plural unit (MONTHS/DAYS/YEARS/WEEKS) parses like its lowercase form.
+  it("accepts uppercase plural units", () => {
+    const s = first(`VEST OVER 48 MONTHS EVERY 1 MONTH`);
+    expect(s.expr.periodicity).toEqual({
+      type: "MONTHS",
+      length: 1,
+      occurrences: 48,
+    });
+    // years → months, weeks → days conversions still apply through the caps form
+    expect(first(`VEST OVER 2 YEARS EVERY 6 MONTHS`).expr.periodicity).toEqual({
+      type: "MONTHS",
+      length: 6,
+      occurrences: 4,
+    });
+    expect(first(`VEST OVER 4 WEEKS EVERY 7 DAYS`).expr.periodicity).toEqual({
+      type: "DAYS",
+      length: 7,
+      occurrences: 4,
+    });
+  });
 });
 
 describe("Misc", () => {

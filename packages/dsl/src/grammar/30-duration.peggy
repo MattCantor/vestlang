@@ -15,7 +15,7 @@ Duration
     }
 
 Unit
-  = "day"i "s"? { return "DAYS"; }
-  / "month"i "s"? { return "MONTHS"; }
-  / "week"i "s"? { return "weeks"; } // will be converted to DAYS
-  / "year"i "s"? { return "years"; } // will be converted to MONTHS
+  = "day"i "s"i? { return "DAYS"; }
+  / "month"i "s"i? { return "MONTHS"; }
+  / "week"i "s"i? { return "weeks"; } // will be converted to DAYS
+  / "year"i "s"i? { return "years"; } // will be converted to MONTHS
