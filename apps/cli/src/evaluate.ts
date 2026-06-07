@@ -1,4 +1,8 @@
-import { evaluateStatement, presentSchedule } from "@vestlang/evaluator";
+import {
+  evaluateStatement,
+  formatFinding,
+  presentSchedule,
+} from "@vestlang/evaluator";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type { RecoveredTemplate } from "@vestlang/recover";
 import { getTodayISO, input, validateDate } from "./utils.js";
@@ -67,13 +71,15 @@ function printRecovered(recovered: RecoveredTemplate): void {
 function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
   // The consumer rule: "representable" is read from status, "pending" from
   // blockers (never from status === "unresolved"). A `template` carrying
-  // blockers is representable-but-pending, not complete.
-  const { representable, pending } = presentSchedule(r);
+  // blockers is representable-but-pending, not complete. "valid" is a separate
+  // question — false when the schedule over-allocates the grant.
+  const { representable, pending, valid } = presentSchedule(r);
   if (withStatus) {
     const reason = "reason" in r ? r.reason : undefined;
     const tags = [
       representable ? "representable" : null,
       pending ? "pending" : null,
+      valid ? null : "invalid",
     ]
       .filter(Boolean)
       .join(", ");
@@ -90,6 +96,10 @@ function printSchedule(r: EvaluatedSchedule, withStatus: boolean): void {
       unresolved: item.meta.unresolved,
     })),
   );
+  // Show the projection above, then flag it — the schedule is printed but not
+  // presented as valid. (Findings ride every schedule, so report them whether or
+  // not the status line was printed.)
+  r.findings.forEach((f) => console.log(`⚠ ${formatFinding(f)}`));
   if (r.blockers.length > 0) {
     console.log();
     console.log(

@@ -5,6 +5,7 @@ import { normalizeProgram } from "@vestlang/normalizer";
 import {
   evaluateStatement,
   evaluateStatementAsOf,
+  formatFinding,
   presentSchedule,
 } from "@vestlang/evaluator";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
@@ -393,7 +394,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting schedule",
       description:
-        "Evaluate vestlang against a grant context and return every installment (RESOLVED, UNRESOLVED, or IMPOSSIBLE) for each statement along with any blockers. Each result also carries `representable` (the spec fits a canonical layer) and `pending` (witnesses still missing) — note a `template` can be `pending` (e.g. an unfired event), so read pending from the `pending` flag / `blockers`, never from `status`. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
+        "Evaluate vestlang against a grant context and return every installment (RESOLVED, UNRESOLVED, or IMPOSSIBLE) for each statement along with any blockers. Each result also carries `representable` (the spec fits a canonical layer) and `pending` (witnesses still missing) — note a `template` can be `pending` (e.g. an unfired event), so read pending from the `pending` flag / `blockers`, never from `status`. It also carries `valid` (false when the statement allocates more than the grant) and a `findings` array describing any such problem (each with `kind`, `severity`, the exact `sum`, and a human `message`); the installments are still returned when `valid` is false, but should not be treated as a valid schedule. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -416,12 +417,20 @@ export function createServer(): McpServer {
       );
       return jsonResult({
         statements: schedules.map((s, i) => {
-          const { representable, pending } = presentSchedule(s);
+          const { representable, pending, valid } = presentSchedule(s);
           return {
             index: i,
             status: s.status,
             representable,
             pending,
+            // `valid` is false when the schedule over-allocates the grant. The
+            // projection below is still returned (annotate, don't certify), but
+            // the findings say it must not be treated as a valid schedule.
+            valid,
+            findings: s.findings.map((f) => ({
+              ...f,
+              message: formatFinding(f),
+            })),
             ...("reason" in s && s.reason ? { reason: s.reason } : {}),
             installments: s.installments,
             blockers: s.blockers,
@@ -437,7 +446,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
+        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. It also returns `valid` (false when the program allocates more than the grant) and a `findings` array (each with `kind`, `severity`, the exact `sum`, and a human `message`); when `valid` is false the installments are still returned but must not be treated as a valid schedule. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -459,11 +468,18 @@ export function createServer(): McpServer {
       // has a single-template form is rescued back to a template, transparently.
       const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
       const schedule = outcome.schedule;
-      const { representable, pending } = presentSchedule(schedule);
+      const { representable, pending, valid } = presentSchedule(schedule);
       return jsonResult({
         status: schedule.status,
         representable,
         pending,
+        // False when the program vests more than the grant. The projection is
+        // still returned (annotate, don't certify) but flagged via findings.
+        valid,
+        findings: schedule.findings.map((f) => ({
+          ...f,
+          message: formatFinding(f),
+        })),
         ...("reason" in schedule && schedule.reason
           ? { reason: schedule.reason }
           : {}),
