@@ -208,6 +208,29 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   });
 });
 
+describe("Date literals", () => {
+  it("parses a real calendar date", () => {
+    const s = first(`VEST FROM DATE 2024-02-29`);
+    expect(s.expr.vesting_start.base).toEqual({
+      type: "DATE",
+      value: "2024-02-29",
+    });
+  });
+
+  it("rejects impossible calendar dates the lexical shape admits", () => {
+    for (const bad of [
+      "2025-02-31",
+      "2023-02-29",
+      "2025-13-01",
+      "0000-01-01",
+    ]) {
+      expect(() => parse(`VEST FROM DATE ${bad}`)).toThrowError(
+        /not a valid calendar date/,
+      );
+    }
+  });
+});
+
 describe("System event protections", () => {
   it("errors if EVENT vestingStart appears as user-provided Ident", () => {
     expect(() => parse(`VEST FROM EVENT vestingStart`)).toThrowError();

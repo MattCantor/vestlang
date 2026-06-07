@@ -48,6 +48,30 @@ describe("addPeriod", () => {
   });
 });
 
+describe("addPeriod — year range", () => {
+  it("keeps a sub-100 year instead of shifting it ~+1900", () => {
+    expect(
+      addPeriod(
+        "0050-06-15",
+        1,
+        "months",
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      ),
+    ).toBe("0050-07-15");
+  });
+
+  it("throws cleanly instead of emitting a malformed date past 9999", () => {
+    expect(() =>
+      addPeriod(
+        "9999-12-31",
+        1,
+        "years",
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      ),
+    ).toThrow(/range/);
+  });
+});
+
 describe("dateDiff", () => {
   it("counts whole days", () => {
     expect(dateDiff("2025-01-01", "2025-01-31", "days")).toEqual({ diff: 30 });

@@ -3,6 +3,9 @@
 // https://peggyjs.org/
 
 
+
+  import { isValidCalendarDate } from "@vestlang/utils";
+
 class peg$SyntaxError extends SyntaxError {
   constructor(message, expected, found, location) {
     super(message);
@@ -306,6 +309,11 @@ function peg$parse(input, options) {
   function peg$f18() {    return "years";  }
   function peg$f19() {    return true;  }
   function peg$f20(iso) {
+    // The lexical shape above admits impossibles (month 00–19, day 00–39);
+    // reject the ones that aren't real calendar dates with a located error.
+    if (!isValidCalendarDate(iso)) {
+      error(`"${iso}" is not a valid calendar date`);
+    }
     return mkDate(iso);
   }
   function peg$f21() {    return "grantDate";  }

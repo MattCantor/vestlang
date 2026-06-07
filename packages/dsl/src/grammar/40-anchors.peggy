@@ -7,6 +7,11 @@ Strict = "STRICTLY"i { return true; }
 
 DateLiteral
   = "DATE"i _ iso:$([0-9][0-9][0-9][0-9] "-" [0-1][0-9] "-" [0-3][0-9]) {
+      // The lexical shape above admits impossibles (month 00–19, day 00–39);
+      // reject the ones that aren't real calendar dates with a located error.
+      if (!isValidCalendarDate(iso)) {
+        error(`"${iso}" is not a valid calendar date`);
+      }
       return mkDate(iso);
     }
 

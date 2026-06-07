@@ -16,9 +16,38 @@ import type { OCTDate, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 const DEFAULT_DAY_OF_MONTH: VestingDayOfMonth =
   "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 
-// ISO-string ↔ Date (UTC midnight)
-export const toDate = (iso: OCTDate): Date => new Date(iso + "T00:00:00Z");
-export const toISO = (d: Date): OCTDate => d.toISOString().slice(0, 10);
+// ISO-string ↔ Date (UTC midnight).
+//
+// Both directions go through explicit components rather than string parsing /
+// `toISOString()`. The string paths mishandle the year at both ends: `Date.UTC`
+// (and `new Date(year, …)`) remap years 0–99 to 1900–1999, and `toISOString()`
+// switches to extended notation (`+010000-…`) above year 9999, which then gets
+// truncated to a malformed date. `setUTCFullYear` takes the full year verbatim,
+// so building this way is exact across the whole 0001–9999 range.
+const pad = (n: number, width: number): string =>
+  String(n).padStart(width, "0");
+
+const utcMidnight = (year: number, monthIdx: number, day: number): Date => {
+  const d = new Date(0);
+  d.setUTCFullYear(year, monthIdx, day);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+};
+
+export const toDate = (iso: OCTDate): Date => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return utcMidnight(y, m - 1, d);
+};
+
+export const toISO = (d: Date): OCTDate => {
+  const y = d.getUTCFullYear();
+  if (y < 1 || y > 9999) {
+    throw new RangeError(
+      `date out of representable range 0001–9999 (got year ${y})`,
+    );
+  }
+  return `${pad(y, 4)}-${pad(d.getUTCMonth() + 1, 2)}-${pad(d.getUTCDate(), 2)}`;
+};
 
 /**
  * Step `months` calendar months from `iso`, picking the target day-of-month per
@@ -49,7 +78,7 @@ export function addMonthsRule(
   const tm = ((mSum % 12) + 12) % 12;
 
   // Last day of the target month in UTC: day 0 of the next month.
-  const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+  const lastDay = utcMidnight(ty, tm + 1, 0).getUTCDate();
 
   const pickDay = (): number => {
     switch (dayOfMonth) {
@@ -67,7 +96,7 @@ export function addMonthsRule(
     }
   };
 
-  return toISO(new Date(Date.UTC(ty, tm, pickDay())));
+  return toISO(utcMidnight(ty, tm, pickDay()));
 }
 
 // Step `n` calendar days in UTC. `setUTCDate` rolls months/years correctly and
