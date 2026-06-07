@@ -5,6 +5,7 @@ import {
   OffsetTag,
   PeriodTag,
 } from "./enums.js";
+import type { SourceLocation } from "./diagnostic.js";
 import { OCTDate, Selector, TwoOrMore } from "./helpers.js";
 
 // The DSL AST exists in two phases, tracked by this parameter:
@@ -100,6 +101,15 @@ export type VestingNodeExpr =
 
 interface BaseCondition {
   type: ConditionTag;
+  // Transient parser annotations: present on the raw AST, stripped by the
+  // normalizer, so a normalized Condition never carries them. They exist only to
+  // surface the bare mixed-infix AND/OR case (the `no-implicit-mixed-boolean`
+  // finding) and are not part of the canonical interchange (./canonical.ts).
+  //   grouped    — the node came from explicit grouping: parens or AND(…)/OR(…).
+  //   mixedInfix — set on an infix OR with an un-grouped infix AND operand
+  //                (`a OR b AND c`); the value is the OR's source span.
+  grouped?: boolean;
+  mixedInfix?: SourceLocation;
 }
 
 export interface AtomCondition extends BaseCondition {

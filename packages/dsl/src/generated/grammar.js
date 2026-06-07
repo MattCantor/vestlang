@@ -338,16 +338,19 @@ function peg$parse(input, options) {
   }
   function peg$f31(op, head, tail) {
     const OP = op.toUpperCase();
-    return mkBool( OP, collect(head, tail))
+    return markGrouped(mkBool(OP, collect(head, tail)))
   }
-  function peg$f32(e) {    return e;  }
+  function peg$f32(e) {    return markGrouped(e);  }
   function peg$f33(head, tail) {
     if (tail.length === 0) return head;
     return mkBool("AND", collect(head, tail))
   }
   function peg$f34(head, tail) {
     if (tail.length === 0) return head;
-    return mkBool("OR", collect(head, tail))
+    // Flag a bare `… OR … AND …`: SQL precedence groups it silently. Check the
+    // raw operands, before mkBool flattens any grouped child OR into this node.
+    const operands = collect(head, tail);
+    return flagMixedInfix(mkBool("OR", operands), operands, location())
   }
   function peg$f35(op, head, tail) {
     return {
@@ -2685,6 +2688,28 @@ function peg$parse(input, options) {
       `${OP} requires at least two items`
     )
     return { type: OP, items: flat }
+  }
+  // Tag a node that came from explicit grouping — parentheses or AND(...)/OR(...).
+  // The infix OrExpr reads this to tell a deliberately-grouped AND operand from a
+  // bare one. Transient: the normalizer strips it.
+  function markGrouped(node) {
+    if (node && typeof node === "object") node.grouped = true;
+    return node;
+  }
+  // Flag a bare mixed infix `a OR b AND c`. AND binds tighter than OR, so this
+  // groups as OR(a, AND(b,c)) with nothing in the source to show it. Detect it on
+  // the OR whose operands include an un-grouped AND, and stash the OR's span so
+  // the normalizer can surface how it grouped. `operands` are the raw AndExpr
+  // results, NOT node.items — mkBool may have flattened a grouped child OR in,
+  // whose AND would otherwise read as top-level mixing.
+  function flagMixedInfix(node, operands, loc) {
+    if (
+      node && node.type === "OR" &&
+      operands.some((op) => op && op.type === "AND" && !op.grouped)
+    ) {
+      node.mixedInfix = loc;
+    }
+    return node;
   }
   function mkVestingNode(duration, context) {
     return {

@@ -6,6 +6,7 @@ import {
   VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
+import type { SourceLocation } from "@vestlang/types";
 
 /**
  * Create a deterministic key for sorting/deduplication.
@@ -40,13 +41,24 @@ function dedupe<T>(arr: T[]): T[] {
 }
 
 /**
- * Called once when dedupe drops at least one arm from a selector/bool, with the
- * node's `type` tag. The normalizer stays silent about it (deduping is part of
- * canonicalization), but selector call sites pass this so `lintText` can surface
- * a "duplicate items" warning — the catch the old `no-duplicate-selector-items`
- * lint rule used to promise but couldn't make on already-normalized input.
+ * Something the normalizer notices while canonicalizing that the output no longer
+ * shows — so only the normalizer is positioned to catch it. Keyed on `kind` (the
+ * house style, cf. `Finding` in @vestlang/types): each variant carries just the
+ * data its diagnostic needs, and `normalizeProgram` maps it to a `Diagnostic`,
+ * stamping the statement path. `lintText` surfaces them.
+ *
+ *   duplicate-selector — dedupe dropped a repeated selector arm.
+ *   mixed-boolean      — a bare `a OR b AND c` whose grouping the precedence rule
+ *                        resolved silently (the `no-implicit-mixed-boolean` nudge).
+ *
+ * The path is added by the per-statement closure, not here, so variants stay
+ * about the finding itself.
  */
-export type DedupeReport = (droppedFromType: string) => void;
+export type NormalizationFinding =
+  | { kind: "duplicate-selector"; selectorType: string }
+  | { kind: "mixed-boolean"; loc: SourceLocation };
+
+export type FindingSink = (finding: NormalizationFinding) => void;
 
 /**
  * Normalize an expression
@@ -58,22 +70,22 @@ export function NormalizeAndSort<
   T extends RawScheduleExpr,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
->(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
 export function NormalizeAndSort<
   T extends VestingNodeExpr,
   E extends { type: string; items: T[] },
   N extends VestingNodeExpr,
->(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
 export function NormalizeAndSort<
   T extends Condition,
   E extends { type: string; items: T[] },
   N extends Condition,
->(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport): N;
+>(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
 export function NormalizeAndSort<
   T extends Schedule | VestingNode | Condition,
   E extends { type: string; items: T[] },
   N extends Schedule | VestingNode | Condition,
->(expression: E, normalizeFN: (x: T) => N, report?: DedupeReport) {
+>(expression: E, normalizeFN: (x: T) => N, report?: FindingSink) {
   // Normalize children (nested selectors or vesting nodes or schedules
   let items = expression.items.map(normalizeFN);
 
@@ -88,7 +100,8 @@ export function NormalizeAndSort<
   items.sort((a, b) => stableKey(a).localeCompare(stableKey(b)));
   const beforeDedupe = items.length;
   items = dedupe(items);
-  if (report && items.length < beforeDedupe) report(expression.type);
+  if (report && items.length < beforeDedupe)
+    report({ kind: "duplicate-selector", selectorType: expression.type });
 
   // Collapse singletons
   if (items.length === 1) return items[0];

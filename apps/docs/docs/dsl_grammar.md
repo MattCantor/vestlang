@@ -109,6 +109,8 @@ A condition gates one anchor on another, and drives whether installments resolve
 
 `STRICTLY` makes the comparison exclusive (`<` / `>`). Conditions combine with `AND` / `OR` — SQL precedence, so `AND` binds tighter and parentheses override — and also accept the function form `AND( … )` / `OR( … )`.
 
+A bare mix of `AND` and `OR` at the same level (e.g. `a OR b AND c`) is still accepted, but it raises a `no-implicit-mixed-boolean` warning that spells out how the precedence grouped it — so the grouping is never silent. Parenthesize or use the function form to say it outright.
+
 ```vest
 VEST FROM EVENT milestone
   STRICTLY BEFORE DATE 2025-01-01 AND AFTER EVENT threshold

@@ -1,5 +1,5 @@
 import { normalizeVestingNode } from "./core.js";
-import { NormalizeAndSort, type DedupeReport } from "./utils.js";
+import { NormalizeAndSort, type FindingSink } from "./utils.js";
 import {
   ChainedSchedule,
   Duration,
@@ -26,7 +26,7 @@ type SYSTEM_EVENT = "grantDate" | "vestingStart";
  */
 export function normalizeStatement(
   s: RawStatement,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): Statement {
   // A THEN tail has no start of its own — it continues from the previous
   // segment's end. Leave its start null rather than filling in the grant date
@@ -52,7 +52,7 @@ export function normalizeStatement(
  */
 function normalizeChainedSchedule(
   s: ChainedSchedule<"raw">,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): ChainedSchedule {
   const periodicity = s.periodicity.cliff
     ? {
@@ -71,7 +71,7 @@ function normalizeChainedSchedule(
  */
 function normalizeScheduleExpr(
   e: RawScheduleExpr,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): ScheduleExpr {
   switch (e.type) {
     case "SCHEDULE":
@@ -95,7 +95,7 @@ function normalizeScheduleExpr(
  * - Normalizes `vesting_start` and optional `cliff`
  * - Periodicity comes already canonical from the grammar
  */
-function normalizeSchedule(s: RawSchedule, report?: DedupeReport): Schedule {
+function normalizeSchedule(s: RawSchedule, report?: FindingSink): Schedule {
   const startNode = s.vesting_start ?? {
     type: "NODE",
     base: {
@@ -119,7 +119,7 @@ function normalizeSchedule(s: RawSchedule, report?: DedupeReport): Schedule {
 function normalizeNode(
   c: Duration | VestingNodeExpr,
   durationRef: SYSTEM_EVENT,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): VestingNodeExpr {
   switch (c.type) {
     case "DURATION":
@@ -151,14 +151,14 @@ function normalizeNode(
 
 function normalizeVestingStart(
   c: Duration | VestingNodeExpr,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): VestingNodeExpr {
   return normalizeNode(c, "grantDate", report);
 }
 
 function normalizeCliff(
   c: Duration | VestingNodeExpr,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): VestingNodeExpr {
   return normalizeNode(c, "vestingStart", report);
 }
@@ -170,11 +170,11 @@ function normalizeCliff(
  */
 function normalizeVestingNodeExpr(
   e: VestingNodeExpr,
-  report?: DedupeReport,
+  report?: FindingSink,
 ): VestingNodeExpr {
   switch (e.type) {
     case "NODE":
-      return normalizeVestingNode(e);
+      return normalizeVestingNode(e, report);
     case "NODE_EARLIER_OF":
     case "NODE_LATER_OF":
       return NormalizeAndSort(
