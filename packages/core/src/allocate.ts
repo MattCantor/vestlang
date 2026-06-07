@@ -23,6 +23,14 @@ export const floorSharesAt = (
   totalShares: number,
   cumulative: Fraction,
 ): number => {
+  // A valid Fraction has a positive denominator; reject anything else loudly
+  // rather than letting BigInt throw an opaque "Division by zero". Callers
+  // upstream never build such a fraction, so this guards the public boundary.
+  if (cumulative.denominator < 1) {
+    throw new Error(
+      `floorSharesAt: cumulative.denominator must be >= 1 (got ${cumulative.denominator})`,
+    );
+  }
   const total = BigInt(totalShares);
   const num = BigInt(cumulative.numerator);
   const den = BigInt(cumulative.denominator);

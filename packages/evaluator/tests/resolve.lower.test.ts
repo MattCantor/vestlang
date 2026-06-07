@@ -168,4 +168,23 @@ describe("resolveToCore — QUANTITY amount lowers to a portion of the grant", (
       denominator: 4,
     });
   });
+
+  it("QUANTITY against a zero-share grant lowers to 0/1, not a degenerate 1/0", () => {
+    // A zero-share grant is legal; a QUANTITY has nothing to claim, so it vests
+    // nothing rather than crashing the validator or allocator (issue #61).
+    const program: Program = [
+      stmt(
+        { type: "QUANTITY", value: 25000 },
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        { type: "MONTHS", length: 1, occurrences: 1 },
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput({}, 0));
+    if (result.kind !== "template") throw new Error("expected template");
+    expect(result.template.statements[0].percentage).toEqual({
+      numerator: 0,
+      denominator: 1,
+    });
+    expect(result.findings).toEqual([]);
+  });
 });

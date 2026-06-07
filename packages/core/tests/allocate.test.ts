@@ -47,4 +47,12 @@ describe("allocateExact + floorSharesAt", () => {
     // second cumulative 2/3: floor(66.67) - 33 = 66 - 33 = 33
     expect(allocateExact(100, { numerator: 2, denominator: 3 }, 33)).toBe(33);
   });
+
+  it("rejects a degenerate (denominator < 1) fraction with a clear error", () => {
+    // A 1/0 fraction would otherwise throw an opaque BigInt "Division by zero";
+    // the precondition names what's wrong instead (issue #61).
+    expect(() => floorSharesAt(5, { numerator: 1, denominator: 0 })).toThrow(
+      /denominator must be >= 1/,
+    );
+  });
 });

@@ -65,9 +65,8 @@ const allocationFindings = (
   resolutions: StmtResolution[],
   totalShares: number,
 ): Finding[] => {
-  // A grant of zero shares can't over- or under-allocate, and we must bail before
-  // summing: a quantity over zero shares lowers to a 1/0 fraction, which the
-  // comparison would misread.
+  // A grant of zero shares can't over- or under-allocate — there's nothing to
+  // allocate against — so any sum is moot and we raise no finding.
   if (totalShares === 0) return [];
   // An impossible program never resolves to anything, so flagging its allocation on
   // top of that contradiction is just noise.
