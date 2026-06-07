@@ -1,3 +1,7 @@
+{{
+  import { isValidCalendarDate } from "@vestlang/utils";
+}}
+
 {
   function mkDuration(value, unit, sign) {
     return { type: "DURATION", value, unit, sign };

@@ -188,6 +188,9 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@vestlang/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       zod:
         specifier: ^3.23.8
         version: 3.25.76
@@ -231,6 +234,9 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
+      '@vestlang/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       peggy:
         specifier: ^5.0.6

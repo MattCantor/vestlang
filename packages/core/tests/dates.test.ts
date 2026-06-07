@@ -189,6 +189,29 @@ describe("advanceCursor — origin forwarding", () => {
   });
 });
 
+describe("year range — sub-100 preserved, out-of-range rejected", () => {
+  // The month path used to rebuild dates via Date.UTC(year, …), which remaps
+  // years 0–99 to 1900–1999. Component-based building keeps the year verbatim.
+  it("sub-100 year is not shifted by ~+1900 in the month path", () => {
+    expect(addMonthsRule("0050-06-15", 1)).toBe("0050-07-15");
+    expect(addPeriod("0050-01-15", 1, "MONTHS")).toBe("0050-02-15");
+  });
+
+  it("sub-100 year survives the day path too", () => {
+    expect(addDays("0050-06-15", 1)).toBe("0050-06-16");
+  });
+
+  it("rejects arithmetic that overflows past year 9999", () => {
+    expect(() => addPeriod("9999-12-31", 1, "YEARS")).toThrow(/range/);
+    expect(() => addMonthsRule("9999-12-15", 1)).toThrow(/range/);
+  });
+
+  it("rejects arithmetic that underflows before year 0001", () => {
+    expect(() => addPeriod("0001-01-01", 1, "YEARS")).not.toThrow(); // 0002 is fine
+    expect(() => addMonthsRule("0001-01-15", -12)).toThrow(/range/);
+  });
+});
+
 describe("comparisons on ISO dates", () => {
   it("lt / gt / eq", () => {
     expect(lt("2024-01-01", "2024-01-02")).toBe(true);

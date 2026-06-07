@@ -12,6 +12,7 @@ import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
+import { isValidCalendarDate } from "@vestlang/utils";
 import type {
   EvaluationContextInput,
   OCTDate,
@@ -63,7 +64,8 @@ installments gated on them will come back as UNRESOLVED with blockers.`;
 
 const ISO_DATE = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD");
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD")
+  .refine(isValidCalendarDate, "must be a real calendar date (YYYY-MM-DD)");
 
 const VESTING_DAY_OF_MONTH = z.enum([
   "01",
