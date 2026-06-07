@@ -596,9 +596,9 @@ describe("resolveToCore — over-allocation finding", () => {
 
   it("a zero-share grant raises no finding — nothing can allocate against it", () => {
     // 3/2 would over-allocate against any real grant, but a zero-share grant can't
-    // allocate at all, so the check is skipped rather than flagging it. (Portions
-    // are used here on purpose: a QUANTITY against zero shares lowers to a 1/0
-    // fraction that trips the allocator itself — a separate, pre-existing path.)
+    // allocate at all, so the check is skipped rather than flagging it. (A QUANTITY
+    // against zero shares is covered separately below — it lowers to 0, not a
+    // degenerate fraction.)
     const program: Program = [
       stmt(
         portion(3, 2),
@@ -607,6 +607,29 @@ describe("resolveToCore — over-allocation finding", () => {
       ),
     ];
     expect(resolveToCore(program, ctxInput({}, 0)).findings).toEqual([]);
+  });
+
+  it("QUANTITY on a zero-share grant down the events path allocates nothing, no throw", () => {
+    // Two QUANTITY grids on different dates classify to events; against a
+    // zero-share grant each lowers to 0, so the allocator runs cleanly and emits
+    // nothing rather than dividing by zero (issue #61, the events-path repro).
+    const program: Program = [
+      stmt(
+        quantity(750),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+      stmt(
+        quantity(750),
+        makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput({}, 0));
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") throw new Error("expected events");
+    expect(result.installments).toEqual([]);
+    expect(result.findings).toEqual([]);
   });
 
   it("a THEN chain that over-allocates is caught on the tail's own share", () => {

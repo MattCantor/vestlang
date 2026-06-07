@@ -30,7 +30,7 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { advanceCursor, eq, fracReduce } from "@vestlang/core";
+import { advanceCursor, eq, fracReduce, ZERO } from "@vestlang/core";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
@@ -44,10 +44,17 @@ const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 // not a floating milestone, so it must not register an event firing.
 const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
 
-/** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`. */
+/** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`.
+ *  A zero-share grant has nothing for a QUANTITY to claim, so it lowers to 0
+ *  (vests nothing) rather than the degenerate `v/0`. That fraction is invalid
+ *  (validate rejects denominator < 1) and would otherwise crash downstream — the
+ *  template validator or `floorSharesAt`. PORTION amounts carry their own
+ *  denominator and never touch the grant count, so they're left alone. */
 const amountToFraction = (a: Amount, totalShares: number): Fraction =>
   a.type === "QUANTITY"
-    ? fracReduce({ numerator: a.value, denominator: totalShares })
+    ? totalShares === 0
+      ? ZERO
+      : fracReduce({ numerator: a.value, denominator: totalShares })
     : fracReduce({ numerator: a.numerator, denominator: a.denominator });
 
 /** First single schedule of an expression (descend combinators' items[0]). */
