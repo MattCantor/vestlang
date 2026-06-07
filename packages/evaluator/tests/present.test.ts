@@ -48,6 +48,14 @@ const overAllocated: Finding[] = [
     path: ["Program"],
   },
 ];
+const underAllocated: Finding[] = [
+  {
+    kind: "under-allocation",
+    severity: "warning",
+    sum: { numerator: 1, denominator: 2 },
+    path: ["Program"],
+  },
+];
 
 const dated: Installment[] = [
   { amount: 100, date: "2025-02-01", meta: { state: "RESOLVED" } },
@@ -92,6 +100,11 @@ describe("presentSchedule — the orthogonal reads", () => {
     const p = presentSchedule(stub("template", [], dated, overAllocated));
     expect(p.valid).toBe(false);
     expect(p.representable).toBe(true); // the interchange still holds it
+  });
+
+  it("a warning finding (under-allocation) leaves the schedule valid", () => {
+    const p = presentSchedule(stub("template", [], dated, underAllocated));
+    expect(p.valid).toBe(true); // only error-severity findings flip valid
   });
 
   it("annotate, don't certify: an over-allocating pending template stays projected", () => {

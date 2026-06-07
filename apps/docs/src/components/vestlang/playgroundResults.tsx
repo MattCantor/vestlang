@@ -25,27 +25,29 @@ export default function PlaygroundResults({
           <TabsContent value="Installments" className="ui-mt-4">
             {schedules.map((s: EvaluatedSchedule, index: number) => (
               <Fragment key={index}>
-                {/* Show the projection, but flag it when the schedule allocates
-                    more than the grant — don't present it as valid. */}
-                {s.findings.some((f) => f.severity === "error") ? (
-                  <div
-                    role="alert"
-                    style={{
-                      border: "1px solid var(--ifm-color-danger)",
-                      borderRadius: "var(--ifm-code-border-radius)",
-                      padding: "0.5rem 0.75rem",
-                      marginBottom: "0.5rem",
-                      color: "var(--ifm-color-danger)",
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    {s.findings
-                      .filter((f) => f.severity === "error")
-                      .map((f, i) => (
-                        <div key={i}>⚠ {formatFinding(f)}</div>
-                      ))}
-                  </div>
-                ) : null}
+                {/* Show the projection, but flag it: an over-allocation (error)
+                    isn't a valid schedule; an under-allocation (warning) is legal
+                    but worth noting. The table is always shown either way. */}
+                {s.findings.map((f, i) => {
+                  const tone =
+                    f.severity === "error" ? "danger" : "warning";
+                  return (
+                    <div
+                      key={i}
+                      role={f.severity === "error" ? "alert" : "status"}
+                      style={{
+                        border: `1px solid var(--ifm-color-${tone})`,
+                        borderRadius: "var(--ifm-code-border-radius)",
+                        padding: "0.5rem 0.75rem",
+                        marginBottom: "0.5rem",
+                        color: `var(--ifm-color-${tone})`,
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      ⚠ {formatFinding(f)}
+                    </div>
+                  );
+                })}
                 <InstallmentsTable installments={s.installments} />
                 {s.blockers.length > 0 ? (
                   <pre

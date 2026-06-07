@@ -645,3 +645,64 @@ describe("resolveToCore — over-allocation finding", () => {
     expect(resolveToCore(program, ctxInput()).findings).toEqual([]);
   });
 });
+
+// Allocating less than the whole grant is legal — a grant may leave shares
+// unvested — so it's a warning, not an error. It fires whenever the schedule sums
+// to under 100%, on a lone statement or a composed one.
+describe("resolveToCore — under-allocation finding", () => {
+  const yearly: VestingPeriod = { type: "MONTHS", length: 12, occurrences: 1 };
+
+  const underAllocation = (result: { findings: Finding[] }) =>
+    result.findings.filter((f) => f.kind === "under-allocation");
+
+  it("a single 1/2 statement warns (it is the entire schedule)", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(underAllocation(result)).toEqual([
+      {
+        kind: "under-allocation",
+        severity: "warning",
+        sum: { numerator: 1, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
+  });
+
+  it("two 1/4 statements summing to 1/2 warn the same way", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+      stmt(
+        portion(1, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(underAllocation(result)).toHaveLength(1);
+    expect(underAllocation(result)[0].sum).toEqual({
+      numerator: 1,
+      denominator: 2,
+    });
+  });
+
+  it("a bare statement defaults to the whole grant — no finding", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+    ];
+    expect(resolveToCore(program, ctxInput()).findings).toEqual([]);
+  });
+});
