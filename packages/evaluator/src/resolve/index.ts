@@ -44,34 +44,45 @@ export const resolveToCore = (
 
   return {
     ...verdict,
-    findings: overAllocationFindings(verdict, resolutions, totalShares),
+    findings: allocationFindings(verdict, resolutions, totalShares),
   };
 };
 
-// Catch a program that vests more than the whole grant. We check here, before the
+// Check how much of the grant the schedule allocates. We look here, before the
 // result splits into a template or a bag of events, because that split is exactly
-// where the two ways to over-allocate diverge — a single `3/2` statement becomes a
-// template, while `3/4 PLUS 3/4` becomes events — yet both are still visible as the
-// same flat list of resolved statements, each carrying its share-of-grant fraction.
-// Summing those fractions catches both at once. Mixed quantity/portion programs come
-// out in the wash too, since the share counts have already been lowered to fractions.
-const overAllocationFindings = (
+// where the cases diverge — a single `3/2` statement becomes a template, while
+// `3/4 PLUS 3/4` becomes events — yet both are still visible as the same flat list of
+// resolved statements, each carrying its share-of-grant fraction. Summing those
+// fractions and comparing to the whole grant catches everything at once. Mixed
+// quantity/portion programs come out in the wash too, since the share counts have
+// already been lowered to fractions.
+//
+// Over the grant is an error — a grant can never vest more than 100% of itself. Under
+// the grant is only a warning: leaving some of the grant unvested is a legal thing to
+// write, just usually worth a heads-up.
+const allocationFindings = (
   verdict: ResolveVerdict,
   resolutions: StmtResolution[],
   totalShares: number,
 ): Finding[] => {
-  // A grant of zero shares can't over- (or under-) allocate, and we must bail before
+  // A grant of zero shares can't over- or under-allocate, and we must bail before
   // summing: a quantity over zero shares lowers to a 1/0 fraction, which the
-  // comparison would misread as "greater than the whole grant".
+  // comparison would misread.
   if (totalShares === 0) return [];
-  // An impossible program never resolves to anything, so flagging an overage on top
-  // of that contradiction is just noise.
+  // An impossible program never resolves to anything, so flagging its allocation on
+  // top of that contradiction is just noise.
   if (verdict.kind === "impossible") return [];
 
   const sum = fracSum(resolutions.map((r) => r.percentage));
-  if (fracCmp(sum, ONE) > 0) {
+  const cmp = fracCmp(sum, ONE);
+  if (cmp > 0) {
     return [
       { kind: "over-allocation", severity: "error", sum, path: ["Program"] },
+    ];
+  }
+  if (cmp < 0) {
+    return [
+      { kind: "under-allocation", severity: "warning", sum, path: ["Program"] },
     ];
   }
   return [];
