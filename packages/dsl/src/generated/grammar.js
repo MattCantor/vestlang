@@ -222,7 +222,7 @@ function peg$parse(input, options) {
   const peg$e11 = peg$classExpectation([["0", "1"]], false, false, false);
   const peg$e12 = peg$literalExpectation("/", false);
   const peg$e13 = peg$literalExpectation("day", true);
-  const peg$e14 = peg$literalExpectation("s", false);
+  const peg$e14 = peg$literalExpectation("s", true);
   const peg$e15 = peg$literalExpectation("month", true);
   const peg$e16 = peg$literalExpectation("week", true);
   const peg$e17 = peg$literalExpectation("year", true);
@@ -1255,8 +1255,8 @@ function peg$parse(input, options) {
       if (peg$silentFails === 0) { peg$fail(peg$e13); }
     }
     if (s1 !== peg$FAILED) {
-      if (input.charCodeAt(peg$currPos) === 115) {
-        s2 = peg$c9;
+      s2 = input.charAt(peg$currPos);
+      if (s2.toLowerCase() === peg$c9) {
         peg$currPos++;
       } else {
         s2 = peg$FAILED;
@@ -1281,8 +1281,8 @@ function peg$parse(input, options) {
         if (peg$silentFails === 0) { peg$fail(peg$e15); }
       }
       if (s1 !== peg$FAILED) {
-        if (input.charCodeAt(peg$currPos) === 115) {
-          s2 = peg$c9;
+        s2 = input.charAt(peg$currPos);
+        if (s2.toLowerCase() === peg$c9) {
           peg$currPos++;
         } else {
           s2 = peg$FAILED;
@@ -1307,8 +1307,8 @@ function peg$parse(input, options) {
           if (peg$silentFails === 0) { peg$fail(peg$e16); }
         }
         if (s1 !== peg$FAILED) {
-          if (input.charCodeAt(peg$currPos) === 115) {
-            s2 = peg$c9;
+          s2 = input.charAt(peg$currPos);
+          if (s2.toLowerCase() === peg$c9) {
             peg$currPos++;
           } else {
             s2 = peg$FAILED;
@@ -1333,8 +1333,8 @@ function peg$parse(input, options) {
             if (peg$silentFails === 0) { peg$fail(peg$e17); }
           }
           if (s1 !== peg$FAILED) {
-            if (input.charCodeAt(peg$currPos) === 115) {
-              s2 = peg$c9;
+            s2 = input.charAt(peg$currPos);
+            if (s2.toLowerCase() === peg$c9) {
               peg$currPos++;
             } else {
               s2 = peg$FAILED;

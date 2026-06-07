@@ -324,7 +324,14 @@ export function createServer(): McpServer {
     },
     async ({ ast }) => {
       try {
-        const text = stringify(ast as Statement | Program);
+        // MCP clients sometimes serialize a structured argument as a JSON string
+        // (the input schema is `unknown`, so the SDK doesn't parse it for us).
+        // Accept either a parsed Statement/Program or its stringified form.
+        const node =
+          typeof ast === "string"
+            ? (JSON.parse(ast) as Statement | Program)
+            : (ast as Statement | Program);
+        const text = stringify(node);
         return jsonResult({ dsl: text });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
