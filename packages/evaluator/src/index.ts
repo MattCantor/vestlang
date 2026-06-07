@@ -1,6 +1,7 @@
 export { evaluateStatementAsOf, type VestedResult } from "./asof.js";
 export { evaluateStatement, evaluateProgram } from "./evaluate/index.js";
 export { presentSchedule, type SchedulePresentation } from "./present.js";
+export { formatFinding } from "./findings.js";
 export {
   rehydrate,
   reparseDefinition,
