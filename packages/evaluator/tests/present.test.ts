@@ -1,8 +1,8 @@
-// The consumer rule, made explicit. `presentSchedule` derives three orthogonal
+// The consumer rule, made explicit. `presentSchedule` derives four orthogonal
 // reads — representable (status), pending (blockers, NOT status === "unresolved"),
-// projected (installments). The load-bearing case is a pending-template: status
-// "template" AND blockers present must read representable-but-pending, not
-// complete.
+// projected (installments), valid (findings). The load-bearing case is a
+// pending-template: status "template" AND blockers present must read
+// representable-but-pending, not complete.
 
 import { describe, it, expect } from "vitest";
 import type {
@@ -10,6 +10,7 @@ import type {
   Blocker,
   EvaluatedSchedule,
   EvaluationContextInput,
+  Finding,
   Installment,
   Program,
   VestingNode,
@@ -24,13 +25,29 @@ import {
   makeVestingBaseEvent,
 } from "./helpers";
 
-// presentSchedule reads only status / blockers / installments, so stub the rest.
+// presentSchedule reads only status / blockers / installments / findings, so stub
+// the rest. Findings default to none (a well-formed schedule).
 const stub = (
   status: EvaluatedSchedule["status"],
   blockers: Blocker[],
   installments: Installment[],
+  findings: Finding[] = [],
 ): EvaluatedSchedule =>
-  ({ status, blockers, installments }) as unknown as EvaluatedSchedule;
+  ({
+    status,
+    blockers,
+    installments,
+    findings,
+  }) as unknown as EvaluatedSchedule;
+
+const overAllocated: Finding[] = [
+  {
+    kind: "over-allocation",
+    severity: "error",
+    sum: { numerator: 3, denominator: 2 },
+    path: ["Program"],
+  },
+];
 
 const dated: Installment[] = [
   { amount: 100, date: "2025-02-01", meta: { state: "RESOLVED" } },
@@ -52,12 +69,13 @@ const impossibleBlocker: Blocker[] = [
   { type: "IMPOSSIBLE_SELECTOR", selector: "EARLIER_OF", blockers: [] },
 ];
 
-describe("presentSchedule — the three orthogonal reads", () => {
+describe("presentSchedule — the orthogonal reads", () => {
   it("template + blockers (pending-template) → representable AND pending", () => {
     expect(presentSchedule(stub("template", eventBlocker, dated))).toEqual({
       representable: true,
       pending: true,
       projected: true,
+      valid: true,
     });
   });
 
@@ -66,6 +84,27 @@ describe("presentSchedule — the three orthogonal reads", () => {
       representable: true,
       pending: false,
       projected: true,
+      valid: true,
+    });
+  });
+
+  it("an error finding makes the schedule read invalid (separate from representable)", () => {
+    const p = presentSchedule(stub("template", [], dated, overAllocated));
+    expect(p.valid).toBe(false);
+    expect(p.representable).toBe(true); // the interchange still holds it
+  });
+
+  it("annotate, don't certify: an over-allocating pending template stays projected", () => {
+    // representable + pending + projected, but invalid — the legal partial
+    // projection is still surfaced; it just isn't certified valid.
+    const p = presentSchedule(
+      stub("template", eventBlocker, dated, overAllocated),
+    );
+    expect(p).toEqual({
+      representable: true,
+      pending: true,
+      projected: true,
+      valid: false,
     });
   });
 
@@ -135,6 +174,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       representable: true,
       pending: true,
       projected: true,
+      valid: true,
     });
   });
 
@@ -179,6 +219,26 @@ describe("presentSchedule — end-to-end hybrid", () => {
       representable: false,
       pending: true, // the void half carries IMPOSSIBLE_CONDITION blockers
       projected: true, // the resolved half's dated tranches are now surfaced
+      valid: true,
     });
+  });
+
+  it("3/4 + 3/4 over one grant → projected but invalid (don't hide the projection)", () => {
+    const program: Program = [
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        { type: "MONTHS", length: 12, occurrences: 1 },
+      ),
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-07-01")),
+        { type: "MONTHS", length: 12, occurrences: 1 },
+      ),
+    ];
+    const [out] = evaluateProgram(program, ctxInput());
+    const p = presentSchedule(out);
+    expect(p.valid).toBe(false);
+    expect(p.projected).toBe(true); // the (over-allocating) projection is still shown
   });
 });

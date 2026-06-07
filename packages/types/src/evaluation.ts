@@ -3,6 +3,7 @@ import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate } from "./helpers.js";
 import { VestingDayOfMonth } from "./oct_types.js";
+import type { Finding } from "./diagnostic.js";
 
 export interface EvaluationContext {
   events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>;
@@ -178,11 +179,11 @@ export interface InstallmentSet {
 }
 
 /**
- * The published evaluation contract. A discriminated union keyed on `status`
- * (always present), where the presence of the canonical artifact is implied by
- * the arm.
+ * The verdict half of the published contract: a discriminated union keyed on
+ * `status` (always present), where the presence of the canonical artifact is
+ * implied by the arm.
  */
-export type EvaluatedSchedule =
+export type EvaluatedScheduleVerdict =
   | {
       status: "template";
       template: VestingScheduleTemplate;
@@ -209,3 +210,17 @@ export type EvaluatedSchedule =
       installments: ImpossibleInstallment[];
       blockers: ImpossibleBlocker[];
     };
+
+/**
+ * The published evaluation contract: the verdict, plus any findings the engine
+ * accumulated about the schedule as a whole (e.g. over-allocation).
+ *
+ * `findings` is attached to the union rather than written into each arm because
+ * it's orthogonal to which verdict the schedule landed in — a schedule can be a
+ * perfectly representable `template` and still over-allocate. The intersection
+ * keeps `status` narrowing intact while making `findings` available on every arm;
+ * it's an empty array in the common, well-formed case.
+ */
+export type EvaluatedSchedule = EvaluatedScheduleVerdict & {
+  findings: Finding[];
+};

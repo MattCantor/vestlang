@@ -29,6 +29,7 @@ export type {
   SourcePosition,
   SourceLocation,
   Diagnostic,
+  Finding,
 } from "./diagnostic.js";
 export {
   Duration,
@@ -87,6 +88,7 @@ export {
   SourceMapEntry,
   SourceMap,
   InstallmentSet,
+  EvaluatedScheduleVerdict,
   EvaluatedSchedule,
   Status,
 } from "./evaluation.js";

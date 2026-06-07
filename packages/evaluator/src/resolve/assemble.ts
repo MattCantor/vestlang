@@ -10,7 +10,10 @@
 //   - impossible  → all-void installments + contradiction blockers, status
 //                   "impossible".
 
-import type { EvaluatedSchedule } from "@vestlang/types";
+import type {
+  EvaluatedSchedule,
+  EvaluatedScheduleVerdict,
+} from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import type { NonTemplateReason, ResolveResult } from "./types.js";
@@ -30,8 +33,8 @@ const reasonToString = (r: NonTemplateReason): string => {
   }
 };
 
-/** Map a resolve verdict to the published EvaluatedSchedule. */
-export const assemble = (result: ResolveResult): EvaluatedSchedule => {
+/** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet). */
+const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
   switch (result.kind) {
     case "template": {
       const compiled = compileToInstallments(
@@ -73,3 +76,13 @@ export const assemble = (result: ResolveResult): EvaluatedSchedule => {
       };
   }
 };
+
+/**
+ * Map a resolve result to the published EvaluatedSchedule, carrying its findings
+ * across. Findings ride on the wrapper, so they thread through in one place here
+ * rather than being repeated in each arm above.
+ */
+export const assemble = (result: ResolveResult): EvaluatedSchedule => ({
+  ...assembleVerdict(result),
+  findings: result.findings,
+});

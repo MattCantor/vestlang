@@ -3,9 +3,11 @@ import { compile } from "@vestlang/core";
 import type {
   Amount,
   EvaluationContextInput,
+  Finding,
   OCTDate,
   Program,
   ResolvedInstallment,
+  Statement,
   VestingNode,
   VestingNodeExpr,
   VestingPeriod,
@@ -505,5 +507,141 @@ describe("resolveToCore — template arm still wins when it fits", () => {
     ];
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("template");
+  });
+});
+
+// A grant can't vest more than itself. The check sums each statement's
+// share-of-grant and flags anything over 100%, regardless of which verdict the
+// program lands in — so both a single oversized statement (a template) and two
+// statements that overlap past the grant (events) get caught.
+describe("resolveToCore — over-allocation finding", () => {
+  const yearly: VestingPeriod = { type: "MONTHS", length: 12, occurrences: 1 };
+
+  const quantity = (value: number): Amount => ({ type: "QUANTITY", value });
+
+  // A THEN tail: it carries its own share but inherits the handoff date.
+  const then = (amount: Amount, periodicity: VestingPeriod): Statement => ({
+    type: "STATEMENT",
+    chained: true,
+    amount,
+    expr: { type: "SCHEDULE", vesting_start: null, periodicity },
+  });
+
+  const overAllocation = (result: { findings: Finding[] }) =>
+    result.findings.filter((f) => f.kind === "over-allocation");
+
+  it("two 3/4 grids on different dates (events) sum to 3/2 → one error finding", () => {
+    const program: Program = [
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("events");
+    expect(overAllocation(result)).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 3, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
+  });
+
+  it("a single 3/2 statement (template) carries the same finding", () => {
+    const program: Program = [
+      stmt(
+        portion(3, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("template");
+    expect(overAllocation(result)).toHaveLength(1);
+    expect(overAllocation(result)[0].sum).toEqual({
+      numerator: 3,
+      denominator: 2,
+    });
+  });
+
+  it("mixed QUANTITY statements over the grant are caught (the linter punts on these)", () => {
+    // 750 + 750 = 1500 shares against a 1000-share grant → 3/2.
+    const program: Program = [
+      stmt(
+        quantity(750),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+      stmt(
+        quantity(750),
+        makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+        yearly,
+      ),
+    ];
+    const result = resolveToCore(program, ctxInput({}, 1000));
+    expect(overAllocation(result)).toHaveLength(1);
+    expect(overAllocation(result)[0].sum).toEqual({
+      numerator: 3,
+      denominator: 2,
+    });
+  });
+
+  it("a zero-share grant raises no finding — nothing can allocate against it", () => {
+    // 3/2 would over-allocate against any real grant, but a zero-share grant can't
+    // allocate at all, so the check is skipped rather than flagging it. (Portions
+    // are used here on purpose: a QUANTITY against zero shares lowers to a 1/0
+    // fraction that trips the allocator itself — a separate, pre-existing path.)
+    const program: Program = [
+      stmt(
+        portion(3, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+    ];
+    expect(resolveToCore(program, ctxInput({}, 0)).findings).toEqual([]);
+  });
+
+  it("a THEN chain that over-allocates is caught on the tail's own share", () => {
+    // head 3/4 then tail 3/4 → 3/2, one resolved template.
+    const program: Program = [
+      stmt(
+        portion(3, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+      then(portion(3, 4), yearly),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("template");
+    expect(overAllocation(result)).toHaveLength(1);
+  });
+
+  it("an impossible program is left alone — no over-allocation noise on a dead grant", () => {
+    // 3/2 would over-allocate, but the start can never fire, so suppress the finding.
+    const program: Program = [
+      stmt(portion(3, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
+    ];
+    const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
+    expect(result.kind).toBe("impossible");
+    expect(result.findings).toEqual([]);
+  });
+
+  it("a well-formed full grant carries no finding", () => {
+    const program: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        yearly,
+      ),
+    ];
+    expect(resolveToCore(program, ctxInput()).findings).toEqual([]);
   });
 });
