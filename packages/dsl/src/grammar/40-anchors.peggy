@@ -54,16 +54,17 @@ Constraint
     }
   }
 
-// Function form: AND(...), OR(...). These bind like their infix versions
+// Function form: AND(...), OR(...). These bind like their infix versions. The
+// explicit call is grouping, so the result is marked grouped.
 FuncBool
   = op:("AND"i / "OR"i) "(" _ head:OrExpr tail:(CommaSep OrExpr)* _ ")" {
     const OP = op.toUpperCase();
-    return mkBool( OP, collect(head, tail))
+    return markGrouped(mkBool(OP, collect(head, tail)))
   }
 
-// Parenthesized
+// Parenthesized — explicit grouping, so the inner result is marked grouped.
 Paren
-  = "(" _ e:OrExpr _ ")" { return e; }
+  = "(" _ e:OrExpr _ ")" { return markGrouped(e); }
 
 Condition = Paren / FuncBool / Constraint
 
@@ -77,7 +78,10 @@ AndExpr
 OrExpr
   = head:AndExpr tail:(OrSep AndExpr)* {
     if (tail.length === 0) return head;
-    return mkBool("OR", collect(head, tail))
+    // Flag a bare `… OR … AND …`: SQL precedence groups it silently. Check the
+    // raw operands, before mkBool flattens any grouped child OR into this node.
+    const operands = collect(head, tail);
+    return flagMixedInfix(mkBool("OR", operands), operands, location())
   }
 
 

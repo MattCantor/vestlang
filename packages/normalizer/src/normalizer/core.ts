@@ -1,4 +1,4 @@
-import { NormalizeAndSort } from "./utils.js";
+import { NormalizeAndSort, type FindingSink } from "./utils.js";
 import { AtomCondition, Condition, VestingNode } from "@vestlang/types";
 
 /* ------------------------
@@ -9,11 +9,14 @@ import { AtomCondition, Condition, VestingNode } from "@vestlang/types";
  * Normalize a vesting node:
  * - Normalize constraints (if CONSTRAINED)
  */
-export function normalizeVestingNode(node: VestingNode): VestingNode {
+export function normalizeVestingNode(
+  node: VestingNode,
+  report?: FindingSink,
+): VestingNode {
   if (node.condition) {
     return {
       ...node,
-      condition: normalizeCondition(node.condition),
+      condition: normalizeCondition(node.condition, report),
     };
   }
   return node;
@@ -30,13 +33,20 @@ export function normalizeVestingNode(node: VestingNode): VestingNode {
  * - Sort & dedupe items for determinism
  * - Collapse singletons: AND(x) -> x, OR(x) -> x
  */
-function normalizeCondition(node: Condition): Condition {
+function normalizeCondition(node: Condition, report?: FindingSink): Condition {
   switch (node.type) {
     case "ATOM":
-      return normalizeAtom(node);
+      return normalizeAtom(node, report);
     case "AND":
-    case "OR":
-      return NormalizeAndSort(node, normalizeCondition);
+    case "OR": {
+      // A bare `a OR b AND c` the parser flagged as mixed-infix: report how the
+      // precedence grouped it, then drop the transient markers (`grouped`,
+      // `mixedInfix`) so the canonical output is clean — NormalizeAndSort spreads
+      // the node, so they'd otherwise leak onto the normalized tree.
+      const { mixedInfix, grouped: _grouped, ...rest } = node;
+      if (mixedInfix) report?.({ kind: "mixed-boolean", loc: mixedInfix });
+      return NormalizeAndSort(rest, (c) => normalizeCondition(c, report));
+    }
     default:
       throw new Error(
         `normalizeCondition: unexpected condition type ${(node as { type?: string })?.type}`,
@@ -47,8 +57,8 @@ function normalizeCondition(node: Condition): Condition {
 /**
  * Normalize an ATOM's base vesting node
  */
-function normalizeAtom(a: AtomCondition): AtomCondition {
-  const normalizedBase = normalizeVestingNode(a.constraint.base);
+function normalizeAtom(a: AtomCondition, report?: FindingSink): AtomCondition {
+  const normalizedBase = normalizeVestingNode(a.constraint.base, report);
 
   return {
     type: "ATOM",

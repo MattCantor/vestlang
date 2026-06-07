@@ -272,4 +272,96 @@ describe("@vestlang/linter", () => {
       expect(lintProgram(program).diagnostics).toEqual([]);
     });
   });
+
+  // A bare mixed `… OR … AND …` groups by SQL precedence (AND binds tighter) with
+  // nothing in the source to show it. The parser flags it; the normalizer surfaces
+  // the warning through the same `lintText` sink, since the grouping is invisible
+  // on the normalized tree. Explicit grouping — parens or AND(…)/OR(…) — is silent.
+  describe("implicit mixed boolean (via lintText)", () => {
+    const OVER = `OVER 4 years EVERY 1 month`;
+    const lint = (condition: string) =>
+      lintText(
+        `VEST FROM EVENT m ${condition} ${OVER}`,
+        parse,
+      ).diagnostics.filter((d) => d.ruleId === "no-implicit-mixed-boolean");
+
+    it("warns on a bare mixed AND/OR and teaches the grouping", () => {
+      const flagged = lint(
+        `BEFORE EVENT ipo OR BEFORE DATE 2026-01-01 AND AFTER DATE 2025-01-01`,
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].ruleId).toBe("no-implicit-mixed-boolean");
+      expect(flagged[0].severity).toBe("warning");
+      expect(flagged[0].path).toEqual(["Program", 0]);
+      // carries the OR's source span
+      expect(flagged[0].loc?.start.line).toBe(1);
+      expect(typeof flagged[0].loc?.start.column).toBe("number");
+      // teaches the precedence rather than naming a notation to switch to
+      expect(flagged[0].message).toMatch(/AND binds tighter than OR/);
+      expect(flagged[0].message).not.toMatch(/AND\(/);
+    });
+
+    it("warns regardless of which operator comes first", () => {
+      // `a AND b OR c` groups as `(a AND b) OR c` — still a silent mix.
+      expect(
+        lint(
+          `BEFORE EVENT ipo AND AFTER DATE 2025-01-01 OR AFTER DATE 2024-01-01`,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("stays silent on a single operator", () => {
+      expect(lint(`BEFORE EVENT ipo AND AFTER DATE 2025-01-01`)).toEqual([]);
+      expect(lint(`BEFORE EVENT ipo OR AFTER DATE 2025-01-01`)).toEqual([]);
+    });
+
+    it("stays silent on the explicit functional form", () => {
+      expect(
+        lint(
+          `OR(BEFORE EVENT ipo, AND(BEFORE DATE 2026-01-01, AFTER DATE 2025-01-01))`,
+        ),
+      ).toEqual([]);
+    });
+
+    it("stays silent when either side is parenthesized", () => {
+      expect(
+        lint(
+          `BEFORE EVENT ipo OR (BEFORE DATE 2026-01-01 AND AFTER DATE 2025-01-01)`,
+        ),
+      ).toEqual([]);
+      expect(
+        lint(
+          `(BEFORE EVENT ipo OR BEFORE DATE 2026-01-01) AND AFTER DATE 2025-01-01`,
+        ),
+      ).toEqual([]);
+    });
+
+    it("stays silent on a zero/one-constraint anchor", () => {
+      expect(lint(`BEFORE EVENT ipo`)).toEqual([]);
+    });
+
+    it("flags only the inner mix when an outer group is explicit", () => {
+      // The inner `… OR … AND …` is the bare mix; the outer AND is parenthesized
+      // around it, so exactly one warning is raised.
+      const flagged = lint(
+        `AFTER DATE 2024-01-01 AND (BEFORE EVENT ipo OR BEFORE DATE 2026-01-01 AND AFTER DATE 2025-01-01)`,
+      );
+      expect(flagged).toHaveLength(1);
+    });
+
+    it("does not surface the warning through lintProgram on a normalized program", () => {
+      // The parser's marker is stripped during normalization, so lintProgram —
+      // which sees only the normalized tree — has nothing to report.
+      const program = normalizeProgram(
+        parse(
+          `VEST FROM EVENT m BEFORE EVENT ipo OR BEFORE DATE 2026-01-01 AND AFTER DATE 2025-01-01 ${OVER}`,
+        ),
+      );
+      expect(
+        lintProgram(program).diagnostics.filter(
+          (d) => d.ruleId === "no-implicit-mixed-boolean",
+        ),
+      ).toEqual([]);
+    });
+  });
 });
