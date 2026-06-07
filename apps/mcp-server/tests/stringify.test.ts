@@ -100,4 +100,41 @@ describe("mcp-server / vestlang_stringify tool layer", () => {
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toMatch(/Stringify failed/);
   });
+
+  it("rejects a raw (un-normalized) parse AST instead of crashing", async () => {
+    // A bare-DURATION cliff is what vestlang_parse emits; vestlang_compile
+    // resolves it to a node. Feeding the raw shape must fail with a clear
+    // message, not the cryptic "reading 'kind'" Doc-printer crash.
+    const client = await connectClient();
+    const rawAst = [
+      {
+        type: "STATEMENT",
+        amount: { type: "PORTION", numerator: 1, denominator: 1 },
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: {
+            type: "NODE",
+            base: { type: "EVENT", value: "grant" },
+            offsets: [],
+          },
+          periodicity: {
+            type: "MONTHS",
+            length: 1,
+            occurrences: 48,
+            cliff: {
+              type: "DURATION",
+              value: 12,
+              unit: "MONTHS",
+              sign: "PLUS",
+            },
+          },
+        },
+      },
+    ];
+
+    const res = await callStringify(client, rawAst);
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/un-normalized/);
+    expect(res.content[0].text).not.toMatch(/reading 'kind'/);
+  });
 });

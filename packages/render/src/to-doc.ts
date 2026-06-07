@@ -166,6 +166,15 @@ export function toDocVestingNodeExpr(node: VestingNodeExpr): Doc {
         kw(selectorKeyword(node.type)),
         node.items.map(toDocVestingNodeExpr),
       );
+    default:
+      // A normalized AST resolves cliffs/anchors to VestingNodeExpr nodes; a raw
+      // vestlang_parse AST leaves a cliff as a bare DURATION, which has no
+      // rendering here. Fail loudly rather than return undefined into the
+      // printer, where it crashes deep in Doc traversal with "reading 'kind'".
+      throw new Error(
+        `Cannot render un-normalized node of type "${(node as { type: string }).type}"; ` +
+          `toDoc expects the normalized AST (cliffs and anchors resolved to nodes), not a raw parse AST`,
+      );
   }
 }
 
