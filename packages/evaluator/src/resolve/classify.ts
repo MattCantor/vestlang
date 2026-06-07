@@ -33,7 +33,7 @@ import {
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
-import type { NonTemplateReason, ResolveResult } from "./types.js";
+import type { NonTemplateReason, ResolveVerdict } from "./types.js";
 
 interface RawEv {
   date: string;
@@ -170,7 +170,7 @@ const eventsArm = (
   ctx: EvaluationContext,
   totalShares: number,
   reason: NonTemplateReason,
-): ResolveResult => ({
+): ResolveVerdict => ({
   kind: "events",
   installments: resolvedInstallments(resolutions, ctx, totalShares),
   reason,
@@ -179,7 +179,7 @@ const eventsArm = (
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
   program: Program,
-): ResolveResult => {
+): ResolveVerdict => {
   const { ctx, totalShares } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
@@ -257,7 +257,7 @@ const unresolvedArm = (
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
   program: Program,
-): ResolveResult =>
+): ResolveVerdict =>
   build.why === "unresolved"
     ? unresolvedArm(build, program)
     : eventsArm(build.resolutions, build.ctx, build.totalShares, build.reason);

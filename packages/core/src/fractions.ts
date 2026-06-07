@@ -40,3 +40,15 @@ export const fracSub = (a: Fraction, b: Fraction): Fraction =>
 
 export const ZERO: Fraction = { numerator: 0, denominator: 1 };
 export const ONE: Fraction = { numerator: 1, denominator: 1 };
+
+/** Sum a list of fractions (empty list → 0). */
+export const fracSum = (fs: Fraction[]): Fraction => fs.reduce(fracAdd, ZERO);
+
+// Compare two fractions without dividing: a/b vs c/d has the same ordering as
+// a·d vs c·b, since every denominator in play here is positive. Returns -1, 0, or
+// 1 — the usual comparator sign — so callers can ask `fracCmp(x, ONE) > 0` etc.
+export const fracCmp = (a: Fraction, b: Fraction): -1 | 0 | 1 => {
+  const lhs = a.numerator * b.denominator;
+  const rhs = b.numerator * a.denominator;
+  return lhs < rhs ? -1 : lhs > rhs ? 1 : 0;
+};

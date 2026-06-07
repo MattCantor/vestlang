@@ -11,6 +11,7 @@
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import type {
   Blocker,
+  Finding,
   ImpossibleBlocker,
   ImpossibleInstallment,
   Installment,
@@ -26,7 +27,7 @@ export type NonTemplateReason =
   // An event-anchored cliff; Carta has no event anchor on the cliff field.
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string };
 
-export type ResolveResult =
+export type ResolveVerdict =
   | {
       kind: "template";
       template: VestingScheduleTemplate;
@@ -58,3 +59,9 @@ export type ResolveResult =
       installments: ImpossibleInstallment[];
       blockers: ImpossibleBlocker[];
     };
+
+// The verdict plus any findings the resolver accumulated (over-allocation, for
+// now). Carried on the wrapper rather than duplicated into each arm — findings
+// are about the resolution attempt as a whole, not about which verdict it
+// reached — and threaded onward onto EvaluatedSchedule the same way.
+export type ResolveResult = ResolveVerdict & { findings: Finding[] };
