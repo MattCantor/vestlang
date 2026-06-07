@@ -1,5 +1,5 @@
 import {
-  evaluateStatement,
+  evaluateStatements,
   formatFinding,
   presentSchedule,
 } from "@vestlang/evaluator";
@@ -49,9 +49,7 @@ export function evaluate(
     return;
   }
 
-  normalized
-    .map((s) => evaluateStatement(s, ctx))
-    .forEach((r) => printSchedule(r, false));
+  evaluateStatements(normalized, ctx).forEach((r) => printSchedule(r, false));
 }
 
 // When recovery fired, the schedule above prints as a plain `template`; this

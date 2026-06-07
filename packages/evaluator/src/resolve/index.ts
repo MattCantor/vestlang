@@ -4,7 +4,13 @@
 // one verdict (`status`): `template`, `events`, or `unresolved`. This is the live
 // evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
 
-import type { EvaluationContextInput, Finding, Program } from "@vestlang/types";
+import type {
+  ChainedSchedule,
+  EvaluationContextInput,
+  Finding,
+  Program,
+  ScheduleExpr,
+} from "@vestlang/types";
 import {
   assertValidVestingScheduleTemplate,
   MAX_INSTALLMENTS,
@@ -16,14 +22,28 @@ import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
-// Resolution is the cheap, non-materializing pass: one StmtResolution per
-// statement carrying a scalar `occurrences`, never an array of that length. So
-// the sum is the exact installment count and can be checked before any branch
-// (template/events/unresolved) expands one element per occurrence.
-const sumOccurrences = (rs: StmtResolution[]): number =>
-  rs.reduce((sum, r) => sum + r.periodicity.occurrences, 0);
+// How many installments a statement will materialize is structural — it's the
+// `occurrences` read straight off the periodicity, no resolution required (a
+// schedule-level selector contributes its largest arm). Reading it this way
+// matters: resolution steps the chain cursor, which for an over-cap schedule
+// runs the date past year 9999 and throws a date-range error first — so the cap
+// has to be checked *before* any resolution, or the wrong error wins.
+const scheduleExprOccurrences = (e: ScheduleExpr | ChainedSchedule): number =>
+  e.type === "SCHEDULE"
+    ? e.periodicity.occurrences
+    : Math.max(0, ...e.items.map(scheduleExprOccurrences));
 
-const assertOccurrenceSumWithinCap = (total: number): void => {
+/** Bound the installments a program will materialize, before any resolution or
+ *  per-occurrence build. The same structural measure is used by `resolveToCore`
+ *  and by the per-statement MCP tools (`vestlang_evaluate` family, which map
+ *  over statements separately and so wouldn't otherwise see a program that is
+ *  individually-small but collectively huge), so all the evaluate tools agree on
+ *  what they reject. */
+export const assertProgramInstallmentCap = (program: Program): void => {
+  const total = program.reduce(
+    (sum, s) => sum + scheduleExprOccurrences(s.expr),
+    0,
+  );
   if (total > MAX_INSTALLMENTS) {
     throw new Error(
       `schedule expands to ${total} installments, exceeds the limit of ${MAX_INSTALLMENTS}`,
@@ -31,34 +51,16 @@ const assertOccurrenceSumWithinCap = (total: number): void => {
   }
 };
 
-/** Bound a whole program's materialization. `resolveToCore`'s cap sees only the
- *  statements of one call; a per-statement evaluator (the MCP `vestlang_evaluate`
- *  family) maps it over each statement separately, so a program that is
- *  individually-small but collectively huge would slip past. Resolve the whole
- *  program once and sum — the same exact measure `resolveToCore` uses, so the
- *  per-statement and whole-program tools agree. */
-export const assertProgramInstallmentCap = (
-  program: Program,
-  ctxInput: EvaluationContextInput,
-): void => {
-  const ctx = createEvaluationContext(ctxInput);
-  assertOccurrenceSumWithinCap(
-    sumOccurrences(resolveStatements(program, ctx, ctx.grantQuantity)),
-  );
-};
-
 export const resolveToCore = (
   program: Program,
   ctxInput: EvaluationContextInput,
 ): ResolveResult => {
+  // Reject an oversized program before resolving anything (see above).
+  assertProgramInstallmentCap(program);
+
   const ctx = createEvaluationContext(ctxInput);
   const totalShares = ctx.grantQuantity;
   const resolutions = resolveStatements(program, ctx, totalShares);
-
-  // Bound the materialization before any branch expands one element per
-  // occurrence. The same limit is enforced in core's template validator for
-  // direct compile consumers.
-  assertOccurrenceSumWithinCap(sumOccurrences(resolutions));
 
   const build = buildTemplate(resolutions, ctx, totalShares);
 
