@@ -1,9 +1,11 @@
 import {
   EvaluationContextInput,
+  Program,
   Statement,
   Installment,
 } from "@vestlang/types";
 import { evaluateStatement } from "./evaluate/index.js";
+import { assertProgramInstallmentCap } from "./resolve/index.js";
 import { prepare } from "./utils.js";
 
 export interface VestedResult {
@@ -54,4 +56,17 @@ export function evaluateStatementAsOf(
   }
 
   return { vested, unvested, impossible, unresolved };
+}
+
+/**
+ * As-of sibling of `evaluateStatements`: evaluate each statement of a program as
+ * of `ctx.asOf`. The per-statement as-of consumers use this rather than a
+ * hand-rolled map, so the whole-program installment cap is enforced once.
+ */
+export function evaluateStatementsAsOf(
+  program: Program,
+  ctx_input: EvaluationContextInput,
+): VestedResult[] {
+  assertProgramInstallmentCap(program);
+  return program.map((stmt) => evaluateStatementAsOf(stmt, ctx_input));
 }

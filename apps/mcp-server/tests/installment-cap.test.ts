@@ -42,13 +42,16 @@ const errorOf = (res: CallResult) =>
 describe("mcp-server / installment cap", () => {
   it("rejects a schedule that expands past the cap instead of crashing", async () => {
     const client = await connectClient();
+    // 1,000,000 MONTHS would vest in ~year 85,000 — so resolving it also trips
+    // the date-range guard. The cap is structural and must win, reporting the
+    // count rather than the (less useful) date-overflow it would hit downstream.
     const res = await evaluate(
       client,
       "VEST OVER 1000000 months EVERY 1 month",
     );
-    const error = (res.structuredContent as { error?: { message?: string } })
-      ?.error;
-    expect(error?.message).toMatch(/exceeds the limit/);
+    const message = errorOf(res)?.message;
+    expect(message).toMatch(/exceeds the limit/);
+    expect(message).not.toMatch(/representable range/);
   });
 
   it("rejects when many PLUS components together exceed the cap", async () => {
@@ -61,6 +64,15 @@ describe("mcp-server / installment cap", () => {
     const error = (res.structuredContent as { error?: { message?: string } })
       ?.error;
     expect(error?.message).toMatch(/exceeds the limit/);
+  });
+
+  it("an in-cap schedule that overflows the calendar returns a clean date error", async () => {
+    // 10,000 occurrences is AT the cap (allowed) — but 10,000 YEARS runs the
+    // vest dates past year 9999, so the date range, not the count, is the real
+    // problem. The cap doesn't mask it; it surfaces cleanly (no crash).
+    const client = await connectClient();
+    const res = await evaluate(client, "VEST OVER 10000 years EVERY 1 year");
+    expect(errorOf(res)?.message).toMatch(/representable range/);
   });
 
   it("caps an unresolved (event-anchored) schedule too", async () => {

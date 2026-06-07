@@ -1,5 +1,13 @@
-export { evaluateStatementAsOf, type VestedResult } from "./asof.js";
-export { evaluateStatement, evaluateProgram } from "./evaluate/index.js";
+export {
+  evaluateStatementAsOf,
+  evaluateStatementsAsOf,
+  type VestedResult,
+} from "./asof.js";
+export {
+  evaluateStatement,
+  evaluateStatements,
+  evaluateProgram,
+} from "./evaluate/index.js";
 export { presentSchedule, type SchedulePresentation } from "./present.js";
 export { formatFinding } from "./findings.js";
 export {
@@ -12,7 +20,7 @@ export {
 // installments) before assemble flattens the reason to a string, then assemble a
 // result it already holds without re-resolving. Most callers should stick to
 // evaluateStatement/evaluateProgram above.
-export { resolveToCore, assertProgramInstallmentCap } from "./resolve/index.js";
+export { resolveToCore } from "./resolve/index.js";
 export { assemble } from "./resolve/assemble.js";
 export type { ResolveResult, NonTemplateReason } from "./resolve/index.js";
 export {

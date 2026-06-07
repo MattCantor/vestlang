@@ -3,9 +3,8 @@ import { z } from "zod";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import {
-  assertProgramInstallmentCap,
-  evaluateStatement,
-  evaluateStatementAsOf,
+  evaluateStatements,
+  evaluateStatementsAsOf,
   formatFinding,
   presentSchedule,
 } from "@vestlang/evaluator";
@@ -436,8 +435,7 @@ export function createServer(): McpServer {
       const ctx = buildContext(params);
       let schedules;
       try {
-        assertProgramInstallmentCap(parsed.program, ctx);
-        schedules = parsed.program.map((stmt) => evaluateStatement(stmt, ctx));
+        schedules = evaluateStatements(parsed.program, ctx);
       } catch (err) {
         return evaluationError(err);
       }
@@ -563,10 +561,7 @@ export function createServer(): McpServer {
       const ctx = buildContext(params);
       let results;
       try {
-        assertProgramInstallmentCap(parsed.program, ctx);
-        results = parsed.program.map((stmt) =>
-          evaluateStatementAsOf(stmt, ctx),
-        );
+        results = evaluateStatementsAsOf(parsed.program, ctx);
       } catch (err) {
         return evaluationError(err);
       }
@@ -617,10 +612,7 @@ export function createServer(): McpServer {
       const ctx = buildContext({ ...params, as_of: params.to });
       let results;
       try {
-        assertProgramInstallmentCap(parsed.program, ctx);
-        results = parsed.program.map((stmt) =>
-          evaluateStatementAsOf(stmt, ctx),
-        );
+        results = evaluateStatementsAsOf(parsed.program, ctx);
       } catch (err) {
         return evaluationError(err);
       }

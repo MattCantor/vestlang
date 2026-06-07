@@ -1,4 +1,4 @@
-import { evaluateStatementAsOf } from "@vestlang/evaluator";
+import { evaluateStatementsAsOf } from "@vestlang/evaluator";
 import { getTodayISO, input, validateDate } from "./utils.js";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { parse } from "@vestlang/dsl";
@@ -29,7 +29,7 @@ export function asof(
 
   const ast = parse(input(parts, opts.stdin));
   const normalized = normalizeProgram(ast);
-  const results = normalized.map((s) => evaluateStatementAsOf(s, ctx));
+  const results = evaluateStatementsAsOf(normalized, ctx);
   results.forEach((r) => {
     if (r.vested.length > 0) {
       console.log("VESTED");
