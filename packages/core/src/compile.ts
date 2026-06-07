@@ -19,7 +19,7 @@ import type {
 } from "@vestlang/types";
 import { allocateExact } from "./allocate";
 import { addPeriod, advanceCursor, gt } from "./dates";
-import { fracAdd, fracMul, fracSub, ONE, ZERO } from "./fractions";
+import { fracAdd, fracMul, fracSub, ONE, ZERO } from "@vestlang/utils";
 import { foldToGrantDate } from "./fold";
 import {
   assertValidVestingRuntime,

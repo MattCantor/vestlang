@@ -1,6 +1,6 @@
 {
-  "name": "@vestlang/linter",
-  "version": "0.1.1",
+  "name": "@vestlang/utils",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -13,21 +13,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rimraf dist && tsc -p tsconfig.json",
     "test": "vitest run",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vestlang/dsl": "workspace:*",
-    "@vestlang/normalizer": "workspace:*",
-    "@vestlang/types": "workspace:*",
-    "@vestlang/utils": "workspace:*",
-    "@vestlang/walk": "workspace:*"
+    "@vestlang/types": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "vitest": "^2.0.5",
-    "rimraf": "^6.0.1"
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"

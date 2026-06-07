@@ -25,7 +25,8 @@ import type {
   PeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import { addPeriod, fracReduce, gt, toDate } from "@vestlang/core";
+import { addPeriod, gt, toDate } from "@vestlang/core";
+import { fracReduce } from "@vestlang/utils";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 

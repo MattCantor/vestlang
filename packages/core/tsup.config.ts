@@ -2,7 +2,9 @@ import { defineConfig } from "tsup";
 
 // Core is the standalone, publishable engine (`@vestlang/core`). It ships dual
 // CJS/ESM so an external CommonJS consumer (OCF-Tools) can `require()` it while
-// this ESM-first repo `import`s it natively. Core has no runtime dependencies.
+// this ESM-first repo `import`s it natively. Core ships no runtime dependencies:
+// its one internal runtime dep, `@vestlang/utils` (fraction math), is *bundled
+// in* rather than shipped — see `noExternal` below.
 //
 // The canonical IR types live in `@vestlang/types` (a private, type-only
 // devDependency); core `import type`s them. `dts.resolve` folds those type
@@ -16,4 +18,9 @@ export default defineConfig({
   dts: { resolve: true },
   sourcemap: true,
   clean: true,
+  // `@vestlang/utils` is ESM-only; inline it into both the CJS and ESM bundles
+  // so the published CJS never emits `require("@vestlang/utils")` (which would
+  // throw for OCF-Tools). Keeping it a devDependency already makes tsup bundle
+  // it; this is explicit so a tsup default change can't externalize it.
+  noExternal: ["@vestlang/utils"],
 });

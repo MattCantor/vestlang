@@ -1,4 +1,5 @@
 import { RuleModule } from "../types.js";
+import { fracCmp, fracSum, ONE } from "@vestlang/utils";
 
 const meta = {
   id: "portion-allocation",
@@ -7,33 +8,6 @@ const meta = {
   recommended: true,
   severity: "error" as const,
 };
-
-const gcd = (a: number, b: number): number => {
-  let x = Math.abs(a);
-  let y = Math.abs(b);
-  while (y !== 0) {
-    [x, y] = [y, x % y];
-  }
-  return x || 1;
-};
-
-// Sum a list of portions exactly, keeping the result reduced so the message
-// can name the fraction without float drift.
-function sumPortions(portions: { numerator: number; denominator: number }[]): {
-  numerator: number;
-  denominator: number;
-} {
-  let num = 0;
-  let den = 1;
-  for (const p of portions) {
-    num = num * p.denominator + p.numerator * den;
-    den = den * p.denominator;
-    const g = gcd(num, den);
-    num /= g;
-    den /= g;
-  }
-  return { numerator: num, denominator: den };
-}
 
 const pct = (num: number, den: number) => `${Math.round((num / den) * 100)}%`;
 
@@ -72,15 +46,16 @@ export const rulePortionAllocation: RuleModule = {
           return;
         }
 
-        const { numerator, denominator } = sumPortions(portions);
-        if (numerator > denominator) {
+        const { numerator, denominator } = fracSum(portions);
+        const cmp = fracCmp({ numerator, denominator }, ONE);
+        if (cmp > 0) {
           ctx.report({
             ruleId: id,
             message: `portion amounts sum to ${numerator}/${denominator} (${pct(numerator, denominator)}), over-allocating the grant`,
             severity: "error",
             path: ["Program"],
           });
-        } else if (numerator < denominator) {
+        } else if (cmp < 0) {
           ctx.report({
             ruleId: id,
             message: `portion amounts sum to ${numerator}/${denominator} (${pct(numerator, denominator)}); the grant is not fully allocated`,
