@@ -1,9 +1,8 @@
-import { parse } from "@vestlang/dsl";
-import { input } from "./utils.js";
-import { normalizeProgram } from "@vestlang/normalizer";
+import { parseToProgram } from "@vestlang/pipeline";
+import { input, fail } from "./utils.js";
 
 export function compile(parts: string[] = [], opts: { stdin?: boolean }): void {
-  const ast = parse(input(parts, opts.stdin));
-  const result = normalizeProgram(ast);
-  console.log(JSON.stringify(result, null, 2));
+  const result = parseToProgram(input(parts, opts.stdin));
+  if (!result.ok) fail(result.error);
+  console.log(JSON.stringify(result.program, null, 2));
 }
