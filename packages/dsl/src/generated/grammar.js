@@ -422,13 +422,13 @@ function peg$parse(input, options) {
          };  }
   function peg$f42(a) {
     if (a.type === "NODE" && a.base.type === "EVENT" && a.base.value === "vestingStart") {
-      throw new SyntaxError('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
+      error('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
     }
     return a
   }
   function peg$f43(a) {
     if (a.type === "NODE" && a.base.type === "EVENT" && a.base.value === "grantDate") {
-      throw new SyntaxError('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
+      error('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
     }
     return a
   }
@@ -2663,7 +2663,7 @@ function peg$parse(input, options) {
     return a || 1;
   }
   function mkPortion(n, d) {
-    if (d === 0) throw new SyntaxError("Denominator cannot be 0")
+    if (d === 0) error("Denominator cannot be 0")
     // keep denominator positive, move sign to numerator if ever needed
     if (d < 0) { n = -n; d = -d; }
     const g = gcd(Math.abs(n), d);
@@ -2675,7 +2675,7 @@ function peg$parse(input, options) {
   }
   function collectTwoOrMore(head, tail) {
     const arr = collect(head, tail);
-    if (arr.length < 2) throw new SyntaxError("At least two items are required");
+    if (arr.length < 2) error("At least two items are required");
     return arr;
   }
   function mkBool(op, items) {

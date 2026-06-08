@@ -38,7 +38,7 @@
     return a || 1;
   }
   function mkPortion(n, d) {
-    if (d === 0) throw new SyntaxError("Denominator cannot be 0")
+    if (d === 0) error("Denominator cannot be 0")
     // keep denominator positive, move sign to numerator if ever needed
     if (d < 0) { n = -n; d = -d; }
     const g = gcd(Math.abs(n), d);
@@ -50,7 +50,7 @@
   }
   function collectTwoOrMore(head, tail) {
     const arr = collect(head, tail);
-    if (arr.length < 2) throw new SyntaxError("At least two items are required");
+    if (arr.length < 2) error("At least two items are required");
     return arr;
   }
   function mkBool(op, items) {
