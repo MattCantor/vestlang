@@ -113,9 +113,12 @@ umbrella at build time and never published on their own.
 | `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
 | `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (branch-and-bound exact cover) |
 | `@vestlang/recover` | — | Template recovery: composes evaluator + inferrer to rescue an `events-only` program into a template when its projection has one |
+| `@vestlang/pipeline` | — | The shared consumer layer both apps route through — parse → context → evaluate → view, behind one structured error model |
 | `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
 
-Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`.
+Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`. Both the CLI and the MCP
+server orchestrate the engine through `@vestlang/pipeline` rather than wiring the
+parse → evaluate → present steps themselves, so the two can't drift.
 
 > The umbrella is published as `@vestlang/vestlang` today; the unscoped `vestlang` name is
 > the intended target (pending a registry clearance).

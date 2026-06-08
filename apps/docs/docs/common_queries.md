@@ -5,6 +5,23 @@ attached to `vestlang_evaluate_as_of` output, window queries via
 `vestlang_vested_between`, and the date-math primitives — so derived numbers come
 from tool output rather than model arithmetic.
 
+## Error responses
+
+The evaluate/parse tools (`vestlang_parse`, `vestlang_compile`,
+`vestlang_evaluate`, `vestlang_evaluate_program`, `vestlang_evaluate_as_of`,
+`vestlang_vested_between`) don't fail with an exception — a failure comes back as
+a single structured shape, so check for an `error` field before reading the rest:
+
+```json
+{ "error": { "ruleId": "syntax-error", "message": "…", "loc": { "start": { "line": 1, "column": 1 }, "end": { "line": 1, "column": 5 } } } }
+```
+
+- **`ruleId: "syntax-error"`** — the DSL didn't parse. Carries `loc`, the source
+  span (line/column) of the offending token.
+- **`ruleId: "evaluation-error"`** — the DSL parsed but evaluation couldn't
+  proceed (e.g. a schedule too large to materialize, or a `from` after `to` on a
+  window query). No `loc` — these aren't tied to a source position.
+
 ## Summary fields on `vestlang_evaluate_as_of`
 
 `vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the flat `installments` + `blockers`; the as-of partitioning is what the MCP layer adds.)
