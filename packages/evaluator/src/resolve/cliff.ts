@@ -25,7 +25,7 @@ import type {
   PeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import { addPeriod, gt, toDate } from "@vestlang/core";
+import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -130,11 +130,12 @@ export const lowerCliff = (
   const dom: VestingDayOfMonth = ctx.vesting_day_of_month;
 
   // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate,
-  // counted on the origin-sprung grid (see the note on `origin` above).
+  // counted on the origin-sprung grid (see the note on `origin` above) — the same
+  // grid core later partitions the lump on.
+  const at = gridDate({ anchor, origin, period, periodType, dom });
   let m = 0;
   for (let i = 1; i <= occurrences; i++) {
-    if (gt(addPeriod(anchor, i * period, periodType, dom, origin), cliffDate))
-      break;
+    if (gt(at(i), cliffDate)) break;
     m++;
   }
   if (m === 0) return { state: "NONE" };
