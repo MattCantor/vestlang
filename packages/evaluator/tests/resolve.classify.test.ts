@@ -654,14 +654,24 @@ describe("resolveToCore — over-allocation finding", () => {
     expect(overAllocation(result)).toHaveLength(1);
   });
 
-  it("an impossible program is left alone — no over-allocation noise on a dead grant", () => {
-    // 3/2 would over-allocate, but the start can never fire, so suppress the finding.
+  it("an impossible program still flags over-allocation — it's a firing-invariant defect", () => {
+    // 3/2 over-allocates regardless of whether the start can ever fire. The
+    // declared share sum is independent of the impossibility verdict, so the
+    // finding stands: a record keeper resolving against its own events would
+    // still store an over-allocating spec.
     const program: Program = [
       stmt(portion(3, 2), eventBeforeDate("a", "2025-01-01"), twoYearsAnnual),
     ];
     const result = resolveToCore(program, ctxInput({ a: "2025-06-01" }));
     expect(result.kind).toBe("impossible");
-    expect(result.findings).toEqual([]);
+    expect(result.findings).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 3, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
   });
 
   it("a well-formed full grant carries no finding", () => {

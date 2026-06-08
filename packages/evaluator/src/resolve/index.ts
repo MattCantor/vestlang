@@ -89,7 +89,7 @@ export const resolveToCore = (
 
   return {
     ...verdict,
-    findings: allocationFindings(verdict, resolutions, totalShares),
+    findings: allocationFindings(resolutions, totalShares),
   };
 };
 
@@ -106,16 +106,12 @@ export const resolveToCore = (
 // the grant is only a warning: leaving some of the grant unvested is a legal thing to
 // write, just usually worth a heads-up.
 const allocationFindings = (
-  verdict: ResolveVerdict,
   resolutions: StmtResolution[],
   totalShares: number,
 ): Finding[] => {
   // A grant of zero shares can't over- or under-allocate — there's nothing to
   // allocate against — so any sum is moot and we raise no finding.
   if (totalShares === 0) return [];
-  // An impossible program never resolves to anything, so flagging its allocation on
-  // top of that contradiction is just noise.
-  if (verdict.kind === "impossible") return [];
 
   const sum = fracSum(resolutions.map((r) => r.percentage));
   const cmp = fracCmp(sum, ONE);
