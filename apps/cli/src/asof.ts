@@ -1,8 +1,5 @@
-import { evaluateStatementsAsOf } from "@vestlang/evaluator";
-import { getTodayISO, input, validateDate } from "./utils.js";
-import { normalizeProgram } from "@vestlang/normalizer";
-import { parse } from "@vestlang/dsl";
-import { EvaluationContext } from "@vestlang/types";
+import { parseQuantity, validateDate, runAsOf } from "@vestlang/pipeline";
+import { input, fail } from "./utils.js";
 
 export function asof(
   parts: string[],
@@ -10,27 +7,34 @@ export function asof(
     quantity: string;
     grantDate: string;
     date?: string;
+    event: Record<string, string>;
     stdin?: boolean;
   },
 ): void {
-  // quantity: must be a whole number
-  const quantity = Number(opts.quantity);
-  if (!Number.isInteger(quantity) || quantity < 0) {
-    console.error("Quantity must be a non-negative whole number.");
-    process.exit(1);
+  const quantity = parseQuantity(opts.quantity);
+  if (!quantity.ok) fail(quantity.error);
+  const grantDate = validateDate(opts.grantDate);
+  if (!grantDate.ok) fail(grantDate.error);
+
+  // --date is optional; when omitted, runAsOf cuts off as of today.
+  let asOf: string | undefined;
+  if (opts.date !== undefined) {
+    const date = validateDate(opts.date);
+    if (!date.ok) fail(date.error);
+    asOf = date.date;
   }
 
-  const ctx: EvaluationContext = {
-    events: { grantDate: validateDate(opts.grantDate) },
-    grantQuantity: quantity,
-    asOf: validateDate(opts.date ?? getTodayISO()),
-    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  const grant = {
+    grant_date: grantDate.date,
+    grant_quantity: quantity.quantity,
+    events: opts.event,
   };
 
-  const ast = parse(input(parts, opts.stdin));
-  const normalized = normalizeProgram(ast);
-  const results = evaluateStatementsAsOf(normalized, ctx);
-  results.forEach((r) => {
+  const result = runAsOf(input(parts, opts.stdin), grant, asOf);
+  if (!result.ok) fail(result.error);
+
+  console.log(`AS OF ${result.asOf}`);
+  result.statements.forEach((r) => {
     if (r.vested.length > 0) {
       console.log("VESTED");
       console.table(r.vested);
@@ -45,5 +49,7 @@ export function asof(
     }
     console.log("UNRESOLVED");
     console.log(r.unresolved);
+    console.log("SUMMARY");
+    console.table(r.summary);
   });
 }

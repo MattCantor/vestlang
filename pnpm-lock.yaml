@@ -66,21 +66,12 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
-      '@vestlang/evaluator':
-        specifier: workspace:*
-        version: link:../../packages/evaluator
       '@vestlang/linter':
         specifier: workspace:*
         version: link:../../packages/linter
-      '@vestlang/normalizer':
+      '@vestlang/pipeline':
         specifier: workspace:*
-        version: link:../../packages/normalizer
-      '@vestlang/recover':
-        specifier: workspace:*
-        version: link:../../packages/recover
-      '@vestlang/types':
-        specifier: workspace:*
-        version: link:../../packages/types
+        version: link:../../packages/pipeline
       commander:
         specifier: ^14.0.1
         version: 14.0.1

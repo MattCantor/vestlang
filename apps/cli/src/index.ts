@@ -10,6 +10,19 @@ const program = new Command();
 
 program.name("vest").description("Vestlang CLI").version("0.1.0");
 
+// One boundary around the command actions: anything that still throws (a stray
+// engine error, a bug) becomes a single `error:` line and a non-zero exit,
+// never a raw Node stack trace leaking file paths. Known pipeline failures are
+// already presented by `fail` inside the actions; this catches the rest.
+function withBoundary(action: () => void): void {
+  try {
+    action();
+  } catch (err) {
+    console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+
 /* ------------------------
  * Inspect
  * ------------------------ */
@@ -21,7 +34,7 @@ program
   .argument("[input...]", "DSL text")
   .option("--stdin", "read input from stdin")
   .action((parts: string[] = [], opts: { stdin?: boolean }) => {
-    inspect(parts, opts);
+    withBoundary(() => inspect(parts, opts));
   });
 
 /* ------------------------
@@ -35,7 +48,7 @@ program
   .argument("[input...]", "DSL text")
   .option("--stdin", "read input from stdin")
   .action((parts: string[] = [], opts: { stdin?: boolean }) => {
-    compile(parts, opts);
+    withBoundary(() => compile(parts, opts));
   });
 
 /* ------------------------
@@ -48,6 +61,12 @@ program
   .requiredOption("-q, --quantity <number>", "total number of shares granted")
   .requiredOption("-g, --grantDate <string>", "grant date of the award")
   .option("-d, --date <YYYY-MM-DD>", "as-of date in YYYY-MM-DD format")
+  .option(
+    "-e, --event <NAME=YYYY-MM-DD>",
+    "add an event (repeatable), e.g. --event ipo=2025-01-01",
+    parseEvent,
+    {} as Record<string, string>,
+  )
   .option("--stdin", "read input from stdin")
   .argument("[input...]", "DSL text")
   .action(
@@ -57,10 +76,11 @@ program
         quantity: string;
         grantDate: string;
         date?: string;
+        event: Record<string, string>;
         stdin?: boolean;
       },
     ) => {
-      asof(parts, opts);
+      withBoundary(() => asof(parts, opts));
     },
   );
 
@@ -111,7 +131,7 @@ program
         program?: boolean;
       },
     ) => {
-      evaluate(parts, opts);
+      withBoundary(() => evaluate(parts, opts));
     },
   );
 
