@@ -7,6 +7,7 @@ import {
   baseCtx,
   makeVestingBaseDate,
   makeSingletonSchedule,
+  makeConstrainedNodeWithAtomCondition,
 } from "./helpers.js";
 import { VestingNodeExpr } from "@vestlang/types";
 
@@ -80,6 +81,74 @@ describe("evaluateVestingNodeExpr selectors", () => {
     expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
       "UNRESOLVED_SELECTOR",
     );
+  });
+
+  // A statically-dead arm: 2025-01-01 can never be AFTER 2025-06-01 (both fixed
+  // dates), so no witness can ever resolve it. Distinct from a pending arm.
+  const deadArm = makeConstrainedNodeWithAtomCondition(
+    "AFTER",
+    "2025-01-01",
+    "2025-06-01",
+  );
+
+  it("LATER_OF with a statically-dead arm is IMPOSSIBLE (dead arm dominates a resolved sibling)", () => {
+    const ctx = baseCtx();
+    const expr = {
+      type: "NODE_LATER_OF",
+      items: [
+        deadArm,
+        {
+          type: "NODE",
+          base: makeVestingBaseDate("2025-03-01"),
+          offsets: [],
+        },
+      ],
+    } as VestingNodeExpr;
+    const res = evaluateVestingNodeExpr(expr, ctx);
+    expect(res.type).toBe("IMPOSSIBLE");
+    const blocker = (res as { blockers: { type: string; selector: string }[] })
+      .blockers[0];
+    expect(blocker.type).toBe("IMPOSSIBLE_SELECTOR");
+    expect(blocker.selector).toBe("LATER_OF");
+  });
+
+  it("LATER_OF with a dead arm is IMPOSSIBLE even when the sibling is only pending", () => {
+    const ctx = baseCtx();
+    const expr = {
+      type: "NODE_LATER_OF",
+      items: [
+        deadArm,
+        {
+          type: "NODE",
+          base: { type: "EVENT", value: "laterEvent" },
+          offsets: [],
+        },
+      ],
+    } as VestingNodeExpr;
+    const res = evaluateVestingNodeExpr(expr, ctx);
+    expect(res.type).toBe("IMPOSSIBLE");
+    expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
+      "IMPOSSIBLE_SELECTOR",
+    );
+  });
+
+  it("EARLIER_OF drops a statically-dead arm and resolves to the survivor", () => {
+    const ctx = baseCtx();
+    const expr = {
+      type: "NODE_EARLIER_OF",
+      items: [
+        deadArm,
+        {
+          type: "NODE",
+          base: makeVestingBaseDate("2025-03-01"),
+          offsets: [],
+        },
+      ],
+    } as VestingNodeExpr;
+    const res = evaluateVestingNodeExpr(expr, ctx);
+    expect(res.type).toBe("PICKED");
+    expect((res as { meta: { type: string } }).meta.type).toBe("RESOLVED");
+    expect((res as { meta: { date: string } }).meta.date).toBe("2025-03-01");
   });
 
   it("All impossible → IMPOSSIBLE_SELECTOR", () => {

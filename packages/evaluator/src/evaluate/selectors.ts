@@ -25,6 +25,10 @@ function allImpossible<T>(x: PickReturn<T>[]) {
   return x.every((r) => r.type === "IMPOSSIBLE");
 }
 
+function anyImpossible<T>(x: PickReturn<T>[]) {
+  return x.some((r) => r.type === "IMPOSSIBLE");
+}
+
 function collectBlockers<T>(x: PickReturn<T>[]): Blocker[] {
   const blockers: Blocker[] = [];
   for (const r of x) {
@@ -87,43 +91,65 @@ type SelectorPolicy = {
   selector: SelectorTag;
   selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // earlier: any resolved, later: all resolved
   partialEmit: boolean; // only true for LATER_OF
+  impossibleArmPoisons: boolean; // LATER_OF is universal: one dead arm sinks the whole selector
 };
 
 const EARLIER_POLICY: SelectorPolicy = {
   selector: "EARLIER_OF",
   selectorIsSatisfied: (c) => c.some(isPickedResolved),
   partialEmit: false,
+  impossibleArmPoisons: false,
 };
 
 const LATER_POLICY: SelectorPolicy = {
   selector: "LATER_OF",
   selectorIsSatisfied: (c) => c.every(isPickedResolved),
   partialEmit: true,
+  impossibleArmPoisons: true,
 };
+
+/** Build the IMPOSSIBLE node a selector reports when dead arms sink it. */
+function impossibleSelector<T>(
+  policy: SelectorPolicy,
+  candidates: PickReturn<T>[],
+): PickReturn<T> {
+  return {
+    type: "IMPOSSIBLE",
+    blockers: [
+      {
+        type: "IMPOSSIBLE_SELECTOR",
+        selector: policy.selector,
+        blockers: collectImpossibleBlockers(candidates),
+      },
+    ],
+  };
+}
 
 function handleSelector<T extends Schedule | VestingNode>(
   candidates: PickReturn<T>[],
   policy: SelectorPolicy,
 ): PickReturn<T> {
-  if (allImpossible(candidates))
-    return {
-      type: "IMPOSSIBLE",
-      blockers: [
-        {
-          type: "IMPOSSIBLE_SELECTOR",
-          selector: policy.selector,
-          blockers: collectImpossibleBlockers(candidates),
-        },
-      ],
-    };
+  if (allImpossible(candidates)) return impossibleSelector(policy, candidates);
 
-  const resolved = candidates.filter(isPickedResolved);
+  // LATER_OF is universal ("the later of all of them"), so a single statically
+  // dead arm means there is no "later of both" — the whole selector is dead.
+  // Checked before the resolved/partial logic so it dominates any resolved or
+  // pending sibling.
+  if (policy.impossibleArmPoisons && anyImpossible(candidates))
+    return impossibleSelector(policy, candidates);
+
+  // EARLIER_OF is existential ("first to occur"): a dead arm can never be first,
+  // so drop it and resolve over the survivors. (For LATER_OF every survivor is
+  // live by the poison check above, so this filter is a no-op there.)
+  const live = candidates.filter((c) => c.type !== "IMPOSSIBLE");
+
+  const resolved = live.filter(isPickedResolved);
   const hasAnyResolved = resolved.length > 0;
-  const allResolved = hasAnyResolved && resolved.length === candidates.length;
-  const unresolved = candidates.length - resolved.length;
+  const allResolved = hasAnyResolved && resolved.length === live.length;
+  const unresolved = live.length - resolved.length;
 
   // Resolve per policy
-  if (policy.selectorIsSatisfied(candidates)) {
+  if (policy.selectorIsSatisfied(live)) {
     const { picked, meta } = reduceBest(resolved, policy.selector);
     return { type: "PICKED", picked, meta };
   }
@@ -142,10 +168,10 @@ function handleSelector<T extends Schedule | VestingNode>(
                 {
                   type: "UNRESOLVED_SELECTOR",
                   selector: policy.selector,
-                  blockers: collectBlockers(candidates),
+                  blockers: collectBlockers(live),
                 },
               ]
-            : collectBlockers(candidates),
+            : collectBlockers(live),
       },
     };
   }
@@ -157,7 +183,7 @@ function handleSelector<T extends Schedule | VestingNode>(
       {
         type: "UNRESOLVED_SELECTOR",
         selector: policy.selector,
-        blockers: collectBlockers(candidates),
+        blockers: collectBlockers(live),
       },
     ],
   };
