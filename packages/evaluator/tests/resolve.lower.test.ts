@@ -15,16 +15,22 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
-): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01", ...events },
-  grantQuantity,
-  asOf: "2035-01-01",
-});
+): EvaluationContextInput => {
+  // Callers override the grant date by passing `grantDate` in this map.
+  const { grantDate = "2025-01-01", ...rest } = events;
+  return {
+    grantDate,
+    events: rest,
+    grantQuantity,
+    asOf: "2035-01-01",
+  };
+};
 
 const portion = (numerator: number, denominator: number): Amount => ({
   type: "PORTION",
@@ -46,7 +52,7 @@ const sum = (events: { amount: string }[]) =>
   events.reduce((a, e) => a + Number(e.amount), 0);
 
 describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", () => {
-  const cliff12mo = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+  const cliff12mo = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const program: Program = [

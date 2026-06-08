@@ -44,7 +44,8 @@ export function residualAgainstInput(
 
   for (const stmt of program) {
     const result = evaluateStatement(stmt, {
-      events: { grantDate: ctx.grantDate },
+      grantDate: ctx.grantDate,
+      events: {},
       grantQuantity: ctx.totalQuantity,
       asOf: ctx.asOf,
       vesting_day_of_month: ctx.vestingDayOfMonth,
@@ -89,7 +90,8 @@ export function collapseAgainstInput(
   ctx: VerifyContext,
 ): { residual: number; status: Status } {
   const [schedule] = evaluateProgram(program, {
-    events: { grantDate: ctx.grantDate },
+    grantDate: ctx.grantDate,
+    events: {},
     grantQuantity: ctx.totalQuantity,
     asOf: ctx.asOf,
     vesting_day_of_month: ctx.vestingDayOfMonth,
@@ -122,7 +124,8 @@ export function collapseAgainstInput(
  */
 export function programStatus(program: Program, ctx: VerifyContext): Status {
   const [schedule] = evaluateProgram(program, {
-    events: { grantDate: ctx.grantDate },
+    grantDate: ctx.grantDate,
+    events: {},
     grantQuantity: ctx.totalQuantity,
     asOf: ctx.asOf,
     vesting_day_of_month: ctx.vestingDayOfMonth,

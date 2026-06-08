@@ -6,15 +6,24 @@ import { VestingDayOfMonth } from "./oct_types.js";
 import type { Finding } from "./diagnostic.js";
 
 export interface EvaluationContext {
-  events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>;
+  /** The grant-date system anchor. A runtime input, not a fired milestone, so it
+   *  is its own field (mirroring VestingRuntime) rather than an `events` entry. */
+  grantDate: OCTDate;
+  /** The vesting-start system anchor a cliff hangs off. Overlaid per-statement
+   *  during cliff/unresolved resolution; absent on the base context. */
+  vestingStart?: OCTDate;
+  /** Genuine fired named events only (`ipo`, `milestone`) — no system anchors. */
+  events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
   asOf: OCTDate;
   vesting_day_of_month: VestingDayOfMonth;
 }
 
+// Callers supply everything but the day-of-month rule (the evaluator defaults it)
+// and the transient `vestingStart` overlay (set internally during resolution).
 export type EvaluationContextInput = Omit<
   EvaluationContext,
-  "vesting_day_of_month"
+  "vesting_day_of_month" | "vestingStart"
 > &
   Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
 

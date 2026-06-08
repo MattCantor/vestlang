@@ -97,7 +97,7 @@ const resolvedInstallments = (
   allocateEvents(
     resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx)),
     totalShares,
-    ctx.events.grantDate,
+    ctx.grantDate,
   ).map((t) => makeResolvedInstallment(t.date, t.amount));
 
 const eventsArm = (

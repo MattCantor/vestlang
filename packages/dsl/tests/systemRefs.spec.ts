@@ -10,7 +10,7 @@ describe("Bareword system references", () => {
     const stmt = first(`VEST FROM grantDate OVER 12 months EVERY 12 months`);
     const vs = stmt.expr.vesting_start as VestingNode;
     expect(vs.type).toBe("NODE");
-    expect(vs.base).toEqual({ type: "EVENT", value: "grantDate" });
+    expect(vs.base).toEqual({ type: "GRANT_DATE" });
     expect(vs.offsets).toEqual([]);
   });
 
@@ -19,7 +19,7 @@ describe("Bareword system references", () => {
       `VEST FROM grantDate + 12 months OVER 36 months EVERY 1 month`,
     );
     const vs = stmt.expr.vesting_start as VestingNode;
-    expect(vs.base).toEqual({ type: "EVENT", value: "grantDate" });
+    expect(vs.base).toEqual({ type: "GRANT_DATE" });
     expect(vs.offsets).toEqual([
       { type: "DURATION", value: 12, unit: "MONTHS", sign: "PLUS" },
     ]);
@@ -29,7 +29,7 @@ describe("Bareword system references", () => {
     for (const spelling of ["grant_date", "grant-date", "GRANTDATE"]) {
       const stmt = first(`VEST FROM ${spelling} OVER 12 months EVERY 1 month`);
       const vs = stmt.expr.vesting_start as VestingNode;
-      expect(vs.base).toEqual({ type: "EVENT", value: "grantDate" });
+      expect(vs.base).toEqual({ type: "GRANT_DATE" });
     }
   });
 
@@ -51,9 +51,9 @@ describe("Bareword system references", () => {
       throw new Error("expected SCHEDULE exprs");
     const aStart = a.vesting_start as VestingNode;
     const bStart = b.vesting_start as VestingNode;
-    expect(aStart.base).toEqual({ type: "EVENT", value: "grantDate" });
+    expect(aStart.base).toEqual({ type: "GRANT_DATE" });
     expect(aStart.offsets).toEqual([]);
-    expect(bStart.base).toEqual({ type: "EVENT", value: "grantDate" });
+    expect(bStart.base).toEqual({ type: "GRANT_DATE" });
     expect(bStart.offsets).toEqual([
       { type: "DURATION", value: 12, unit: "MONTHS", sign: "PLUS" },
     ]);
@@ -88,6 +88,6 @@ describe("System event protections (reachable guards)", () => {
   it("allows bareword vestingStart in CLIFF (explicit, valid)", () => {
     const stmt = first(`VEST OVER 48 months EVERY 1 month CLIFF vestingStart`);
     const cliff = stmt.expr.periodicity.cliff as VestingNode;
-    expect(cliff.base).toEqual({ type: "EVENT", value: "vestingStart" });
+    expect(cliff.base).toEqual({ type: "VESTING_START" });
   });
 });

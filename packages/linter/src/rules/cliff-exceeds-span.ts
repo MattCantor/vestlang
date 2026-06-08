@@ -16,8 +16,7 @@ const meta = {
 function startRelativeOffset(expr: VestingNodeExpr): Duration | undefined {
   if (
     expr.type !== "NODE" ||
-    expr.base.type !== "EVENT" ||
-    expr.base.value !== "vestingStart" ||
+    expr.base.type !== "VESTING_START" ||
     expr.condition !== undefined ||
     expr.offsets.length !== 1
   )

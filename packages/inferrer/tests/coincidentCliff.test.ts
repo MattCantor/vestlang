@@ -51,7 +51,8 @@ function footprint(
   policy: VestingDayOfMonth,
 ): Map<string, number> {
   const ctx: EvaluationContextInput = {
-    events: { grantDate: "1900-01-01" },
+    grantDate: "1900-01-01",
+    events: {},
     grantQuantity: 1_000_000,
     asOf: "2999-12-31",
     vesting_day_of_month: policy,

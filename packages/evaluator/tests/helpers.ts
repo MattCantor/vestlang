@@ -13,8 +13,11 @@ import {
   ResolvedNode,
   Schedule,
   UnresolvedNode,
+  VestingBase,
   VestingBaseDate,
   VestingBaseEvent,
+  VestingBaseGrantDate,
+  VestingBaseVestingStart,
   VestingNode,
   VestingPeriod,
 } from "@vestlang/types";
@@ -22,7 +25,8 @@ import {
 export const baseCtx = (
   overrides: Partial<EvaluationContext> = {},
 ): EvaluationContext => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
   grantQuantity: 100,
   asOf: "2025-06-01",
@@ -39,6 +43,14 @@ export const makeVestingBaseEvent = (value: string): VestingBaseEvent => ({
   value,
 });
 
+export const makeVestingBaseGrantDate = (): VestingBaseGrantDate => ({
+  type: "GRANT_DATE",
+});
+
+export const makeVestingBaseVestingStart = (): VestingBaseVestingStart => ({
+  type: "VESTING_START",
+});
+
 export const makeDuration = (
   value: number,
   unit: PeriodTag,
@@ -51,7 +63,7 @@ export const makeDuration = (
 });
 
 export const makeSingletonNode = (
-  base: VestingBaseDate | VestingBaseEvent,
+  base: VestingBase,
   offsets: Offsets = [],
 ): VestingNode => ({
   type: "NODE",
@@ -70,7 +82,7 @@ const makeConstraint = (
 });
 
 export const makeImpossibleConditionBlocker = (
-  base: VestingBaseDate | VestingBaseEvent,
+  base: VestingBase,
   offsets: Offsets = [],
 ): Extract<ImpossibleBlocker, { type: "IMPOSSIBLE_CONDITION" }> => {
   const { type: _type, ...rest } = makeSingletonNode(base, offsets);

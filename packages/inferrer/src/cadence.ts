@@ -38,7 +38,8 @@ export function cadenceKey(c: Cadence): string {
 
 export function minimalCtx(policy: VestingDayOfMonth): EvaluationContext {
   return {
-    events: { grantDate: "1970-01-01" },
+    grantDate: "1970-01-01",
+    events: {},
     grantQuantity: 0,
     asOf: "1970-01-01",
     vesting_day_of_month: policy,

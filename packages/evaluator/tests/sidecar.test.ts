@@ -29,12 +29,14 @@ import {
   makeSingletonNode,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseGrantDate,
 } from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 100000,
   asOf: "2035-01-01",
   ...overrides,
@@ -59,7 +61,7 @@ const stageAStmt = (): Statement => ({
     vesting_start: {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+        makeSingletonNode(makeVestingBaseGrantDate(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
         makeSingletonNode(makeVestingBaseEvent("ipo")),
@@ -92,7 +94,7 @@ const plainStmt = (): Statement => ({
   amount: portion(1, 1),
   expr: {
     type: "SCHEDULE",
-    vesting_start: makeSingletonNode(makeVestingBaseEvent("grantDate")),
+    vesting_start: makeSingletonNode(makeVestingBaseGrantDate()),
     periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
   },
 });
@@ -126,7 +128,8 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
     const result = rehydratePersisted(
       reread,
       ctxInput({
-        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
+        grantDate: "2025-01-01",
+        events: { ipo: "2027-03-01" },
         asOf: "2027-06-01",
         grantQuantity: 4800,
       }),
@@ -165,7 +168,8 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
     const result = rehydratePersisted(
       dropped,
       ctxInput({
-        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
+        grantDate: "2025-01-01",
+        events: { ipo: "2027-03-01" },
         grantQuantity: 4800,
       }),
     );

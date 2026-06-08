@@ -159,7 +159,8 @@ describe("presentSchedule — end-to-end hybrid", () => {
     expr: makeSingletonSchedule(start, periodicity),
   });
   const ctxInput = (): EvaluationContextInput => ({
-    events: { grantDate: "2025-01-01" },
+    grantDate: "2025-01-01",
+    events: {},
     grantQuantity: 4800,
     asOf: "2035-01-01",
   });
@@ -223,7 +224,8 @@ describe("presentSchedule — end-to-end hybrid", () => {
     ];
     // a fires after the BEFORE deadline → void half; the DATE half resolves.
     const [out] = evaluateProgram(program, {
-      events: { grantDate: "2025-01-01", a: "2025-06-01" },
+      grantDate: "2025-01-01",
+      events: { a: "2025-06-01" },
       grantQuantity: 4800,
       asOf: "2035-01-01",
     });

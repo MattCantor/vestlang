@@ -62,11 +62,10 @@ const measureDuration = (
   return { length: dayCount(anchor, cliffDate), period_type: "DAYS" };
 };
 
-/** A bare, non-`vestingStart` event anchor: no time-based cliff field. */
+/** A genuine named-event cliff anchor: no time-based cliff field. The VESTING_START
+ *  anchor is its own tag now, so a plain `base.type === "EVENT"` already excludes it. */
 const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
-  expr.type === "NODE" &&
-  expr.base.type === "EVENT" &&
-  expr.base.value !== "vestingStart"
+  expr.type === "NODE" && expr.base.type === "EVENT"
     ? expr.base.value
     : undefined;
 
@@ -98,10 +97,7 @@ export const lowerCliff = (
 
   // Resolve the cliff date, overlaying the vesting start so a `vestingStart`-
   // relative cliff (e.g. "+12 months") resolves.
-  const overlayCtx: EvaluationContext = {
-    ...ctx,
-    events: { ...ctx.events, vestingStart: anchor },
-  };
+  const overlayCtx: EvaluationContext = { ...ctx, vestingStart: anchor };
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
   // A cliff date is known only when the expression fully resolves. A partial
@@ -165,8 +161,7 @@ const vestingStartOffset = (
 ): { value: number; unit: PeriodTag } | undefined => {
   if (
     expr.type !== "NODE" ||
-    expr.base.type !== "EVENT" ||
-    expr.base.value !== "vestingStart" ||
+    expr.base.type !== "VESTING_START" ||
     expr.condition !== undefined ||
     expr.offsets.length !== 1
   )

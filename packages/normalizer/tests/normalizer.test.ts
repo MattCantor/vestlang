@@ -51,10 +51,7 @@ describe("Produces default", () => {
     const vs = out[0].expr.vesting_start;
     expect(vs).toEqual({
       type: "NODE",
-      base: {
-        type: "EVENT",
-        value: "grantDate",
-      },
+      base: { type: "GRANT_DATE" },
       offsets: [],
     });
   });
@@ -69,10 +66,7 @@ describe("Produces default", () => {
       throw new Error(
         `Expected ${JSON.stringify(out[0].expr, null, 2)} cliff to have type "NODE"`,
       );
-    expect(cliff.base).toEqual({
-      type: "EVENT",
-      value: "vestingStart",
-    });
+    expect(cliff.base).toEqual({ type: "VESTING_START" });
   });
 });
 

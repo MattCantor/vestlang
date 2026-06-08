@@ -73,7 +73,8 @@ function characterize(c: CorpusCase): CaseSnapshot {
   // tool takes, so `status` here is the program-level verdict a consumer sees.
   const program = normalizeProgram(parse(inferred.dsl));
   const ctx: EvaluationContextInput = {
-    events: { grantDate: c.grantDate ?? c.tranches[0].date },
+    grantDate: c.grantDate ?? c.tranches[0].date,
+    events: {},
     grantQuantity: c.grant,
     asOf: AS_OF,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,

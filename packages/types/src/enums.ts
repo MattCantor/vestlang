@@ -2,7 +2,7 @@
 export type ConstraintTag = "BEFORE" | "AFTER";
 
 // enums/VestingBaseType.schema.json
-export type VBaseTag = "DATE" | "EVENT";
+export type VBaseTag = "DATE" | "EVENT" | "GRANT_DATE" | "VESTING_START";
 
 // enums/VestlangExpressionType.schema.json
 //

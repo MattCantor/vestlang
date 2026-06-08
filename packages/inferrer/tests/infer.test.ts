@@ -208,7 +208,8 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
       parse("100000 VEST FROM DATE 2023-10-01 OVER 48 months EVERY 1 month"),
     );
     const full = evalAllResolved(program, {
-      events: { grantDate: d("2024-01-01") },
+      grantDate: d("2024-01-01"),
+      events: {},
       grantQuantity: 100000,
       asOf: d("2030-01-01"),
       vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
@@ -298,7 +299,8 @@ describe("inferSchedule — degenerate", () => {
 describe("inferSchedule — policy detection", () => {
   it("month-end schedule (seeded on day 31) → detects VESTING_START_DAY policy", () => {
     const ctx = {
-      events: { grantDate: d("2024-01-31") },
+      grantDate: d("2024-01-31"),
+      events: {},
       grantQuantity: 48000,
       asOf: d("2028-02-01"),
       vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const,
@@ -387,7 +389,8 @@ interface RoundTripCase {
 function runRoundTrip(c: RoundTripCase) {
   const grantDate = d(c.grantDate);
   const ctx: EvaluationContextInput = {
-    events: { grantDate },
+    grantDate,
+    events: {},
     grantQuantity: c.grantQuantity,
     asOf: d("2030-01-01"),
     vesting_day_of_month: c.policy,
@@ -405,7 +408,8 @@ function runRoundTrip(c: RoundTripCase) {
   const inferredProgram = normalizeProgram(parse(inferred.dsl));
   const totalFromInferred = originalTranches.reduce((a, t) => a + t.amount, 0);
   const inferredCtx: EvaluationContextInput = {
-    events: { grantDate },
+    grantDate,
+    events: {},
     grantQuantity: totalFromInferred,
     asOf: d("2030-01-01"),
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
@@ -510,7 +514,8 @@ describe("inferSchedule — rounded trains", () => {
   for (const c of cases) {
     it(`folds ${c.total} over ${c.over} months into one UNIFORM`, () => {
       const ctx: EvaluationContextInput = {
-        events: { grantDate: d("2024-01-01") },
+        grantDate: d("2024-01-01"),
+        events: {},
         grantQuantity: c.total,
         asOf: d("2031-01-01"),
         vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",

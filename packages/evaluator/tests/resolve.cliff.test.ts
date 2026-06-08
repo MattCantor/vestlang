@@ -7,10 +7,13 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseGrantDate,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 const ctx = baseCtx({
-  events: { grantDate: "2025-01-01", ipo: "2026-04-01" },
+  grantDate: "2025-01-01",
+  events: { ipo: "2026-04-01" },
   vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
 });
 const anchor = "2025-01-01" as OCTDate;
@@ -24,7 +27,7 @@ describe("lowerCliff", () => {
 
   it("on-grid +12 month cliff → {length:12, period_type:MONTHS, percentage:1/4}", () => {
     const cliff: VestingNodeExpr = makeSingletonNode(
-      makeVestingBaseEvent("vestingStart"),
+      makeVestingBaseVestingStart(),
       [makeDuration(12, "MONTHS", "PLUS")],
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
@@ -88,11 +91,11 @@ describe("lowerCliff", () => {
     // LATER OF(+12 months, EVENT ipo) with ipo unfired: the +12mo branch is only a
     // lower bound — the pending event can only push the cliff later — so the cliff
     // must stay UNRESOLVED rather than collapse to the floor (which would over-vest).
-    const noIpo = baseCtx({ events: { grantDate: "2025-01-01" } });
+    const noIpo = baseCtx({ grantDate: "2025-01-01", events: {} });
     const cliff: VestingNodeExpr = {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
         makeSingletonNode(makeVestingBaseEvent("ipo")),
@@ -110,7 +113,7 @@ describe("lowerCliff", () => {
 
 describe("lowerDeferredCliff (no concrete anchor)", () => {
   const vsCliff = (value: number, unit: "DAYS" | "MONTHS") =>
-    makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+    makeSingletonNode(makeVestingBaseVestingStart(), [
       makeDuration(value, unit, "PLUS"),
     ]);
 
@@ -178,7 +181,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     const cliff: VestingNodeExpr = {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
         makeSingletonNode(makeVestingBaseEvent("ipo")),
@@ -191,7 +194,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
   });
 
   it("a cliff measured from grant date (not vestingStart) needs the anchor → UNRESOLVED", () => {
-    const cliff = makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+    const cliff = makeSingletonNode(makeVestingBaseGrantDate(), [
       makeDuration(12, "MONTHS", "PLUS"),
     ]);
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48)).toEqual({

@@ -59,7 +59,8 @@ function tranchesFromDsl(
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) throw new Error(`failed to parse fixture DSL: ${dsl}`);
   const installments: Installment[] = evaluateStatement(parsed.program[0], {
-    events: { grantDate },
+    grantDate,
+    events: {},
     grantQuantity,
     asOf,
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",

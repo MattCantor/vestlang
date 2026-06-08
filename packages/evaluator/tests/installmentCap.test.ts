@@ -10,7 +10,8 @@ import { evaluateStatements, evaluateStatementsAsOf } from "../src/index.js";
 // lives here, spanning the whole program rather than a single statement.
 
 const ctx: EvaluationContextInput = {
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 1000,
   asOf: "2025-06-01",
   vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",

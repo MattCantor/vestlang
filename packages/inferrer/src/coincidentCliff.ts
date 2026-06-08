@@ -25,7 +25,8 @@ function installmentDates(
   let map;
   try {
     map = resolvedInstallmentMap(buildStatement(u, policy), {
-      events: { grantDate: "1900-01-01" },
+      grantDate: "1900-01-01",
+      events: {},
       grantQuantity: u.total,
       asOf: "2999-12-31",
       vesting_day_of_month: policy,

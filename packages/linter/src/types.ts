@@ -13,6 +13,8 @@ import {
   Statement,
   VestingBaseDate,
   VestingBaseEvent,
+  VestingBaseGrantDate,
+  VestingBaseVestingStart,
   VestingNode,
 } from "@vestlang/types";
 
@@ -59,6 +61,8 @@ export type Visitor = Partial<{
   AFTER: (node: Constraint, path: NodePath) => void;
   DATE: (node: VestingBaseDate, path: NodePath) => void;
   EVENT: (node: VestingBaseEvent, path: NodePath) => void;
+  GRANT_DATE: (node: VestingBaseGrantDate, path: NodePath) => void;
+  VESTING_START: (node: VestingBaseVestingStart, path: NodePath) => void;
 }>;
 
 export interface RuleModule {

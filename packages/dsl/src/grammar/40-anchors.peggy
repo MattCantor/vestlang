@@ -15,20 +15,25 @@ DateLiteral
       return mkDate(iso);
     }
 
+// A system anchor's identity is a base tag, not a string — so SystemRef returns
+// the base node directly, which is how EventRef tells a reserved anchor apart
+// from a genuine event (a string) without risking a name collision.
 SystemRef
-  = "grantdate"i { return "grantDate"; }
-  / "grant_date"i { return "grantDate"; }
-  / "grant-date"i { return "grantDate"; }
-  / "vestingstart"i { return "vestingStart"; }
-  / "vesting_start"i { return "vestingStart"; }
-  / "vesting-start"i { return "vestingStart"; }
+  = "grantdate"i { return mkGrantDate(); }
+  / "grant_date"i { return mkGrantDate(); }
+  / "grant-date"i { return mkGrantDate(); }
+  / "vestingstart"i { return mkVestingStart(); }
+  / "vesting_start"i { return mkVestingStart(); }
+  / "vesting-start"i { return mkVestingStart(); }
 
 
-EventRef = "EVENT"i _ name:( SystemRef / Ident ) { return mkEvent(name); }
+EventRef = "EVENT"i _ a:( SystemRef / Ident ) {
+  return typeof a === "string" ? mkEvent(a) : a;
+}
 
 // Bareword system references (grantDate / vestingStart and their variants)
 // may be used as anchors without the `EVENT` keyword.
-SystemRefEvent = name:SystemRef { return mkEvent(name); }
+SystemRefEvent = SystemRef
 
 /* --- Vesting Node --- */
 

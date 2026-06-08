@@ -137,7 +137,8 @@ describe("inferSchedule — sequential recovery end to end", () => {
     // reads as one reusable template, not a flat events-only list.
     const program = normalizeProgram(parse(inferred.dsl));
     const ctx: EvaluationContextInput = {
-      events: { grantDate: RATE_CHANGE[0].date },
+      grantDate: RATE_CHANGE[0].date,
+      events: {},
       grantQuantity: 800,
       asOf: "2030-01-01",
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
@@ -195,7 +196,8 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
 
   function collapse(dsl: string, dom: string) {
     const ctx: EvaluationContextInput = {
-      events: { grantDate: GRANT },
+      grantDate: GRANT,
+      events: {},
       grantQuantity: 600,
       asOf: "2030-01-01",
       vesting_day_of_month:

@@ -22,12 +22,14 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 100000,
   asOf: "2035-01-01",
   ...overrides,
@@ -254,7 +256,7 @@ describe("resolveToCore — a cliff on a tail measures from the handoff", () => 
   // cliff measured from the grant would have landed.
   // A vestingStart-relative duration cliff, built the same way the
   // single-statement cliff test does; for a tail, "vestingStart" is the handoff.
-  const tailCliff = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+  const tailCliff = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const program: Program = [
@@ -295,7 +297,8 @@ describe("resolveToCore — events-only month-end chain springs back too", () =>
   // or an event-origin chain would drift where a date chain doesn't. ipo fires on
   // a 31st, so every handoff is a candidate to clamp.
   const ctx = ctxInput({
-    events: { grantDate: "2025-01-01", ipo: "2025-01-31" },
+    grantDate: "2025-01-01",
+    events: { ipo: "2025-01-31" },
   });
   const program: Program = [
     eventHead(portion(1, 3), "ipo", {
@@ -334,7 +337,7 @@ describe("resolveToCore — a sub-annual cliff on a month-end tail", () => {
   // cliff date is a plain duration from the handoff (Feb 28 + 3mo = May 28), so
   // it lands between Apr 30 and May 31. Two tranches precede it (Mar 31, Apr 30),
   // so the lump is 2/6 of the tail and the remaining four split evenly.
-  const tailCliff = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+  const tailCliff = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(3, "MONTHS", "PLUS"),
   ]);
   const program: Program = [
@@ -509,7 +512,8 @@ describe("resolveToCore — event-origin THEN chain, event fired", () => {
   // tail picks up from there: head at ipo + 1y, tail at ipo + 2y. Both segments
   // sit on the same event, so the program resolves to events-only, not a template.
   const ctx = ctxInput({
-    events: { grantDate: "2025-01-01", ipo: "2026-06-01" },
+    grantDate: "2025-01-01",
+    events: { ipo: "2026-06-01" },
   });
   const program: Program = [
     eventHead(portion(1, 2), "ipo", oneYear),
@@ -541,7 +545,8 @@ describe("resolveToCore — two independent portions on one fired event", () => 
   // different days (ipo, and ipo + 12mo). Same overlap reason as the chain above,
   // but the message must read as a genuine collision rather than a sequence.
   const ctx = ctxInput({
-    events: { grantDate: "2025-01-01", ipo: "2026-06-01" },
+    grantDate: "2025-01-01",
+    events: { ipo: "2026-06-01" },
   });
   const program: Program = [
     eventHead(portion(1, 2), "ipo", oneYear),
@@ -564,7 +569,8 @@ describe("resolveToCore — two event-origin chains on one fired event", () => {
   // the overlap on its own, so the program is events-only and every tail still
   // lands on the timeline.
   const ctx = ctxInput({
-    events: { grantDate: "2025-01-01", ipo: "2026-06-01" },
+    grantDate: "2025-01-01",
+    events: { ipo: "2026-06-01" },
   });
   const program: Program = [
     eventHead(portion(1, 4), "ipo", oneYear),

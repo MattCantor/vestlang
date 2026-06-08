@@ -13,8 +13,8 @@ const today = date.toISOString().split("T")[0];
 
 const createCtx = (grantQuantity: number = 100) =>
   ({
+    grantDate: today,
     events: {
-      grantDate: today,
       X: today,
     },
     grantQuantity: grantQuantity,
