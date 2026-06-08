@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidCalendarDate } from "../src/dates";
+import { isValidCalendarDate, todayISO } from "../src/dates";
 
 describe("isValidCalendarDate", () => {
   it("accepts real dates, including the leap day", () => {
@@ -37,5 +37,17 @@ describe("isValidCalendarDate", () => {
   it("applies the centennial leap rule", () => {
     expect(isValidCalendarDate("2000-02-29")).toBe(true); // div by 400
     expect(isValidCalendarDate("1900-02-29")).toBe(false); // div by 100, not 400
+  });
+});
+
+describe("todayISO", () => {
+  // Can't pin an exact value without freezing the clock; assert the shape and
+  // that it's a date the rest of the system would accept.
+  it("returns a strict YYYY-MM-DD string", () => {
+    expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("returns a real calendar date", () => {
+    expect(isValidCalendarDate(todayISO())).toBe(true);
   });
 });
