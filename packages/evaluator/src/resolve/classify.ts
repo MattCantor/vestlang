@@ -17,150 +17,88 @@ import type {
   ResolvedInstallment,
   SymbolicInstallment,
 } from "@vestlang/types";
-import type { Fraction } from "@vestlang/types";
-import { addPeriod, allocateExact, foldToGrantDate, gt } from "@vestlang/core";
 import {
-  fracAdd,
-  fracMul,
-  fracReduce,
-  fracSub,
-  ONE,
-  ZERO,
-} from "@vestlang/utils";
+  addPeriod,
+  allocateEvents,
+  expandGrid,
+  type GridCliff,
+  type RawEvent,
+} from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { NonTemplateReason, ResolveVerdict } from "./types.js";
 
-interface RawEv {
-  date: string;
-  fraction: Fraction;
-  order: number;
-  occ: number;
-}
-
 /**
- * Expand one resolved statement to its dated events (fraction-of-grant each),
- * honoring a time-based or (fired) event cliff. This is the same shape core's
- * compile produces, but per statement so independent grids can coexist.
+ * Expand one resolved statement to its dated fraction-of-grant events, honoring a
+ * time-based or fired-event cliff. Same shared kernel core's compile uses, called
+ * per statement so independent grids can coexist in the events arm.
  */
 const expandResolution = (
   r: StmtResolution,
   order: number,
   ctx: EvaluationContext,
-): RawEv[] => {
+): RawEvent[] => {
   if (r.start.state !== "RESOLVED") return [];
-  const dom = ctx.vesting_day_of_month;
   const anchor = r.start.date;
   // For a chain tail, `anchor` is the clamped handoff (Feb 28 off a Jan 31 head)
-  // while `origin` keeps the chain's first day (the 31st), so the grid below
-  // springs back to the month-end where it can. A non-tail is its own origin.
+  // while `origin` keeps the chain's first day (the 31st), so the grid springs
+  // back to the month-end where it can. A non-tail is its own origin.
   const origin = r.origin ?? anchor;
-  const { type, length: period, occurrences: N } = r.periodicity;
-  const stmtFraction = r.percentage;
-  const gridDate = (i: number): string =>
-    addPeriod(anchor, i * period, type, dom, origin);
-  const ev = (date: string, fraction: Fraction, occ: number): RawEv => ({
-    date,
-    fraction,
-    order,
-    occ,
-  });
-  const evenGrid = (): RawEv[] => {
-    const per = fracMul(stmtFraction, { numerator: 1, denominator: N });
-    return Array.from({ length: N }, (_, i) => ev(gridDate(i + 1), per, i + 1));
-  };
+  const { type, length: period, occurrences } = r.periodicity;
+  const dom = ctx.vesting_day_of_month;
 
-  // Resolve the cliff date + lump fraction (time-based, or a fired event cliff).
-  let cliffDate: string | undefined;
-  let cliffPct: Fraction | undefined;
+  let cliff: GridCliff;
   if (r.cliff.state === "RESOLVED") {
-    cliffDate = addPeriod(
-      anchor,
-      r.cliff.cliff.length,
-      r.cliff.cliff.period_type,
-      dom,
-    );
-    cliffPct = r.cliff.cliff.percentage;
+    // A time-based cliff is a pure duration from the anchor (no origin).
+    cliff = {
+      kind: "fixed",
+      date: addPeriod(
+        anchor,
+        r.cliff.cliff.length,
+        r.cliff.cliff.period_type,
+        dom,
+      ),
+      percentage: r.cliff.cliff.percentage,
+    };
   } else if (r.cliff.state === "EVENT") {
-    cliffDate = ctx.events[r.cliff.eventId]; // undefined if not fired
+    // An event cliff has no percentage of its own — the lump takes whatever share
+    // of the grid lands at or before the firing. Unfired → no lump.
+    const date = ctx.events[r.cliff.eventId];
+    cliff = date ? { kind: "proportional", date } : { kind: "none" };
+  } else {
+    cliff = { kind: "none" };
   }
-  if (!cliffDate || !gt(cliffDate, anchor)) return evenGrid();
 
-  const post: number[] = [];
-  let m = 0;
-  for (let i = 1; i <= N; i++) {
-    if (gt(gridDate(i), cliffDate)) post.push(i);
-    else m++;
-  }
-  if (m === 0) return evenGrid();
-
-  const pct = cliffPct ?? fracReduce({ numerator: m, denominator: N });
-  const out: RawEv[] = [ev(cliffDate, fracMul(stmtFraction, pct), 0)];
-  const P = post.length;
-  if (P > 0) {
-    const per = fracMul(
-      stmtFraction,
-      fracMul(fracSub(ONE, pct), { numerator: 1, denominator: P }),
-    );
-    for (const i of post) out.push(ev(gridDate(i), per, i));
-  }
-  return out;
-};
-
-/** Aggregate amounts dated before the grant onto the grant date (the implicit
- *  cliff core.compile applies). Amounts are already integers, so this is an exact
- *  regroup of a date-sorted series — no re-allocation. No-op without a grant date. */
-const foldResolvedToGrantDate = (
-  installments: ResolvedInstallment[],
-  ctx: EvaluationContext,
-): ResolvedInstallment[] => {
-  if (!ctx.events.grantDate) return installments;
-  const folded = foldToGrantDate(
-    installments.map((t) => t.date),
-    installments.map((t) => t.amount),
-    ctx.events.grantDate,
-  );
-  return folded.dates.map((d, i) =>
-    makeResolvedInstallment(d, folded.amounts[i]),
-  );
+  return expandGrid({
+    anchor,
+    origin,
+    period,
+    periodType: type,
+    occurrences,
+    stmtFraction: r.percentage,
+    statementOrder: order,
+    dom,
+    cliff,
+  });
 };
 
 /**
  * Dated tranches for every resolved statement: expand each to dated
- * fraction-events, sort, and allocate with one running cumulative (core's
- * allocator). Pre-grant tranches fold onto the grant date — the same implicit
- * cliff core.compile applies. Statements whose start didn't resolve contribute
- * nothing (expandResolution skips them).
+ * fraction-events and hand the lot to the kernel's allocator, which orders them,
+ * turns the fractions into exact integer shares, and folds anything pre-grant onto
+ * the grant date. Statements whose start didn't resolve contribute nothing.
  */
 const resolvedInstallments = (
   resolutions: StmtResolution[],
   ctx: EvaluationContext,
   totalShares: number,
-): ResolvedInstallment[] => {
-  const events = resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx));
-  events.sort((a, b) =>
-    a.date !== b.date
-      ? a.date < b.date
-        ? -1
-        : 1
-      : a.order !== b.order
-        ? a.order - b.order
-        : a.occ - b.occ,
-  );
-
-  let cumulative: Fraction = ZERO;
-  let vestedSoFar = 0;
-  const installments: ResolvedInstallment[] = [];
-  for (const e of events) {
-    cumulative = fracAdd(cumulative, e.fraction);
-    const amount = allocateExact(totalShares, cumulative, vestedSoFar);
-    if (amount === 0) continue;
-    vestedSoFar += amount;
-    installments.push(makeResolvedInstallment(e.date, amount));
-  }
-  return foldResolvedToGrantDate(installments, ctx);
-};
+): ResolvedInstallment[] =>
+  allocateEvents(
+    resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx)),
+    totalShares,
+    ctx.events.grantDate,
+  ).map((t) => makeResolvedInstallment(t.date, t.amount));
 
 const eventsArm = (
   resolutions: StmtResolution[],
