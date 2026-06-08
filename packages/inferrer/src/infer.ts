@@ -11,6 +11,7 @@ import { foldCliffs } from "./cliffFold.js";
 import { splitCoincidentCliffs } from "./coincidentCliff.js";
 import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
+import { InferInputError } from "./errors.js";
 import { POLICY_CANDIDATES } from "./policy.js";
 import { segmentSequential } from "./sequential.js";
 import type {
@@ -278,8 +279,15 @@ function selectBest(
 
 export function inferSchedule(input: InferInput): InferResult {
   if (input.tranches.length === 0) {
-    throw new Error("inferSchedule: tranches must not be empty");
+    throw new InferInputError("tranches must not be empty");
   }
+  input.tranches.forEach((t, i) => {
+    if (!Number.isInteger(t.amount) || t.amount < 0) {
+      throw new InferInputError(
+        `tranche amounts must be non-negative integers (got ${t.amount} at index ${i})`,
+      );
+    }
+  });
 
   const sorted = sortInput(input.tranches);
   const totalQuantity = sorted.reduce((a, t) => a + t.amount, 0);

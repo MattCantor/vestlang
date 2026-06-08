@@ -1,4 +1,5 @@
 export { inferSchedule } from "./infer.js";
+export { InferInputError } from "./errors.js";
 export type {
   InferInput,
   InferResult,

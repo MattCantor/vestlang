@@ -198,7 +198,7 @@ Blocker (the `condition` is the offending node, minus its `type`):
       "type": "ATOM",
       "constraint": {
         "type": "BEFORE",
-        "base": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
+        "base": { "type": "NODE", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
         "strict": false
       }
     }

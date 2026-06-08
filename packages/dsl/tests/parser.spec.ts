@@ -268,6 +268,19 @@ describe("Over/Every validations", () => {
     });
   });
 
+  // The mismatched-zero messages name the field that is actually zero (#74 item 3).
+  it("OVER zero / EVERY non-zero names OVER as the offender", () => {
+    expect(() => parse(`VEST OVER 0 months EVERY 1 month`)).toThrowError(
+      "OVER must be non-zero when EVERY is non-zero",
+    );
+  });
+
+  it("EVERY zero / OVER non-zero names EVERY as the offender", () => {
+    expect(() => parse(`VEST OVER 12 months EVERY 0 months`)).toThrowError(
+      "EVERY must be non-zero when OVER is non-zero",
+    );
+  });
+
   // The keyword and its plural `s` are both case-insensitive, so an all-caps
   // plural unit (MONTHS/DAYS/YEARS/WEEKS) parses like its lowercase form.
   it("accepts uppercase plural units", () => {

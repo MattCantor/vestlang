@@ -388,11 +388,11 @@ function peg$parse(input, options) {
     const step = e.value
 
     if (span === 0 && step !== 0) {
-      error("EVERY must be non-zero when OVER is non-zero")
+      error("OVER must be non-zero when EVERY is non-zero")
     };
 
     if (step === 0 && span !== 0) {
-      error("OVER must be non-zero when EVERY is non-zero")
+      error("EVERY must be non-zero when OVER is non-zero")
     };
 
     if (span === 0 && step === 0) {

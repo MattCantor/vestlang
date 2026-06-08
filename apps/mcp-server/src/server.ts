@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { parse } from "@vestlang/dsl";
-import { inferSchedule } from "@vestlang/inferrer";
+import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
 import { isValidCalendarDate } from "@vestlang/utils";
@@ -276,6 +276,8 @@ export function createServer(): McpServer {
                   date: ISO_DATE,
                   amount: z
                     .number()
+                    .int("tranche amount must be a whole number")
+                    .min(0, "tranche amount must be non-negative")
                     .describe("Tranche amount (not cumulative)"),
                 })
                 .strict(),
@@ -307,8 +309,14 @@ export function createServer(): McpServer {
         });
         return jsonResult(result);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return toolError(`Inference failed: ${msg}.`);
+        // Input-contract violations carry a clean domain message; anything else
+        // is an internal error from a deeper layer and must not leak its text.
+        if (err instanceof InferInputError) {
+          return toolError(`Inference failed: ${err.message}.`);
+        }
+        return toolError(
+          "Inference failed: could not infer a schedule from the provided tranches.",
+        );
       }
     },
   );
