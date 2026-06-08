@@ -13,7 +13,7 @@ import type {
   Statement,
   VestingNode,
 } from "@vestlang/types";
-import { addPeriod, allocateVector, foldToGrantDate } from "@vestlang/core";
+import { allocateVector, foldToGrantDate, gridDate } from "@vestlang/core";
 import { amountToQuantify } from "../utils.js";
 import {
   evaluateScheduleExpr,
@@ -73,8 +73,15 @@ export const unresolvedInstallments = (
   // Resolved start — generate the grid (anchored from start to avoid drift),
   // fold the grant-date lump, then inspect the cliff.
   const start = res.meta.date;
+  const at = gridDate({
+    anchor: start,
+    origin: start,
+    period: length,
+    periodType: type,
+    dom: ctx.vesting_day_of_month,
+  });
   let dates: OCTDate[] = Array.from({ length: occurrences }, (_, i) =>
-    addPeriod(start, length * (i + 1), type, ctx.vesting_day_of_month),
+    at(i + 1),
   );
   if (ctx.events.grantDate) {
     const folded = foldToGrantDate(dates, amounts, ctx.events.grantDate);
