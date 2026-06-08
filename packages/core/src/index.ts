@@ -8,4 +8,5 @@ export * from "./validate";
 export * from "./allocate";
 export * from "./dates";
 export * from "./fold";
+export * from "./kernel";
 export * from "./compile";
