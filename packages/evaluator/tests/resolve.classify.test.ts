@@ -38,6 +38,22 @@ const eventBeforeDate = (event: string, deadline: OCTDate): VestingNode => ({
   },
 });
 
+// `DATE x AFTER DATE y` with x earlier than y — statically void: both dates are
+// fixed, so no witness assignment can ever satisfy it.
+const dateAfterDate = (date: OCTDate, after: OCTDate): VestingNode => ({
+  type: "NODE",
+  base: makeVestingBaseDate(date),
+  offsets: [],
+  condition: {
+    type: "ATOM",
+    constraint: {
+      type: "AFTER",
+      base: makeSingletonNode(makeVestingBaseDate(after)),
+      strict: false,
+    },
+  },
+});
+
 const twoYearsAnnual: VestingPeriod = {
   type: "MONTHS",
   length: 12,
@@ -230,6 +246,32 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     expect(
       result.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION"),
     ).toBe(true);
+  });
+
+  it("LATER_OF start with a statically-dead arm → impossible, not unresolved", () => {
+    // Arm 1 (Jan 1 AFTER Jun 1) is statically dead; arm 2 resolves to Mar 1.
+    // LATER_OF is universal, so the dead arm sinks the whole start — it must not
+    // masquerade as pending on a witness that will never arrive. (#60)
+    const start: VestingNodeExpr = {
+      type: "NODE_LATER_OF",
+      items: [
+        dateAfterDate("2025-01-01", "2025-06-01"),
+        makeSingletonNode(makeVestingBaseDate("2025-03-01")),
+      ],
+    };
+    const program: Program = [
+      {
+        type: "STATEMENT",
+        amount: portion(1, 1),
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: start,
+          periodicity: twoYearsAnnual,
+        },
+      },
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("impossible");
   });
 
   it("merely-pending statement (unfired event) stays unresolved, not impossible", () => {
