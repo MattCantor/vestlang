@@ -1,26 +1,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { parse } from "@vestlang/dsl";
-import { normalizeProgram } from "@vestlang/normalizer";
-import {
-  evaluateStatements,
-  evaluateStatementsAsOf,
-  formatFinding,
-  presentSchedule,
-} from "@vestlang/evaluator";
-import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import { inferSchedule } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
 import { isValidCalendarDate } from "@vestlang/utils";
-import type {
-  EvaluationContextInput,
-  OCTDate,
-  Program,
-  Statement,
-} from "@vestlang/types";
+import {
+  parseRaw,
+  parseToProgram,
+  runEvaluate,
+  runEvaluateProgram,
+  runAsOf,
+  runVestedBetween,
+  type GrantInput,
+} from "@vestlang/pipeline";
+import type { OCTDate, Program, Statement } from "@vestlang/types";
 import { registerResources } from "./resources.js";
-import { computeSummary, filterByWindow } from "./summary.js";
 import {
   addPeriod,
   dateDiff,
@@ -56,7 +51,13 @@ Typical workflows:
 
 Dates are YYYY-MM-DD. Statements that reference named events (e.g.
 EVENT "ipo") require those events to appear in the events map — otherwise
-installments gated on them will come back as UNRESOLVED with blockers.`;
+installments gated on them will come back as UNRESOLVED with blockers.
+
+When parse/compile/evaluate fail they don't throw — they return a structured
+{ error: { ruleId, message, loc? } }: ruleId is "syntax-error" (carrying loc,
+the source span) for malformed DSL, or "evaluation-error" for a problem hit
+during evaluation (e.g. a schedule too large to materialize). Check for an
+\`error\` field on the result before reading the rest.`;
 
 /* ------------------------
  * Shared Zod schemas
@@ -129,86 +130,21 @@ const EVAL_CONTEXT_FIELDS = {
  * Helpers
  * ------------------------ */
 
-function today(): OCTDate {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function buildContext(input: {
+// The four grant scalars the evaluate tools share, pulled out of a tool's params
+// (already validated by the zod schema above) and handed to the pipeline, which
+// owns the rest: context construction, the grantDate injection, evaluation.
+function toGrant(p: {
   grant_date: string;
   grant_quantity: number;
   events?: Record<string, string>;
-  as_of?: string;
   vesting_day_of_month?: z.infer<typeof VESTING_DAY_OF_MONTH>;
-}): EvaluationContextInput {
-  const events: Record<string, OCTDate> = {};
-  for (const [name, date] of Object.entries(input.events ?? {})) {
-    events[name] = date;
-  }
-  events.grantDate = input.grant_date;
+}): GrantInput {
   return {
-    events: events as EvaluationContextInput["events"],
-    grantQuantity: input.grant_quantity,
-    asOf: input.as_of ?? today(),
-    vesting_day_of_month:
-      input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    grant_date: p.grant_date,
+    grant_quantity: p.grant_quantity,
+    events: p.events,
+    vesting_day_of_month: p.vesting_day_of_month,
   };
-}
-
-type ParseError = {
-  ruleId: "syntax-error";
-  message: string;
-  loc?: {
-    start: { line: number; column: number };
-    end: { line: number; column: number };
-  };
-};
-
-function parseWithDiagnostics(
-  dsl: string,
-): { ok: true; program: Program } | { ok: false; error: ParseError } {
-  try {
-    const raw = parse(dsl);
-    return { ok: true, program: normalizeProgram(raw) };
-  } catch (err: unknown) {
-    const e = err as {
-      name?: string;
-      message?: string;
-      location?: {
-        start: { line: number; column: number };
-        end: { line: number; column: number };
-      };
-    };
-    if (e?.name === "SyntaxError" && e.location) {
-      return {
-        ok: false,
-        error: {
-          ruleId: "syntax-error",
-          message: e.message ?? "Syntax error",
-          loc: {
-            start: {
-              line: e.location.start.line,
-              column: e.location.start.column,
-            },
-            end: {
-              line: e.location.end.line,
-              column: e.location.end.column,
-            },
-          },
-        },
-      };
-    }
-    return {
-      ok: false,
-      error: {
-        ruleId: "syntax-error",
-        message: e?.message ?? String(err),
-      },
-    };
-  }
 }
 
 function toolError(message: string) {
@@ -216,18 +152,6 @@ function toolError(message: string) {
     isError: true,
     content: [{ type: "text" as const, text: message }],
   };
-}
-
-// Surface an engine-side throw (e.g. the installment cap) the same way a parse
-// failure is surfaced: a result carrying an `error`, not an exception. Keeps the
-// evaluate tools' error shape uniform for consumers.
-function evaluationError(err: unknown) {
-  return jsonResult({
-    error: {
-      ruleId: "evaluation-error",
-      message: err instanceof Error ? err.message : String(err),
-    },
-  });
 }
 
 function jsonResult<T>(output: T) {
@@ -265,29 +189,9 @@ export function createServer(): McpServer {
       },
     },
     async ({ dsl }) => {
-      try {
-        const raw = parse(dsl);
-        return jsonResult({ ast: raw });
-      } catch (err: unknown) {
-        const e = err as {
-          name?: string;
-          message?: string;
-          location?: {
-            start: { line: number; column: number };
-            end: { line: number; column: number };
-          };
-        };
-        if (e?.name === "SyntaxError" && e.location) {
-          return jsonResult({
-            error: {
-              ruleId: "syntax-error",
-              message: e.message,
-              loc: e.location,
-            },
-          });
-        }
-        return toolError(`Parse failed: ${e?.message ?? String(err)}`);
-      }
+      const result = parseRaw(dsl);
+      if (!result.ok) return jsonResult({ error: result.error });
+      return jsonResult({ ast: result.ast });
     },
   );
 
@@ -307,7 +211,7 @@ export function createServer(): McpServer {
       },
     },
     async ({ dsl }) => {
-      const result = parseWithDiagnostics(dsl);
+      const result = parseToProgram(dsl);
       if (!result.ok) return jsonResult({ error: result.error });
       return jsonResult({ program: result.program });
     },
@@ -430,36 +334,10 @@ export function createServer(): McpServer {
       },
     },
     async (params) => {
-      const parsed = parseWithDiagnostics(params.dsl);
-      if (!parsed.ok) return jsonResult({ error: parsed.error });
-      const ctx = buildContext(params);
-      let schedules;
-      try {
-        schedules = evaluateStatements(parsed.program, ctx);
-      } catch (err) {
-        return evaluationError(err);
-      }
+      const result = runEvaluate(params.dsl, toGrant(params));
+      if (!result.ok) return jsonResult({ error: result.error });
       return jsonResult({
-        statements: schedules.map((s, i) => {
-          const { representable, pending, valid } = presentSchedule(s);
-          return {
-            index: i,
-            status: s.status,
-            representable,
-            pending,
-            // `valid` is false when the schedule over-allocates the grant. The
-            // projection below is still returned (annotate, don't certify), but
-            // the findings say it must not be treated as a valid schedule.
-            valid,
-            findings: s.findings.map((f) => ({
-              ...f,
-              message: formatFinding(f),
-            })),
-            ...("reason" in s && s.reason ? { reason: s.reason } : {}),
-            installments: s.installments,
-            blockers: s.blockers,
-          };
-        }),
+        statements: result.views.map((view, index) => ({ index, ...view })),
       });
     },
   );
@@ -485,49 +363,13 @@ export function createServer(): McpServer {
       },
     },
     async (params) => {
-      const parsed = parseWithDiagnostics(params.dsl);
-      if (!parsed.ok) return jsonResult({ error: parsed.error });
-      const ctx = buildContext(params);
-      // The recovering entry: an events-only program whose realized projection
-      // has a single-template form is rescued back to a template, transparently.
-      let outcome;
-      try {
-        outcome = evaluateProgramWithRecovery(parsed.program, ctx);
-      } catch (err) {
-        return evaluationError(err);
-      }
-      const schedule = outcome.schedule;
-      const { representable, pending, valid } = presentSchedule(schedule);
+      const result = runEvaluateProgram(params.dsl, toGrant(params));
+      if (!result.ok) return jsonResult({ error: result.error });
+      // The view carries the verdict and the published fields; on a rescue the
+      // recovered block (events-only reason + inferred DSL) rides alongside.
       return jsonResult({
-        status: schedule.status,
-        representable,
-        pending,
-        // False when the program vests more than the grant. The projection is
-        // still returned (annotate, don't certify) but flagged via findings.
-        valid,
-        findings: schedule.findings.map((f) => ({
-          ...f,
-          message: formatFinding(f),
-        })),
-        ...("reason" in schedule && schedule.reason
-          ? { reason: schedule.reason }
-          : {}),
-        installments: schedule.installments,
-        blockers: schedule.blockers,
-        // On a rescue, `status` is now "template"; the original events-only
-        // reason and the recovered DSL ride here instead. Absent means no
-        // recovery happened. The compiled template/runtime stay server-side.
-        ...(outcome.rescued
-          ? {
-              recovered: {
-                from: outcome.recovered.from,
-                reason: outcome.recovered.reason,
-                dsl: outcome.recovered.dsl,
-                vestingDayOfMonth: outcome.recovered.vestingDayOfMonth,
-                residualError: outcome.recovered.residualError,
-              },
-            }
-          : {}),
+        ...result.view,
+        ...(result.recovered ? { recovered: result.recovered } : {}),
       });
     },
   );
@@ -556,24 +398,13 @@ export function createServer(): McpServer {
       },
     },
     async (params) => {
-      const parsed = parseWithDiagnostics(params.dsl);
-      if (!parsed.ok) return jsonResult({ error: parsed.error });
-      const ctx = buildContext(params);
-      let results;
-      try {
-        results = evaluateStatementsAsOf(parsed.program, ctx);
-      } catch (err) {
-        return evaluationError(err);
-      }
+      const result = runAsOf(params.dsl, toGrant(params), params.as_of);
+      if (!result.ok) return jsonResult({ error: result.error });
       return jsonResult({
-        as_of: ctx.asOf,
-        statements: results.map((r, i) => ({
-          index: i,
-          vested: r.vested,
-          unvested: r.unvested,
-          impossible: r.impossible,
-          unresolved: r.unresolved,
-          summary: computeSummary(r, ctx.grantQuantity),
+        as_of: result.asOf,
+        statements: result.statements.map((stmt, index) => ({
+          index,
+          ...stmt,
         })),
       });
     },
@@ -602,36 +433,20 @@ export function createServer(): McpServer {
       },
     },
     async (params) => {
-      if (params.from > params.to) {
-        return toolError(
-          `Invalid window: from (${params.from}) is after to (${params.to})`,
-        );
-      }
-      const parsed = parseWithDiagnostics(params.dsl);
-      if (!parsed.ok) return jsonResult({ error: parsed.error });
-      const ctx = buildContext({ ...params, as_of: params.to });
-      let results;
-      try {
-        results = evaluateStatementsAsOf(parsed.program, ctx);
-      } catch (err) {
-        return evaluationError(err);
-      }
+      const result = runVestedBetween(
+        params.dsl,
+        toGrant(params),
+        params.from,
+        params.to,
+      );
+      if (!result.ok) return jsonResult({ error: result.error });
       return jsonResult({
-        from: params.from,
-        to: params.to,
-        statements: results.map((r, i) => {
-          const { installments, total } = filterByWindow(
-            r.vested,
-            params.from,
-            params.to,
-          );
-          return {
-            index: i,
-            vested_in_window: total,
-            tranches_in_window: installments.length,
-            installments,
-          };
-        }),
+        from: result.from,
+        to: result.to,
+        statements: result.statements.map((stmt, index) => ({
+          index,
+          ...stmt,
+        })),
       });
     },
   );

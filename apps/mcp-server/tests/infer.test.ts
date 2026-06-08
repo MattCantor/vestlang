@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { parse } from "@vestlang/dsl";
 import { evaluateStatement } from "@vestlang/evaluator";
-import { normalizeProgram } from "@vestlang/normalizer";
+import { parseToProgram } from "@vestlang/pipeline";
 import type {
   Installment,
   OCTDate,
@@ -57,8 +56,9 @@ function tranchesFromDsl(
   grantQuantity: number,
   asOf: OCTDate,
 ): { date: string; amount: number }[] {
-  const program = normalizeProgram(parse(dsl));
-  const installments: Installment[] = evaluateStatement(program[0], {
+  const parsed = parseToProgram(dsl);
+  if (!parsed.ok) throw new Error(`failed to parse fixture DSL: ${dsl}`);
+  const installments: Installment[] = evaluateStatement(parsed.program[0], {
     events: { grantDate },
     grantQuantity,
     asOf,
