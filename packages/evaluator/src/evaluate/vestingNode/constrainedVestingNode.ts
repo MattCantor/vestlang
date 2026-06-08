@@ -8,6 +8,7 @@ import type {
   UnresolvedNode,
   VestingNode,
 } from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
 import { evaluateVestingBase } from "./vestingBase.js";
 import { evaluateConstraint } from "./constraint.js";
 
@@ -70,5 +71,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
 
       return blockers;
     }
+    default:
+      return assertNever(condition);
   }
 }

@@ -15,7 +15,7 @@ import {
   assertValidVestingScheduleTemplate,
   MAX_INSTALLMENTS,
 } from "@vestlang/core";
-import { fracCmp, fracSum, ONE } from "@vestlang/utils";
+import { assertNever, fracCmp, fracSum, ONE } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
@@ -28,10 +28,17 @@ import type { ResolveResult, ResolveVerdict } from "./types.js";
 // matters: resolution steps the chain cursor, which for an over-cap schedule
 // runs the date past year 9999 and throws a date-range error first — so the cap
 // has to be checked *before* any resolution, or the wrong error wins.
-const scheduleExprOccurrences = (e: ScheduleExpr | ChainedSchedule): number =>
-  e.type === "SCHEDULE"
-    ? e.periodicity.occurrences
-    : Math.max(0, ...e.items.map(scheduleExprOccurrences));
+const scheduleExprOccurrences = (e: ScheduleExpr | ChainedSchedule): number => {
+  switch (e.type) {
+    case "SCHEDULE":
+      return e.periodicity.occurrences;
+    case "SCHEDULE_EARLIER_OF":
+    case "SCHEDULE_LATER_OF":
+      return Math.max(0, ...e.items.map(scheduleExprOccurrences));
+    default:
+      return assertNever(e);
+  }
+};
 
 /** Bound the installments a program will materialize, before any resolution or
  *  per-occurrence build. The same structural measure is used by `resolveToCore`

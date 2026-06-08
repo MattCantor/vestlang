@@ -14,6 +14,7 @@
 // both into proper nodes first. Only the normalizer needs to know about that
 // raw shape, so this traversal doesn't.
 
+import { assertNever } from "@vestlang/utils";
 import type {
   ChainedSchedule,
   Condition,
@@ -49,13 +50,10 @@ export type Step = string | number;
 // The trail of steps from the root down to the node currently being visited.
 export type Path = Step[];
 
-// Called when the switch below is handed a node kind it has no case for. Because
-// the parameter is typed `never`, this only compiles while every variant of
-// `AstNode` is accounted for — add a node kind and forget to list its children
-// and the build breaks right here, pointing at the omission.
-export function assertNever(x: never): never {
-  throw new Error(`Unhandled AST node: ${JSON.stringify(x)}`);
-}
+// The `default` of the child-dispatch switch below calls `assertNever` (from
+// `@vestlang/utils`): because its parameter is typed `never`, the switch only
+// compiles while every variant of `AstNode` is accounted for — add a node kind
+// and forget to list its children and the build breaks right there.
 
 // Hand each direct child of `node` to `visit`, along with the step that reaches
 // it. This is the single source of truth for the AST's edges — everything else
