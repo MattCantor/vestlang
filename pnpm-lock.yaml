@@ -533,6 +533,9 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
+      '@vestlang/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       '@vestlang/dsl':
         specifier: workspace:*

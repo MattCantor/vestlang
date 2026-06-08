@@ -10,6 +10,7 @@ import type {
   UnresolvedNode,
   VestingNode,
 } from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
 import { eq, gt, lt } from "../time.js";
 
 /* ------------------------
@@ -22,10 +23,6 @@ const createImpossibleBlocker = (
   type: "IMPOSSIBLE_CONDITION",
   condition: { base: n.base, offsets: n.offsets, condition: n.condition },
 });
-
-const assertNever = (x: never): never => {
-  throw new Error(`Unhandled case: ${String(x)}`);
-};
 
 const failByRelation = (
   relation: ConstraintTag,

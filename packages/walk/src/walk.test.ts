@@ -1,14 +1,7 @@
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { describe, expect, it } from "vitest";
-import {
-  assertNever,
-  forEachChild,
-  some,
-  walk,
-  type AstNode,
-  type Path,
-} from "./index.js";
+import { forEachChild, some, walk, type AstNode, type Path } from "./index.js";
 
 // Parse a snippet and run it through the normalizer — forEachChild only knows
 // the normalized shape, which is what every real consumer feeds it.
@@ -157,11 +150,5 @@ describe("some", () => {
       "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month",
     )[0];
     expect(some(stmt, (n) => n.type === "EVENT")).toBe(false);
-  });
-});
-
-describe("assertNever", () => {
-  it("throws on an unexpected node kind", () => {
-    expect(() => assertNever({ type: "BOGUS" } as never)).toThrow();
   });
 });
