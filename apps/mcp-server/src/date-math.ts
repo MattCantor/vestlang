@@ -1,5 +1,4 @@
-import { parse } from "@vestlang/dsl";
-import { normalizeProgram } from "@vestlang/normalizer";
+import { parseToProgram } from "@vestlang/pipeline";
 import {
   addDays,
   addMonthsRule,
@@ -105,14 +104,14 @@ export type ResolveOffsetResult =
  * offset arithmetic all flow through the single source of truth.
  */
 export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
-  const dsl = `VEST FROM ${input.expr}`;
-  let program;
-  try {
-    program = normalizeProgram(parse(dsl));
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `Could not parse expression: ${msg}` };
+  const parsed = parseToProgram(`VEST FROM ${input.expr}`);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: `Could not parse expression: ${parsed.error.message}`,
+    };
   }
+  const program = parsed.program;
 
   if (program.length === 0) {
     return { ok: false, error: "Expression produced no statements" };

@@ -176,12 +176,9 @@ importers:
       '@vestlang/linter':
         specifier: workspace:*
         version: link:../../packages/linter
-      '@vestlang/normalizer':
+      '@vestlang/pipeline':
         specifier: workspace:*
-        version: link:../../packages/normalizer
-      '@vestlang/recover':
-        specifier: workspace:*
-        version: link:../../packages/recover
+        version: link:../../packages/pipeline
       '@vestlang/render':
         specifier: workspace:*
         version: link:../../packages/render
