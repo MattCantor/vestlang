@@ -1,0 +1,36 @@
+{
+  "name": "@vestlang/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rimraf dist && tsc -p tsconfig.json",
+    "test": "vitest",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@vestlang/dsl": "workspace:*",
+    "@vestlang/evaluator": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "@vestlang/recover": "workspace:*",
+    "@vestlang/types": "workspace:*",
+    "@vestlang/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}
