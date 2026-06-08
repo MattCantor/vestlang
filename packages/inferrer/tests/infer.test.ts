@@ -10,7 +10,7 @@ import type {
   ResolvedInstallment,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import { inferSchedule } from "../src/index.js";
+import { inferSchedule, InferInputError } from "../src/index.js";
 import type { TrancheInput } from "../src/types.js";
 
 function d(s: string): OCTDate {
@@ -678,5 +678,36 @@ describe("inferSchedule — data-adaptive cadence", () => {
       unit: "DAYS",
       length: 45,
     });
+  });
+});
+
+describe("inferSchedule — input contract", () => {
+  // The entry guard rejects out-of-domain input at the inferrer boundary with a
+  // typed InferInputError, rather than letting a bad amount descend into the
+  // evaluator and surface a deeper engine assertion (#74 item 1).
+  it("throws InferInputError on empty tranches", () => {
+    expect(() => inferSchedule({ tranches: [] })).toThrow(InferInputError);
+  });
+
+  it("throws InferInputError on a fractional amount", () => {
+    expect(() =>
+      inferSchedule({
+        tranches: [
+          { date: "2025-01-01", amount: 31.25 },
+          { date: "2025-02-01", amount: 31.25 },
+        ],
+      }),
+    ).toThrow(InferInputError);
+  });
+
+  it("throws InferInputError on a negative amount", () => {
+    expect(() =>
+      inferSchedule({
+        tranches: [
+          { date: "2025-01-01", amount: -10 },
+          { date: "2025-02-01", amount: 20 },
+        ],
+      }),
+    ).toThrow(InferInputError);
   });
 });

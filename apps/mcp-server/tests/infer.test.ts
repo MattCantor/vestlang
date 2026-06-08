@@ -172,4 +172,25 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("YYYY-MM-DD");
   });
+
+  // The input schema is the first line of defense: it must reject out-of-domain
+  // amounts before they descend into the engine, and the error must never name
+  // an internal type (#74 item 1).
+  it.each([
+    ["a fractional amount", 31.25],
+    ["a negative amount", -10],
+  ])("rejects %s without leaking internal type names", async (_label, bad) => {
+    const client = await connectClient();
+    const res = await callInfer(client, {
+      tranches: [
+        { date: "2025-01-01", amount: bad },
+        { date: "2025-02-01", amount: 20 },
+      ],
+    });
+    expect(res.isError).toBe(true);
+    const text = res.content[0].text;
+    expect(text).not.toMatch(
+      /totalShares|VestingScheduleTemplate|VestingRuntime|BigInt/,
+    );
+  });
 });
