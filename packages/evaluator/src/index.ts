@@ -9,6 +9,7 @@ export {
   evaluateProgram,
 } from "./evaluate/index.js";
 export { presentSchedule, type SchedulePresentation } from "./present.js";
+export { toScheduleView, type ScheduleView } from "./view.js";
 export { formatFinding } from "./findings.js";
 export {
   rehydrate,
