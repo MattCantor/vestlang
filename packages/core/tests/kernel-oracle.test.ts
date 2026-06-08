@@ -66,22 +66,13 @@ describe("kernel oracle — event payout scaled by a realized fraction", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// KNOWN BUG — issue #90. This is the one case in the whole oracle that pins
-// WRONG output on purpose, so the rest of the suite can stay byte-for-byte
-// stable while this one is fixed in isolation later.
-//
-// The setup is degenerate but the validator allows it: a schedule whose
-// installments have zero spacing (period 0, so every occurrence lands on the
-// start date) and whose cliff is zero-length (so the cliff also falls on the
-// start date). A 25% cliff should pay 25% up front and the remaining 75% should
-// still vest — here, on the start date too. Instead the compiler drops the 75%
-// entirely and emits only the 25% lump.
-//
-// When the kernel fix lands, this expectation flips to include the remaining
-// shares. Until then it documents the defect. Do NOT "correct" it here.
-// ---------------------------------------------------------------------------
-describe("kernel oracle — zero-spacing cliff drops the remainder (#90, buggy)", () => {
+// Issue #90, now fixed. A degenerate-but-valid schedule: zero spacing (period 0,
+// so every occurrence lands on the start date) and a zero-length cliff (so the
+// cliff also falls on the start date). A cliff that has already arrived by the
+// time vesting starts holds nothing back, so it's treated as no cliff and the
+// whole grant still vests across the (same-date) occurrences. The compiler used
+// to emit only the 25% lump and drop the other 75%; it no longer does.
+describe("kernel oracle — zero-spacing cliff on the start vests the full grant (#90)", () => {
   const template: VestingScheduleTemplate = {
     id: "period-0-cliff",
     statements: [
@@ -102,13 +93,16 @@ describe("kernel oracle — zero-spacing cliff drops the remainder (#90, buggy)"
   };
   const runtime: VestingRuntime = { startDate: "2025-01-01" };
 
-  it("emits only the 25% lump and silently drops the other 75%", () => {
+  it("vests the four equal occurrences on the start date", () => {
     expect(compile(template, 400, runtime)).toEqual([
+      { date: "2025-01-01", amount: "100" },
+      { date: "2025-01-01", amount: "100" },
+      { date: "2025-01-01", amount: "100" },
       { date: "2025-01-01", amount: "100" },
     ]);
   });
 
-  it("under-vests the grant — 100 of 400 shares, 300 lost", () => {
-    expect(sum(compile(template, 400, runtime))).toBe(100);
+  it("vests the whole grant — 400 of 400 shares, nothing dropped", () => {
+    expect(sum(compile(template, 400, runtime))).toBe(400);
   });
 });

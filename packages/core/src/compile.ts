@@ -17,10 +17,14 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { allocateExact } from "./allocate";
-import { addPeriod, advanceCursor, gt } from "./dates";
-import { fracAdd, fracMul, fracSub, ONE, ZERO } from "@vestlang/utils";
-import { foldToGrantDate } from "./fold";
+import { addPeriod, advanceCursor } from "./dates";
+import { fracMul, ONE } from "@vestlang/utils";
+import {
+  allocateEvents,
+  expandGrid,
+  type GridCliff,
+  type RawEvent,
+} from "./kernel";
 import {
   assertValidVestingRuntime,
   assertValidVestingScheduleTemplate,
@@ -39,39 +43,11 @@ export interface CompiledInstallment {
 }
 
 /**
- * Raw event before integer-share materialization: the per-event fraction-of-grant
- * plus enough metadata for a deterministic chronological sort.
- */
-interface RawEvent {
-  date: OCTDate;
-  fractionOfGrant: Fraction;
-  statementOrder: number;
-  occurrence: number;
-}
-
-/**
- * Expand a statement's occurrences into raw events anchored at `anchor`, applying
- * the time-based cliff by date. `multiplier` scales every fraction (EVENT
- * statements pass realized_fraction; DATE statements pass ONE). All fractions are
- * already multiplied through by statement.percentage, so they are fraction of
- * grant, not of the statement.
- *
- * Cliffless: every occurrence vests statement.percentage / N at its grid date.
- *
- * With a cliff: the cliff date is `cliff.length` `cliff.period_type`s after the
- * anchor. Occurrences whose grid date is at/before the cliff date are subsumed
- * into a single lump on the cliff date (`cliff.percentage` of the statement);
- * occurrences after the cliff split the remaining `1 − cliff.percentage` evenly,
- * each at its own grid date. Because the cliff is a duration (not an occurrence
- * index), the lump lands on the true cliff date even when it falls between grid
- * points. On-grid cliffs reproduce the positional result exactly.
- *
- * `origin` is the chain's first date, used only for the grid's day-of-month so a
- * segment whose anchor was clamped to a short month still vests on the chain's
- * original day where the calendar allows it. It defaults to `anchor` (the head
- * segment and EVENT statements are their own origin). The cliff date stays a pure
- * duration from this segment's anchor — it never reads `origin` — so the lump
- * lands where its length puts it regardless of how the day-of-month springs.
+ * Lower one statement onto the shared grid kernel. The cliff is a duration from
+ * the anchor (so the lump lands on its true date, off-grid or not), and the EVENT
+ * `multiplier` — realized_fraction for a partial payout, ONE otherwise — folds into
+ * the statement's share of the grant before the grid splits it. `origin` carries
+ * the chain's first date for day-of-month spring-back; it defaults to `anchor`.
  */
 const expandAnchored = (
   statement: VestingStatement,
@@ -80,59 +56,30 @@ const expandAnchored = (
   dom: VestingRuntime["vestingDayOfMonth"],
   origin: OCTDate = anchor,
 ): RawEvent[] => {
-  const N = statement.occurrences;
-  const stmtFraction = statement.percentage;
-  const gridDate = (i: number): OCTDate =>
-    addPeriod(anchor, i * statement.period, statement.period_type, dom, origin);
-  const event = (
-    date: OCTDate,
-    fraction: Fraction,
-    occurrence: number,
-  ): RawEvent => ({
-    date,
-    fractionOfGrant: fracMul(fraction, multiplier),
+  const cliff: GridCliff = statement.cliff
+    ? {
+        kind: "fixed",
+        date: addPeriod(
+          anchor,
+          statement.cliff.length,
+          statement.cliff.period_type,
+          dom,
+        ),
+        percentage: statement.cliff.percentage,
+      }
+    : { kind: "none" };
+
+  return expandGrid({
+    anchor,
+    origin,
+    period: statement.period,
+    periodType: statement.period_type,
+    occurrences: statement.occurrences,
+    stmtFraction: fracMul(statement.percentage, multiplier),
     statementOrder: statement.order,
-    occurrence,
+    dom,
+    cliff,
   });
-  const evenGrid = (): RawEvent[] => {
-    const per = fracMul(stmtFraction, { numerator: 1, denominator: N });
-    return Array.from({ length: N }, (_, idx) =>
-      event(gridDate(idx + 1), per, idx + 1),
-    );
-  };
-
-  if (!statement.cliff) return evenGrid();
-
-  const cliff = statement.cliff;
-  const cliffDate = addPeriod(anchor, cliff.length, cliff.period_type, dom);
-
-  // Partition occurrences: those strictly after the cliff date keep their own
-  // grid date; the rest are subsumed into the lump.
-  const postOccurrences: number[] = [];
-  let preCount = 0;
-  for (let i = 1; i <= N; i++) {
-    if (gt(gridDate(i), cliffDate)) postOccurrences.push(i);
-    else preCount++;
-  }
-
-  // Cliff at/before the first installment → no lump, plain grid.
-  if (preCount === 0) return evenGrid();
-
-  const events: RawEvent[] = [];
-  // The lump (occurrence 0 sorts it first within the statement on its date).
-  events.push(event(cliffDate, fracMul(stmtFraction, cliff.percentage), 0));
-
-  // The remaining 1 − cliff.percentage spreads over the post-cliff occurrences.
-  // (When none remain — cliff at/after the last grid date — only the lump vests.)
-  const P = postOccurrences.length;
-  if (P > 0) {
-    const per = fracMul(
-      stmtFraction,
-      fracMul(fracSub(ONE, cliff.percentage), { numerator: 1, denominator: P }),
-    );
-    for (const i of postOccurrences) events.push(event(gridDate(i), per, i));
-  }
-  return events;
 };
 
 /**
@@ -187,10 +134,9 @@ const expandStatement = (
 };
 
 /**
- * Core compile, numeric. Expands statements, sorts chronologically (tie-break:
- * statement.order, then occurrence), allocates with a single running cumulative
- * across the whole template (so the schedule telescopes exactly to totalShares),
- * and applies the grant-date implicit cliff via the shared fold.
+ * Core compile, numeric. Expands every statement onto the shared grid, then hands
+ * the whole event stream to the kernel's allocator, which orders it and turns the
+ * fractions into exact integer shares (with the grant-date fold applied).
  */
 const compileRaw = (
   template: VestingScheduleTemplate,
@@ -205,8 +151,8 @@ const compileRaw = (
   assertValidVestingScheduleTemplate(template);
   assertValidVestingRuntime(runtime, template);
 
-  // Step 1: expand each statement. DATE statements chain through dateCursor;
-  // EVENT statements anchor absolutely at their firing.
+  // Expand each statement. DATE statements chain through dateCursor; EVENT
+  // statements anchor absolutely at their firing.
   const statements = [...template.statements].sort((a, b) => a.order - b.order);
   let dateCursor: OCTDate | undefined = runtime.startDate;
   const rawEvents: RawEvent[] = [];
@@ -217,38 +163,7 @@ const compileRaw = (
     dateCursor = result.nextCursor;
   }
 
-  // Step 2: chronological sort, tie-break on (statementOrder, occurrence) so two
-  // events on the same date have a deterministic, spec-traceable order.
-  rawEvents.sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    if (a.statementOrder !== b.statementOrder)
-      return a.statementOrder - b.statementOrder;
-    return a.occurrence - b.occurrence;
-  });
-
-  // Step 3: single-cumulative allocation. The cumulative fraction accumulates
-  // across all events; amount = floor(totalShares × cumulative) − vestedSoFar,
-  // telescoping to sum exactly to totalShares (when all EVENT statements fire).
-  let cumulative: Fraction = ZERO;
-  let vestedSoFar = 0;
-  const dates: OCTDate[] = [];
-  const amounts: number[] = [];
-  for (const raw of rawEvents) {
-    cumulative = fracAdd(cumulative, raw.fractionOfGrant);
-    const amount = allocateExact(totalShares, cumulative, vestedSoFar);
-    if (amount === 0) continue;
-    vestedSoFar += amount;
-    dates.push(raw.date);
-    amounts.push(amount);
-  }
-
-  // Step 4: grant-date implicit cliff — amounts dated before grantDate aggregate
-  // onto grantDate (vesting can't occur before the grant existed).
-  const folded = runtime.grantDate
-    ? foldToGrantDate(dates, amounts, runtime.grantDate)
-    : { dates, amounts };
-
-  return folded.dates.map((date, i) => ({ date, amount: folded.amounts[i] }));
+  return allocateEvents(rawEvents, totalShares, runtime.grantDate);
 };
 
 /**
