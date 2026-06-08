@@ -83,8 +83,8 @@ export const unresolvedInstallments = (
   let dates: OCTDate[] = Array.from({ length: occurrences }, (_, i) =>
     at(i + 1),
   );
-  if (ctx.events.grantDate) {
-    const folded = foldToGrantDate(dates, amounts, ctx.events.grantDate);
+  if (ctx.grantDate) {
+    const folded = foldToGrantDate(dates, amounts, ctx.grantDate);
     dates = folded.dates;
     amounts.length = 0;
     amounts.push(...folded.amounts);
@@ -93,10 +93,7 @@ export const unresolvedInstallments = (
   const cliff = res.picked.periodicity.cliff;
   if (!cliff) return EMPTY; // fully resolved, so not part of the unresolved verdict
 
-  const overlayCtx: EvaluationContext = {
-    ...ctx,
-    events: { ...ctx.events, vestingStart: start },
-  };
+  const overlayCtx: EvaluationContext = { ...ctx, vestingStart: start };
   const resCliff = evaluateVestingNodeExpr(cliff, overlayCtx);
 
   if (resCliff.type === "IMPOSSIBLE")

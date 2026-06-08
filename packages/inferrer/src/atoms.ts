@@ -83,7 +83,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
     occurrences: totalSteps,
     cliff: {
       type: "NODE",
-      base: { type: "EVENT", value: "vestingStart" },
+      base: { type: "VESTING_START" },
       offsets: [
         {
           type: "DURATION",

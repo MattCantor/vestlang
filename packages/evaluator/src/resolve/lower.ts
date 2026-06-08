@@ -39,12 +39,6 @@ import type { NonTemplateReason } from "./types.js";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 
-// The normalizer's internal anchors (packages/normalizer .. program.ts SYSTEM_EVENT).
-// They always resolve to a concrete date, so a start expressed relative to one
-// (e.g. `FROM +12 months` = `grantDate + 12mo`) is an absolute service-time DATE,
-// not a floating milestone, so it must not register an event firing.
-const SYSTEM_EVENTS = new Set(["grantDate", "vestingStart"]);
-
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`.
  *  A zero-share grant has nothing for a QUANTITY to claim, so it lowers to 0
  *  (vests nothing) rather than the degenerate `v/0`. That fraction is invalid
@@ -66,15 +60,14 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
 };
 
 /** DATE vs floating EVENT, from the (winning) schedule's vesting_start leaf.
- *  A genuine named event floats; a system anchor (grantDate/vestingStart) is a
- *  resolved absolute date and is treated as DATE (so `FROM +N months` chains and
- *  never registers a duplicate `grantDate` firing). */
+ *  A genuine named event (`base.type === "EVENT"`) floats; the system anchors are
+ *  their own tags (GRANT_DATE/VESTING_START) — resolved absolute dates — and fall
+ *  to DATE, so `FROM +N months` chains and never registers a spurious event
+ *  firing. The tag is the distinction; no value test needed. */
 const startBase = (
   vs: VestingNodeExpr,
 ): { base: "DATE" | "EVENT"; eventId?: string } =>
-  vs.type === "NODE" &&
-  vs.base.type === "EVENT" &&
-  !SYSTEM_EVENTS.has(vs.base.value)
+  vs.type === "NODE" && vs.base.type === "EVENT"
     ? { base: "EVENT", eventId: vs.base.value }
     : { base: "DATE" };
 
@@ -97,7 +90,7 @@ const isCombinator = (e: VestingNodeExpr): boolean =>
  *  not a generic tree walk, so the recursion stays here and stays narrow. */
 const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
   e.type === "NODE"
-    ? e.base.type === "EVENT" && !SYSTEM_EVENTS.has(e.base.value)
+    ? e.base.type === "EVENT"
     : e.items.some(referencesNamedEvent);
 
 export interface StmtResolution {
@@ -601,7 +594,7 @@ export const buildTemplate = (
     ...(eventFirings.length > 0 ? { eventFirings } : {}),
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
     // onto grantDate. Core's compile applies this when runtime.grantDate is set.
-    ...(ctx.events.grantDate ? { grantDate: ctx.events.grantDate } : {}),
+    ...(ctx.grantDate ? { grantDate: ctx.grantDate } : {}),
     ...(ctx.vesting_day_of_month !== DEFAULT_DAY_OF_MONTH
       ? { vestingDayOfMonth: ctx.vesting_day_of_month }
       : {}),

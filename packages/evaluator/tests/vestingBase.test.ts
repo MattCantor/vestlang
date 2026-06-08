@@ -32,11 +32,8 @@ describe("evaluateVestingBase", () => {
 
   it("EVENT resolved if ctx has date, with offsets applied (MONTHS)", () => {
     const ctx = baseCtx({
-      events: {
-        grantDate: "2025-01-01",
-        vestingStart: "2024-01-10",
-        boardApproval: "2024-01-31",
-      },
+      grantDate: "2025-01-01",
+      events: { vestingStart: "2024-01-10", boardApproval: "2024-01-31" },
     });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseEvent("boardApproval"), [
@@ -48,7 +45,7 @@ describe("evaluateVestingBase", () => {
   });
 
   it("EVENT unresolved if missing", () => {
-    const ctx = baseCtx({ events: { grantDate: "2025-01-01" } });
+    const ctx = baseCtx({ grantDate: "2025-01-01", events: {} });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseEvent("boardApproval")),
       ctx,

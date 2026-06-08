@@ -55,7 +55,15 @@ export type Offsets =
  * ------------------------ */
 
 // primitives/vestlang/VestingBase.schema.json
-// A vesting anchor: a calendar DATE or a named EVENT. Exported as the union so
+// A vesting anchor. Four kinds, each its own tag so "is this a genuine event?" is
+// the discriminant rather than a string test against the anchor value:
+//   DATE          — a calendar date.
+//   GRANT_DATE    — the runtime grant-date anchor (resolved from ctx.grantDate).
+//   VESTING_START — the per-statement vesting-start anchor a cliff hangs off
+//                   (resolved from the overlay ctx.vestingStart).
+//   EVENT         — a genuine named milestone (ipo, …); never a system anchor.
+// The two system anchors carry no value: any offset (`FROM grantDate + 12mo`)
+// lives on the enclosing VestingNode, not the base. Exported as the union so
 // callers narrow on `type`; there is intentionally no wide `{ type: VBaseTag }`
 // base type to annotate against (that would discard the discriminant).
 export interface VestingBaseDate {
@@ -63,12 +71,27 @@ export interface VestingBaseDate {
   value: OCTDate;
 }
 
+export interface VestingBaseGrantDate {
+  type: "GRANT_DATE";
+}
+
+export interface VestingBaseVestingStart {
+  type: "VESTING_START";
+}
+
 export interface VestingBaseEvent {
   type: "EVENT";
   value: string;
 }
 
-export type VestingBase = VestingBaseDate | VestingBaseEvent;
+export type VestingBase =
+  | VestingBaseDate
+  | VestingBaseGrantDate
+  | VestingBaseVestingStart
+  | VestingBaseEvent;
+
+/** The two normalizer-minted system anchors, distinct from genuine events. */
+export type VestingBaseSystem = VestingBaseGrantDate | VestingBaseVestingStart;
 
 /* ------------------------
  * Vesting Node

@@ -11,7 +11,8 @@ function makeCtx(opts: {
   events?: Record<string, string>;
 }): EvaluationContextInput {
   return {
-    events: { grantDate: "2024-01-01", ...(opts.events ?? {}) },
+    grantDate: "2024-01-01",
+    events: { ...(opts.events ?? {}) },
     grantQuantity: opts.grantQuantity,
     asOf: "2025-01-01",
   };

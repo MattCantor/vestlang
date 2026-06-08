@@ -33,8 +33,8 @@ const eventFalse = (event: string) => ({
 });
 
 const ctx_input: EvaluationContextInput = {
+  grantDate: today,
   events: {
-    grantDate: today,
     X: today,
   },
   grantQuantity: 100,

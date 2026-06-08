@@ -14,7 +14,9 @@ import {
   VestingPeriod,
 } from "@vestlang/types";
 
-type SYSTEM_EVENT = "grantDate" | "vestingStart";
+// Which system anchor a bare duration / default start normalizes onto. These are
+// the base tags directly, so minting a base is just `{ type: anchor }`.
+type SystemAnchorTag = "GRANT_DATE" | "VESTING_START";
 
 /* ------------------------
  * Orchestration
@@ -98,10 +100,7 @@ function normalizeScheduleExpr(
 function normalizeSchedule(s: RawSchedule, report?: FindingSink): Schedule {
   const startNode = s.vesting_start ?? {
     type: "NODE",
-    base: {
-      type: "EVENT",
-      value: "grantDate",
-    },
+    base: { type: "GRANT_DATE" },
     offsets: [] as Offsets,
   };
   const vesting_start = normalizeVestingStart(startNode, report);
@@ -118,24 +117,21 @@ function normalizeSchedule(s: RawSchedule, report?: FindingSink): Schedule {
 
 function normalizeNode(
   c: Duration | VestingNodeExpr,
-  durationRef: SYSTEM_EVENT,
+  anchor: SystemAnchorTag,
   report?: FindingSink,
 ): VestingNodeExpr {
   switch (c.type) {
     case "DURATION":
       return {
         type: "NODE",
-        base: {
-          type: "EVENT",
-          value: durationRef,
-        },
+        base: { type: anchor },
         offsets: [c],
       };
     case "NODE_LATER_OF":
     case "NODE_EARLIER_OF":
       return NormalizeAndSort(
         c,
-        durationRef === "grantDate"
+        anchor === "GRANT_DATE"
           ? (x) => normalizeVestingStart(x, report)
           : (x) => normalizeCliff(x, report),
         report,
@@ -153,14 +149,14 @@ function normalizeVestingStart(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr {
-  return normalizeNode(c, "grantDate", report);
+  return normalizeNode(c, "GRANT_DATE", report);
 }
 
 function normalizeCliff(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr {
-  return normalizeNode(c, "vestingStart", report);
+  return normalizeNode(c, "VESTING_START", report);
 }
 
 /**

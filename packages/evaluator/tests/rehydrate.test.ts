@@ -19,12 +19,14 @@ import {
   makeSingletonNode,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseGrantDate,
 } from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 100000,
   asOf: "2035-01-01",
   ...overrides,
@@ -55,13 +57,16 @@ const stageAStmt = (): Statement => ({
   amount: portion(1, 1),
   expr: {
     type: "SCHEDULE",
+    // Items in canonical (normalizer sort) order: EVENT "ipo" sorts before the
+    // GRANT_DATE anchor, so a hand-built statement must match that to stay a
+    // parse∘stringify fixpoint (the real pipeline normalizes before lowering).
     vesting_start: {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        makeSingletonNode(makeVestingBaseGrantDate(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
-        makeSingletonNode(makeVestingBaseEvent("ipo")),
       ],
     },
     periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
@@ -93,7 +98,8 @@ describe("rehydrate — Stage C: IPO fires → witness → full projection", () 
       sourceMap,
       runtime,
       ctxInput({
-        events: { grantDate: "2025-01-01", ipo: "2027-03-01" },
+        grantDate: "2025-01-01",
+        events: { ipo: "2027-03-01" },
         asOf: "2027-06-01",
         grantQuantity: 4800,
       }),
@@ -124,7 +130,8 @@ describe("rehydrate — Stage D: IPO still unfired → no witness", () => {
       sourceMap,
       runtime,
       ctxInput({
-        events: { grantDate: "2025-01-01" }, // ipo unfired
+        grantDate: "2025-01-01",
+        events: {}, // ipo unfired
         asOf: "2026-06-01", // grant+12mo passed, IPO not
         grantQuantity: 4800,
       }),

@@ -22,12 +22,15 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseGrantDate,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 100000,
   asOf: "2035-01-01",
   ...overrides,
@@ -52,7 +55,7 @@ const stmt = (
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 
 describe("assemble — template status", () => {
-  const cliff12mo = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+  const cliff12mo = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const monthly48WithCliff = stmt(
@@ -146,7 +149,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
     const fromGrant = (num: number, months: number) =>
       stmt(
         portion(num, 100),
-        makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+        makeSingletonNode(makeVestingBaseGrantDate(), [
           makeDuration(months, "MONTHS", "PLUS"),
         ]),
         { type: "DAYS", length: 0, occurrences: 1 },
@@ -177,10 +180,8 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
     const [out] = evaluateProgram(
       program,
       ctxInput({
-        events: {
-          grantDate: "2025-01-01",
-          ipo: "2026-06-15",
-        },
+        grantDate: "2025-01-01",
+        events: { ipo: "2026-06-15" },
       }),
     );
     expect(out.status).toBe("template");
@@ -273,7 +274,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   // `+12mo` desugars to `grantDate + 12 months` (a system anchor → DATE);
   // `EVENT "ipo"` is the genuine named condition that earns the synthetic event.
   const plus12mo = () =>
-    makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+    makeSingletonNode(makeVestingBaseGrantDate(), [
       makeDuration(12, "MONTHS", "PLUS"),
     ]);
   const ipo = () => makeSingletonNode(makeVestingBaseEvent("ipo"));
@@ -390,10 +391,10 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
           vesting_start: {
             type: "NODE_LATER_OF",
             items: [
-              makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+              makeSingletonNode(makeVestingBaseGrantDate(), [
                 makeDuration(12, "MONTHS", "PLUS"),
               ]),
-              makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+              makeSingletonNode(makeVestingBaseGrantDate(), [
                 makeDuration(24, "MONTHS", "PLUS"),
               ]),
             ],
@@ -420,7 +421,7 @@ describe("assemble — unresolved status", () => {
         type: "NODE_LATER_OF",
         items: [
           makeSingletonNode(makeVestingBaseDate("2030-01-01")),
-          makeSingletonNode(makeVestingBaseEvent("grantDate"), [
+          makeSingletonNode(makeVestingBaseGrantDate(), [
             makeDuration(12, "MONTHS", "PLUS"),
           ]),
         ],
@@ -467,7 +468,8 @@ describe("assemble — impossible status", () => {
     const out = evaluateStatement(
       voidStmt,
       ctxInput({
-        events: { grantDate: "2025-01-01", a: "2025-06-01" },
+        grantDate: "2025-01-01",
+        events: { a: "2025-06-01" },
       }),
     );
     expect(out.status).toBe("impossible");
@@ -485,7 +487,8 @@ describe("assemble — impossible status", () => {
     const [out] = evaluateProgram(
       [voidStmt, voidStmt],
       ctxInput({
-        events: { grantDate: "2025-01-01", a: "2025-06-01" },
+        grantDate: "2025-01-01",
+        events: { a: "2025-06-01" },
       }),
     );
     expect(out.status).toBe("impossible");
@@ -504,7 +507,7 @@ describe("assemble — impossible status", () => {
     });
     const [out] = evaluateProgram(
       [resolving, half],
-      ctxInput({ events: { grantDate: "2025-01-01", a: "2025-06-01" } }),
+      ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );
     expect(out.status).toBe("unresolved");
     const resolved = out.installments.filter(

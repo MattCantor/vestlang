@@ -29,6 +29,9 @@
   }
   function mkEvent(name) { return { type: "EVENT", value: name };
   }
+  // System anchors are their own base tags, distinct from genuine events.
+  function mkGrantDate() { return { type: "GRANT_DATE" }; }
+  function mkVestingStart() { return { type: "VESTING_START" }; }
   function mkQuantity(q) { return { type: "QUANTITY", value: q };
   }
   function gcd(a, b) {
@@ -97,7 +100,7 @@
   function mkVestingNode(duration, context) {
     return {
       type: "NODE",
-      base: { type: "EVENT", value: context === "FROM" ? "grantDate" : "vestingStart"},
+      base: context === "FROM" ? mkGrantDate() : mkVestingStart(),
       offsets: normalizeOffsets([duration]),
     }
   }

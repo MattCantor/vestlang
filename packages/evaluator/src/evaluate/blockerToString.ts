@@ -68,5 +68,16 @@ function offsetsToString(o: Offsets): string {
 }
 
 function vestingBaseToString(b: VestingBase): string {
-  return `${b.type} ${b.value}`;
+  switch (b.type) {
+    case "DATE":
+      return `DATE ${b.value}`;
+    case "EVENT":
+      return `EVENT ${b.value}`;
+    // System anchors keep the `EVENT <name>` rendering they had when they lived
+    // in the EVENT arm, so diagnostic strings are unchanged.
+    case "GRANT_DATE":
+      return "EVENT grantDate";
+    case "VESTING_START":
+      return "EVENT vestingStart";
+  }
 }

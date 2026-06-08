@@ -12,7 +12,8 @@ import { computeSummary, filterByWindow } from "../src/summary";
 const ctx = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01" },
+  grantDate: "2025-01-01",
+  events: {},
   grantQuantity: 100000,
   asOf: "2026-04-16",
   ...overrides,
@@ -41,7 +42,7 @@ describe("computeSummary", () => {
   it("fully_vested_date is null when schedule has unresolved installments", () => {
     const result = run(
       "VEST FROM EVENT ipo OVER 2 years EVERY 1 month",
-      ctx({ events: { grantDate: "2025-01-01" } }),
+      ctx({ grantDate: "2025-01-01", events: {} }),
     );
     const s = computeSummary(result, 100000);
     expect(s.fully_vested_date).toBeNull();

@@ -39,7 +39,7 @@ describe("Start & basics", () => {
         `${JSON.stringify(first)} expected to have type "SCHEDULE`,
       );
     const firstVestingStart = first.vesting_start as VestingNode;
-    expect(firstVestingStart.base.value).toBe("a");
+    expect(firstVestingStart.base).toEqual({ type: "EVENT", value: "a" });
 
     const second = ast[1].expr;
     if (second.type !== "SCHEDULE")
@@ -47,7 +47,7 @@ describe("Start & basics", () => {
         `${JSON.stringify(second)} expected to have type "SCHEDULE"`,
       );
     const secondVestingStart = second.vesting_start as VestingNode;
-    expect(secondVestingStart.base.value).toBe("b");
+    expect(secondVestingStart.base).toEqual({ type: "EVENT", value: "b" });
   });
 });
 

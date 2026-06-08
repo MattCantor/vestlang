@@ -19,14 +19,11 @@ export type BuildContextInput = {
 };
 
 export function buildContext(input: BuildContextInput): EvaluationContextInput {
-  // Named events flow through untouched; grantDate is always injected so the
-  // engine can resolve a grant-relative start. This is the invariant that used
-  // to be copied (and occasionally missed) at each call site.
-  const events: Record<string, OCTDate> = { ...(input.events ?? {}) };
-  events.grantDate = input.grant_date;
-
+  // grantDate is its own context field (a runtime anchor, not a fired event); the
+  // events map carries only genuine named events, passed through untouched.
   return {
-    events: events as EvaluationContextInput["events"],
+    grantDate: input.grant_date,
+    events: { ...(input.events ?? {}) },
     grantQuantity: input.grant_quantity,
     asOf: input.as_of ?? todayISO(),
     // Left undefined on purpose: the evaluator defaults the day-of-month rule

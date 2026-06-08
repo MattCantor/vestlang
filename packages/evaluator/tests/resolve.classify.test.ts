@@ -19,6 +19,7 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeDuration,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 // `EVENT <event> BEFORE DATE <deadline>` — void once the event fires after the
@@ -63,11 +64,16 @@ const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
-): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01", ...events },
-  grantQuantity,
-  asOf: "2035-01-01",
-});
+): EvaluationContextInput => {
+  // Callers override the grant date by passing `grantDate` in this map.
+  const { grantDate = "2025-01-01", ...rest } = events;
+  return {
+    grantDate,
+    events: rest,
+    grantQuantity,
+    asOf: "2035-01-01",
+  };
+};
 
 const portion = (numerator: number, denominator: number): Amount => ({
   type: "PORTION",
@@ -371,7 +377,7 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
 
 describe("resolveToCore — pending event-anchored start + duration cliff (#21)", () => {
   // grant 2024-01-01, 48,000 shares: 4-year monthly grid, 1-year cliff.
-  const cliff1yr = makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+  const cliff1yr = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(12, "MONTHS", "PLUS"),
   ]);
   const monthly48: VestingPeriod = {
@@ -383,7 +389,8 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
   const ctx21 = (
     events: Record<string, OCTDate> = {},
   ): EvaluationContextInput => ({
-    events: { grantDate: "2024-01-01", ...events },
+    grantDate: "2024-01-01",
+    events: { ...events },
     grantQuantity: 48000,
     asOf: "2035-01-01",
   });
@@ -438,7 +445,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     const start: VestingNodeExpr = {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseEvent("vestingStart"), [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
         makeSingletonNode(makeVestingBaseEvent("ipo")),

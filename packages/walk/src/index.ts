@@ -101,7 +101,9 @@ export function forEachChild(
 
     case "DATE":
     case "EVENT":
-      return; // leaves — nothing to descend into
+    case "GRANT_DATE":
+    case "VESTING_START":
+      return; // base leaves — nothing to descend into
 
     default:
       return assertNever(node);

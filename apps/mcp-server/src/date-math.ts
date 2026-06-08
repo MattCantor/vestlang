@@ -18,7 +18,8 @@ const MS_PER_DAY = 86_400_000;
 
 function stubCtx(rule: VestingDayOfMonth): EvaluationContext {
   return {
-    events: { grantDate: "1970-01-01" },
+    grantDate: "1970-01-01",
+    events: {},
     grantQuantity: 0,
     asOf: "1970-01-01",
     vesting_day_of_month: rule,
@@ -117,11 +118,12 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
     return { ok: false, error: "Expression produced no statements" };
   }
 
-  const events: Record<string, OCTDate> = { grantDate: input.grant_date };
+  const events: Record<string, OCTDate> = {};
   for (const [k, v] of Object.entries(input.events ?? {})) events[k] = v;
 
   const ctx: EvaluationContextInput = {
-    events: events as EvaluationContextInput["events"],
+    grantDate: input.grant_date,
+    events,
     grantQuantity: 1,
     asOf: "9999-12-31",
     vesting_day_of_month:

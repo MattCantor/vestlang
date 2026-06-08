@@ -23,7 +23,8 @@ function evalToMap(
   policy: VestingDayOfMonth,
 ): AmtMap | null {
   return resolvedInstallmentMap(stmt, {
-    events: { grantDate },
+    grantDate,
+    events: {},
     grantQuantity: totalQuantity,
     asOf,
     vesting_day_of_month: policy,

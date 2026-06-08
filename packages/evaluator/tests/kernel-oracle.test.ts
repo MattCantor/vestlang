@@ -18,6 +18,7 @@ import {
   makeSingletonNode,
   makeVestingBaseDate,
   makeVestingBaseEvent,
+  makeVestingBaseVestingStart,
 } from "./helpers";
 
 // Frozen oracle for the share-allocation kernel (issue #85), evaluator-side cases.
@@ -48,11 +49,16 @@ const stmt = (
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 96000,
-): EvaluationContextInput => ({
-  events: { grantDate: "2025-01-01", ...events },
-  grantQuantity,
-  asOf: "2040-01-01",
-});
+): EvaluationContextInput => {
+  // Callers override the grant date by passing `grantDate` in this map.
+  const { grantDate = "2025-01-01", ...rest } = events;
+  return {
+    grantDate,
+    events: rest,
+    grantQuantity,
+    asOf: "2040-01-01",
+  };
+};
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
@@ -60,13 +66,13 @@ const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
 
 // A one-year cliff written as a duration off the vesting start.
 const oneYearCliff: VestingNodeExpr = makeSingletonNode(
-  makeVestingBaseEvent("vestingStart"),
+  makeVestingBaseVestingStart(),
   [makeDuration(12, "MONTHS", "PLUS")],
 );
 
 // A two-month cliff, likewise relative to the vesting start.
 const twoMonthCliff: VestingNodeExpr = makeSingletonNode(
-  makeVestingBaseEvent("vestingStart"),
+  makeVestingBaseVestingStart(),
   [makeDuration(2, "MONTHS", "PLUS")],
 );
 
@@ -257,7 +263,8 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
   // a 31st, two-month cliff: Feb 29 and Mar 31 fall on or before it → 2 of 4.
   const anchor = "2024-01-31" as OCTDate;
   const cliffCtx = baseCtx({
-    events: { grantDate: "2024-01-01" },
+    grantDate: "2024-01-01",
+    events: {},
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
   });
 

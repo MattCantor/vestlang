@@ -118,7 +118,7 @@ function scheduleClauses(s: Schedule | ChainedSchedule): Doc[] {
   //   - omit entirely if it's the default grantDate with no offsets/conditions
   //   - sugar `EVENT grantDate +N` back to the bare `FROM N` the grammar accepts
   if (s.vesting_start && !isDefaultVestingStart(s.vesting_start)) {
-    const sugared = sugaredAnchorDuration(s.vesting_start, "grantDate");
+    const sugared = sugaredAnchorDuration(s.vesting_start, "GRANT_DATE");
     clauses.push([
       kw("FROM"),
       " ",
@@ -131,7 +131,7 @@ function scheduleClauses(s: Schedule | ChainedSchedule): Doc[] {
 
   // CLIFF: same bare-duration sugar, anchored on vestingStart.
   if (s.periodicity.cliff) {
-    const sugared = sugaredAnchorDuration(s.periodicity.cliff, "vestingStart");
+    const sugared = sugaredAnchorDuration(s.periodicity.cliff, "VESTING_START");
     clauses.push([
       kw("CLIFF"),
       " ",
@@ -215,7 +215,19 @@ function toDocOffsets(offsets: Offsets): Doc {
 }
 
 function toDocVestingBase(base: VestingBase): Doc {
-  return `${kw(base.type)} ${base.value}`;
+  switch (base.type) {
+    case "DATE":
+      return `${kw("DATE")} ${base.value}`;
+    case "EVENT":
+      return `${kw("EVENT")} ${base.value}`;
+    // System anchors print in the same `EVENT <name>` form they always have —
+    // the grammar re-accepts `EVENT grantDate` / `EVENT vestingStart` and folds
+    // them back to their tags, so the round-trip is stable.
+    case "GRANT_DATE":
+      return `${kw("EVENT")} grantDate`;
+    case "VESTING_START":
+      return `${kw("EVENT")} vestingStart`;
+  }
 }
 
 /* ------------------------
@@ -224,8 +236,7 @@ function toDocVestingBase(base: VestingBase): Doc {
 
 function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
   if (vs.type !== "NODE") return false;
-  if (vs.base.type !== "EVENT") return false;
-  if (vs.base.value !== "grantDate") return false;
+  if (vs.base.type !== "GRANT_DATE") return false;
   if (vs.offsets && vs.offsets.length > 0) return false;
   if (vs.condition) return false;
   return true;
@@ -239,11 +250,10 @@ function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
  */
 function sugaredAnchorDuration(
   node: VestingNodeExpr,
-  systemEvent: "grantDate" | "vestingStart",
+  systemAnchor: "GRANT_DATE" | "VESTING_START",
 ): string | null {
   if (node.type !== "NODE") return null;
-  if (node.base.type !== "EVENT") return null;
-  if (node.base.value !== systemEvent) return null;
+  if (node.base.type !== systemAnchor) return null;
   if (node.condition) return null;
   if (!node.offsets || node.offsets.length !== 1) return null;
   const offset = node.offsets[0];

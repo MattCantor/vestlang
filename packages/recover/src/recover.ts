@@ -47,7 +47,7 @@ export function evaluateProgramWithRecovery(
   }));
   const inferred = inferSchedule({
     tranches,
-    grantDate: ctx.events.grantDate,
+    grantDate: ctx.grantDate,
   });
 
   // Re-classify the inferred program. The day-of-month convention isn't in the
