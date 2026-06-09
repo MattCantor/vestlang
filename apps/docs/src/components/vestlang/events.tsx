@@ -9,7 +9,7 @@ export default function Events({
   setEvents: Dispatch<SetStateAction<Record<string, OCTDate | undefined>>>;
 }) {
   const onChangeEvent = (name: string, date: OCTDate) => {
-    setEvents((prev: Record<string, OCTDate>) => ({
+    setEvents((prev) => ({
       ...prev,
       [name]: date,
     }));
@@ -53,13 +53,13 @@ export default function Events({
             </thead>
             <tbody>
               {Object.entries(events).map(
-                ([name, date]: [string, OCTDate], index) => (
+                ([name, date], index) => (
                   <tr key={`${name}-${index}`}>
                     <td style={{ padding: "0.75rem 1rem" }}>{name}</td>
                     <td style={{ padding: "0.75rem 1rem" }}>
                       <input
                         type="date"
-                        value={date}
+                        value={date ?? ""}
                         onChange={(e) =>
                           onChangeEvent(name, e.target.value as OCTDate)
                         }

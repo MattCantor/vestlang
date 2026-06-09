@@ -1,9 +1,13 @@
 {
-  // This file is not used in compilation. It is here just for a nice editor experience.
+  // Drives both the editor experience and the CI `typecheck` task (run via
+  // `turbo typecheck`). `@docusaurus/tsconfig` omits `strict`, so set it here to
+  // match the rest of the repo — without it, discriminated-union narrowing in
+  // the Playground silently degrades.
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
     "baseUrl": ".",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "strict": true
   },
   "exclude": [
     ".docusaurus",
