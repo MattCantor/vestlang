@@ -11,17 +11,25 @@ npm install @vestlang/vestlang
 ## Usage
 
 ```typescript
-import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
+import {
+  parse,
+  normalizeProgram,
+  evaluateProgramWithRecovery,
+} from "@vestlang/vestlang";
 
 const source = "VEST OVER 4 years EVERY 1 month CLIFF 1 year";
 const program = normalizeProgram(parse(source));
 
-const schedule = evaluateStatement(program[0], {
+// Evaluates the whole program as one grant. `outcome.schedule` is the evaluated
+// schedule; `outcome.rescued` is true when an events-only program was recovered
+// back to a template (and `outcome.recovered` then describes the recovery).
+const outcome = evaluateProgramWithRecovery(program, {
   grantDate: "2024-01-01",   // the grant-date anchor (its own field)
   events: {},                // named events the DSL references, e.g. { ipo: "2027-06-01" }
   grantQuantity: 10000,
   asOf: "2028-01-01",
 });
+const schedule = outcome.schedule;
 
 console.log(schedule.interchange.status);      // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
 console.log(schedule.resolution.status);       // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
@@ -62,8 +70,9 @@ resolves-to reading assumes stayed absent, each `{ eventId, through }`) and `fin
 (allocation problems). At the installment level, each row's `meta.state` is `RESOLVED`,
 `UNRESOLVED`, or `IMPOSSIBLE`.
 
-`evaluateStatement` classifies one statement at a time; `evaluateProgram` collapses a whole
-multi-statement program into a **single** schedule.
+`evaluateProgramWithRecovery` collapses a whole program — one statement or many — into a
+**single** schedule, and recovers an events-only result back to a template when its projection
+turns out to have one.
 
 ## API
 
@@ -77,9 +86,7 @@ multi-statement program into a **single** schedule.
 
 ### Evaluation
 
-- `evaluateStatement(statement, context)` - Resolve + classify a single statement into an `EvaluatedSchedule` (two verdicts + installments)
-- `evaluateProgram(program, context)` - Collapse a whole multi-statement program into **one** schedule (returned as a one-element array)
-- `evaluateStatementAsOf(statement, context)` - Evaluate a statement as of a specific date
+- `evaluateProgramWithRecovery(program, context)` - Collapse a whole program into **one** `EvaluatedSchedule` (two verdicts + installments), recovering an events-only result back to a template when its projection has one. Returns a `RecoveryOutcome` whose `.schedule` is the evaluated schedule.
 
 ### Inference (the inverse of evaluation)
 
