@@ -2,14 +2,16 @@
 // — the version a consumer (the CLI's tables, the MCP server's JSON) actually
 // shows a user. It carries both verdicts side by side (what's storable, and what
 // it resolves to today), the installments, the blockers, the findings (each with
-// a human-readable message), and the four orthogonal read-flags. It drops the
-// engine's working state: the compiled template, the runtime inputs, and the
-// source map all stay server-side.
+// a human-readable message), the absence assumptions the resolution leaned on (also
+// with a message), and the four orthogonal read-flags. It drops the engine's working
+// state: the compiled template, the runtime inputs, and the source map all stay
+// server-side.
 //
 // Both consumers used to build this object by hand, and drifted. This is the one
 // place that derivation lives.
 
 import type {
+  AbsenceAssumption,
   Blocker,
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
@@ -20,6 +22,7 @@ import type {
 import { presentSchedule } from "./present.js";
 import { reasonToString } from "./resolve/assemble.js";
 import { formatFinding } from "./findings.js";
+import { formatAbsenceAssumption } from "./absence.js";
 
 // The here-and-now verdict, against the events we currently know. `reason` rides
 // along only on the events-only arm — it's what explains the fall back to bare
@@ -44,6 +47,9 @@ export type ScheduleView = {
   interchange: InterchangeView;
   // Each finding gets a rendered `message` alongside its structured fields.
   findings: Array<Finding & { message: string }>;
+  // The non-occurrences the resolution leaned on, each with a rendered `message`
+  // (same treatment as findings). Empty when nothing is being assumed absent.
+  absenceAssumptions: Array<AbsenceAssumption & { message: string }>;
   // The projection is the resolution overlay's output. Widened to the full
   // Installment union: the serialized view doesn't care which arm (resolved /
   // unresolved / impossible) produced each one.
@@ -76,6 +82,10 @@ export function toScheduleView(s: EvaluatedSchedule): ScheduleView {
     resolution: resolutionView(s.resolution),
     interchange: interchangeView(s.interchange),
     findings: s.findings.map((f) => ({ ...f, message: formatFinding(f) })),
+    absenceAssumptions: s.absenceAssumptions.map((a) => ({
+      ...a,
+      message: formatAbsenceAssumption(a),
+    })),
     installments: s.resolution.installments,
     blockers: s.resolution.blockers,
   };

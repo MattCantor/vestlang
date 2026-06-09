@@ -99,6 +99,15 @@ function printSchedule(view: ScheduleView, withStatus: boolean): void {
   // presented as valid. (Findings ride every schedule, with their message
   // already rendered, so report them whether or not a status line was printed.)
   view.findings.forEach((f) => console.log(`⚠ ${f.message}`));
+  // What the "resolves to" reading is quietly taking for granted: events we're
+  // assuming haven't happened yet (and by when). If one of them later turns out to
+  // have occurred, the projection above can change.
+  if (view.absenceAssumptions.length > 0) {
+    console.log();
+    console.log("Assumes these events have not yet occurred:");
+    view.absenceAssumptions.forEach((a) => console.log(`  ${a.message}`));
+    console.log();
+  }
   if (view.blockers.length > 0) {
     console.log();
     console.log(

@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import type {
+  AbsenceAssumption,
   Blocker,
   EvaluatedSchedule,
   Finding,
@@ -27,6 +28,7 @@ const stub = (fields: {
   findings?: Finding[];
   reason?: string;
   interchange?: InterchangeVerdict;
+  absenceAssumptions?: AbsenceAssumption[];
 }): EvaluatedSchedule =>
   ({
     interchange: fields.interchange ?? { status: "template" },
@@ -36,7 +38,7 @@ const stub = (fields: {
       installments: fields.installments ?? [],
       ...(fields.reason !== undefined ? { reason: fields.reason } : {}),
     },
-    absenceAssumptions: [],
+    absenceAssumptions: fields.absenceAssumptions ?? [],
     findings: fields.findings ?? [],
   }) as unknown as EvaluatedSchedule;
 
@@ -130,5 +132,24 @@ describe("toScheduleView", () => {
     );
     expect(view.installments).toEqual(dated);
     expect(view.blockers).toEqual(eventBlocker);
+  });
+
+  it("folds a rendered message into each absence assumption, keeping its fields", () => {
+    const view = toScheduleView(
+      stub({
+        status: "template",
+        absenceAssumptions: [{ eventId: "ipo", through: "2025-01-01" }],
+      }),
+    );
+    expect(view.absenceAssumptions).toHaveLength(1);
+    const [a] = view.absenceAssumptions;
+    expect(a.eventId).toBe("ipo"); // structured fields preserved
+    expect(a.through).toBe("2025-01-01");
+    expect(a.message).toBe("ipo did not occur on/before 2025-01-01");
+  });
+
+  it("leaves absenceAssumptions empty when the schedule assumes nothing", () => {
+    const view = toScheduleView(stub({ status: "template" }));
+    expect(view.absenceAssumptions).toEqual([]);
   });
 });

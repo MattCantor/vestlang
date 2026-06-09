@@ -1,6 +1,6 @@
 import { Fragment, ReactNode } from "react";
 import { EvaluatedSchedule, Program } from "@vestlang/types";
-import { formatFinding } from "@vestlang/evaluator";
+import { formatFinding, formatAbsenceAssumption } from "@vestlang/evaluator";
 import { InstallmentsTable } from "./installmentsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
@@ -56,6 +56,14 @@ export default function PlaygroundResults({
                   {"  •  "}
                   <strong>Resolves to:</strong> {s.resolution.status}
                 </p>
+                {/* What the "resolves to" reading is assuming hasn't happened yet —
+                    events whose later occurrence could change the projection below. */}
+                {s.absenceAssumptions.length > 0 ? (
+                  <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
+                    <strong>Assumes not yet occurred:</strong>{" "}
+                    {s.absenceAssumptions.map(formatAbsenceAssumption).join("; ")}
+                  </p>
+                ) : null}
                 <InstallmentsTable installments={s.resolution.installments} />
                 {s.resolution.blockers.length > 0 ? (
                   <pre
