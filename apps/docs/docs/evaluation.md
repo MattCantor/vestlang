@@ -96,9 +96,8 @@ For each statement the evaluator:
 3. Accrues any installments scheduled before the grant date onto the grant date (see [below](#vesting-start-before-grant-date)).
 4. Applies an explicit **`CLIFF`** if present (including partial knowledge for `LATER OF` cliffs, [below](#partial-knowledge-for-later-of)).
 5. **Allocates** the amount across installments (cumulative round-down by default, exact-rational so the rounded shares telescope to the grant exactly).
-6. **Classifies** the result into the two verdicts and emits the installments.
 
-A whole multi-statement program collapses to **one** `EvaluatedSchedule` — never a fan-out.
+A whole multi-statement program then collapses to **one** `EvaluatedSchedule` — never a fan-out — which is **classified** into the two verdicts and carries the merged installments and a single allocation finding if the amounts don't sum to the grant.
 
 **Allocation is exact.** Amounts are split by cumulative round-down in exact rational arithmetic, so the rounded integers telescope to the grant with no drift. For example `100 VEST OVER 3 months EVERY 1 month` over 100 shares vests `33, 33, 34` — each tranche is `floor(100 × i/3) − vestedSoFar` — summing to exactly 100.
 
@@ -170,7 +169,7 @@ Both verdicts `impossible`. Note that an unfired _event_ in a gate is **not** im
 
 ### Template recovery
 
-`events-only` is a verdict about _authored structure_, not the realized numbers. When two overlapping grids actually project a stream with a single-template form, the default program surfaces — `evaluateProgramWithRecovery`, the MCP `vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and, when it reproduces the projection exactly, publish `template` with a `recovered` note instead.
+`events-only` is a verdict about _authored structure_, not the realized numbers. When two overlapping grids actually project a stream with a single-template form, the default program evaluation — `evaluateProgramWithRecovery`, the MCP `vestlang_evaluate` tool, and `vest evaluate` — re-infers that template and, when it reproduces the projection exactly, publishes `template` with a `recovered` note instead.
 
 `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months`, 100 shares — the two grids are really one 6-month cadence:
 
@@ -179,7 +178,7 @@ Both verdicts `impossible`. Note that an unfired _event_ in a gate is **not** im
 | 50     | 2026-01-01 | RESOLVED |
 | 50     | 2026-07-01 | RESOLVED |
 
-Both verdicts `template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. The raw classifier (`evaluateProgram`) still reports `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
+Both verdicts `template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. Without recovery, the raw classification is still `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
 
 ## Installment states
 

@@ -8,9 +8,9 @@ from tool output rather than model arithmetic.
 ## Error responses
 
 The evaluate/parse tools (`vestlang_parse`, `vestlang_compile`,
-`vestlang_evaluate`, `vestlang_evaluate_program`, `vestlang_evaluate_as_of`,
-`vestlang_vested_between`) don't fail with an exception — a failure comes back as
-a single structured shape, so check for an `error` field before reading the rest:
+`vestlang_evaluate`, `vestlang_evaluate_as_of`, `vestlang_vested_between`) don't
+fail with an exception — a failure comes back as a single structured shape, so
+check for an `error` field before reading the rest:
 
 ```json
 { "error": { "ruleId": "syntax-error", "message": "…", "loc": { "start": { "line": 1, "column": 1 }, "end": { "line": 1, "column": 5 } } } }
@@ -22,11 +22,13 @@ a single structured shape, so check for an `error` field before reading the rest
   proceed (e.g. a schedule too large to materialize, or a `from` after `to` on a
   window query). No `loc` — these aren't tied to a source position.
 
-## Verdicts and flags on every evaluate response
+## Verdicts and flags on the `vestlang_evaluate` response
 
-`vestlang_evaluate`, `vestlang_evaluate_program`, and `vestlang_evaluate_as_of`
-each return, per schedule, two verdicts plus a few derived reads. See
-[Evaluation](./evaluation.md) for the full model; the short version:
+`vestlang_evaluate` evaluates the whole program as one schedule and returns two
+verdicts plus a few derived reads (and a per-clause `breakdown`).
+`vestlang_evaluate_as_of` carries no verdict — it partitions the same schedule by
+date; see [its summary fields](#summary-fields-on-vestlang_evaluate_as_of) below.
+See [Evaluation](./evaluation.md) for the full model; the short version:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -39,12 +41,13 @@ each return, per schedule, two verdicts plus a few derived reads. See
 | `absenceAssumptions` | array | Events the resolves-to reading is assuming stayed absent — each `{ eventId, through, message }`, i.e. "`eventId` did not occur on/before `through`". A later/backdated firing of one of these could change the result. Empty for a date-only or fully-fired schedule. |
 | `installments` | array | The dated projection (RESOLVED), or symbolic tranches when something is pending. |
 | `blockers` | array | What's unfired/contradictory, structurally. |
+| `breakdown` | array | Per-clause attribution — one entry per statement, each with its own `installments` and `blockers` (no verdict; a clause has no storable schedule of its own). |
 
 ## Summary fields on `vestlang_evaluate_as_of`
 
 `vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the two verdicts, `absenceAssumptions`, the flat `installments`, and `blockers`; the as-of partitioning and `summary` are what the MCP layer adds on top.)
 
-Each statement's response includes a `summary` object:
+The response includes a `summary` object:
 
 | Field | Type | Meaning |
 |---|---|---|

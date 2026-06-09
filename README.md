@@ -103,12 +103,12 @@ before a strictly earlier one.)
 **Template recovery.** `events-only` is a verdict about *authored structure*, not the
 realized numbers — and some events-only programs project a stream that *does* have a
 single-template form (two overlapping absolute-date grids that are really one cadence, say).
-The default program-evaluation surfaces — `evaluateProgramWithRecovery`, the MCP
-`vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and,
-when it reproduces the projection exactly, publish `template` with a `recovered` note, turning
+The default program evaluation — `evaluateProgramWithRecovery`, the MCP
+`vestlang_evaluate` tool, and `vest evaluate` — re-infers that template and,
+when it reproduces the projection exactly, publishes `template` with a `recovered` note, turning
 a lossy `events-only` back into a clean canonical form. The rescue is sound only for
 firing-invariant programs (no event anchors), so contingent schedules are never collapsed; the
-raw classifier (`evaluateProgram`) still reports the structural verdict.
+raw, recovery-free classification still reports the structural verdict.
 
 ---
 
@@ -186,8 +186,8 @@ ESM-only) so even CommonJS consumers can depend on the engine.
 ### 2. As an MCP server
 
 `apps/mcp-server` exposes the full pipeline as Model Context Protocol tools —
-`vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_program`,
-`vestlang_evaluate_as_of`, `vestlang_lint`, `vestlang_stringify`, `vestlang_infer_schedule` —
+`vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_as_of`,
+`vestlang_lint`, `vestlang_stringify`, `vestlang_infer_schedule` —
 and publishes the grammar/spec/examples as resources. This is the surface for driving
 vestlang from an LLM agent.
 
@@ -241,7 +241,7 @@ state of equity, and the DSL owns all of it.
 ### Graded, multi-statement → one `template`
 
 A 5 / 15 / 40 / 40 graded schedule, written as four statements, collapses to a single
-template (no fan-out) — `vest evaluate --program`, 100 shares:
+template (no fan-out) — `vest evaluate`, 100 shares:
 
 | Amount | Date | State |
 |---:|:---|:---|
@@ -255,8 +255,8 @@ Both verdicts `template`.
 ### Two overlapping absolute starts → recovered to `template`
 
 Two independent absolute-date grids classify `events-only` on structure alone — but their
-realized projection can still have a single-template form, and the default program surfaces
-recover it. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months` over 100 shares — `vest evaluate --program`:
+realized projection can still have a single-template form, and the default program evaluation
+recovers it. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months` over 100 shares — `vest evaluate`:
 
 | Amount | Date | State |
 |---:|:---|:---|
