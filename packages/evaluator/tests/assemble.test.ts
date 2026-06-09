@@ -411,6 +411,106 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   });
 });
 
+describe("assemble — gated atomic start → synthetic event", () => {
+  // A BEFORE/AFTER gate carries a guard a bare EVENT base can't hold, so a gated
+  // atomic start externalizes the same way a combinator does: one synthetic event
+  // whose source-map definition carries the whole guarded expression. This is
+  // what keeps the guard from being dropped at the storage boundary (#18), and it
+  // makes the two word-orders of the same gate lower identically (#54).
+  //
+  // asOf is BEFORE the 2030 deadline so the date operand is still in the future
+  // (UNRESOLVED) and the gate stays pending — not resolved or impossible.
+  const gatedCtx = ctxInput({ asOf: "2026-06-01" });
+
+  // `FROM EVENT a BEFORE DATE 2030-01-01` — event in the base, date in the gate.
+  const eventBeforeDate: VestingNode = {
+    type: "NODE",
+    base: makeVestingBaseEvent("a"),
+    offsets: [],
+    condition: {
+      type: "ATOM",
+      constraint: {
+        type: "BEFORE",
+        base: makeSingletonNode(makeVestingBaseDate("2030-01-01")),
+        strict: false,
+      },
+    },
+  };
+
+  // `FROM DATE 2030-01-01 BEFORE EVENT e` — the mirror: date in the base, event
+  // in the gate. Logically equivalent ordering; must lower the same way.
+  const dateBeforeEvent: VestingNode = {
+    type: "NODE",
+    base: makeVestingBaseDate("2030-01-01"),
+    offsets: [],
+    condition: {
+      type: "ATOM",
+      constraint: {
+        type: "BEFORE",
+        base: makeSingletonNode(makeVestingBaseEvent("e")),
+        strict: false,
+      },
+    },
+  };
+
+  const monthly = { type: "MONTHS", length: 1, occurrences: 48 } as const;
+
+  it("EVENT a BEFORE DATE (future), a unfired → synthetic event carrying the guard", () => {
+    const out = evaluateStatement(
+      stmt(portion(1, 1), eventBeforeDate, monthly),
+      gatedCtx,
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
+    const base = out.template.statements[0].vesting_base;
+    expect(base.type).toBe("EVENT");
+    const eventId = base.type === "EVENT" ? base.event_id : "";
+    expect(eventId).toMatch(/^evt_/);
+    // The guard must survive into the stored definition, not be dropped.
+    expect(Object.keys(out.sourceMap)).toEqual([eventId]);
+    expect(out.sourceMap[eventId].definition).toMatch(/BEFORE/);
+    expect(out.sourceMap[eventId].definition).toMatch(/2030-01-01/);
+    expect(out.sourceMap[eventId].definition).toMatch(/\ba\b/);
+    // No firing yet; pending-ness rides blockers, projection empty.
+    expect(out.runtime.eventFirings ?? []).toEqual([]);
+    expect(out.installments).toEqual([]);
+  });
+
+  it("DATE (future) BEFORE EVENT e → the mirror order externalizes the same way", () => {
+    const out = evaluateStatement(
+      stmt(portion(1, 1), dateBeforeEvent, monthly),
+      gatedCtx,
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
+    const base = out.template.statements[0].vesting_base;
+    expect(base.type).toBe("EVENT");
+    expect(Object.keys(out.sourceMap)).toHaveLength(1);
+    const [id] = Object.keys(out.sourceMap);
+    expect(out.sourceMap[id].definition).toMatch(/BEFORE/);
+    expect(out.sourceMap[id].definition).toMatch(/\be\b/);
+    expect(out.installments).toEqual([]);
+  });
+
+  it("a bare ungated EVENT start stays a plain floating event (no synthetic id)", () => {
+    const out = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseEvent("a")),
+        monthly,
+      ),
+      gatedCtx,
+    );
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
+    const base = out.template.statements[0].vesting_base;
+    expect(base.type).toBe("EVENT");
+    // The real event id, NOT a minted synthetic one — and no source map.
+    expect(base.type === "EVENT" ? base.event_id : "").toBe("a");
+    expect(out.sourceMap).toEqual({});
+  });
+});
+
 describe("assemble — unresolved status", () => {
   // A pure-date combinator that cannot fully resolve (a literal DATE arm still in
   // the future under asOf, no named event to externalize) stays `unresolved`.

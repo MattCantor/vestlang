@@ -23,7 +23,8 @@
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
-    "@vestlang/utils": "workspace:*"
+    "@vestlang/utils": "workspace:*",
+    "@vestlang/walk": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",
