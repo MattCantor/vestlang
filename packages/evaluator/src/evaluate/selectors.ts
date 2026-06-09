@@ -16,6 +16,7 @@ import {
   type PickReturn,
 } from "./utils.js";
 import { evaluateVestingNode } from "./vestingNode/index.js";
+import { withBoundary } from "./boundary.js";
 
 /* ------------------------
  * Types & Guards
@@ -161,10 +162,14 @@ function handleSelector<T extends Schedule | VestingNode>(
 
   // Partial resolution branch for LATER_OF
   if (policy.partialEmit && !allResolved && hasAnyResolved) {
-    const { picked } = reduceBest(resolved, policy.selector);
+    const best = reduceBest(resolved, policy.selector);
+    // The latest arm settled so far is the answer only as long as the arms we're
+    // still waiting on don't land even later. So its date is the boundary we're
+    // assuming each of those pending events stays absent through.
+    const stamped = withBoundary(collectBlockers(live), best.meta.date);
     return {
       type: "PICKED",
-      picked,
+      picked: best.picked,
       meta: {
         type: "UNRESOLVED",
         blockers:
@@ -173,10 +178,10 @@ function handleSelector<T extends Schedule | VestingNode>(
                 {
                   type: "UNRESOLVED_SELECTOR",
                   selector: policy.selector,
-                  blockers: collectBlockers(live),
+                  blockers: stamped,
                 },
               ]
-            : collectBlockers(live),
+            : stamped,
       },
     };
   }
