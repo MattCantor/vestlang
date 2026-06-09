@@ -11,6 +11,7 @@ export {
 export { presentSchedule, type SchedulePresentation } from "./present.js";
 export { toScheduleView, type ScheduleView } from "./view.js";
 export { formatFinding } from "./findings.js";
+export { formatAbsenceAssumption } from "./absence.js";
 export {
   rehydrate,
   reparseDefinition,
