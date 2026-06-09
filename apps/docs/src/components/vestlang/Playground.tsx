@@ -1,24 +1,28 @@
-import {
-  type ReactNode,
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
+import { type ReactNode, useState, useCallback, useEffect } from "react";
 import BrowserOnly from "@docusaurus/BrowserOnly";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateStatement } from "@vestlang/evaluator";
-import type {
-  Program,
-  EvaluatedSchedule,
-  EvaluationContext,
-  OCTDate,
-} from "@vestlang/types";
+import {
+  runEvaluate,
+  type GrantInput,
+  type ScheduleView,
+  type RecoveredView,
+  type ClauseBreakdown,
+} from "@vestlang/pipeline";
+import type { Program, OCTDate } from "@vestlang/types";
 import PlaygroundResults from "./playgroundResults";
 import { getVestingEvents, toISODate } from "./helpers";
 import { GrantConfiguration } from "./grant-configuration";
 import { DSLInput } from "./dsl-input";
+
+// The whole program collapsed into one schedule (`view`), plus what each clause
+// contributed (`breakdown`) and, if an events-only program was recovered back to
+// a template, the recovery note. Mirrors what the MCP/CLI evaluate returns.
+type ProgramResult = {
+  view: ScheduleView;
+  recovered?: RecoveredView;
+  breakdown: ClauseBreakdown[];
+};
 
 export default function Playground(): ReactNode {
   const [quantity, setQuantity] = useState<number>(100);
@@ -28,55 +32,57 @@ export default function Playground(): ReactNode {
     "VEST OVER 4 years EVERY 3 months CLIFF 12 months",
   );
   const [ast, setAst] = useState<Program | null>(null);
-  const [schedules, setSchedules] = useState<EvaluatedSchedule[] | null>(null);
+  const [result, setResult] = useState<ProgramResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const todayISO = useMemo(() => toISODate(new Date()), []);
-
   const run = useCallback(() => {
+    let normalized: Program;
     try {
-      const raw = parse(dsl);
-      const normalized = normalizeProgram(raw);
-      setAst(normalized);
-
-      // Collect unique event identifiers from AST
-      const astEvents = Array.from(new Set(getVestingEvents(normalized)));
-
-      // Build a fresh events object:
-      // - Keep only keys that exist in astEvents
-      // - Preserve their prior date if present
-      // - Add missing keys with todayISO
-      const nextEvents: Record<string, OCTDate | undefined> = {};
-      for (const k of astEvents) {
-        if (k === "grantDate" || k === "vestingStart") continue;
-        nextEvents[k] = events[k] ?? undefined;
-      }
-
-      // Update state
-      setEvents(nextEvents);
-
-      // Merger with grantDate
-      const mergedEvents: EvaluationContext["events"] = {
-        grantDate: toISODate(grantDate),
-        ...nextEvents,
-      };
-
-      const ctx: EvaluationContext = {
-        events: mergedEvents,
-        grantQuantity: quantity,
-        asOf: todayISO,
-        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      };
-
-      const results = normalized.map((s) => evaluateStatement(s, ctx));
-      setSchedules(results);
-      setError(null);
+      normalized = normalizeProgram(parse(dsl));
     } catch (e: any) {
       setAst(null);
-      setSchedules(null);
+      setResult(null);
       setError(e?.message ?? String(e));
+      return;
     }
-  }, [dsl, quantity, grantDate, events, todayISO]);
+    setAst(normalized);
+
+    // Sync the event-date inputs to whatever events the statement names: keep a
+    // box for each one (carrying over any date already entered), drop the rest.
+    // grantDate / vestingStart are anchors, not user-supplied events.
+    const namedEvents: Record<string, OCTDate | undefined> = {};
+    for (const k of new Set(getVestingEvents(normalized))) {
+      if (k === "grantDate" || k === "vestingStart") continue;
+      namedEvents[k] = events[k] ?? undefined;
+    }
+    setEvents(namedEvents);
+
+    // The pipeline owns the rest — parse, context (it injects the grant-date
+    // anchor itself, so we pass only genuine named events with a date), collapse,
+    // recovery — and hands back one program-scoped view plus the per-clause
+    // breakdown. Events still awaiting a date are simply left out (unfired).
+    const grant: GrantInput = {
+      grant_date: toISODate(grantDate),
+      grant_quantity: quantity,
+      events: Object.fromEntries(
+        Object.entries(namedEvents).filter(([, v]) => v !== undefined),
+      ) as Record<string, OCTDate>,
+      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    };
+
+    const evaluated = runEvaluate(dsl, grant);
+    if ("error" in evaluated) {
+      setResult(null);
+      setError(evaluated.error.message);
+      return;
+    }
+    setResult({
+      view: evaluated.view,
+      recovered: evaluated.recovered,
+      breakdown: evaluated.breakdown,
+    });
+    setError(null);
+  }, [dsl, quantity, grantDate, events]);
 
   // Auto-run with light debounce on any relevant change
   useEffect(() => {
@@ -141,8 +147,13 @@ export default function Playground(): ReactNode {
 
                   {/* Results */}
 
-                  {schedules && ast && (
-                    <PlaygroundResults schedules={schedules} ast={ast} />
+                  {result && ast && (
+                    <PlaygroundResults
+                      view={result.view}
+                      recovered={result.recovered}
+                      breakdown={result.breakdown}
+                      ast={ast}
+                    />
                   )}
                 </div>
               </div>
