@@ -25,7 +25,8 @@ export function evaluateStatementAsOf(
 ): VestedResult {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
 
-  const installments = evaluateStatement(stmt, ctx_input).installments;
+  const installments = evaluateStatement(stmt, ctx_input).resolution
+    .installments;
 
   const vested: Installment[] = [];
   const unvested: Installment[] = [];

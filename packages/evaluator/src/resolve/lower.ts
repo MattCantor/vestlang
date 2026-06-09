@@ -36,7 +36,7 @@ import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
-import type { NonTemplateReason } from "./types.js";
+import type { NonTemplateReason } from "@vestlang/types";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 

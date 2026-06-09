@@ -15,17 +15,10 @@ import type {
   ImpossibleBlocker,
   ImpossibleInstallment,
   Installment,
+  NonTemplateReason,
   ResolvedInstallment,
   SourceMap,
 } from "@vestlang/types";
-
-/** Why a resolved program could not be a single canonical template. */
-export type NonTemplateReason =
-  // Two independent DATE-anchored time grids live at once. Carta models these as
-  // separate grants, so they can't be one template.
-  | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
-  // An event-anchored cliff; Carta has no event anchor on the cliff field.
-  | { kind: "EVENT_CLIFF"; eventId: string; detail?: string };
 
 export type ResolveVerdict =
   | {

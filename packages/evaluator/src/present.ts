@@ -2,17 +2,19 @@ import type { EvaluatedSchedule } from "@vestlang/types";
 
 /**
  * The consumer rule, made explicit. There are four orthogonal reads of an
- * `EvaluatedSchedule`, each keyed off a different field:
+ * `EvaluatedSchedule`, and the point of this function is that each comes from a
+ * different place — getting them from the right place is what keeps them honest:
  *
- *   representable  from `status`        can the canonical interchange hold the spec?
- *   pending        from `blockers`      are witnesses still missing? (never read this
- *                                       from `status === "unresolved"`)
- *   projected      from `installments`  is there a dated projection yet?
+ *   representable  from `interchange`   can the record keeper hold this spec? This
+ *                                       is the firing-invariant verdict, so the
+ *                                       answer doesn't lurch around as events fire.
+ *   pending        from `resolution`    are witnesses still missing? (read the
+ *                                       blockers, not `status === "unresolved"`)
+ *   projected      from `resolution`    is there a dated projection yet?
  *   valid          from `findings`      is the spec legal (≤ 100% of the grant)?
  *
- * The pending template is the case this exists for: a `status` of `template`
- * (representable) together with blockers present (pending). Surfaces must not let
- * that collapse into "complete".
+ * The pending template is the case this exists for: a representable schedule that
+ * still carries blockers. Surfaces must not let that collapse into "complete".
  *
  * `valid` is deliberately separate from `representable`: "the interchange can hold
  * this spec" and "this spec is legal" are different questions, and they can
@@ -43,10 +45,13 @@ export interface SchedulePresentation {
 
 /** Derive the orthogonal reads from an evaluated schedule. */
 export function presentSchedule(s: EvaluatedSchedule): SchedulePresentation {
+  const { interchange, resolution } = s;
   return {
-    representable: s.status === "template" || s.status === "events-only",
-    pending: s.status !== "impossible" && s.blockers.length > 0,
-    projected: s.installments.some((i) => i.meta.state === "RESOLVED"),
+    representable:
+      interchange.status === "template" || interchange.status === "events-only",
+    pending:
+      resolution.status !== "impossible" && resolution.blockers.length > 0,
+    projected: resolution.installments.some((i) => i.meta.state === "RESOLVED"),
     valid: s.findings.every((f) => f.severity !== "error"),
   };
 }

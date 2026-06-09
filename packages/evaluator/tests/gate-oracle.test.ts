@@ -60,7 +60,8 @@ type Verdict = "vests" | "pending" | "impossible" | "events-only";
  *  `unresolved` and a witness-pending `template` both read as "pending" — the
  *  floor cares whether a verdict was committed, not which lowering carried it. */
 function verdictOf(s: EvaluatedSchedule): Verdict {
-  switch (s.status) {
+  const { status, installments } = s.resolution;
+  switch (status) {
     case "impossible":
       return "impossible";
     case "events-only":
@@ -68,9 +69,7 @@ function verdictOf(s: EvaluatedSchedule): Verdict {
     case "unresolved":
       return "pending";
     case "template": {
-      const resolved = s.installments.filter(
-        (i) => i.meta.state === "RESOLVED",
-      );
+      const resolved = installments.filter((i) => i.meta.state === "RESOLVED");
       return resolved.length > 0 ? "vests" : "pending";
     }
   }

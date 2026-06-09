@@ -308,10 +308,8 @@ describe("inferSchedule — policy detection", () => {
     const stmt = normalizeProgram(
       parse("48000 VEST FROM DATE 2024-01-31 OVER 48 months EVERY 1 month"),
     )[0];
-    const installments: Installment[] = evaluateStatement(
-      stmt,
-      ctx,
-    ).installments;
+    const installments: Installment[] = evaluateStatement(stmt, ctx).resolution
+      .installments;
     const tranches: TrancheInput[] = installments
       .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
       .map((i) => ({ date: i.date, amount: i.amount }));
@@ -363,7 +361,7 @@ function evalAllResolved(
   const map = new Map<string, number>();
   for (const stmt of program) {
     const result = evaluateStatement(stmt, ctx);
-    for (const inst of result.installments) {
+    for (const inst of result.resolution.installments) {
       if (inst.meta.state === "RESOLVED") {
         const key = inst.date as unknown as string;
         map.set(key, (map.get(key) ?? 0) + inst.amount);
@@ -525,10 +523,8 @@ describe("inferSchedule — rounded trains", () => {
           `${c.total} VEST FROM DATE 2024-01-01 OVER ${c.over} months EVERY 1 month`,
         ),
       )[0];
-      const installments: Installment[] = evaluateStatement(
-        stmt,
-        ctx,
-      ).installments;
+      const installments: Installment[] = evaluateStatement(stmt, ctx)
+        .resolution.installments;
       const tranches: TrancheInput[] = installments
         .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
         .map((i) => ({ date: i.date, amount: i.amount }));

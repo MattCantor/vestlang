@@ -50,7 +50,7 @@ export function residualAgainstInput(
       asOf: ctx.asOf,
       vesting_day_of_month: ctx.vestingDayOfMonth,
     });
-    for (const inst of result.installments) {
+    for (const inst of result.resolution.installments) {
       if (inst.meta.state !== "RESOLVED") {
         return { residual: Number.POSITIVE_INFINITY, installments: [] };
       }
@@ -98,16 +98,19 @@ export function collapseAgainstInput(
   });
 
   const produced = new Map<string, number>();
-  for (const inst of schedule.installments) {
+  // We care about the closed-world result here — what the program actually
+  // resolves to against the (empty) events — so read off the resolution verdict.
+  const { status, installments } = schedule.resolution;
+  for (const inst of installments) {
     if (inst.meta.state !== "RESOLVED" || inst.date === undefined) {
-      return { residual: Number.POSITIVE_INFINITY, status: schedule.status };
+      return { residual: Number.POSITIVE_INFINITY, status };
     }
     produced.set(inst.date, (produced.get(inst.date) ?? 0) + inst.amount);
   }
 
   return {
     residual: residualBetween(produced, input),
-    status: schedule.status,
+    status,
   };
 }
 
@@ -130,5 +133,5 @@ export function programStatus(program: Program, ctx: VerifyContext): Status {
     asOf: ctx.asOf,
     vesting_day_of_month: ctx.vestingDayOfMonth,
   });
-  return schedule.status;
+  return schedule.resolution.status;
 }

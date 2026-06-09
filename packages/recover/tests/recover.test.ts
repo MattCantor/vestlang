@@ -32,7 +32,7 @@ describe("evaluateProgramWithRecovery", () => {
 
     expect(outcome.rescued).toBe(true);
     if (!outcome.rescued) return; // narrow for the assertions below
-    expect(outcome.schedule.status).toBe("template");
+    expect(outcome.schedule.resolution.status).toBe("template");
     expect(outcome.recovered.from).toBe("events-only");
     expect(outcome.recovered.reason).toBe(
       "Two independent absolute-date vesting grids on one grant.",
@@ -44,6 +44,26 @@ describe("evaluateProgramWithRecovery", () => {
     );
   });
 
+  // #75.2: recovery is gated on firing-invariance (event-freeness), not on a
+  // literal `FROM DATE`. The same two overlapping grids written off the grant date
+  // — `FROM grantDate` and `FROM grantDate + 2 months`, against grantDate
+  // 2024-01-01 — are just as recoverable, because a grant-date anchor is a fixed
+  // service-time date, not a milestone.
+  it("rescues grant-date-anchored grids, not only literal FROM DATE", () => {
+    const outcome = evaluateProgramWithRecovery(
+      prog(
+        "0.5 VEST FROM grantDate OVER 4 months EVERY 1 month PLUS 0.5 VEST FROM grantDate + 2 months OVER 4 months EVERY 1 month",
+      ),
+      makeCtx({ grantQuantity: 800 }),
+    );
+
+    expect(outcome.rescued).toBe(true);
+    if (!outcome.rescued) return;
+    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.recovered.dsl).toContain("THEN");
+    expect(outcome.recovered.residualError).toBe(0);
+  });
+
   it("does not rescue an event-anchored cliff (rejected on reason kind)", () => {
     const outcome = evaluateProgramWithRecovery(
       prog(
@@ -53,7 +73,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.status).toBe("events-only");
+    expect(outcome.schedule.resolution.status).toBe("events-only");
   });
 
   // Same reason kind as #43 (OVERLAPPING_ABSOLUTE_STARTS), but an event anchor.
@@ -68,7 +88,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.status).toBe("events-only");
+    expect(outcome.schedule.resolution.status).toBe("events-only");
   });
 
   // Two grids on different days of the month interleave into a stream with no
@@ -84,7 +104,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.status).toBe("events-only");
+    expect(outcome.schedule.resolution.status).toBe("events-only");
   });
 
   it("returns a clean template untouched, with no inference", () => {
@@ -94,7 +114,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.status).toBe("template");
+    expect(outcome.schedule.resolution.status).toBe("template");
   });
 
   // An unfired event start resolves to a (pending) template, not events-only —
@@ -106,6 +126,6 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.status).toBe("template");
+    expect(outcome.schedule.resolution.status).toBe("template");
   });
 });

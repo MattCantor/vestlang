@@ -26,6 +26,15 @@ import {
   makeVestingBaseVestingStart,
 } from "./helpers";
 
+// Every assertion in this file is about the closed-world resolution verdict
+// (which arm a schedule lands in, the dated installments, the blockers), so these
+// helpers grab that verdict straight off the result. The firing-invariant
+// interchange verdict has its own suite in interchange.test.ts.
+const evalStmt = (stmt: Statement, ctx: EvaluationContextInput) =>
+  evaluateStatement(stmt, ctx).resolution;
+const evalProgram = (program: Program, ctx: EvaluationContextInput) =>
+  evaluateProgram(program, ctx).map((s) => s.resolution);
+
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
 ): EvaluationContextInput => ({
@@ -65,7 +74,7 @@ describe("assemble — template status", () => {
   );
 
   it("monthly-48 + 12mo cliff → RESOLVED installments tagged template", () => {
-    const out = evaluateStatement(monthly48WithCliff, ctxInput());
+    const out = evalStmt(monthly48WithCliff, ctxInput());
     expect(out.status).toBe("template");
     expect(out.blockers).toEqual([]);
     expect(out.installments).toHaveLength(37); // cliff lump + 36 monthly
@@ -79,7 +88,7 @@ describe("assemble — template status", () => {
   });
 
   it("totals telescope EXACTLY to grant quantity", () => {
-    const out = evaluateStatement(monthly48WithCliff, ctxInput());
+    const out = evalStmt(monthly48WithCliff, ctxInput());
     expect(sum(out.installments)).toBe(100000);
   });
 
@@ -96,7 +105,7 @@ describe("assemble — template status", () => {
       yearStmt(8, "2027-01-01"),
       yearStmt(8, "2028-01-01"),
     ];
-    const schedules = evaluateProgram(program, ctxInput());
+    const schedules = evalProgram(program, ctxInput());
     expect(schedules).toHaveLength(1); // whole program → one template schedule
     expect(schedules[0].status).toBe("template");
     expect(sum(schedules[0].installments)).toBe(100000);
@@ -125,7 +134,7 @@ describe("assemble — events-only status", () => {
         },
       ),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const [out] = evalProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
     if (out.status !== "events-only") throw new Error("expected events-only");
     expect(out.reason).toBeTruthy();
@@ -159,8 +168,8 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
       fromGrant(15, 24),
       fromGrant(80, 36),
     ];
-    expect(() => evaluateProgram(program, ctxInput())).not.toThrow();
-    const [out] = evaluateProgram(program, ctxInput());
+    expect(() => evalProgram(program, ctxInput())).not.toThrow();
+    const [out] = evalProgram(program, ctxInput());
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
       true,
     );
@@ -177,7 +186,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
         occurrences: 1,
       });
     const program: Program = [ipoPortion(1), ipoPortion(1)];
-    const [out] = evaluateProgram(
+    const [out] = evalProgram(
       program,
       ctxInput({
         grantDate: "2025-01-01",
@@ -201,7 +210,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         occurrences: 1,
       }),
     ];
-    const out = evaluateStatement(program[0], ctxInput()); // ipo not fired
+    const out = evalStmt(program[0], ctxInput()); // ipo not fired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     expect(out.installments).toEqual([]); // no firing → nothing projected yet
@@ -239,7 +248,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         occurrences: 1,
       }),
     ];
-    const [out] = evaluateProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
+    const [out] = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
@@ -293,7 +302,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   });
 
   it("LATER OF(+12mo, EVENT ipo), ipo unfired → template + synthetic event", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput(),
     );
@@ -334,10 +343,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
     } as Statement;
-    const out = evaluateStatement(
-      earlierStmt,
-      ctxInput({ asOf: "2025-06-01" }),
-    );
+    const out = evalStmt(earlierStmt, ctxInput({ asOf: "2025-06-01" }));
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     const base = out.template.statements[0].vesting_base;
@@ -351,7 +357,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
       combinatorStmt("NODE_LATER_OF", portion(3, 4)),
       combinatorStmt("NODE_LATER_OF", portion(1, 4)),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const [out] = evalProgram(program, ctxInput());
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     expect(out.template.statements).toHaveLength(2);
@@ -364,7 +370,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   });
 
   it("100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo) → synthetic event", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput({ grantQuantity: 4800 }),
     );
@@ -383,7 +389,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   it("pure-date combinator earns NO synthetic event (resolves to a DATE template)", () => {
     // LATER OF(+12mo, +24mo) — no named event, so it fails the admission test and
     // resolves to a single DATE anchor (the later). Template, no source map.
-    const out = evaluateStatement(
+    const out = evalStmt(
       {
         type: "STATEMENT",
         amount: portion(1, 1),
@@ -458,7 +464,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
   const monthly = { type: "MONTHS", length: 1, occurrences: 48 } as const;
 
   it("EVENT a BEFORE DATE (future), a unfired → synthetic event carrying the guard", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       stmt(portion(1, 1), eventBeforeDate, monthly),
       gatedCtx,
     );
@@ -479,7 +485,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
   });
 
   it("DATE (future) BEFORE EVENT e → the mirror order externalizes the same way", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       stmt(portion(1, 1), dateBeforeEvent, monthly),
       gatedCtx,
     );
@@ -495,7 +501,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
   });
 
   it("a bare ungated EVENT start stays a plain floating event (no synthetic id)", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       stmt(
         portion(1, 1),
         makeSingletonNode(makeVestingBaseEvent("a")),
@@ -537,7 +543,7 @@ describe("assemble — future-dated pure-date schedules resolve", () => {
     const program: Program = [
       { type: "STATEMENT", amount: portion(1, 1), expr: laterOfSchedule },
     ];
-    const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" }));
+    const out = evalStmt(program[0], ctxInput({ asOf: "2026-06-01" }));
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     // Pure dates: nothing to externalize, so no synthetic event.
@@ -574,7 +580,7 @@ describe("assemble — impossible status", () => {
   });
 
   it("contradictory statement → status impossible, all installments IMPOSSIBLE", () => {
-    const out = evaluateStatement(
+    const out = evalStmt(
       voidStmt,
       ctxInput({
         grantDate: "2025-01-01",
@@ -593,7 +599,7 @@ describe("assemble — impossible status", () => {
   });
 
   it("whole-program collapse: all-void program → impossible", () => {
-    const [out] = evaluateProgram(
+    const [out] = evalProgram(
       [voidStmt, voidStmt],
       ctxInput({
         grantDate: "2025-01-01",
@@ -614,7 +620,7 @@ describe("assemble — impossible status", () => {
       length: 12,
       occurrences: 2,
     });
-    const [out] = evaluateProgram(
+    const [out] = evalProgram(
       [resolving, half],
       ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );

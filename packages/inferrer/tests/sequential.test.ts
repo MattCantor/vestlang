@@ -144,7 +144,7 @@ describe("inferSchedule — sequential recovery end to end", () => {
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
     };
     const [schedule] = evaluateProgram(program, ctx);
-    expect(schedule.status).toBe("template");
+    expect(schedule.resolution.status).toBe("template");
   });
 
   it("emits a head followed by chained tails, never the other way round", () => {
@@ -211,7 +211,8 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
     expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
     expect(inferred.dsl).toContain("THEN");
     expect(
-      collapse(inferred.dsl, inferred.diagnostics.vestingDayOfMonth).status,
+      collapse(inferred.dsl, inferred.diagnostics.vestingDayOfMonth).resolution
+        .status,
     ).toBe("template");
   });
 
@@ -222,7 +223,7 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
     // statements read as independent grids → events-only.
     const dated =
       "200 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 400 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
-    expect(collapse(dated, "31_OR_LAST_DAY_OF_MONTH").status).toBe(
+    expect(collapse(dated, "31_OR_LAST_DAY_OF_MONTH").resolution.status).toBe(
       "events-only",
     );
   });

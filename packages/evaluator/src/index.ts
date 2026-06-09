@@ -19,11 +19,12 @@ export {
 // The pre-assemble verdict and the assemble step, exposed for @vestlang/recover:
 // it needs to inspect the structured ResolveResult (reason kind, the events-arm
 // installments) before assemble flattens the reason to a string, then assemble a
-// result it already holds without re-resolving. Most callers should stick to
+// result it already holds without re-resolving. `resolveInterchange` gives it the
+// firing-invariant verdict to pass alongside. Most callers should stick to
 // evaluateStatement/evaluateProgram above.
-export { resolveToCore } from "./resolve/index.js";
+export { resolveToCore, resolveInterchange } from "./resolve/index.js";
 export { assemble } from "./resolve/assemble.js";
-export type { ResolveResult, NonTemplateReason } from "./resolve/index.js";
+export type { ResolveResult } from "./resolve/index.js";
 export {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,

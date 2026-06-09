@@ -26,14 +26,14 @@ describe("makeTranches", () => {
 
   it("makeStartPlusTranches steps are index * stepLength", () => {
     const out = makeStartPlusSchedule([1, 1, 1], "MONTHS", 3, [
-      { type: "DATE_NOT_YET_OCCURRED", date: "2024-02-01" },
+      { type: "EVENT_NOT_YET_OCCURRED", event: "milestone" },
     ]);
     expect(out.installments.map((t) => t.meta.symbolicDate)).toEqual([
       { type: "START_PLUS", unit: "MONTHS", steps: 0 },
       { type: "START_PLUS", unit: "MONTHS", steps: 3 },
       { type: "START_PLUS", unit: "MONTHS", steps: 6 },
     ]);
-    expect(out.installments[0].meta.unresolved).toContain("DATE 2024-02-01"); // stringified via blockerToString
+    expect(out.installments[0].meta.unresolved).toContain("EVENT milestone"); // stringified via blockerToString
   });
 
   it("makeImpossibleTranches repeats blockers and amounts", () => {

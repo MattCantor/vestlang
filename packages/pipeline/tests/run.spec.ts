@@ -20,7 +20,7 @@ describe("runEvaluate", () => {
     if (r.ok) {
       const views: ScheduleView[] = r.views;
       expect(views).toHaveLength(1);
-      expect(views[0].status).toBe("template");
+      expect(views[0].resolution.status).toBe("template");
     }
   });
 

@@ -93,4 +93,7 @@ export {
   EvaluatedScheduleVerdict,
   EvaluatedSchedule,
   Status,
+  NonTemplateReason,
+  InterchangeVerdict,
+  AbsenceAssumption,
 } from "./evaluation.js";

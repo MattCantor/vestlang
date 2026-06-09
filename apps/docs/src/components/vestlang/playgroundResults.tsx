@@ -48,8 +48,16 @@ export default function PlaygroundResults({
                     </div>
                   );
                 })}
-                <InstallmentsTable installments={s.installments} />
-                {s.blockers.length > 0 ? (
+                {/* The two verdicts, labeled: what a record keeper could store
+                    for this schedule, and what it resolves to given the events
+                    entered above. */}
+                <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
+                  <strong>Storable:</strong> {s.interchange.status}
+                  {"  •  "}
+                  <strong>Resolves to:</strong> {s.resolution.status}
+                </p>
+                <InstallmentsTable installments={s.resolution.installments} />
+                {s.resolution.blockers.length > 0 ? (
                   <pre
                     style={{
                       fontSize: "0.75rem",
@@ -61,7 +69,7 @@ export default function PlaygroundResults({
                       background: "var(--ifm-code-background)",
                     }}
                   >
-                    {JSON.stringify(s.blockers, null, 2)}
+                    {JSON.stringify(s.resolution.blockers, null, 2)}
                   </pre>
                 ) : null}
               </Fragment>

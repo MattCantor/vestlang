@@ -1,4 +1,8 @@
-import { assemble, resolveToCore } from "@vestlang/evaluator";
+import {
+  assemble,
+  resolveToCore,
+  resolveInterchange,
+} from "@vestlang/evaluator";
 import { inferSchedule, type TrancheInput } from "@vestlang/inferrer";
 import type {
   EvaluationContextInput,
@@ -21,18 +25,24 @@ export function evaluateProgramWithRecovery(
   ctx: EvaluationContextInput,
 ): RecoveryOutcome {
   const r = resolveToCore(stmts, ctx);
+  // The storable-floor verdict for the authored program, paired with every
+  // schedule we assemble from `r` below.
+  const interchange = resolveInterchange(stmts, ctx);
 
   // Anything that already fits a template (or can't resolve yet) leaves here
   // untouched — no inference cost on the common path.
-  if (r.kind !== "events") return { rescued: false, schedule: assemble(r) };
+  if (r.kind !== "events")
+    return { rescued: false, schedule: assemble(r, interchange) };
 
   // From here `r` is the events arm. Assemble it once: it's both the value we
   // return when there's no rescue, and the only place the original events-only
   // reason survives — once we publish a recovered template, that schedule carries
   // no reason of its own.
-  const eventsSchedule = assemble(r);
+  const eventsSchedule = assemble(r, interchange);
   const reason =
-    eventsSchedule.status === "events-only" ? eventsSchedule.reason : "";
+    eventsSchedule.resolution.status === "events-only"
+      ? eventsSchedule.resolution.reason
+      : "";
   const noRescue: RecoveryOutcome = {
     rescued: false,
     schedule: eventsSchedule,
@@ -52,27 +62,41 @@ export function evaluateProgramWithRecovery(
 
   // Re-classify the inferred program. The day-of-month convention isn't in the
   // DSL text, so it has to ride in as context for the projection to line up.
-  const reclassified = resolveToCore(inferred.program, {
+  const reclassifiedCtx = {
     ...ctx,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
-  });
+  };
+  const reclassified = resolveToCore(inferred.program, reclassifiedCtx);
   if (reclassified.kind !== "template") return noRescue;
 
-  const published = assemble(reclassified);
-  // assemble preserves a template verdict as status "template"; the guard is here
-  // to narrow the type, not because the other branch is reachable.
-  if (published.status !== "template") return noRescue;
+  // The published schedule describes the inferred program now, so its storable
+  // verdict comes from that program too — and since recovery only runs on
+  // firing-invariant inputs, the inferred template is itself storable.
+  const published = assemble(
+    reclassified,
+    resolveInterchange(inferred.program, reclassifiedCtx),
+  );
+  // assemble preserves a template verdict; the guard is here to narrow the type,
+  // not because the other branch is reachable.
+  if (published.resolution.status !== "template") return noRescue;
+  // Rebuild with the narrowed resolution so the value matches the rescued-arm
+  // type. Narrowing the nested `resolution` doesn't re-type the whole object, so
+  // we spread it back together explicitly.
+  const rescued = { ...published, resolution: published.resolution };
 
   // Re-assert exact reproduction independently of the inferrer's own fit check.
   // This is what licenses flipping the verdict events-only → template: not just
   // "the inferred DSL fits the stream" but "the rescued template reproduces the
   // original projection exactly." Anything but a clean zero and we don't rescue.
-  const residualError = residualBetween(r.installments, published.installments);
+  const residualError = residualBetween(
+    r.installments,
+    published.resolution.installments,
+  );
   if (residualError !== 0) return noRescue;
 
   return {
     rescued: true,
-    schedule: published,
+    schedule: rescued,
     recovered: {
       from: "events-only",
       reason,

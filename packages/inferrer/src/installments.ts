@@ -21,7 +21,7 @@ export function resolvedInstallmentMap(
   stmt: Statement,
   ctx: EvaluationContextInput,
 ): Map<OCTDate, number> | null {
-  const { installments } = evaluateStatement(stmt, ctx);
+  const { installments } = evaluateStatement(stmt, ctx).resolution;
   const map = new Map<OCTDate, number>();
   for (const inst of installments) {
     if (inst.meta.state !== "RESOLVED" || inst.date === undefined) return null;

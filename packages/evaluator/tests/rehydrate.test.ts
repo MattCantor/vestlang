@@ -76,16 +76,16 @@ const stageAStmt = (): Statement => ({
 // Build the stored artifact (IPO unfired): a `template` arm carrying the
 // synthetic EVENT statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
-  const out = evaluateStatement(
+  const { resolution } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (out.status !== "template")
-    throw new Error(`expected template, got ${out.status}`);
+  if (resolution.status !== "template")
+    throw new Error(`expected template, got ${resolution.status}`);
   return {
-    template: out.template,
-    sourceMap: out.sourceMap,
-    runtime: out.runtime,
+    template: resolution.template,
+    sourceMap: resolution.sourceMap,
+    runtime: resolution.runtime,
   };
 };
 

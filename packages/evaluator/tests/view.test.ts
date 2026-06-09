@@ -10,24 +10,34 @@ import type {
   EvaluatedSchedule,
   Finding,
   Installment,
+  InterchangeVerdict,
+  Status,
 } from "@vestlang/types";
 import { toScheduleView } from "../src/view";
 
-// Same shortcut present.test.ts uses: toScheduleView reads only status /
-// blockers / installments / findings (+ reason on the events-only arm), so stub
-// the rest. Extra fields (e.g. reason) pass straight through the cast.
+// The view carries both verdicts. We stub the resolution side (status, blockers,
+// installments, the events-only reason) and let the interchange side default to a
+// plain template; a test that cares about the storable verdict passes its own.
+// Everything is cast through `unknown`, so the stub only has to carry the fields
+// toScheduleView actually reads.
 const stub = (fields: {
-  status: EvaluatedSchedule["status"];
+  status: Status;
   blockers?: Blocker[];
   installments?: Installment[];
   findings?: Finding[];
   reason?: string;
+  interchange?: InterchangeVerdict;
 }): EvaluatedSchedule =>
   ({
-    blockers: [],
-    installments: [],
-    findings: [],
-    ...fields,
+    interchange: fields.interchange ?? { status: "template" },
+    resolution: {
+      status: fields.status,
+      blockers: fields.blockers ?? [],
+      installments: fields.installments ?? [],
+      ...(fields.reason !== undefined ? { reason: fields.reason } : {}),
+    },
+    absenceAssumptions: [],
+    findings: fields.findings ?? [],
   }) as unknown as EvaluatedSchedule;
 
 const dated: Installment[] = [
@@ -46,21 +56,41 @@ const overAllocated: Finding[] = [
 ];
 
 describe("toScheduleView", () => {
-  it("carries reason on the events-only arm", () => {
+  it("carries the resolution reason on the events-only arm", () => {
     const view = toScheduleView(
       stub({ status: "events-only", reason: "overlapping starts" }),
     );
-    expect(view.status).toBe("events-only");
+    expect(view.resolution.status).toBe("events-only");
     // narrow before reading reason — it only exists on this arm
-    if (view.status === "events-only") {
-      expect(view.reason).toBe("overlapping starts");
+    if (view.resolution.status === "events-only") {
+      expect(view.resolution.reason).toBe("overlapping starts");
     }
   });
 
-  it("omits reason on the template / unresolved / impossible arms", () => {
+  it("omits the resolution reason on the template / unresolved / impossible arms", () => {
     for (const status of ["template", "unresolved", "impossible"] as const) {
       const view = toScheduleView(stub({ status }));
-      expect("reason" in view).toBe(false);
+      expect("reason" in view.resolution).toBe(false);
+    }
+  });
+
+  it("surfaces the interchange verdict alongside the resolution one", () => {
+    // An event cliff is events-only when you read against known events, but has no
+    // storable form, so the two verdicts differ — the view shows both.
+    const view = toScheduleView(
+      stub({
+        status: "events-only",
+        reason: "event-anchored cliff",
+        interchange: {
+          status: "unrepresentable",
+          reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+        },
+      }),
+    );
+    expect(view.resolution.status).toBe("events-only");
+    expect(view.interchange.status).toBe("unrepresentable");
+    if (view.interchange.status === "unrepresentable") {
+      expect(view.interchange.reason).toContain("ipo");
     }
   });
 
