@@ -90,26 +90,10 @@ describe("mcp-server / installment cap", () => {
     const client = await connectClient();
     const res = await evaluate(client, "VEST OVER 48 months EVERY 1 month");
     const sc = res.structuredContent as {
-      statements?: { installments: unknown[] }[];
+      installments?: unknown[];
       error?: unknown;
     };
     expect(sc.error).toBeUndefined();
-    expect(sc.statements?.[0].installments).toHaveLength(48);
-  });
-
-  // The per-statement and whole-program tools enforce the cap by the same exact
-  // measure, so they must agree on a borderline program — neither rejects what
-  // the other accepts.
-  it("vestlang_evaluate and vestlang_evaluate_program agree on an over-cap program", async () => {
-    const client = await connectClient();
-    const dsl =
-      "VEST OVER 6000 days EVERY 1 day PLUS VEST OVER 6000 days EVERY 1 day";
-    const perStatement = errorOf(await evaluate(client, dsl));
-    const program = errorOf(
-      await callEval(client, "vestlang_evaluate_program", dsl),
-    );
-    expect(perStatement?.message).toMatch(/exceeds the limit/);
-    expect(program?.message).toMatch(/exceeds the limit/);
-    expect(program?.message).toBe(perStatement?.message);
+    expect(sc.installments).toHaveLength(48);
   });
 });

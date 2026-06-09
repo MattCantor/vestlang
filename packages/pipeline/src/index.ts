@@ -12,13 +12,14 @@ export type { PipelineError, Result, Loc } from "./parse.js";
 
 export { parseQuantity, validateDate } from "./validate.js";
 
-export {
-  runEvaluate,
-  runEvaluateProgram,
-  runAsOf,
-  runVestedBetween,
+export { runEvaluate, runAsOf, runVestedBetween } from "./run.js";
+export type {
+  GrantInput,
+  AsOfView,
+  WindowView,
+  RecoveredView,
+  ClauseBreakdown,
 } from "./run.js";
-export type { GrantInput, AsOfView, WindowView, RecoveredView } from "./run.js";
 
 // Re-exported so the apps can type their rendering off the pipeline alone,
 // without taking a direct dependency on the evaluator / summary internals.

@@ -33,23 +33,23 @@ export function asof(
   const result = runAsOf(input(parts, opts.stdin), grant, asOf);
   if (!result.ok) fail(result.error);
 
+  // One partition for the whole grant — the program is collapsed before it's
+  // split into vested / unvested / impossible.
   console.log(`AS OF ${result.asOf}`);
-  result.statements.forEach((r) => {
-    if (r.vested.length > 0) {
-      console.log("VESTED");
-      console.table(r.vested);
-    }
-    if (r.unvested.length > 0) {
-      console.log("UNVESTED");
-      console.table(r.unvested);
-    }
-    if (r.impossible.length > 0) {
-      console.log("IMPOSSIBLE");
-      console.table(r.impossible);
-    }
-    console.log("UNRESOLVED");
-    console.log(r.unresolved);
-    console.log("SUMMARY");
-    console.table(r.summary);
-  });
+  if (result.vested.length > 0) {
+    console.log("VESTED");
+    console.table(result.vested);
+  }
+  if (result.unvested.length > 0) {
+    console.log("UNVESTED");
+    console.table(result.unvested);
+  }
+  if (result.impossible.length > 0) {
+    console.log("IMPOSSIBLE");
+    console.table(result.impossible);
+  }
+  console.log("UNRESOLVED");
+  console.log(result.unresolved);
+  console.log("SUMMARY");
+  console.table(result.summary);
 }

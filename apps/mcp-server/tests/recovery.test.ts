@@ -3,10 +3,10 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
-// Exercises the MCP tool layer for `vestlang_evaluate_program` once the recovery
-// pass is wired in: the rescued response shape (`recovered` block) and its
-// absence when nothing is recovered. The recovery *logic* lives in and is covered
-// by @vestlang/recover; here we only check the tool surfaces it.
+// Exercises the MCP tool layer for `vestlang_evaluate` once the recovery pass is
+// wired in: the rescued response shape (`recovered` block) and its absence when
+// nothing is recovered. The recovery *logic* lives in and is covered by
+// @vestlang/recover; here we only check the tool surfaces it.
 
 type CallResult = {
   isError?: boolean;
@@ -31,12 +31,12 @@ function callEval(
   args: { dsl: string; grant_date: string; grant_quantity: number },
 ): Promise<CallResult> {
   return client.callTool({
-    name: "vestlang_evaluate_program",
+    name: "vestlang_evaluate",
     arguments: args,
   }) as Promise<CallResult>;
 }
 
-describe("mcp-server / vestlang_evaluate_program recovery", () => {
+describe("mcp-server / vestlang_evaluate recovery", () => {
   // The #43 case: two overlapping absolute-date grids classify events-only, but
   // their projection has an equivalent single THEN-chain template.
   it("emits status=template + a recovered block when a rescue happens", async () => {

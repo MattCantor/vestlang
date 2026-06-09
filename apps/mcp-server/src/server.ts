@@ -9,7 +9,6 @@ import {
   parseRaw,
   parseToProgram,
   runEvaluate,
-  runEvaluateProgram,
   runAsOf,
   runVestedBetween,
   type GrantInput,
@@ -38,15 +37,17 @@ Typical workflows:
   AST, then explain it to the user.
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
   a grant_date, grant_quantity, and any named events that the DSL references.
-  vestlang_evaluate classifies each statement on its own; vestlang_evaluate_program
-  collapses the whole program into one schedule. Every schedule comes back with TWO
-  verdicts: \`interchange\` (the "storable" verdict — what a record keeper could hold,
-  computed without reading firings) and \`resolution\` (the "resolves-to" verdict — what
-  it works out to given the events you passed). They can differ — a gated start is a
-  storable template that may resolve to impossible after an early firing. The result also
-  carries \`absenceAssumptions\`: events the resolves-to reading is assuming stayed absent
-  (each { eventId, through, message }), whose later or backdated firing could change the
-  answer.
+  Both treat the program as one grant — its statements collapse into a single
+  schedule rather than being judged branch by branch. vestlang_evaluate returns
+  the whole schedule with TWO verdicts: \`interchange\` (the "storable" verdict —
+  what a record keeper could hold, computed without reading firings) and
+  \`resolution\` (the "resolves-to" verdict — what it works out to given the events
+  you passed). They can differ — a gated start is a storable template that may
+  resolve to impossible after an early firing. It also carries \`absenceAssumptions\`:
+  events the resolves-to reading is assuming stayed absent (each
+  { eventId, through, message }), whose later or backdated firing could change the
+  answer — and a \`breakdown\`: each clause's own tranches and blockers, for when
+  you need to see which clause produced what.
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL (branch-and-bound
   minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
@@ -328,13 +329,13 @@ export function createServer(): McpServer {
     },
   );
 
-  /* evaluate: DSL + context → full schedule of installments per statement */
+  /* evaluate: DSL + context → the grant's collapsed schedule + per-clause breakdown */
   server.registerTool(
     "vestlang_evaluate",
     {
       title: "Evaluate vesting schedule",
       description:
-        "Evaluate vestlang against a grant context and return, for each statement, two verdicts plus its installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) and blockers. The verdicts: `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings (status: template / events-only / unrepresentable / impossible); and `resolution` — the resolves-to verdict, what it works out to given the events you passed (status: template / events-only / unresolved / impossible). They can differ. Each result also carries `representable` (from `interchange` — storable at all), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `blockers`, never from a verdict's status), and `valid` (false when the statement allocates more than the grant) with a `findings` array (each `kind`, `severity`, exact `sum`, human `message`); installments are still returned when `valid` is false but aren't a valid schedule. It also carries `absenceAssumptions`: events the resolves-to reading assumes stayed absent (each { eventId, through, message }), whose later or backdated firing could change the result. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
+        'Evaluate a vestlang program against a grant context. The program is treated as ONE grant: its statements collapse into a single schedule of installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) with blockers, and you get TWO verdicts on it. `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — today only an event-anchored cliff), or "impossible" (a structural contradiction). `resolution` — the resolves-to verdict given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `interchange`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `blockers`, never from a verdict status), and `valid` (false when the program allocates more than the grant) with a single `findings` array (each `kind`, `severity`, exact `sum`, human `message`) computed over the whole program; installments are still returned when `valid` is false but aren\'t a valid schedule. It carries `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, message }, whose later or backdated firing could change the result), and `breakdown` — one entry per clause with that clause\'s own installments and blockers (no verdict; a clause has no storable schedule of its own), for attribution. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.',
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -351,39 +352,12 @@ export function createServer(): McpServer {
     async (params) => {
       const result = runEvaluate(params.dsl, toGrant(params));
       if (!result.ok) return jsonResult({ error: result.error });
-      return jsonResult({
-        statements: result.views.map((view, index) => ({ index, ...view })),
-      });
-    },
-  );
-
-  /* evaluate_program: DSL program → ONE collapsed schedule + program-level verdict (status) */
-  server.registerTool(
-    "vestlang_evaluate_program",
-    {
-      title: "Evaluate a whole program as one schedule",
-      description:
-        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule. Returns TWO verdicts. `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — today only an event-anchored cliff), or "impossible" (a structural contradiction). `resolution` — the resolves-to verdict given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `interchange`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `blockers`, never from a verdict status), `valid` (false on over-allocation) with a `findings` array (each `kind`, `severity`, exact `sum`, human `message`), and `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, message }, whose later or backdated firing could change the result). Use vestlang_evaluate instead for the per-statement view.',
-      inputSchema: z
-        .object({
-          dsl: DSL_INPUT,
-          ...EVAL_CONTEXT_FIELDS,
-        })
-        .strict().shape,
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    async (params) => {
-      const result = runEvaluateProgram(params.dsl, toGrant(params));
-      if (!result.ok) return jsonResult({ error: result.error });
-      // The view carries the verdict and the published fields; on a rescue the
-      // recovered block (events-only reason + inferred DSL) rides alongside.
+      // The view carries the verdicts and published fields; the breakdown rides
+      // alongside, and on a rescue so does the recovered block (events-only
+      // reason + inferred DSL).
       return jsonResult({
         ...result.view,
+        breakdown: result.breakdown,
         ...(result.recovered ? { recovered: result.recovered } : {}),
       });
     },
@@ -395,7 +369,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting as of a date",
       description:
-        "Evaluate vestlang and partition installments into {vested, unvested, impossible} with an unresolved count, as of a given date (defaults to today). This is the primary tool for answering 'how much is vested right now?' questions. Each statement also carries the two verdicts (`interchange` / `resolution`), the `representable` / `pending` / `valid` flags, and `absenceAssumptions` — see vestlang_evaluate for those.",
+        "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date, cliff). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. For the verdicts and storability flags, use vestlang_evaluate.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -417,10 +391,11 @@ export function createServer(): McpServer {
       if (!result.ok) return jsonResult({ error: result.error });
       return jsonResult({
         as_of: result.asOf,
-        statements: result.statements.map((stmt, index) => ({
-          index,
-          ...stmt,
-        })),
+        vested: result.vested,
+        unvested: result.unvested,
+        impossible: result.impossible,
+        unresolved: result.unresolved,
+        summary: result.summary,
       });
     },
   );
@@ -431,7 +406,7 @@ export function createServer(): McpServer {
     {
       title: "Vested shares in a date window",
       description:
-        "Return the RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested.",
+        "Return the grant's RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. The program is collapsed into one schedule first; UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -458,10 +433,9 @@ export function createServer(): McpServer {
       return jsonResult({
         from: result.from,
         to: result.to,
-        statements: result.statements.map((stmt, index) => ({
-          index,
-          ...stmt,
-        })),
+        vested_in_window: result.vested_in_window,
+        tranches_in_window: result.tranches_in_window,
+        installments: result.installments,
       });
     },
   );
