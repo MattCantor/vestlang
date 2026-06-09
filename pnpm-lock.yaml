@@ -143,12 +143,18 @@ importers:
       '@docusaurus/types':
         specifier: 3.9.1
         version: 3.9.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@types/prismjs':
+        specifier: ^1.26.5
+        version: 1.26.5
       prismjs:
         specifier: ^1.30.0
         version: 1.30.0
       typescript:
         specifier: ~5.6.2
         version: 5.6.3
+      utility-types:
+        specifier: ^3.11.0
+        version: 3.11.0
 
   apps/mcp-server:
     dependencies:

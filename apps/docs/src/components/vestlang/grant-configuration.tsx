@@ -15,8 +15,8 @@ export function GrantConfiguration({
   setQuantity: Dispatch<SetStateAction<number>>;
   grantDate: Date;
   setGrantDate: Dispatch<SetStateAction<Date>>;
-  events: Record<string, OCTDate>;
-  setEvents: Dispatch<SetStateAction<Record<string, OCTDate>>>;
+  events: Record<string, OCTDate | undefined>;
+  setEvents: Dispatch<SetStateAction<Record<string, OCTDate | undefined>>>;
 }) {
   return (
     <div className="card">

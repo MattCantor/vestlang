@@ -7,7 +7,7 @@ export function DSLInput({
 }: {
   dsl: string;
   setDsl: Dispatch<SetStateAction<string>>;
-  error: string;
+  error: string | null;
 }) {
   return (
     <div className="card">

@@ -20,7 +20,7 @@
     "test": "turbo test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "tsc --noEmit -p tsconfig.lint.json",
+    "typecheck": "tsc --noEmit -p tsconfig.lint.json && turbo typecheck",
     "clean": "turbo run clean && rimraf node_modules",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
