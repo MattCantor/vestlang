@@ -1,9 +1,9 @@
-import { EvaluatedSchedule } from "@vestlang/types";
+import { Installment } from "@vestlang/types";
 
 export function InstallmentsTable({
   installments,
 }: {
-  installments: EvaluatedSchedule["installments"];
+  installments: Installment[];
 }) {
   return (
     <div style={{ overflow: "auto" }}>

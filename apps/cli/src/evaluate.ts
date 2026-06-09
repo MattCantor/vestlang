@@ -63,12 +63,13 @@ function printRecovered(recovered: RecoveredView): void {
 }
 
 function printSchedule(view: ScheduleView, withStatus: boolean): void {
-  // The consumer rule: "representable" is read from status, "pending" from
-  // blockers (never from status === "unresolved"). A `template` carrying
-  // blockers is representable-but-pending, not complete. "valid" is a separate
-  // question — false when the schedule over-allocates the grant.
+  // Two verdicts, printed side by side: what the record keeper could store
+  // ("storable", the firing-invariant verdict), and what the schedule resolves to
+  // given the events we know ("resolves to"). The read-flags hang off them:
+  // "representable" tracks the storable verdict, "pending" comes from the blockers
+  // (not from a "resolves to: unresolved"), and "valid" is its own question —
+  // false when the schedule over-allocates the grant.
   if (withStatus) {
-    const reason = "reason" in view ? view.reason : undefined;
     const tags = [
       view.representable ? "representable" : null,
       view.pending ? "pending" : null,
@@ -76,9 +77,14 @@ function printSchedule(view: ScheduleView, withStatus: boolean): void {
     ]
       .filter(Boolean)
       .join(", ");
+    const storableReason =
+      "reason" in view.interchange ? ` (${view.interchange.reason})` : "";
+    const resolvesReason =
+      "reason" in view.resolution ? ` (${view.resolution.reason})` : "";
     console.log();
+    console.log(`storable: ${view.interchange.status}${storableReason}`);
     console.log(
-      `status: ${view.status}${reason ? ` (${reason})` : ""}${tags ? ` — ${tags}` : ""}`,
+      `resolves to: ${view.resolution.status}${resolvesReason}${tags ? ` — ${tags}` : ""}`,
     );
   }
   console.table(

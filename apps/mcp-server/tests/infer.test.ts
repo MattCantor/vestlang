@@ -64,7 +64,7 @@ function tranchesFromDsl(
     grantQuantity,
     asOf,
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-  }).installments;
+  }).resolution.installments;
   return installments
     .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
     .map((i) => ({

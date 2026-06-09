@@ -47,10 +47,6 @@ export type UnresolvedBlocker =
       blockers: Blocker[];
     }
   | {
-      type: "DATE_NOT_YET_OCCURRED";
-      date: OCTDate;
-    }
-  | {
       type: "UNRESOLVED_CONDITION";
       condition: Omit<VestingNode, "type">;
     };
@@ -220,16 +216,85 @@ export type EvaluatedScheduleVerdict =
       blockers: ImpossibleBlocker[];
     };
 
+/* ------------------------
+ * Interchange verdict
+ * ------------------------ */
+
 /**
- * The published evaluation contract: the verdict, plus any findings the engine
- * accumulated about the schedule as a whole (e.g. over-allocation).
- *
- * `findings` is attached to the union rather than written into each arm because
- * it's orthogonal to which verdict the schedule landed in — a schedule can be a
- * perfectly representable `template` and still over-allocate. The intersection
- * keeps `status` narrowing intact while making `findings` available on every arm;
- * it's an empty array in the common, well-formed case.
+ * Why a schedule can't be expressed as a single canonical template. Shared by both
+ * verdicts below, since the same structural fact can land a schedule in different
+ * buckets depending on which question you're asking.
  */
-export type EvaluatedSchedule = EvaluatedScheduleVerdict & {
+export type NonTemplateReason =
+  // Two (or more) independent absolute-date grids on one grant. A record keeper
+  // models those as separate grants, so they can't collapse into one template.
+  | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
+  // The cliff hangs off a named event. The canonical cliff is a fixed duration, so
+  // it has nowhere to put an event-anchored cliff.
+  | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
+  // The cliff can only be placed once we know when an event fired, so we can't
+  // pin it down ahead of time and there's nothing storable to hand over.
+  | { kind: "DEFERRED_CLIFF"; detail?: string };
+
+/**
+ * What a record keeper could store for this schedule, asked WITHOUT looking at
+ * which events have actually fired. This is the stable floor: because it ignores
+ * firings, a new event arriving can never change the answer, so it's safe to
+ * persist. (Contrast `EvaluatedScheduleVerdict` below, which answers the
+ * here-and-now question and does consult fired events.)
+ *
+ *   - "template"         stores as one canonical template (an event-anchored start
+ *                        is fine — it rides across as a deferred/synthetic event).
+ *   - "events-only"      stores as a flat list of dated vesting events, but not one
+ *                        template (e.g. two independent date grids).
+ *   - "unrepresentable"  the record keeper has no home for it at all, even as bare
+ *                        events — the only case today is an event-anchored cliff.
+ *   - "impossible"       self-contradictory no matter what events fire (e.g. a date
+ *                        required to fall after a strictly later date).
+ */
+export type InterchangeVerdict =
+  | {
+      status: "template";
+      template: VestingScheduleTemplate;
+      sourceMap: SourceMap;
+    }
+  | {
+      status: "events-only";
+      installments: ResolvedInstallment[];
+      reason: NonTemplateReason;
+    }
+  | { status: "unrepresentable"; reason: NonTemplateReason }
+  | { status: "impossible"; blockers: ImpossibleBlocker[] };
+
+/**
+ * One non-occurrence the current resolution is leaning on. Reading a schedule as,
+ * say, "vested" often quietly assumes some event hasn't happened yet; this records
+ * that assumption so it can be disclosed and watched.
+ *
+ * `through` is inclusive: the claim is "`eventId` did not occur on or before this
+ * date." (Populated in a later phase; emitted as an empty list for now.)
+ */
+export interface AbsenceAssumption {
+  eventId: string;
+  through: OCTDate;
+}
+
+/**
+ * The published evaluation result. It carries two verdicts side by side, because
+ * "what can be stored for this schedule" and "what does it work out to given the
+ * events we currently know" are genuinely different questions:
+ *
+ *   - `interchange` is firing-invariant — the storable floor (see InterchangeVerdict).
+ *   - `resolution` is the closed-world, here-and-now answer that does read events.
+ *
+ * `absenceAssumptions` lists the non-occurrences `resolution` leaned on. `findings`
+ * (over/under-allocation, etc.) sits at the top level because it's about the
+ * schedule as written, independent of either verdict — a perfectly storable
+ * `template` can still allocate more than 100% of the grant.
+ */
+export interface EvaluatedSchedule {
+  interchange: InterchangeVerdict;
+  resolution: EvaluatedScheduleVerdict;
+  absenceAssumptions: AbsenceAssumption[];
   findings: Finding[];
-};
+}

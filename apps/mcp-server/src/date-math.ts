@@ -130,7 +130,10 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
       input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
   };
 
-  const { installments, blockers } = evaluateStatement(program[0], ctx);
+  const { installments, blockers } = evaluateStatement(
+    program[0],
+    ctx,
+  ).resolution;
   const first = installments[0] ?? null;
 
   if (first?.meta.state === "RESOLVED" && first.date) {

@@ -6,20 +6,25 @@ import {
 } from "@vestlang/types";
 import {
   resolveToCore,
+  resolveInterchange,
   assertProgramInstallmentCap,
 } from "../resolve/index.js";
 import { assemble } from "../resolve/assemble.js";
 
 /**
- * Evaluate one normalized Statement: resolve the one-statement program against
- * runtime, classify its verdict (`status`), and assemble the tagged
- * EvaluatedSchedule.
+ * Evaluate one normalized Statement. We work it out two ways: `resolveToCore`
+ * gives the closed-world result against the events we know, and `resolveInterchange`
+ * gives the firing-invariant "what's storable" verdict. assemble pairs them into
+ * one EvaluatedSchedule.
  */
 export function evaluateStatement(
   stmt: Statement,
   ctx_input: EvaluationContextInput,
 ): EvaluatedSchedule {
-  return assemble(resolveToCore([stmt], ctx_input));
+  return assemble(
+    resolveToCore([stmt], ctx_input),
+    resolveInterchange([stmt], ctx_input),
+  );
 }
 
 /**
@@ -46,5 +51,10 @@ export function evaluateProgram(
   stmts: Program,
   ctx_input: EvaluationContextInput,
 ): EvaluatedSchedule[] {
-  return [assemble(resolveToCore(stmts, ctx_input))];
+  return [
+    assemble(
+      resolveToCore(stmts, ctx_input),
+      resolveInterchange(stmts, ctx_input),
+    ),
+  ];
 }

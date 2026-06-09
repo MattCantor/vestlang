@@ -1,5 +1,5 @@
-import type { NonTemplateReason, ResolveResult } from "@vestlang/evaluator";
-import type { Program } from "@vestlang/types";
+import type { ResolveResult } from "@vestlang/evaluator";
+import type { NonTemplateReason, Program } from "@vestlang/types";
 import { some } from "@vestlang/walk";
 
 // The events arm of the classifier's verdict — the only shape recovery acts on.

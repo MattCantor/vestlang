@@ -13,6 +13,7 @@ import type {
   EvaluationContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
+  NonTemplateReason,
   Program,
   ResolvedInstallment,
   SymbolicInstallment,
@@ -27,7 +28,7 @@ import {
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { unresolvedInstallments } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
-import type { NonTemplateReason, ResolveVerdict } from "./types.js";
+import type { ResolveVerdict } from "./types.js";
 
 /**
  * Expand one resolved statement to its dated fraction-of-grant events, honoring a

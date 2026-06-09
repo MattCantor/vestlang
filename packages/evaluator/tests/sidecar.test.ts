@@ -74,16 +74,16 @@ const stageAStmt = (): Statement => ({
 // The stored artifact (IPO unfired): a `template` arm with the synthetic EVENT
 // statement, an empty runtime (no witness), and the source map.
 const storedArtifact = () => {
-  const out = evaluateStatement(
+  const { resolution } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (out.status !== "template")
-    throw new Error(`expected template, got ${out.status}`);
+  if (resolution.status !== "template")
+    throw new Error(`expected template, got ${resolution.status}`);
   return {
-    template: out.template,
-    sourceMap: out.sourceMap,
-    runtime: out.runtime,
+    template: resolution.template,
+    sourceMap: resolution.sourceMap,
+    runtime: resolution.runtime,
   };
 };
 
@@ -189,16 +189,16 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
 
 describe("sidecar — a template with no synthetic events emits no sidecar", () => {
   it("toSidecar({}) is undefined and toPersisted omits the field", () => {
-    const out = evaluateStatement(
+    const { resolution } = evaluateStatement(
       plainStmt(),
       ctxInput({ grantQuantity: 4800 }),
     );
-    if (out.status !== "template")
-      throw new Error(`expected template, got ${out.status}`);
-    expect(out.sourceMap).toEqual({});
+    if (resolution.status !== "template")
+      throw new Error(`expected template, got ${resolution.status}`);
+    expect(resolution.sourceMap).toEqual({});
 
-    expect(toSidecar(out.sourceMap)).toBeUndefined();
-    const persisted = toPersisted(out);
+    expect(toSidecar(resolution.sourceMap)).toBeUndefined();
+    const persisted = toPersisted(resolution);
     expect("sidecar" in persisted).toBe(false);
   });
 });

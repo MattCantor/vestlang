@@ -12,8 +12,6 @@ export function blockerToString(b: Blocker): string {
   switch (b.type) {
     case "EVENT_NOT_YET_OCCURRED":
       return `EVENT ${b.event}`;
-    case "DATE_NOT_YET_OCCURRED":
-      return `DATE ${b.date}`;
     case "UNRESOLVED_CONDITION":
     case "IMPOSSIBLE_CONDITION":
       return blockerConditionToString(b.condition);

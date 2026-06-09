@@ -12,7 +12,9 @@ import type {
   EvaluationContextInput,
   Finding,
   Installment,
+  InterchangeVerdict,
   Program,
+  Status,
   VestingNode,
   VestingPeriod,
 } from "@vestlang/types";
@@ -25,18 +27,27 @@ import {
   makeVestingBaseEvent,
 } from "./helpers";
 
-// presentSchedule reads only status / blockers / installments / findings, so stub
-// the rest. Findings default to none (a well-formed schedule).
+// presentSchedule reads the interchange status (representable), the resolution
+// status/blockers/installments (pending, projected), and findings (valid), so
+// stub exactly those. The interchange status defaults to the firing-invariant
+// counterpart of the resolution status — the same except that a closed-world
+// "unresolved" has no interchange equivalent and reads as "unrepresentable" — but
+// a test can pass its own to exercise the two verdicts diverging. Findings default
+// to none (a well-formed schedule).
+const interchangeFor = (status: Status): InterchangeVerdict["status"] =>
+  status === "unresolved" ? "unrepresentable" : status;
+
 const stub = (
-  status: EvaluatedSchedule["status"],
+  status: Status,
   blockers: Blocker[],
   installments: Installment[],
   findings: Finding[] = [],
+  interchangeStatus: InterchangeVerdict["status"] = interchangeFor(status),
 ): EvaluatedSchedule =>
   ({
-    status,
-    blockers,
-    installments,
+    interchange: { status: interchangeStatus },
+    resolution: { status, blockers, installments },
+    absenceAssumptions: [],
     findings,
   }) as unknown as EvaluatedSchedule;
 
@@ -183,7 +194,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       }),
     ];
     const [out] = evaluateProgram(program, ctxInput()); // ipo unfired
-    expect(out.status).toBe("template");
+    expect(out.resolution.status).toBe("template");
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true,
@@ -192,7 +203,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
     });
   });
 
-  it("[resolving, void] → unresolved yet projected (resolved tranches present)", () => {
+  it("[resolving, void] → storable as a template, yet resolves to unresolved", () => {
     const voidStart: VestingNode = {
       type: "NODE",
       base: makeVestingBaseEvent("a"),
@@ -229,9 +240,16 @@ describe("presentSchedule — end-to-end hybrid", () => {
       grantQuantity: 4800,
       asOf: "2035-01-01",
     });
-    expect(out.status).toBe("unresolved");
+    // The two verdicts come apart here, which is the whole point of splitting
+    // them. Closed-world, with `a` fired late, the gated half is dead and the
+    // program resolves to `unresolved`. But what's *storable* doesn't depend on
+    // when `a` fired: a date grid plus a guarded event start is a perfectly good
+    // template, so the storable verdict (and therefore `representable`) is true. A
+    // different firing of `a` would resolve it.
+    expect(out.resolution.status).toBe("unresolved");
+    expect(out.interchange.status).toBe("template");
     expect(presentSchedule(out)).toEqual({
-      representable: false,
+      representable: true, // storable as a template, independent of a's firing
       pending: true, // the void half carries IMPOSSIBLE_CONDITION blockers
       projected: true, // the resolved half's dated tranches are now surfaced
       valid: true,

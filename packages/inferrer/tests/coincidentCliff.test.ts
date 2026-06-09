@@ -60,7 +60,7 @@ function footprint(
   const out = new Map<string, number>();
   for (const c of components) {
     const res = evaluateStatement(buildStatement(c, policy), ctx);
-    for (const inst of res.installments) {
+    for (const inst of res.resolution.installments) {
       if (inst.meta.state === "RESOLVED" && inst.date) {
         out.set(inst.date, (out.get(inst.date) ?? 0) + inst.amount);
       }

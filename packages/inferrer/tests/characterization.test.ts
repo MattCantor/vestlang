@@ -88,9 +88,9 @@ function characterize(c: CorpusCase): CaseSnapshot {
   // input, and it churns the snapshot on harmless rounding reshuffles.
   return {
     dsl: inferred.dsl,
-    status: schedule.status,
-    ...("reason" in schedule && schedule.reason
-      ? { reason: schedule.reason }
+    status: schedule.resolution.status,
+    ...("reason" in schedule.resolution && schedule.resolution.reason
+      ? { reason: schedule.resolution.reason }
       : {}),
     residual: inferred.diagnostics.residualError,
     decomposition: {

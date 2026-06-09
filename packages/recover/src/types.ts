@@ -1,22 +1,28 @@
 import type {
   EvaluatedSchedule,
+  EvaluatedScheduleVerdict,
   VestingDayOfMonth,
   VestingRuntime,
   VestingScheduleTemplate,
 } from "@vestlang/types";
 
+/** An evaluated schedule whose resolution verdict is specifically a template. */
+type TemplateResolution = EvaluatedSchedule & {
+  resolution: Extract<EvaluatedScheduleVerdict, { status: "template" }>;
+};
+
 // The result of running a program through the recovery pass.
 //
-// Discriminated on `rescued`, not on `schedule.status`: a program that was
-// already a template short-circuits with status "template" and no rescue, so the
-// status alone can't tell you whether recovery actually fired. The `rescued:true`
-// arm narrows `schedule` to the template variant and guarantees the recovery
+// Discriminated on `rescued`, not on the schedule's verdict: a program that was
+// already a template short-circuits with no rescue, so the verdict alone can't
+// tell you whether recovery actually fired. The `rescued:true` arm narrows the
+// schedule's resolution to the template variant and guarantees the recovery
 // payload, so callers don't re-check either.
 export type RecoveryOutcome =
   | { rescued: false; schedule: EvaluatedSchedule }
   | {
       rescued: true;
-      schedule: Extract<EvaluatedSchedule, { status: "template" }>;
+      schedule: TemplateResolution;
       recovered: RecoveredTemplate;
     };
 

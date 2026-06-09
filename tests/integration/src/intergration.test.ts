@@ -25,7 +25,8 @@ const evaluate = (stmt: string, grantQuantity: number = 100) => {
   const rawProgram = parse(stmt);
   const program = normalizeProgram(rawProgram);
   const expr = program[0];
-  const result = evaluateStatement(expr, createCtx(grantQuantity)).installments;
+  const result = evaluateStatement(expr, createCtx(grantQuantity)).resolution
+    .installments;
   return result;
 };
 

@@ -13,13 +13,16 @@
 import type {
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
+  InterchangeVerdict,
+  NonTemplateReason,
 } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
-import type { NonTemplateReason, ResolveResult } from "./types.js";
+import type { ResolveResult } from "./types.js";
 
-/** Human-readable reason a resolved schedule landed in events-only. */
-const reasonToString = (r: NonTemplateReason): string => {
+/** Turn a structured "couldn't be one template" reason into a sentence for display.
+ *  Shared by both verdicts, so the same code reads the same wherever it surfaces. */
+export const reasonToString = (r: NonTemplateReason): string => {
   switch (r.kind) {
     case "OVERLAPPING_ABSOLUTE_STARTS":
       return (
@@ -29,6 +32,11 @@ const reasonToString = (r: NonTemplateReason): string => {
       return (
         r.detail ??
         `Event-anchored cliff on "${r.eventId}" has no template form.`
+      );
+    case "DEFERRED_CLIFF":
+      return (
+        r.detail ??
+        "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."
       );
   }
 };
@@ -78,11 +86,20 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
 };
 
 /**
- * Map a resolve result to the published EvaluatedSchedule, carrying its findings
- * across. Findings ride on the wrapper, so they thread through in one place here
- * rather than being repeated in each arm above.
+ * Build the published EvaluatedSchedule from the two verdicts. The closed-world
+ * `resolution` is assembled here from the resolve result; the firing-invariant
+ * `interchange` is computed separately (see resolve/interchange.ts) and passed in.
+ *
+ * Findings come off the resolve result and ride at the top level — they're about
+ * the schedule as written, not about either verdict. `absenceAssumptions` is left
+ * empty for now; a later phase fills it from the closed-world evaluation.
  */
-export const assemble = (result: ResolveResult): EvaluatedSchedule => ({
-  ...assembleVerdict(result),
-  findings: result.findings,
+export const assemble = (
+  resolution: ResolveResult,
+  interchange: InterchangeVerdict,
+): EvaluatedSchedule => ({
+  interchange,
+  resolution: assembleVerdict(resolution),
+  absenceAssumptions: [],
+  findings: resolution.findings,
 });

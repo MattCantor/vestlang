@@ -56,7 +56,7 @@ describe("evaluateStatements / evaluateStatementsAsOf — installment cap", () =
       ctx,
     );
     expect(res).toHaveLength(2);
-    expect(res[0].installments).toHaveLength(48);
-    expect(res[1].installments).toHaveLength(12);
+    expect(res[0].resolution.installments).toHaveLength(48);
+    expect(res[1].resolution.installments).toHaveLength(12);
   });
 });
