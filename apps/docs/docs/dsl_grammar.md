@@ -59,12 +59,14 @@ VEST
 ### Selector
 
 ```
-( EARLIER OF | LATER OF ) (
+( EARLIER START OF | LATER START OF ) (
     <schedule-expr>,
     <schedule-expr>
     [, <schedule-expr> … ]
 )
 ```
+
+The selector compares the operand schedules by their **vesting start** and keeps the whole winning schedule — `EARLIER START OF` the one that starts first, `LATER START OF` the one that starts last; the losing schedule (its cadence, cliff, and amount) is dropped. `START` names that comparison key, distinguishing this schedule-level selector from the anchor-level `EARLIER OF` / `LATER OF` ([below](#selectors-over-anchors)) that chooses between bare anchors inside `FROM` / `CLIFF`.
 
 ## Anchors
 

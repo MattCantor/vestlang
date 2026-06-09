@@ -51,6 +51,27 @@ describe("Start & basics", () => {
   });
 });
 
+describe("Schedule-level selectors", () => {
+  it("EARLIER START OF parses to a SCHEDULE_EARLIER_OF over whole schedules", () => {
+    const stmt = first(
+      `VEST EARLIER START OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)`,
+    );
+    expect(stmt.expr.type).toBe("SCHEDULE_EARLIER_OF");
+    expect(stmt.expr.items).toHaveLength(2);
+    expect(
+      stmt.expr.items.every((i: { type: string }) => i.type === "SCHEDULE"),
+    ).toBe(true);
+  });
+
+  it("a bare schedule-level EARLIER OF points at EARLIER START OF", () => {
+    expect(() =>
+      parse(
+        `VEST EARLIER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)`,
+      ),
+    ).toThrowError(/EARLIER START OF/);
+  });
+});
+
 describe("THEN / PLUS composition", () => {
   it("a THEN chain flattens to a head plus chained tails", () => {
     const ast = asJSON(
