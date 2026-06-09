@@ -238,15 +238,15 @@ describe("selectors", () => {
  * ------------------------ */
 
 describe("schedule selectors", () => {
-  it("stringifies LATER OF for schedules", () => {
+  it("stringifies LATER START OF for schedules", () => {
     const result = roundTrip(`
-      VEST LATER OF(
+      VEST LATER START OF(
         FROM EVENT a OVER 12 months EVERY 1 month,
         FROM EVENT b OVER 24 months EVERY 1 month
       )
     `);
     expect(result).toBe(
-      "VEST LATER OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
+      "VEST LATER START OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
     );
   });
 });

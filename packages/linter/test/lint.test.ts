@@ -34,7 +34,7 @@ describe("@vestlang/linter", () => {
 
     it("handles top-level schedule selectors", () => {
       const diagnostics = diagnosticsOf(`
-        VEST EARLIER OF (
+        VEST EARLIER START OF (
           FROM DATE 2025-01-01,
           FROM DATE 2025-06-01
         )

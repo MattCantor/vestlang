@@ -1,10 +1,10 @@
 import type { NodeExprTag, ScheduleExprTag } from "@vestlang/types";
 
-// The internal `type` tag of a selector node distinguishes the schedule layer
-// from the node layer (e.g. SCHEDULE_EARLIER_OF vs NODE_EARLIER_OF), but a
-// reader of the rendered DSL — or of a diagnostic message — should only ever see
-// the plain keyword "EARLIER OF" / "LATER OF". This maps the tag back to that
-// keyword so the layer prefix never leaks into anything user-facing.
+// Maps a selector node's `type` tag to its surface keyword. The two layers read
+// differently on purpose: the node layer (inside FROM / CLIFF) chooses between
+// anchors and prints "EARLIER OF" / "LATER OF"; the schedule layer chooses between
+// whole schedules by vesting start and prints "EARLIER START OF" / "LATER START OF",
+// the START naming the comparison key so the two don't look identical.
 
 type SelectorExprTag = Exclude<
   ScheduleExprTag | NodeExprTag,
@@ -13,8 +13,15 @@ type SelectorExprTag = Exclude<
 
 export function selectorKeyword(
   tag: SelectorExprTag,
-): "EARLIER OF" | "LATER OF" {
-  return tag === "SCHEDULE_EARLIER_OF" || tag === "NODE_EARLIER_OF"
-    ? "EARLIER OF"
-    : "LATER OF";
+): "EARLIER OF" | "LATER OF" | "EARLIER START OF" | "LATER START OF" {
+  switch (tag) {
+    case "NODE_EARLIER_OF":
+      return "EARLIER OF";
+    case "NODE_LATER_OF":
+      return "LATER OF";
+    case "SCHEDULE_EARLIER_OF":
+      return "EARLIER START OF";
+    case "SCHEDULE_LATER_OF":
+      return "LATER START OF";
+  }
 }

@@ -330,12 +330,12 @@ VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 
 #### Selector over schedules
 
-In the case of a selector in `FROM <vesting-expr>`, the selection is determined based on the resolved vesting start, regardless of the cadence of the vesting installments that follow
+A schedule-level selector picks the whole winning schedule by its resolved vesting start, regardless of the cadence of the installments that follow. `START` in the keyword names that comparison key.
 
 ##### DSL
 
 ```vest
-VEST EARLIER OF(
+VEST EARLIER START OF(
   FROM DATE 2025-01-01
     OVER 12 months EVERY 1 months,
   FROM DATE 2026-01-01

@@ -40,12 +40,26 @@ VestTail
       return { type: "STATEMENT", chained: true, amount: a ?? mkPortion(1, 1), expr };
     }
 
-ScheduleExpr = ScheduleSelector / ScheduleBlock
+ScheduleExpr = ScheduleSelector / ScheduleSelectorHint / ScheduleBlock
 
+// Selects between whole schedules by their vesting-start date: EARLIER START OF
+// keeps the one that starts first, LATER START OF the one that starts last, and
+// the losing schedule (its cadence, cliff, amount) is dropped. The START word
+// names that comparison key, and keeps this distinct from the anchor-level
+// EARLIER OF / LATER OF (in 50-gate.peggy), which chooses between bare anchors
+// inside FROM / CLIFF.
 ScheduleSelector
-  = op:("EARLIER"i / "LATER"i) _ "OF"i _ "(" _ head:ScheduleExpr tail:(CommaSep ScheduleExpr)* _ ")" {
+  = op:("EARLIER"i / "LATER"i) _ "START"i _ "OF"i _ "(" _ head:ScheduleExpr tail:(CommaSep ScheduleExpr)* _ ")" {
       return {
         type: op.toUpperCase() === "EARLIER" ? "SCHEDULE_EARLIER_OF" : "SCHEDULE_LATER_OF",
         items: collectTwoOrMore(head, tail)
       };
+    }
+
+// A bare EARLIER OF / LATER OF where a schedule-expr is expected is the
+// anchor-level selector used at the wrong level; point at the schedule-level
+// keyword instead of failing with a bare "unexpected token".
+ScheduleSelectorHint
+  = ("EARLIER"i / "LATER"i) _ "OF"i _ "(" {
+      error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF(...)` / `LATER START OF(...)`.")
     }
