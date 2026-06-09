@@ -39,10 +39,14 @@ Typical workflows:
 - Scenario modeling: call vestlang_evaluate or vestlang_evaluate_as_of with
   a grant_date, grant_quantity, and any named events that the DSL references.
   vestlang_evaluate classifies each statement on its own; vestlang_evaluate_program
-  collapses the whole program into one schedule and reports its verdict
-  (template / events-only / unresolved / impossible) — use it to see whether a
-  multi-statement program fits a single canonical template or falls back to bare
-  events (e.g. overlapping independent starts).
+  collapses the whole program into one schedule. Every schedule comes back with TWO
+  verdicts: \`interchange\` (the "storable" verdict — what a record keeper could hold,
+  computed without reading firings) and \`resolution\` (the "resolves-to" verdict — what
+  it works out to given the events you passed). They can differ — a gated start is a
+  storable template that may resolve to impossible after an early firing. The result also
+  carries \`absenceAssumptions\`: events the resolves-to reading is assuming stayed absent
+  (each { eventId, through, message }), whose later or backdated firing could change the
+  answer.
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL (branch-and-bound
   minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
@@ -50,8 +54,11 @@ Typical workflows:
   returned DSL.
 
 Dates are YYYY-MM-DD. Statements that reference named events (e.g.
-EVENT "ipo") require those events to appear in the events map — otherwise
-installments gated on them will come back as UNRESOLVED with blockers.
+EVENT "ipo") require those events to appear in the events map — otherwise the
+schedule comes back pending: it carries blockers naming the unfired event, an empty or
+partial projection, and (when the event was compared against a date) an entry in
+absenceAssumptions. A comparison against an unfired event is pending, never silently
+satisfied or impossible — the event could still be recorded later, even backdated.
 
 When parse/compile/evaluate fail they don't throw — they return a structured
 { error: { ruleId, message, loc? } }: ruleId is "syntax-error" (carrying loc,
@@ -327,7 +334,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting schedule",
       description:
-        "Evaluate vestlang against a grant context and return every installment (RESOLVED, UNRESOLVED, or IMPOSSIBLE) for each statement along with any blockers. Each result also carries `representable` (the spec fits a canonical layer) and `pending` (witnesses still missing) — note a `template` can be `pending` (e.g. an unfired event), so read pending from the `pending` flag / `blockers`, never from `status`. It also carries `valid` (false when the statement allocates more than the grant) and a `findings` array describing any such problem (each with `kind`, `severity`, the exact `sum`, and a human `message`); the installments are still returned when `valid` is false, but should not be treated as a valid schedule. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
+        "Evaluate vestlang against a grant context and return, for each statement, two verdicts plus its installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) and blockers. The verdicts: `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings (status: template / events-only / unrepresentable / impossible); and `resolution` — the resolves-to verdict, what it works out to given the events you passed (status: template / events-only / unresolved / impossible). They can differ. Each result also carries `representable` (from `interchange` — storable at all), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `blockers`, never from a verdict's status), and `valid` (false when the statement allocates more than the grant) with a `findings` array (each `kind`, `severity`, exact `sum`, human `message`); installments are still returned when `valid` is false but aren't a valid schedule. It also carries `absenceAssumptions`: events the resolves-to reading assumes stayed absent (each { eventId, through, message }), whose later or backdated firing could change the result. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -356,7 +363,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate a whole program as one schedule",
       description:
-        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule, and report its verdict (`status`): "template" (the program fits one canonical template), "events-only" (it resolves to concrete dated amounts but cannot be one template — e.g. two overlapping independent absolute starts, or an event-anchored cliff — with a `reason`), "unresolved" (blocked on an unfired event, with blockers), or "impossible" (self-contradictory — no firing can ever resolve it). Also returns `representable` (status holds a canonical layer) and `pending` (witnesses still missing): a `template` can be `pending` (it carries blockers for unfired events), so read pending from the `pending` flag / `blockers`, never from `status`. It also returns `valid` (false when the program allocates more than the grant) and a `findings` array (each with `kind`, `severity`, the exact `sum`, and a human `message`); when `valid` is false the installments are still returned but must not be treated as a valid schedule. Use vestlang_evaluate instead for the per-statement view (each statement classified on its own).',
+        'Evaluate a whole multi-statement vestlang program collapsed into a SINGLE schedule. Returns TWO verdicts. `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — today only an event-anchored cliff), or "impossible" (a structural contradiction). `resolution` — the resolves-to verdict given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `interchange`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `blockers`, never from a verdict status), `valid` (false on over-allocation) with a `findings` array (each `kind`, `severity`, exact `sum`, human `message`), and `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, message }, whose later or backdated firing could change the result). Use vestlang_evaluate instead for the per-statement view.',
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
@@ -388,7 +395,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting as of a date",
       description:
-        "Evaluate vestlang and partition installments into {vested, unvested, impossible} with an unresolved count, as of a given date (defaults to today). This is the primary tool for answering 'how much is vested right now?' questions.",
+        "Evaluate vestlang and partition installments into {vested, unvested, impossible} with an unresolved count, as of a given date (defaults to today). This is the primary tool for answering 'how much is vested right now?' questions. Each statement also carries the two verdicts (`interchange` / `resolution`), the `representable` / `pending` / `valid` flags, and `absenceAssumptions` — see vestlang_evaluate for those.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,

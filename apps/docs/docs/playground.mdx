@@ -6,4 +6,16 @@ sidebar_position: 5
 
 import Playground from "@site/src/components/vestlang/Playground"
 
+Write a statement on the left and watch it evaluate live against the grant date,
+share count, and any events you enter. Each result shows:
+
+- **Storable** — the [interchange](./evaluation.md#the-two-verdicts) verdict: what a
+  record keeper could hold for this schedule, regardless of which events have fired.
+- **Resolves to** — the [resolution](./evaluation.md#the-two-verdicts) verdict: what it
+  works out to given the events you've entered. Change an event and watch this move while
+  Storable stays put.
+- **Assumes not yet occurred** — the [absence assumptions](./evaluation.md#absence-assumptions):
+  events the resolves-to reading is taking to be absent (and through when). Enter one of
+  them and the line disappears.
+
 <Playground />
