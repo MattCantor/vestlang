@@ -7,27 +7,23 @@ import {
   Offsets,
   VestingBase,
 } from "@vestlang/types";
+import { foldBlocker } from "./blockerTree.js";
 
 export function blockerToString(b: Blocker): string {
-  switch (b.type) {
-    case "EVENT_NOT_YET_OCCURRED":
-      return `EVENT ${b.event}`;
-    case "UNRESOLVED_CONDITION":
-    case "IMPOSSIBLE_CONDITION":
-      return blockerConditionToString(b.condition);
-    case "UNRESOLVED_SELECTOR":
-    case "IMPOSSIBLE_SELECTOR":
-      switch (b.selector) {
-        case "EARLIER_OF": {
-          const EarlierOfItems = b.blockers.map(blockerToString).join(", ");
-          return `EARLIER OF ( ${EarlierOfItems} )`;
-        }
-        case "LATER_OF": {
-          const LaterOfItems = b.blockers.map(blockerToString).join(", ");
-          return `LATER OF ( ${LaterOfItems} )`;
-        }
-      }
-  }
+  return foldBlocker(b, (node, items) => {
+    switch (node.type) {
+      case "EVENT_NOT_YET_OCCURRED":
+        return `EVENT ${node.event}`;
+      case "UNRESOLVED_CONDITION":
+      case "IMPOSSIBLE_CONDITION":
+        return blockerConditionToString(node.condition);
+      case "UNRESOLVED_SELECTOR":
+      case "IMPOSSIBLE_SELECTOR":
+        return node.selector === "EARLIER_OF"
+          ? `EARLIER OF ( ${items.join(", ")} )`
+          : `LATER OF ( ${items.join(", ")} )`;
+    }
+  });
 }
 
 function vestingNodeToString(node: VestingNode): string {
