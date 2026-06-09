@@ -17,14 +17,16 @@ const source = "VEST OVER 4 years EVERY 1 month CLIFF 1 year";
 const program = normalizeProgram(parse(source));
 
 const schedule = evaluateStatement(program[0], {
-  events: { grantDate: "2024-01-01" },
+  grantDate: "2024-01-01",   // the grant-date anchor (its own field)
+  events: {},                // named events the DSL references, e.g. { ipo: "2027-06-01" }
   grantQuantity: 10000,
   asOf: "2028-01-01",
 });
 
-console.log(schedule.fidelity);     // "template" | "events-only" | "unresolved"
-console.log(schedule.installments); // [{ amount, date, meta: { state } }, ...]
-console.log(schedule.blockers);     // [] unless something is unresolved
+console.log(schedule.interchange.status);      // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
+console.log(schedule.resolution.status);       // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
+console.log(schedule.resolution.installments); // [{ amount, date, meta: { state } }, ...]
+console.log(schedule.absenceAssumptions);      // [{ eventId, through }, ...]
 ```
 
 ## How it works
@@ -34,7 +36,7 @@ Vestlang has two layers, split along one line — **resolve vs. substitute**:
 - The **DSL front-end** (this package) _resolves_. It parses your statement, then resolves
   its combinators (`LATER OF` / `EARLIER OF`, event gates, conditional starts) against
   runtime — the grant date, share count, and which events have fired — and **classifies**
-  the result by how well it fits the canonical interchange.
+  the result into two verdicts: what's storable, and what it resolves to given known events.
 - The **engine** (`@vestlang/core`) _substitutes_. Given a fully concrete, combinator-free
   template + runtime, it allocates exact integer shares — exact-rational math, a time-based
   cliff, structural validation. It never sees a combinator or an unresolved state.
@@ -45,21 +47,23 @@ The engine is re-exported as `core`:
 import { core } from "@vestlang/vestlang"; // or: import * as core from "@vestlang/core"
 ```
 
-### The fidelity verdict
+### Two verdicts
 
-Every `EvaluatedSchedule` carries a `fidelity` tag describing how the program mapped onto
-the interchange:
+Every `EvaluatedSchedule` carries two classifications side by side:
 
-| `fidelity` | Meaning |
-| :--------- | :------ |
-| `"template"` | Resolved and fit one canonical template — exact installments, intent preserved (best case). |
-| `"events-only"` | Resolved to concrete dated amounts but couldn't be one template (overlapping independent starts, a loaded allocation mode, an event-anchored cliff). Carries a `reason`; facts preserved, intent reported honestly. |
-| `"unresolved"` | Can't be materialized yet — an unfired event or a contradictory condition. Installments carry symbolic/absent dates and `blockers` name what's missing. |
+| Verdict | Asks | `status` values |
+| :-- | :-- | :-- |
+| `interchange` | what a record keeper could **store** (computed without reading firings) | `template` / `events-only` / `unrepresentable` / `impossible` |
+| `resolution` | what it **resolves to** given the events known | `template` / `events-only` / `unresolved` / `impossible` |
 
-At the installment level, each row's `meta.state` is `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+They can differ — a gated start is a storable `template` that may resolve to `impossible`
+after an early firing. The schedule also carries `absenceAssumptions` (events the
+resolves-to reading assumes stayed absent, each `{ eventId, through }`) and `findings`
+(allocation problems). At the installment level, each row's `meta.state` is `RESOLVED`,
+`UNRESOLVED`, or `IMPOSSIBLE`.
 
 `evaluateStatement` classifies one statement at a time; `evaluateProgram` collapses a whole
-multi-statement program into a **single** schedule and reports its program-level verdict.
+multi-statement program into a **single** schedule.
 
 ## API
 
@@ -73,8 +77,8 @@ multi-statement program into a **single** schedule and reports its program-level
 
 ### Evaluation
 
-- `evaluateStatement(statement, context)` - Resolve + classify a single statement into a fidelity-tagged `EvaluatedSchedule`
-- `evaluateProgram(program, context)` - Collapse a whole multi-statement program into **one** fidelity-tagged schedule (returned as a one-element array)
+- `evaluateStatement(statement, context)` - Resolve + classify a single statement into an `EvaluatedSchedule` (two verdicts + installments)
+- `evaluateProgram(program, context)` - Collapse a whole multi-statement program into **one** schedule (returned as a one-element array)
 - `evaluateStatementAsOf(statement, context)` - Evaluate a statement as of a specific date
 
 ### Inference (the inverse of evaluation)
@@ -106,7 +110,7 @@ The package exports commonly used types:
 **Evaluation**
 
 - `EvaluationContextInput` - Input context for evaluation
-- `EvaluatedSchedule` - Result of evaluating a schedule (carries `installments`, `blockers`, and the `fidelity` tag + optional `reason`)
+- `EvaluatedSchedule` - Result of evaluating a schedule (carries the two verdicts `interchange` / `resolution`, plus `installments`, `blockers`, `absenceAssumptions`, and `findings`)
 - `Installment` - A single vesting installment
 - `ResolvedInstallment` / `UnresolvedInstallment` / `ImpossibleInstallment` - The installment states
 - `VestedResult` - Vested/unvested quantities produced by evaluation

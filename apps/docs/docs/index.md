@@ -21,18 +21,18 @@ VEST OVER 4 years EVERY 1 month CLIFF 1 year
 
 Over 4,800 shares: 1,200 vest at the 1-year cliff, then 100/month for 36 months — 37 installments that telescope to exactly 4,800, the rounded shares summing to the grant with no drift.
 
-## The fidelity ladder
+## Two classifications
 
-Real intent doesn't always fit a clean template, and contingent intent can't always resolve yet. Rather than force-fit or fail, vestlang **classifies** every evaluated schedule into one of four `status` verdicts:
+Real intent doesn't always fit a clean template, and contingent intent can't always resolve yet. Rather than force-fit or fail, vestlang returns **two verdicts** for every evaluated schedule — because what a record keeper can *store* and what the schedule *resolves to* right now are different questions:
 
-| `status` | When |
-| :--- | :--- |
-| **`template`** | Fits one canonical template — exact installments, structured round-trip, intent preserved. |
-| **`events-only`** | Resolves to concrete dated amounts but can't be one template (e.g. an event-anchored cliff, or independent absolute starts that interleave into no single grid) — the bare dated amounts the interchange always accepts, plus the reason. |
-| **`unresolved`** | Can't be materialized yet — waiting on an unfired event — reported with `blockers` naming what's missing. |
-| **`impossible`** | A condition can never be satisfied — flagged with the contradiction. |
+| Verdict | Asks | Reads firings? |
+| :--- | :--- | :--- |
+| **`interchange`** ("Storable") | what can a record keeper hold for this schedule? | never — so the answer is safe to persist |
+| **`resolution`** ("Resolves to") | what does it work out to, given the events we know? | yes — it moves as events arrive |
 
-The verdict is the honesty: facts are preserved and intent is reported as it is, never disguised as a template it isn't. A whole multi-statement program collapses to **one** verdict, never a fan-out. See [Evaluation](./evaluation.md) for the full model.
+Each is one of a few `status` values — `template`, `events-only`, `impossible`, plus `unrepresentable` (interchange-only) or `unresolved` (resolution-only). They can differ for one schedule: a gated start is a storable `template` that may *resolve to* `impossible` after an early firing; an event-anchored cliff is `unrepresentable` to store yet `events-only` once a firing places the lump.
+
+Alongside the verdicts, a schedule discloses its **absence assumptions** — the events the resolves-to reading is assuming haven't happened yet (and through when) — so a later or backdated firing that would change the answer is never silent. See [Evaluation](./evaluation.md) for the full model.
 
 `events-only` is a verdict about *authored structure*, though — and some events-only programs project a stream that *does* have a single-template form. The default program surfaces re-infer it and, when it reproduces the projection exactly, publish `template` with a `recovered` note: [template recovery](./evaluation.md#template-recovery).
 
@@ -44,7 +44,7 @@ A vesting model is really three layers: a **spec** (the schedule definition), a 
 
 - **[Grammar](./dsl_grammar.md)** — the DSL surface: schedules, anchors, combinators, conditions, and `THEN` / `PLUS` composition.
 - **[AST](./ast.md)** — what a statement compiles to.
-- **[Evaluation](./evaluation.md)** — how intent resolves against runtime, the fidelity ladder, and the installment model.
+- **[Evaluation](./evaluation.md)** — how intent resolves against runtime, the two classifications, absence assumptions, and the installment model.
 - **[Playground](./playground.mdx)** — write a statement and watch it evaluate, live.
 
 ## Use it

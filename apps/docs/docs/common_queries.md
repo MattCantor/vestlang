@@ -22,9 +22,27 @@ a single structured shape, so check for an `error` field before reading the rest
   proceed (e.g. a schedule too large to materialize, or a `from` after `to` on a
   window query). No `loc` — these aren't tied to a source position.
 
+## Verdicts and flags on every evaluate response
+
+`vestlang_evaluate`, `vestlang_evaluate_program`, and `vestlang_evaluate_as_of`
+each return, per schedule, two verdicts plus a few derived reads. See
+[Evaluation](./evaluation.md) for the full model; the short version:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `interchange` | `{ status, reason? }` | The **storable** verdict — what a record keeper could hold, asked without reading firings. `status` ∈ `template` / `events-only` / `unrepresentable` / `impossible`. |
+| `resolution` | `{ status, reason? }` | The **resolves-to** verdict — what it works out to given the events you passed. `status` ∈ `template` / `events-only` / `unresolved` / `impossible`. |
+| `representable` | boolean | From `interchange` — can it be stored at all. |
+| `pending` | boolean | From `blockers` — witnesses (unfired events) still missing. A `template` can be `pending`; read pending here, never from a `status`. |
+| `valid` | boolean | `false` when the schedule allocates more than the grant (see `findings`). |
+| `findings` | array | Allocation problems, each with `kind`, `severity`, exact `sum`, and a human `message`. |
+| `absenceAssumptions` | array | Events the resolves-to reading is assuming stayed absent — each `{ eventId, through, message }`, i.e. "`eventId` did not occur on/before `through`". A later/backdated firing of one of these could change the result. Empty for a date-only or fully-fired schedule. |
+| `installments` | array | The dated projection (RESOLVED), or symbolic tranches when something is pending. |
+| `blockers` | array | What's unfired/contradictory, structurally. |
+
 ## Summary fields on `vestlang_evaluate_as_of`
 
-`vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the flat `installments` + `blockers`; the as-of partitioning is what the MCP layer adds.)
+`vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the two verdicts, `absenceAssumptions`, the flat `installments`, and `blockers`; the as-of partitioning and `summary` are what the MCP layer adds on top.)
 
 Each statement's response includes a `summary` object:
 

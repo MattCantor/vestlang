@@ -47,11 +47,11 @@ DSL string ──parse──▶ raw AST ──normalizeProgram──▶ Program 
                                    │
                  resolve combinators vs. runtime, then CLASSIFY
                                    ▼
-                          EvaluatedSchedule, status ∈
-                            template     — fits one canonical template
-                            events-only  — dated facts, not one template (+ reason)
-                            unresolved   — waiting on an unfired event
-                            impossible   — a contradiction; can never resolve
+                          EvaluatedSchedule — two verdicts side by side:
+                            interchange  — what a record keeper can STORE
+                                           (firing-invariant; safe to persist)
+                            resolution   — what it RESOLVES TO, given known events
+                          + absenceAssumptions, findings, installments, blockers
 ```
 
 ### Two layers: *resolve* vs. *substitute*
@@ -66,26 +66,39 @@ The codebase splits along one precise line:
 - **The front-end (`@vestlang/evaluator`, the "extended" layer) *resolves*.** Combinators
   let runtime *select the structure itself* — `LATER OF(12mo, EVENT "ipo")` becomes a
   different schedule depending on which date wins. The resolver evaluates that against
-  runtime and then **classifies** the result into one of four `status` verdicts.
+  runtime and then **classifies** the result into two verdicts side by side — what's
+  storable (firing-invariant) and what it resolves to given the events known.
 
 Think of it like a source language and an IR: the DSL expresses *contingency and intent*
 that the resolved interchange can't *hold*; the engine is the exact, validated target that
 multiple producers can share.
 
-### The fidelity ladder
+### Two classifications
 
-Every evaluated program lands on exactly one `status`:
+Every evaluated schedule comes back with **two verdicts**, because "what can a record
+keeper *store* for this" and "what does it *resolve to* right now" are different questions:
 
-| `status` | When | What you get |
-|---|---|---|
-| **`template`** | The program fits one canonical template | Exact installments; structured round-trip; intent preserved (best case) |
-| **`events-only`** | It resolves to concrete dated amounts that *can't* be one template — e.g. an event-anchored cliff, or independent absolute starts that interleave into no single grid | The bare dated amounts the interchange always accepts, plus a `reason`. Facts preserved, intent reported honestly — never disguised as a template |
-| **`unresolved`** | It can't be materialized yet — waiting on an unfired event | Amounts with symbolic/absent dates + `blockers` naming what's missing |
-| **`impossible`** | A condition can never be satisfied — e.g. an event required `BEFORE` a date already in the past | Installments flagged `IMPOSSIBLE` + `blockers` naming the contradiction |
+- **`interchange`** — the **storable** verdict, computed *without reading firings*, so a
+  later event can never change it. Values: `template`, `events-only`, `unrepresentable`
+  (no storable form even as bare events — today an event-anchored cliff), `impossible`
+  (a structural contradiction).
+- **`resolution`** — the **resolves-to** verdict, given the events currently known.
+  Values: `template`, `events-only`, `unresolved` (pending on an unfired event),
+  `impossible`.
 
-A program collapses to **one** verdict — `template`, `events-only`, `unresolved`, or
-`impossible` — never a fan-out to N. The program-level `status` is the headline; each
-installment also carries its own `state` of `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+They can differ for one schedule: a gated start `FROM DATE 2025-01-01 BEFORE EVENT "ipo"`
+is a storable `template`, but if `ipo` is already on record *before* that date it resolves
+to `impossible`. The flattened consumer view derives three reads — `representable` (from
+interchange), `pending` (from blockers; a `template` can be pending), `valid` (allocation ≤
+grant) — so read each from its own flag, never from a `status`. Each installment also
+carries its own `state` of `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+
+A schedule also discloses its **absence assumptions** — the events the resolves-to reading
+is taking to be absent (each `{ eventId, through }`) — so a later or backdated firing that
+would change the answer is surfaced, not silent. (A `BEFORE`/`AFTER` proviso against an
+unfired event is *pending*, never silently satisfied or impossible — it could still be
+recorded later. `impossible` is reserved for structural contradictions, like a date forced
+before a strictly earlier one.)
 
 **Template recovery.** `events-only` is a verdict about *authored structure*, not the
 realized numbers — and some events-only programs project a stream that *does* have a
@@ -138,16 +151,22 @@ import { parse, normalizeProgram, evaluateStatement } from "@vestlang/vestlang";
 
 const program = normalizeProgram(parse('VEST OVER 4 years EVERY 1 month CLIFF 1 year'));
 const schedule = evaluateStatement(program[0], {
-  events: { grantDate: "2025-01-01" },     // grantDate is required
+  grantDate: "2025-01-01",     // the grant-date anchor (its own field)
+  events: {},                  // named events the DSL references, e.g. { ipo: "2027-06-01" }
   grantQuantity: 4800,
-  asOf: "2026-04-16",                       // the scenario date (required)
+  asOf: "2026-04-16",          // the scenario clock (required)
   // optional: vesting_day_of_month
 });
 
-schedule.status;        // "template" | "events-only" | "unresolved" | "impossible"
-schedule.installments;  // [{ amount, date, meta: { state } }, ...]
-schedule.blockers;      // [] unless something is unresolved or impossible
+schedule.interchange.status;       // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
+schedule.resolution.status;        // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
+schedule.resolution.installments;  // [{ amount, date, meta: { state } }, ...]
+schedule.absenceAssumptions;       // [{ eventId, through }, ...] — events assumed not yet fired
 ```
+
+`toScheduleView(schedule)` flattens this into the shape the CLI and MCP server show — both
+verdicts, the `representable` / `pending` / `valid` flags, the installments and blockers,
+and rendered messages for findings and absence assumptions.
 
 `evaluateStatement` classifies one statement at a time. To collapse a whole multi-statement
 program into a **single** schedule and read its program-level fidelity verdict, use
@@ -191,10 +210,11 @@ All grants below use a grant date of **2025-01-01**. Outputs are produced by the
 
 37 installments, telescoping to exactly 4,800.
 
-### Event-gated cliff → `template` when fired, `unresolved` when not
+### Event-gated cliff → resolves to `template` when fired, `unresolved` when not
 
 `VEST OVER 4 years EVERY 1 month CLIFF LATER OF(+12 months, EVENT ipo)` over 4,800 shares.
-The cliff is the *later* of 12 months and the IPO.
+The cliff is the *later* of 12 months and the IPO. (Storable verdict: `unrepresentable` —
+an event-anchored cliff has no fixed-duration template form, so it can't be stored as one.)
 
 **IPO fired on 2026-06-15** → the cliff lands there; everything before it lumps:
 
@@ -230,7 +250,7 @@ template (no fan-out) — `vest evaluate --program`, 100 shares:
 | 40 | 2028-01-01 | RESOLVED |
 | 40 | 2029-01-01 | RESOLVED |
 
-`fidelity: template`.
+Both verdicts `template`.
 
 ### Two overlapping absolute starts → recovered to `template`
 
@@ -243,8 +263,8 @@ recover it. `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0
 | 50 | 2026-01-01 | RESOLVED |
 | 50 | 2026-07-01 | RESOLVED |
 
-`status: template` — **recovered** from `events-only`, because the two grids are really one
-6-month cadence: `100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months`. The raw
+Both verdicts `template` — **recovered** from `events-only`, because the two grids are really
+one 6-month cadence: `100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months`. The raw
 classifier (`evaluateProgram`) still reports `events-only`; recovery is a property of the
 default program surfaces and only fires when the inferred template reproduces the projection
 exactly.
@@ -261,9 +281,9 @@ month — the 1st and the 15th — `0.5 VEST FROM DATE 2024-01-01 OVER 4 months 
 | 100 | 2024-02-15 | RESOLVED |
 | … | … *(6 more, alternating)* | … |
 
-`status: events-only` — *"Two independent absolute-date vesting grids on one grant."* (An
-event-anchored cliff, `CLIFF EVENT ipo`, is the other genuine case — a cliff with no fixed
-date has no template form.)
+Both verdicts `events-only` — *"Two independent absolute-date vesting grids on one grant."*
+(An event-anchored cliff, `CLIFF EVENT ipo`, is the other genuine case — but it splits by
+lens: `events-only` to resolve, `unrepresentable` to store.)
 
 ### The inverse: tranches → DSL
 

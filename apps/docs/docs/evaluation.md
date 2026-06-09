@@ -3,12 +3,89 @@ title: Evaluation
 sidebar_position: 4
 ---
 
-Evaluation resolves a vesting program against runtime — the grant date, the share count, and which events have fired — and produces an **`EvaluatedSchedule`**: a sequence of dated, integer-allocated installments plus a single program-level **`status`** verdict.
+Evaluation resolves a vesting program against runtime — the grant date, the share count, and which events have fired — and produces an **`EvaluatedSchedule`**: dated, integer-allocated installments and **two verdicts**, side by side.
 
-There are two levels to read, and they're distinct:
+Two verdicts, because "what could a cap-table system store for this schedule" and "what does it work out to given the events we currently know" are different questions with different answers:
 
-- **`status`** — the verdict for the whole schedule: `template`, `events-only`, `unresolved`, or `impossible`.
-- **`state`** — each individual installment's own resolution: `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
+- **`interchange`** — the **storable** verdict. What a record keeper could hold for this schedule, asked _without looking at which events have fired_. Because it ignores firings, a later event can never change it — so it's the answer that's safe to persist.
+- **`resolution`** — the **resolves-to** verdict. What the schedule works out to _given the events currently known_, taken as the whole world. It reads firings, so it moves as events arrive.
+
+```ts
+interface EvaluatedSchedule {
+  interchange: InterchangeVerdict; // storable floor — never reads firings
+  resolution: EvaluatedScheduleVerdict; // resolves-to — closed-world, reads events
+  absenceAssumptions: AbsenceAssumption[]; // events the resolves-to reading leans on
+  findings: Finding[]; // allocation problems (over / under)
+}
+```
+
+Each verdict is a `status` plus the payload that status carries (installments, a `reason`, `blockers`). The CLI and MCP front-ends flatten all of this into a `ScheduleView` — the two verdicts, the installments, the blockers, and three [read-flags](#read-flags).
+
+## The two verdicts
+
+|                     | **Interchange** ("Storable")              | **Resolution** ("Resolves to")                        |
+| :------------------ | :---------------------------------------- | :---------------------------------------------------- |
+| Question            | what can a record keeper store?           | what does it resolve to, given known events?          |
+| Reads firing dates? | never — firing-invariant                  | yes                                                   |
+| `status` values     | `template` / `events-only` / `unrepresentable` / `impossible` | `template` / `events-only` / `unresolved` / `impossible` |
+| Role                | the stored floor                          | the analysis overlay                                  |
+
+The values they share mean the same thing in both lenses:
+
+- **`template`** — fits canonical's one-template shape, so the spec is preserved exactly.
+- **`events-only`** — resolves to concrete dated amounts that can't be one template (carries a `reason`); the facts survive, the single-template intent doesn't.
+- **`impossible`** — a contradiction no assignment of events could ever satisfy.
+
+They differ only on the pending case, because they're asking different things:
+
+- **`unresolved`** is **resolution-only** — the closed-world "can't be materialized yet" (typically a cliff that needs a firing date to place its lump). The interchange lens never consults firings, so it has no pending state of its own.
+- **`unrepresentable`** is **interchange-only** — there's no storable shape at all, not even as bare events. Today the sole cause is an **event-anchored cliff**: the canonical cliff is a fixed duration, so it has nowhere to put a lump whose size _and_ date both move with the firing.
+
+### When the two diverge
+
+Keeping both is the whole point — the same schedule can land differently in each lens:
+
+- A **gated start** `VEST FROM DATE 2025-01-01 BEFORE EVENT ipo` is a storable **`template`** (the gate's definition rides across as a synthetic event). But if `ipo` is already on record at `2024-06-01` — before the 2025 start it was meant to precede — the resolves-to verdict is **`impossible`**. Storable floor: `template`; this-world reading: `impossible`.
+- An **event-anchored cliff** `VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo` is **`unrepresentable`** to store, yet with `ipo` unfired it still resolves to **`events-only`** (the grid, minus the not-yet-placed lump). Same construct, two lenses.
+
+### Read-flags
+
+The flattened `ScheduleView` derives three booleans, each from a different source — read each from its own flag, not from a `status`:
+
+- **`representable`** — from the **interchange** verdict: can a record keeper hold this at all?
+- **`pending`** — from the **blockers**: are witnesses (unfired events) still missing? A storable `template` can be pending — its projection stays empty until the event arrives.
+- **`valid`** — from the **findings**: is at most 100% of the grant allocated? This is about what was written, independent of either verdict and of which events fired.
+
+:::note
+`representable` and "fully projected" are separate axes. An event-anchored start that hasn't fired is a perfectly storable `template` whose projection is empty for now — `representable: true`, `pending: true`. Always read pending from `pending` / `blockers`, never from a `status`.
+:::
+
+## Absence assumptions
+
+Closed-world resolution reads "no firing on record" as "hasn't happened." So the resolves-to verdict can quietly lean on an event _staying_ absent — and if that event is later recorded (even backdated), the answer changes. `absenceAssumptions` discloses every such dependency:
+
+```ts
+interface AbsenceAssumption {
+  eventId: string;
+  through: OCTDate; // inclusive: "did not occur on or before this date"
+}
+```
+
+`VEST FROM DATE 2025-01-01 BEFORE EVENT ipo` (ipo unfired) holds as a pending template only as long as `ipo` stays absent through `2025-01-01` — record `ipo` on or before that date and the gate fails, flipping it to `impossible`. So it discloses `{ eventId: "ipo", through: "2025-01-01" }`. The list is a watch-list of the firings (including backdated ones) that would move the result: a date-only or fully-fired schedule discloses none.
+
+A bare `VEST FROM EVENT ipo` — no `BEFORE`/`AFTER` date to measure against — is simply pending. It has no _dated_ assumption, so it discloses nothing and surfaces only as a blocker.
+
+## Gate provisos (`BEFORE` / `AFTER`)
+
+A `BEFORE`/`AFTER` proviso — "vest from X, so long as it lands before/after Y" — compares two dates. You can only decide it against dates you actually know:
+
+- **Two known dates** (a literal date, or an event already on record) — compared directly; the proviso holds or it doesn't, and the answer never drifts with the clock.
+- **An unfired event on either side** — _pending_, never silently satisfied or impossible. An unrecorded event can still be entered later with any effective date — even one backdated across the comparison — so neither answer is safe to commit. (One exception: being `AFTER` an event the schedule has established can _never_ occur is impossible — you can't be after something that never happens.)
+
+So **`impossible` is reserved for a structural contradiction** — a date forced before a strictly earlier date — not for "an event hasn't fired yet":
+
+- `VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01` → **`impossible`** (June can't precede January).
+- `VEST FROM EVENT milestone BEFORE DATE 2025-01-01`, `milestone` unfired → **pending**, even long past that date — the milestone could still be recorded with an earlier effective date. (It discloses an absence assumption on `milestone` through `2025-01-01`.)
 
 ## The evaluator
 
@@ -19,7 +96,7 @@ For each statement the evaluator:
 3. Accrues any installments scheduled before the grant date onto the grant date (see [below](#vesting-start-before-grant-date)).
 4. Applies an explicit **`CLIFF`** if present (including partial knowledge for `LATER OF` cliffs, [below](#partial-knowledge-for-later-of)).
 5. **Allocates** the amount across installments (cumulative round-down by default, exact-rational so the rounded shares telescope to the grant exactly).
-6. **Classifies** the result into a `status` verdict and emits the installments.
+6. **Classifies** the result into the two verdicts and emits the installments.
 
 A whole multi-statement program collapses to **one** `EvaluatedSchedule` — never a fan-out.
 
@@ -29,108 +106,84 @@ A whole multi-statement program collapses to **one** `EvaluatedSchedule` — nev
 
 ```ts
 {
-  events: { grantDate: OCTDate } & Record<string, OCTDate | undefined>,
+  grantDate: OCTDate,                          // the grant-date anchor (its own field)
+  events: Record<string, OCTDate | undefined>, // genuine named events (e.g. ipo)
   grantQuantity: number,
   asOf: OCTDate,
-  vesting_day_of_month?: VestingDayOfMonth,   // default VESTING_START_DAY_OR_LAST_DAY_OF_MONTH
+  vesting_day_of_month?: VestingDayOfMonth,     // default VESTING_START_DAY_OR_LAST_DAY_OF_MONTH
 }
 ```
 
-- **`events`** — `grantDate` is required; supply any named events the DSL references (e.g. `ipo`). When the vesting start resolves, it's added back as `vestingStart` so a cliff can refer to it.
+- **`grantDate`** — the grant-date anchor, a top-level field (not an entry in `events`). When the vesting start resolves, it's overlaid as `vestingStart` so a cliff can refer to it.
+- **`events`** — the genuine named events the DSL references (e.g. `ipo`). A name absent from the map is treated as unfired, not as never-occurring.
 - **`grantQuantity`** — the share count the amounts allocate against.
-- **`asOf`** — the date a scenario is evaluated against. Required at the library boundary; the CLI and MCP front-ends default it to today. It decides whether a time-limited condition has elapsed: a deadline still in the future keeps a pending event `unresolved` rather than `impossible`.
-- **`vesting_day_of_month`** — an optional OCF convention field, with the canonical default shown above. Allocation is always cumulative round-down — the interchange has no allocation field.
+- **`asOf`** — the clock a scenario is read against; the CLI and MCP front-ends default it to today. It's used to partition installments into vested / not-yet-vested ([`vestlang_evaluate_as_of`](./common_queries.md)); it does **not** decide whether a date is _known_ — a guaranteed-future literal date resolves like any other.
+- **`vesting_day_of_month`** — an optional OCF convention field, with the canonical default shown. Allocation is always cumulative round-down — the interchange has no allocation field.
 
 All dates are `OCTDate` — an ISO `YYYY-MM-DD` string.
 
-## The fidelity ladder (`status`)
-
-Every evaluated program lands on exactly one `status`. The verdict reports, honestly, how much of the intent the canonical interchange can hold.
-
-| `status` | Meaning | The schedule carries |
-| :-- | :-- | :-- |
-| **`template`** | Resolvable and fits canonical's one-template shape — the spec is preserved | `template`, `runtime`, `sourceMap`, resolved `installments`, `blockers` |
-| **`events-only`** | Resolves to dated amounts but can't be one template — facts kept, intent lost | resolved `installments`, a `reason`, `blockers` |
-| **`unresolved`** | Pending — can't be materialized yet (an unfired event) | `installments` (symbolic, plus any resolved siblings), `blockers` |
-| **`impossible`** | Unsatisfiable — no event assignment can ever resolve it | impossible `installments`, `blockers` |
-
-```ts
-type EvaluatedSchedule =
-  | { status: "template";    template; runtime; sourceMap; installments; blockers }
-  | { status: "events-only"; installments; reason; blockers }
-  | { status: "unresolved";  installments; blockers }
-  | { status: "impossible";  installments; blockers };
-```
-
-`sourceMap` (on a `template`) records the DSL behind any synthetic event the lowering had to mint — e.g. when a `FROM EARLIER OF(…)` start is externalized as a single event; it is `{}` for plain schedules.
-
-### How a program is classified
-
-A **canonical template** is one ordered chain of installments measured from a single origin — each segment anchored to a date or a named event, with cumulative round-down allocation and duration-based cliffs. It is the shape the interchange holds and that `@vestlang/core` allocates from. Classification decides whether a program collapses to exactly that, and reports honestly when it can't.
-
-A program is a **`template`** when, after its combinators resolve against runtime, it forms one such chain:
-
-- one ordered sequence from a single origin — a `THEN` chain, or `PLUS` components that continue that origin — not two independent grids;
-- every anchor is a date or a single coherent event (an *unfired* event is fine — see pending, below);
-- any cliff is a duration, not an event;
-- no unsatisfiable condition.
-
-(Allocation is not a condition: the engine is always cumulative round-down.)
-
-It falls to **`events-only`** when it resolves to concrete dated amounts that can't be that single shape. Two things force this:
-
-- **overlapping absolute starts** — two independent starts that don't chain into one origin (a `PLUS` of two different dates, or one event anchoring portions that land on different dates);
-- **event-anchored cliff** — the canonical cliff is a duration, so a cliff gated on an event has no template form.
-
-The first is a verdict about *structure*: some overlapping-start programs project a stream that does have a single-template form, and the default program surfaces recover those to `template` (see [Template recovery](#template-recovery) below). The event-anchored cliff is contingent — its date depends on a firing — and is never recovered.
-
-It is **`unresolved`** when a start or cliff genuinely can't resolve yet (an unfired event with no partial-knowledge floor), and **`impossible`** when a condition can never be satisfied.
-
-:::note
-**Pending templates.** A `template` can still be waiting on runtime: an event-anchored start that hasn't fired lowers to a `template` whose projection is empty until the event arrives, carrying `blockers`. "Representable as a template" and "fully projected" are separate — read pending from `blockers`, never from `status`.
-:::
+## Worked verdicts
 
 ### `template`
 
 A statement (or `THEN` chain) that resolves to a single canonical schedule. `100 VEST OVER 48 months EVERY 12 months`, grant date 2025-01-01:
 
-| Amount | Date | State |
-| --- | --- | --- |
-| 25 | 2026-01-01 | RESOLVED |
-| 25 | 2027-01-01 | RESOLVED |
-| 25 | 2028-01-01 | RESOLVED |
-| 25 | 2029-01-01 | RESOLVED |
+| Amount | Date       | State    |
+| ------ | ---------- | -------- |
+| 25     | 2026-01-01 | RESOLVED |
+| 25     | 2027-01-01 | RESOLVED |
+| 25     | 2028-01-01 | RESOLVED |
+| 25     | 2029-01-01 | RESOLVED |
 
-`status: template`.
+Both verdicts `template`. `sourceMap` (carried on a `template`) records the DSL behind any synthetic event the lowering had to mint — e.g. when a gated or `EARLIER OF(…)` start is externalized as a single event; it's `{}` for plain schedules.
 
 ### `events-only`
 
 Two absolute-date grids that interleave into a stream with no single-template form keep the dated facts and report why. `0.5 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2024-01-15 OVER 4 months EVERY 1 month`, 800 shares — one grid on the 1st, one on the 15th:
 
-| Amount | Date | State |
-| --- | --- | --- |
-| 100 | 2024-02-01 | RESOLVED |
-| 100 | 2024-02-15 | RESOLVED |
-| … | … *(6 more, alternating)* | … |
+| Amount | Date                          | State    |
+| ------ | ----------------------------- | -------- |
+| 100    | 2024-02-01                    | RESOLVED |
+| 100    | 2024-02-15                    | RESOLVED |
+| …      | … _(6 more, alternating)_     | …        |
 
-`status: events-only` — *reason: "Two independent absolute-date vesting grids on one grant."*
+Both verdicts `events-only` — _reason: "Two independent absolute-date vesting grids on one grant."_ (Two independent `DATE` grids are purely date-anchored, so they're `events-only` in both lenses.)
+
+### `unresolved` / `unrepresentable`
+
+A cliff gated on an event can't be placed until the event fires, and has no fixed-duration template form. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF( +12 months, EVENT milestone )`, grant 2025-01-01 over 100 shares, `milestone` unfired:
+
+- **resolution: `unresolved`** — the cliff can't be materialized yet.
+- **interchange: `unrepresentable`** — _reason: "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."_
+
+The installments are still emitted symbolically, every one pinned no earlier than the 12-month floor (see [Partial knowledge](#partial-knowledge-for-later-of)), and the schedule discloses an absence assumption on `milestone` through `2026-01-01`.
+
+### `impossible`
+
+A structural contradiction — no assignment of events can satisfy it. `VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01` (a June start required to precede January):
+
+| Amount | State      | Unresolved                           |
+| ------ | ---------- | ------------------------------------ |
+| 100    | IMPOSSIBLE | `DATE 2025-06-01 BEFORE DATE 2025-01-01` |
+
+Both verdicts `impossible`. Note that an unfired _event_ in a gate is **not** impossible — see [Gate provisos](#gate-provisos-before--after).
 
 ### Template recovery
 
-`events-only` is a verdict about *authored structure*, not the realized numbers. When two overlapping grids actually project a stream with a single-template form, the default program surfaces — `evaluateProgramWithRecovery`, the MCP `vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and, when it reproduces the projection exactly, publish `template` with a `recovered` note instead.
+`events-only` is a verdict about _authored structure_, not the realized numbers. When two overlapping grids actually project a stream with a single-template form, the default program surfaces — `evaluateProgramWithRecovery`, the MCP `vestlang_evaluate_program` tool, and `vest evaluate --program` — re-infer that template and, when it reproduces the projection exactly, publish `template` with a `recovered` note instead.
 
 `0.5 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months PLUS 0.5 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months`, 100 shares — the two grids are really one 6-month cadence:
 
-| Amount | Date | State |
-| --- | --- | --- |
-| 50 | 2026-01-01 | RESOLVED |
-| 50 | 2026-07-01 | RESOLVED |
+| Amount | Date       | State    |
+| ------ | ---------- | -------- |
+| 50     | 2026-01-01 | RESOLVED |
+| 50     | 2026-07-01 | RESOLVED |
 
-`status: template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. The raw classifier (`evaluateProgram`) still reports `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
+Both verdicts `template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. The raw classifier (`evaluateProgram`) still reports `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
 
 ## Installment states
 
-Within a schedule, each installment carries its own `state`.
+Each installment carries its own `state`, separate from the schedule-level verdicts.
 
 ### Resolved
 
@@ -140,24 +193,16 @@ Within a schedule, each installment carries its own `state`.
 
 ### Unresolved
 
-An installment whose date can't be fixed yet has no `date`; instead `meta` carries a **symbolic date** and the unresolved DSL fragment, and the schedule's `blockers` name what's missing.
+An installment whose date can't be fixed yet has no `date`; instead `meta` carries a **symbolic date** and the unresolved DSL fragment, and the schedule's `blockers` name what's missing. (An unfired-event _start_ no longer produces these — it lowers to a pending `template` whose projection is simply empty; symbolic installments appear when part of a known grid still waits on a firing, like the `LATER OF` cliff above.)
 
 ```ts
 { amount: number, meta: { state: "UNRESOLVED", symbolicDate: SymbolicDate, unresolved: string } }
 ```
 
-`100 VEST FROM EVENT milestone` (milestone unfired):
-
-| Amount | Symbolic date | State | Unresolved |
-| --- | --- | --- | --- |
-| 100 | `{ type: UNRESOLVED_VESTING_START }` | UNRESOLVED | `EVENT milestone` |
-
-Blocker: `{ type: "EVENT_NOT_YET_OCCURRED", event: "milestone" }`.
-
 A **symbolic date** takes one of three forms:
 
 ```ts
-{ type: "UNRESOLVED_VESTING_START" }                          // the start itself is unknown
+{ type: "UNRESOLVED_VESTING_START" }                           // the start itself is unknown
 { type: "START_PLUS", unit: "DAYS" | "MONTHS", steps: number } // a known offset from an unknown start
 { type: "UNRESOLVED_CLIFF", date: OCTDate }                    // grid date known, cliff gate unfired
 ```
@@ -166,25 +211,20 @@ The **`unresolved` blockers**:
 
 ```ts
 type UnresolvedBlocker =
-  | { type: "EVENT_NOT_YET_OCCURRED"; event: string }
-  | { type: "DATE_NOT_YET_OCCURRED"; date: OCTDate }
+  | { type: "EVENT_NOT_YET_OCCURRED"; event: string; through?: OCTDate }
   | { type: "UNRESOLVED_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF"; blockers: Blocker[] }
   | { type: "UNRESOLVED_CONDITION"; condition: Omit<VestingNode, "type"> };
 ```
 
+`through` on `EVENT_NOT_YET_OCCURRED` is the date the event was measured against when it has one (a gate's date, or the date a `LATER OF` settled on); it's the boundary the schedule's [absence assumptions](#absence-assumptions) report.
+
 ### Impossible
 
-A condition that can never be satisfied — no event assignment resolves it.
+A condition that can never be satisfied — no event assignment resolves it. For `VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01`:
 
 ```ts
 { amount: number, meta: { state: "IMPOSSIBLE", unresolved: string } }
 ```
-
-`100 VEST FROM EVENT milestone BEFORE DATE 2025-01-01`, evaluated after the deadline has passed (the event never fired, so the start can never occur):
-
-| Amount | State | Unresolved |
-| --- | --- | --- |
-| 100 | IMPOSSIBLE | `EVENT milestone BEFORE DATE 2025-01-01` |
 
 Blocker (the `condition` is the offending node, minus its `type`):
 
@@ -192,7 +232,7 @@ Blocker (the `condition` is the offending node, minus its `type`):
 {
   "type": "IMPOSSIBLE_CONDITION",
   "condition": {
-    "base": { "type": "EVENT", "value": "milestone" },
+    "base": { "type": "DATE", "value": "2025-06-01" },
     "offsets": [],
     "condition": {
       "type": "ATOM",
@@ -216,7 +256,7 @@ type ImpossibleBlocker =
 
 ### Partial knowledge for `LATER OF`
 
-When a `LATER OF` selector has some but not all items resolved, the resolved items still constrain the result. Consider a 4-year quarterly schedule whose cliff is the *later* of 12 months and a milestone, granted 2025-01-01 over 100 shares:
+When a `LATER OF` selector has some but not all items resolved, the resolved items still constrain the result. Consider a 4-year quarterly schedule whose cliff is the _later_ of 12 months and a milestone, granted 2025-01-01 over 100 shares:
 
 ```vest
 100 VEST
@@ -224,13 +264,13 @@ When a `LATER OF` selector has some but not all items resolved, the resolved ite
   CLIFF LATER OF( +12 months, EVENT milestone )
 ```
 
-With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff *later* than the 12-month floor, so we already know nothing vests before that floor. The schedule is `unresolved`, yet every installment carries the 12-month cliff:
+With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so we already know nothing vests before that floor. The schedule is `unresolved` (and `unrepresentable` to store), yet every installment carries the 12-month cliff:
 
-| Amount | Symbolic date | State | Unresolved |
-| --- | --- | --- | --- |
-| 25 | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
-| 6 | `{ type: UNRESOLVED_CLIFF, date: 2026-04-01 }` | UNRESOLVED | EVENT milestone |
-| … | … *(through 2029-01-01)* | … | … |
+| Amount | Symbolic date                              | State      | Unresolved     |
+| ------ | ------------------------------------------ | ---------- | -------------- |
+| 25     | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
+| 6      | `{ type: UNRESOLVED_CLIFF, date: 2026-04-01 }` | UNRESOLVED | EVENT milestone |
+| …      | … _(through 2029-01-01)_                   | …          | …              |
 
 ### Vesting start before grant date
 
@@ -243,8 +283,8 @@ Awards are often granted with a vesting start that precedes the grant date, to g
 
 The four 2024 installments accrue and vest together on the grant date:
 
-| Amount | Date | State |
-| --- | --- | --- |
-| 25 | 2025-01-01 | RESOLVED *(accrued 2024 catch-up)* |
-| 6 | 2025-04-01 | RESOLVED |
-| … | … *(through 2028-01-01)* | … |
+| Amount | Date                          | State                          |
+| ------ | ----------------------------- | ------------------------------ |
+| 25     | 2025-01-01                    | RESOLVED _(accrued 2024 catch-up)_ |
+| 6      | 2025-04-01                    | RESOLVED                       |
+| …      | … _(through 2028-01-01)_      | …                              |
