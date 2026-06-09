@@ -31,7 +31,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
-import { some } from "@vestlang/walk";
+import { referencesEvent } from "@vestlang/walk";
 import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -75,21 +75,6 @@ const startBase = (
 /** A start expression that selects an anchor (EARLIER OF / LATER OF), not a leaf. */
 const isCombinator = (e: VestingNodeExpr): boolean =>
   e.type === "NODE_EARLIER_OF" || e.type === "NODE_LATER_OF";
-
-/** Does the expression reference ≥1 genuine named EVENT, anywhere in the start —
- *  its base, a selector arm, OR a BEFORE/AFTER gate condition? This is the
- *  synthetic-event admission test: a start earns a synthetic event only if its
- *  definition names a real event to defer on (a pure-date construct resolves
- *  directly and never reaches the synthetic path).
- *
- *  We use `@vestlang/walk`'s `some` to descend every edge, the gate condition
- *  included — the same check `@vestlang/recover`'s `hasEventBase` runs. An event
- *  hidden in a gate (`FROM DATE x BEFORE EVENT e`) must count, just like one in
- *  the base, or the gate's guard would be dropped at the storage boundary (#18).
- *  System anchors are filtered out for free: GRANT_DATE / VESTING_START are their
- *  own node kinds, not "EVENT", so a grant-date-relative start never trips this. */
-const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
-  some(e, (n) => n.type === "EVENT");
 
 export interface StmtResolution {
   percentage: Fraction;
@@ -204,7 +189,7 @@ const resolveNonChained = (
   // cliff that needs the firing date (event cliff, cross-unit) keeps the
   // statement UNRESOLVED so it isn't silently dropped.
   const isGated = vs.type === "NODE" && vs.condition !== undefined;
-  if (pending && (isCombinator(vs) || isGated) && referencesNamedEvent(vs)) {
+  if (pending && (isCombinator(vs) || isGated) && referencesEvent(vs)) {
     const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
     if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
       return {
