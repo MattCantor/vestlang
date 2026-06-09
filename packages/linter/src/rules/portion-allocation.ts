@@ -4,7 +4,7 @@ import { fracCmp, fracSum, ONE } from "@vestlang/utils";
 const meta = {
   id: "portion-allocation",
   description:
-    "In a multi-statement program, PORTION amounts must not over-allocate the grant (>100% is an error) and should add up to the whole (under 100% is a warning).",
+    "PORTION amounts must not over-allocate the grant (>100% is an error) and should add up to the whole (under 100% is a warning).",
   recommended: true,
   severity: "error" as const,
 };
@@ -17,10 +17,6 @@ export const rulePortionAllocation: RuleModule = {
     const { id } = meta;
     return {
       Program(program) {
-        // A single bare statement defaulting to 100% is correct; only a
-        // program of two or more statements can misallocate.
-        if (program.length < 2) return;
-
         const portions = program
           .map((s) => s.amount)
           .filter((a) => a.type === "PORTION");

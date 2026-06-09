@@ -109,6 +109,37 @@ describe("@vestlang/linter", () => {
       ).toEqual([]);
     });
 
+    it("warns on a lone explicit portion that under-allocates (1/2)", () => {
+      const diagnostics = diagnosticsOf(`
+        1/2 VEST OVER 12 months EVERY 1 month
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("warning");
+    });
+
+    it("errors on a lone explicit portion that over-allocates (3/2)", () => {
+      const diagnostics = diagnosticsOf(`
+        3/2 VEST OVER 12 months EVERY 1 month
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "portion-allocation",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("error");
+    });
+
+    it("leaves a lone quantity statement alone (no grant total to sum)", () => {
+      const diagnostics = diagnosticsOf(`
+        100 VEST OVER 12 months EVERY 1 month
+      `);
+      expect(
+        diagnostics.filter((d) => d.ruleId === "portion-allocation"),
+      ).toEqual([]);
+    });
+
     it("does not flag quantity programs (out of scope)", () => {
       const diagnostics = diagnosticsOf(`
         100 VEST OVER 2 years EVERY 1 year PLUS 100 VEST OVER 2 years EVERY 1 year
