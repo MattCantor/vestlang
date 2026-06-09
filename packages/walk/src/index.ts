@@ -131,3 +131,11 @@ export function some(node: AstNode, pred: (n: AstNode) => boolean): boolean {
   });
   return hit;
 }
+
+// True if `node` or anything beneath it is a named EVENT anchor. System anchors
+// (GRANT_DATE / VESTING_START) are their own node kinds, not "EVENT", so they
+// never trip this. An EVENT can hide in a base, a cliff, a selector arm, or the
+// reference node of a BEFORE/AFTER gate — `some` descends every edge, so all count.
+export function referencesEvent(node: AstNode): boolean {
+  return some(node, (n) => n.type === "EVENT");
+}

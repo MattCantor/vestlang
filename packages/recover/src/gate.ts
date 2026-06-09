@@ -1,6 +1,6 @@
 import type { ResolveResult } from "@vestlang/evaluator";
 import type { NonTemplateReason, Program } from "@vestlang/types";
-import { some } from "@vestlang/walk";
+import { referencesEvent } from "@vestlang/walk";
 
 // The events arm of the classifier's verdict — the only shape recovery acts on.
 type EventsResult = Extract<ResolveResult, { kind: "events" }>;
@@ -41,13 +41,9 @@ function isOverlappingAbsoluteStarts(reason: NonTemplateReason): boolean {
   return reason.kind === "OVERLAPPING_ABSOLUTE_STARTS";
 }
 
-// True if any vesting anchor reachable from the program is an EVENT.
-//
-// An EVENT doesn't only show up as the start — it can hide in a cliff, in the
-// reference node of a BEFORE/AFTER gate, and inside the arms of a LATER OF /
-// EARLIER OF selector. Rather than re-spell that recursion by hand (and risk
-// missing a spot), we let the shared walker visit every node and just ask at
-// each one whether it's an EVENT.
+// True if any vesting anchor reachable from the program is an EVENT — checked
+// per statement via the shared `referencesEvent` predicate, which descends the
+// base, cliff, gate condition, and selector arms so no placement is missed.
 export function hasEventBase(program: Program): boolean {
-  return program.some((stmt) => some(stmt, (n) => n.type === "EVENT"));
+  return program.some(referencesEvent);
 }
