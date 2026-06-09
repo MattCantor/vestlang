@@ -1,14 +1,39 @@
-import { Fragment, ReactNode } from "react";
-import { EvaluatedSchedule, Program } from "@vestlang/types";
-import { formatFinding, formatAbsenceAssumption } from "@vestlang/evaluator";
+import { ReactNode } from "react";
+import { Program } from "@vestlang/types";
+import type {
+  ScheduleView,
+  RecoveredView,
+  ClauseBreakdown,
+} from "@vestlang/pipeline";
 import { InstallmentsTable } from "./installmentsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
+const blockersBlock = (blockers: ScheduleView["blockers"]) =>
+  blockers.length > 0 ? (
+    <pre
+      style={{
+        fontSize: "0.75rem",
+        lineHeight: 1.6,
+        overflow: "auto",
+        maxHeight: "60vh",
+        borderRadius: "var(--ifm-code-border-radius)",
+        padding: "0.75rem",
+        background: "var(--ifm-code-background)",
+      }}
+    >
+      {JSON.stringify(blockers, null, 2)}
+    </pre>
+  ) : null;
+
 export default function PlaygroundResults({
-  schedules,
+  view,
+  recovered,
+  breakdown,
   ast,
 }: {
-  schedules: EvaluatedSchedule[];
+  view: ScheduleView;
+  recovered?: RecoveredView;
+  breakdown: ClauseBreakdown[];
   ast: Program;
 }): ReactNode {
   return (
@@ -23,65 +48,79 @@ export default function PlaygroundResults({
             <TabsTrigger value="AST">AST</TabsTrigger>
           </TabsList>
           <TabsContent value="Installments" className="ui-mt-4">
-            {schedules.map((s: EvaluatedSchedule, index: number) => (
-              <Fragment key={index}>
-                {/* Show the projection, but flag it: an over-allocation (error)
-                    isn't a valid schedule; an under-allocation (warning) is legal
-                    but worth noting. The table is always shown either way. */}
-                {s.findings.map((f, i) => {
-                  const tone =
-                    f.severity === "error" ? "danger" : "warning";
-                  return (
-                    <div
-                      key={i}
-                      role={f.severity === "error" ? "alert" : "status"}
-                      style={{
-                        border: `1px solid var(--ifm-color-${tone})`,
-                        borderRadius: "var(--ifm-code-border-radius)",
-                        padding: "0.5rem 0.75rem",
-                        marginBottom: "0.5rem",
-                        color: `var(--ifm-color-${tone})`,
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      ⚠ {formatFinding(f)}
-                    </div>
-                  );
-                })}
-                {/* The two verdicts, labeled: what a record keeper could store
-                    for this schedule, and what it resolves to given the events
-                    entered above. */}
+            {/* The program collapses to one schedule, so there's one of each of
+                these — one allocation finding, one verdict pair, one projection.
+                The table is shown either way; a finding just flags it (an
+                over-allocation error isn't a valid schedule, an under-allocation
+                warning is legal but worth noting). */}
+            {view.findings.map((f, i) => {
+              const tone = f.severity === "error" ? "danger" : "warning";
+              return (
+                <div
+                  key={i}
+                  role={f.severity === "error" ? "alert" : "status"}
+                  style={{
+                    border: `1px solid var(--ifm-color-${tone})`,
+                    borderRadius: "var(--ifm-code-border-radius)",
+                    padding: "0.5rem 0.75rem",
+                    marginBottom: "0.5rem",
+                    color: `var(--ifm-color-${tone})`,
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  ⚠ {f.message}
+                </div>
+              );
+            })}
+            {/* The two verdicts, labeled: what a record keeper could store for
+                this grant, and what it resolves to given the events entered. */}
+            <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
+              <strong>Storable:</strong> {view.interchange.status}
+              {"  •  "}
+              <strong>Resolves to:</strong> {view.resolution.status}
+            </p>
+            {/* When an events-only program turned out to have a single-template
+                form, the engine recovers it back to a template; this says where
+                it came from and shows the inferred DSL. */}
+            {recovered ? (
+              <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
+                <strong>Recovered:</strong> {recovered.from} → template
+                {" — "}
+                {recovered.reason} <code>{recovered.dsl}</code>
+              </p>
+            ) : null}
+            {/* What the "resolves to" reading is assuming hasn't happened yet —
+                events whose later occurrence could change the projection below. */}
+            {view.absenceAssumptions.length > 0 ? (
+              <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
+                <strong>Assumes not yet occurred:</strong>{" "}
+                {view.absenceAssumptions.map((a) => a.message).join("; ")}
+              </p>
+            ) : null}
+            <InstallmentsTable installments={view.installments} />
+            {blockersBlock(view.blockers)}
+            {/* Per-clause attribution — which clause produced which tranches.
+                Only worth showing when there's more than one clause (a single
+                clause just is the program). No verdict here: a clause has no
+                storable schedule of its own. */}
+            {breakdown.length > 1 ? (
+              <div style={{ marginTop: "1rem" }}>
                 <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
-                  <strong>Storable:</strong> {s.interchange.status}
-                  {"  •  "}
-                  <strong>Resolves to:</strong> {s.resolution.status}
+                  <strong>By clause</strong>
                 </p>
-                {/* What the "resolves to" reading is assuming hasn't happened yet —
-                    events whose later occurrence could change the projection below. */}
-                {s.absenceAssumptions.length > 0 ? (
-                  <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
-                    <strong>Assumes not yet occurred:</strong>{" "}
-                    {s.absenceAssumptions.map(formatAbsenceAssumption).join("; ")}
-                  </p>
-                ) : null}
-                <InstallmentsTable installments={s.resolution.installments} />
-                {s.resolution.blockers.length > 0 ? (
-                  <pre
-                    style={{
-                      fontSize: "0.75rem",
-                      lineHeight: 1.6,
-                      overflow: "auto",
-                      maxHeight: "60vh",
-                      borderRadius: "var(--ifm-code-border-radius)",
-                      padding: "0.75rem",
-                      background: "var(--ifm-code-background)",
-                    }}
-                  >
-                    {JSON.stringify(s.resolution.blockers, null, 2)}
-                  </pre>
-                ) : null}
-              </Fragment>
-            ))}
+                {breakdown.map((clause, i) => (
+                  <details key={i} style={{ marginBottom: "0.5rem" }}>
+                    <summary style={{ cursor: "pointer" }}>
+                      Clause {i + 1}
+                    </summary>
+                    <div style={{ marginTop: "0.5rem" }}>
+                      <InstallmentsTable installments={clause.installments} />
+                      {blockersBlock(clause.blockers)}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ) : null}
           </TabsContent>
           <TabsContent value="AST">
             <div

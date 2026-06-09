@@ -112,12 +112,12 @@ importers:
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
-      '@vestlang/evaluator':
-        specifier: workspace:*
-        version: link:../../packages/evaluator
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types
