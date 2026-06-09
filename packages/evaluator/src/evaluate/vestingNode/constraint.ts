@@ -12,6 +12,7 @@ import type {
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 import { eq, gt, lt } from "../time.js";
+import { withBoundary } from "../boundary.js";
 
 /* ------------------------
  * Helpers
@@ -50,9 +51,14 @@ const failByRelation = (
 const mergedUnresolved = (
   nodes: (UnresolvedNode | ImpossibleNode)[],
   condition: Omit<VestingNode, "type">,
+  // The date the still-pending side is being measured against, if we know one.
+  // It gets stamped onto the pending-event blockers (not the condition blocker)
+  // so the schedule can later disclose what it's assuming stayed absent.
+  through?: OCTDate,
 ): Blocker[] => {
+  const operandBlockers = nodes.map((n) => n.blockers).flat();
   return [
-    ...nodes.map((n) => n.blockers).flat(),
+    ...(through ? withBoundary(operandBlockers, through) : operandBlockers),
     { type: "UNRESOLVED_CONDITION", condition },
   ];
 };
@@ -104,12 +110,21 @@ export function evaluateConstraint(
   }
 
   // An unfired event on either side keeps the comparison pending — we only ever
-  // hand back the operand(s) we're actually waiting on.
+  // hand back the operand(s) we're actually waiting on. Whichever side we do know
+  // the date of is the yardstick the unfired event is being held against, so that
+  // date is what we're assuming it stays absent through; with neither side known
+  // there's nothing to record.
   if (a.type === "UNRESOLVED" || b.type === "UNRESOLVED") {
     const pending = [a, b].filter(
       (n): n is UnresolvedNode => n.type === "UNRESOLVED",
     );
-    return mergedUnresolved(pending, vestingNode);
+    const knownDate =
+      a.type === "RESOLVED"
+        ? a.date
+        : b.type === "RESOLVED"
+          ? b.date
+          : undefined;
+    return mergedUnresolved(pending, vestingNode, knownDate);
   }
 
   // Both dates known: run the comparison.

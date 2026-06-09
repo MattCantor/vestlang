@@ -40,6 +40,12 @@ export type UnresolvedBlocker =
   | {
       type: "EVENT_NOT_YET_OCCURRED";
       event: string;
+      // Set when this pending event was checked against a known date — a gate's
+      // "before/after <date>" or the date a LATER OF already settled on. It's the
+      // latest date we're taking the event to still be absent on/before; that's
+      // what feeds the schedule's absence-assumption disclosure. Left off when the
+      // event is simply awaited with nothing to compare it to (a bare FROM EVENT).
+      through?: OCTDate;
     }
   | {
       type: "UNRESOLVED_SELECTOR";

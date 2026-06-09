@@ -11,13 +11,17 @@
 //                   "impossible".
 
 import type {
+  AbsenceAssumption,
+  Blocker,
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
   InterchangeVerdict,
   NonTemplateReason,
+  OCTDate,
 } from "@vestlang/types";
-import { compileToInstallments } from "@vestlang/core";
+import { compileToInstallments, gt } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
+import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
 import type { ResolveResult } from "./types.js";
 
 /** Turn a structured "couldn't be one template" reason into a sentence for display.
@@ -40,6 +44,50 @@ export const reasonToString = (r: NonTemplateReason): string => {
       );
   }
 };
+
+/**
+ * The non-occurrences this resolution is leaning on. Closed-world resolution reads
+ * "no firing on record" as "hasn't happened" — so reading a schedule as, say,
+ * vested can quietly depend on some event still being absent. We surface each such
+ * dependency from the blockers the resolution left behind: every "still waiting on
+ * event X" blocker that got measured against a known date carries that date, and
+ * the date is exactly how far we're assuming X stayed absent. A bare wait with no
+ * date to compare against isn't a dated assumption, so it's left to the blocker
+ * list rather than disclosed here; the vesting-start placeholder isn't a real event
+ * and is never disclosed. When one event was held against several dates, the latest
+ * wins — assuming absence through the later date is the stronger, safe claim.
+ */
+const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
+  const latest = new Map<string, OCTDate>();
+
+  const walk = (bs: Blocker[]): void => {
+    for (const b of bs) {
+      if (b.type === "UNRESOLVED_SELECTOR") {
+        walk(b.blockers);
+      } else if (
+        b.type === "EVENT_NOT_YET_OCCURRED" &&
+        b.through !== undefined &&
+        b.event !== VESTING_START_LABEL
+      ) {
+        const prior = latest.get(b.event);
+        if (prior === undefined || gt(b.through, prior))
+          latest.set(b.event, b.through);
+      }
+    }
+  };
+  walk(blockers);
+
+  return [...latest.entries()]
+    .map(([eventId, through]) => ({ eventId, through }))
+    .sort((x, y) =>
+      x.eventId < y.eventId ? -1 : x.eventId > y.eventId ? 1 : 0,
+    );
+};
+
+/** The blockers a verdict left behind. Only template/unresolved/impossible carry
+ *  them; an events-only result resolved to concrete dates and keeps none. */
+const verdictBlockers = (r: ResolveResult): Blocker[] =>
+  "blockers" in r ? r.blockers : [];
 
 /** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet). */
 const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
@@ -91,8 +139,8 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
  * `interchange` is computed separately (see resolve/interchange.ts) and passed in.
  *
  * Findings come off the resolve result and ride at the top level — they're about
- * the schedule as written, not about either verdict. `absenceAssumptions` is left
- * empty for now; a later phase fills it from the closed-world evaluation.
+ * the schedule as written, not about either verdict. `absenceAssumptions` reads the
+ * non-occurrences the closed-world `resolution` leaned on out of its own blockers.
  */
 export const assemble = (
   resolution: ResolveResult,
@@ -100,6 +148,6 @@ export const assemble = (
 ): EvaluatedSchedule => ({
   interchange,
   resolution: assembleVerdict(resolution),
-  absenceAssumptions: [],
+  absenceAssumptions: collectAbsences(verdictBlockers(resolution)),
   findings: resolution.findings,
 });

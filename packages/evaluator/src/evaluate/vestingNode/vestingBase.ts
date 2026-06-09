@@ -10,8 +10,10 @@ import { assertNever } from "@vestlang/utils";
 import { addDays, addMonthsRule } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
-// now a type tag, not a string; this is purely the word a diagnostic prints.
-const VESTING_START_LABEL = "vestingStart";
+// now a type tag, not a string; this is purely the word a diagnostic prints. It's
+// exported so the absence-assumption collector can recognize and skip it — the
+// vesting start is a system placeholder, not an event anyone witnesses.
+export const VESTING_START_LABEL = "vestingStart";
 
 export function evaluateVestingBase(
   node: VestingNode,
