@@ -84,19 +84,24 @@ function reduceBest<T>(
  * ------------------------ */
 
 /**
- * EARLIER_OF is resolved if any item resolves, else unresolved, unless all impossible
- * LATER_OF is resolved if all items resolve. If some resolve, return Picked with UnresolvedNode
+ * Both EARLIER_OF and LATER_OF only settle once every live arm has resolved.
+ * For LATER_OF that's obvious — you can't know the latest until you know them
+ * all. For EARLIER_OF it's subtler: a single resolved arm doesn't pin the
+ * earliest, because an unfired-event sibling could still be recorded with an
+ * earlier date. So neither selector commits while any arm is still pending.
+ * They differ only in how they treat a dead (impossible) arm: EARLIER_OF drops
+ * it and carries on; LATER_OF lets it sink the whole selector.
  */
 type SelectorPolicy = {
   selector: SelectorTag;
-  selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // earlier: any resolved, later: all resolved
+  selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // both: all live arms resolved
   partialEmit: boolean; // only true for LATER_OF
   impossibleArmPoisons: boolean; // LATER_OF is universal: one dead arm sinks the whole selector
 };
 
 const EARLIER_POLICY: SelectorPolicy = {
   selector: "EARLIER_OF",
-  selectorIsSatisfied: (c) => c.some(isPickedResolved),
+  selectorIsSatisfied: (c) => c.every(isPickedResolved),
   partialEmit: false,
   impossibleArmPoisons: false,
 };

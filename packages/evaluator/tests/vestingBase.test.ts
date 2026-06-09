@@ -9,7 +9,7 @@ import {
 } from "./helpers.js";
 
 describe("evaluateVestingBase", () => {
-  it("DATE resolved when <= asOf", () => {
+  it("DATE resolves to its literal value", () => {
     const ctx = baseCtx({ asOf: "2024-02-01" });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2024-02-01")),
@@ -18,16 +18,13 @@ describe("evaluateVestingBase", () => {
     expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" });
   });
 
-  it("DATE unresolved when > asOf, blocker is DATE_NOT_YET_OCCURRED", () => {
+  it("DATE in the future still resolves — asOf doesn't gate a known date", () => {
     const ctx = baseCtx({ asOf: "2024-01-01" });
     const res = evaluateVestingBase(
-      makeSingletonNode(makeVestingBaseDate("2024-02-01")),
+      makeSingletonNode(makeVestingBaseDate("2030-02-01")),
       ctx,
     );
-    expect(res.type).toBe("UNRESOLVED");
-    expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
-      "DATE_NOT_YET_OCCURRED",
-    );
+    expect(res).toEqual({ type: "RESOLVED", date: "2030-02-01" });
   });
 
   it("EVENT resolved if ctx has date, with offsets applied (MONTHS)", () => {
@@ -66,12 +63,5 @@ describe("evaluateVestingBase", () => {
       ctx,
     );
     expect(res).toEqual({ type: "RESOLVED", date: "2024-02-29" });
-  });
-
-  it("DATE resolution ignores asOf when asOf=false", () => {
-    const ctx = baseCtx({ asOf: "2024-01-01" });
-    const node = makeSingletonNode(makeVestingBaseDate("2024-02-01"));
-    const res = evaluateVestingBase(node, ctx, false);
-    expect(res).toEqual({ type: "RESOLVED", date: "2024-02-01" });
   });
 });

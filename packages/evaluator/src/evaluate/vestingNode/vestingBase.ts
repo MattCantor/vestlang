@@ -7,7 +7,7 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { addDays, addMonthsRule, gt } from "../time.js";
+import { addDays, addMonthsRule } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
 // now a type tag, not a string; this is purely the word a diagnostic prints.
@@ -16,18 +16,17 @@ const VESTING_START_LABEL = "vestingStart";
 export function evaluateVestingBase(
   node: VestingNode,
   ctx: EvaluationContext,
-  asOf: boolean = true,
 ): ResolvedNode | UnresolvedNode {
   const base = node.base;
   switch (base.type) {
+    // A literal calendar date is a known value, full stop. A date in the future
+    // is no less *known* than one in the past — only its position relative to
+    // "now" differs, and that's a question for projection, not resolution. So we
+    // never gate it on asOf: whether the schedule has actually reached this date
+    // yet is decided later, by comparing installment dates against asOf.
     case "DATE": {
       const date = applyOffsets(base.value, node.offsets, ctx);
-      return asOf && gt(date, ctx.asOf)
-        ? {
-            type: "UNRESOLVED",
-            blockers: [{ type: "DATE_NOT_YET_OCCURRED", date }],
-          }
-        : { type: "RESOLVED", date };
+      return { type: "RESOLVED", date };
     }
     // The grant date is always known (a required context field), so this anchor
     // resolves unconditionally — no as-of gate, matching how it resolved when it
