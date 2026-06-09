@@ -31,6 +31,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
+import { some } from "@vestlang/walk";
 import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -75,23 +76,20 @@ const startBase = (
 const isCombinator = (e: VestingNodeExpr): boolean =>
   e.type === "NODE_EARLIER_OF" || e.type === "NODE_LATER_OF";
 
-/** Does the expression reference ≥1 genuine named EVENT (not a system anchor)?
- *  The synthetic-event admission test: a combinator anchor earns a synthetic
- *  event only if its definition names a real condition. Guards against smuggling
- *  a pure-date combinator (which resolves directly) into the synthetic path.
+/** Does the expression reference ≥1 genuine named EVENT, anywhere in the start —
+ *  its base, a selector arm, OR a BEFORE/AFTER gate condition? This is the
+ *  synthetic-event admission test: a start earns a synthetic event only if its
+ *  definition names a real event to defer on (a pure-date construct resolves
+ *  directly and never reaches the synthetic path).
  *
- *  This reads like a job for `@vestlang/walk`'s `some` (recover uses it for a
- *  near-identical "is there an event in here?" check), but it isn't one. It only
- *  walks the anchor itself: the node's own base, and the arms of an EARLIER/LATER
- *  OF. It deliberately does NOT look inside a node's BEFORE/AFTER condition. A
- *  shared `some` descends every edge, so it would also count an event gated in a
- *  constraint — widening what qualifies as a referenced event and changing which
- *  starts get a synthetic event. That's a semantic call about the start anchor,
- *  not a generic tree walk, so the recursion stays here and stays narrow. */
+ *  We use `@vestlang/walk`'s `some` to descend every edge, the gate condition
+ *  included — the same check `@vestlang/recover`'s `hasEventBase` runs. An event
+ *  hidden in a gate (`FROM DATE x BEFORE EVENT e`) must count, just like one in
+ *  the base, or the gate's guard would be dropped at the storage boundary (#18).
+ *  System anchors are filtered out for free: GRANT_DATE / VESTING_START are their
+ *  own node kinds, not "EVENT", so a grant-date-relative start never trips this. */
 const referencesNamedEvent = (e: VestingNodeExpr): boolean =>
-  e.type === "NODE"
-    ? e.base.type === "EVENT"
-    : e.items.some(referencesNamedEvent);
+  some(e, (n) => n.type === "EVENT");
 
 export interface StmtResolution {
   percentage: Fraction;
@@ -182,14 +180,46 @@ const resolveNonChained = (
     occurrences: p.occurrences,
   };
 
-  // An unfired *atomic* EVENT start (a bare single node naming an event, not a
-  // combinator or a system anchor) lowers into the template as an EVENT
-  // statement with no firing. Requires a non-PICKED UNRESOLVED (rules out
-  // IMPOSSIBLE and partially-picked combinators). A `vestingStart`-relative
-  // duration cliff lowers anchor-free and rides along on the pending statement;
-  // a cliff that genuinely needs the firing date (event cliff, cross-unit) keeps
-  // the whole statement UNRESOLVED so it isn't silently dropped.
-  const sb = startBase(sched.vesting_start);
+  const vs = sched.vesting_start;
+  const sb = startBase(vs);
+  // The start didn't resolve to a date but isn't dead either. Two ways it can
+  // still lower into the template rather than poisoning the program: as a
+  // synthetic event (it names an event and carries structure we must preserve),
+  // or as a bare floating EVENT (a plain named event the record keeper owns).
+  // Both surface as a non-PICKED UNRESOLVED; a partially-picked LATER_OF surfaces
+  // as PICKED with UNRESOLVED meta. Either way, IMPOSSIBLE is excluded — a dead
+  // start falls through to the UNRESOLVED return below.
+  const pending =
+    res.type === "UNRESOLVED" ||
+    (res.type === "PICKED" && res.meta.type === "UNRESOLVED");
+
+  // Externalize as ONE synthetic event whenever the start references a named
+  // event AND carries something a bare EVENT base can't hold: a combinator over
+  // anchors (EARLIER_OF/LATER_OF), or a BEFORE/AFTER gate. `buildTemplate`
+  // stringifies the whole `expr` into the source map, so the guard rides across
+  // the storage boundary — a gated start stores its definition, never a
+  // guard-stripped event (#18), and the same gate reads the same in either word
+  // order, `EVENT a BEFORE DATE x` or `DATE x BEFORE EVENT a` (#54). A
+  // `vestingStart`-relative duration cliff lowers anchor-free and rides along; a
+  // cliff that needs the firing date (event cliff, cross-unit) keeps the
+  // statement UNRESOLVED so it isn't silently dropped.
+  const isGated = vs.type === "NODE" && vs.condition !== undefined;
+  if (pending && (isCombinator(vs) || isGated) && referencesNamedEvent(vs)) {
+    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
+    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
+      return {
+        percentage,
+        periodicity,
+        start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
+        cliff,
+      };
+    }
+  }
+
+  // A bare, ungated atomic EVENT start — a plain named event with no guard. It's
+  // a real event the record keeper fires directly, so it lowers as an EVENT
+  // statement with no firing (no synthetic indirection, no source-map entry).
+  // Gated event-base nodes were already claimed by the synthetic branch above.
   if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
     const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
     if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
@@ -197,34 +227,6 @@ const resolveNonChained = (
         percentage,
         periodicity,
         start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
-        cliff,
-      };
-    }
-  }
-
-  // A combinator-over-anchors start (EARLIER_OF/LATER_OF) that references a
-  // named EVENT collapses to one synthetic event. It selects an *anchor*, not a
-  // structure, so the fixed downstream grid still lowers into the template with
-  // one deferred event. A pure-date combinator (no named event) fails this test
-  // and keeps its normal resolution. IMPOSSIBLE is excluded by the res.type
-  // guards. As on the atomic path, a `vestingStart`-relative duration cliff
-  // lowers anchor-free and rides along; a cliff that needs the firing date keeps
-  // the statement UNRESOLVED. The pending shape differs by arm: LATER_OF
-  // surfaces as PICKED with UNRESOLVED meta; EARLIER_OF and a fully-pending
-  // LATER_OF surface as UNRESOLVED.
-  const vs = sched.vesting_start;
-  if (
-    (res.type === "UNRESOLVED" ||
-      (res.type === "PICKED" && res.meta.type === "UNRESOLVED")) &&
-    isCombinator(vs) &&
-    referencesNamedEvent(vs)
-  ) {
-    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
-    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
-      return {
-        percentage,
-        periodicity,
-        start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
         cliff,
       };
     }
