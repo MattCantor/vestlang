@@ -2,7 +2,6 @@ import {
   parseQuantity,
   validateDate,
   runEvaluate,
-  runEvaluateProgram,
   type ScheduleView,
   type RecoveredView,
 } from "@vestlang/pipeline";
@@ -15,7 +14,6 @@ export function evaluate(
     grantDate: string;
     event: Record<string, string>;
     stdin?: boolean;
-    program?: boolean;
   },
 ): void {
   const quantity = parseQuantity(opts.quantity);
@@ -30,22 +28,15 @@ export function evaluate(
   };
   const dsl = input(parts, opts.stdin);
 
-  // --program collapses every statement into ONE schedule and reports the
-  // program-level verdict (`status`); the default classifies each statement on
-  // its own. The collapsed path also runs template recovery: an events-only
-  // program whose realized projection has a single-template form is rescued back
-  // to a template (the same behavior as the MCP tool and library default).
-  if (opts.program) {
-    const result = runEvaluateProgram(dsl, grant);
-    if (!result.ok) fail(result.error);
-    printSchedule(result.view, true);
-    if (result.recovered) printRecovered(result.recovered);
-    return;
-  }
-
+  // The whole program collapses into ONE schedule, reported with its grant-level
+  // verdict. This runs template recovery: an events-only program whose realized
+  // projection has a single-template form is rescued back to a template (the same
+  // behavior as the MCP tool and the library default). The MCP tool also returns a
+  // per-clause breakdown; the CLI drops it — it's a minimal dev tool.
   const result = runEvaluate(dsl, grant);
   if (!result.ok) fail(result.error);
-  result.views.forEach((view) => printSchedule(view, false));
+  printSchedule(result.view);
+  if (result.recovered) printRecovered(result.recovered);
 }
 
 // When recovery fired, the schedule above prints as a plain `template`; this
@@ -62,31 +53,29 @@ function printRecovered(recovered: RecoveredView): void {
   console.log();
 }
 
-function printSchedule(view: ScheduleView, withStatus: boolean): void {
+function printSchedule(view: ScheduleView): void {
   // Two verdicts, printed side by side: what the record keeper could store
   // ("storable", the firing-invariant verdict), and what the schedule resolves to
   // given the events we know ("resolves to"). The read-flags hang off them:
   // "representable" tracks the storable verdict, "pending" comes from the blockers
   // (not from a "resolves to: unresolved"), and "valid" is its own question —
   // false when the schedule over-allocates the grant.
-  if (withStatus) {
-    const tags = [
-      view.representable ? "representable" : null,
-      view.pending ? "pending" : null,
-      view.valid ? null : "invalid",
-    ]
-      .filter(Boolean)
-      .join(", ");
-    const storableReason =
-      "reason" in view.interchange ? ` (${view.interchange.reason})` : "";
-    const resolvesReason =
-      "reason" in view.resolution ? ` (${view.resolution.reason})` : "";
-    console.log();
-    console.log(`storable: ${view.interchange.status}${storableReason}`);
-    console.log(
-      `resolves to: ${view.resolution.status}${resolvesReason}${tags ? ` — ${tags}` : ""}`,
-    );
-  }
+  const tags = [
+    view.representable ? "representable" : null,
+    view.pending ? "pending" : null,
+    view.valid ? null : "invalid",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const storableReason =
+    "reason" in view.interchange ? ` (${view.interchange.reason})` : "";
+  const resolvesReason =
+    "reason" in view.resolution ? ` (${view.resolution.reason})` : "";
+  console.log();
+  console.log(`storable: ${view.interchange.status}${storableReason}`);
+  console.log(
+    `resolves to: ${view.resolution.status}${resolvesReason}${tags ? ` — ${tags}` : ""}`,
+  );
   console.table(
     view.installments.map((item) => ({
       amount: item.amount,
@@ -96,8 +85,8 @@ function printSchedule(view: ScheduleView, withStatus: boolean): void {
     })),
   );
   // Show the projection above, then flag it — the schedule is printed but not
-  // presented as valid. (Findings ride every schedule, with their message
-  // already rendered, so report them whether or not a status line was printed.)
+  // presented as valid. Findings ride the schedule with their message already
+  // rendered (e.g. over-allocation), so just echo them.
   view.findings.forEach((f) => console.log(`⚠ ${f.message}`));
   // What the "resolves to" reading is quietly taking for granted: events we're
   // assuming haven't happened yet (and by when). If one of them later turns out to

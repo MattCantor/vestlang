@@ -3,7 +3,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
-// Checks that evaluate_program surfaces the absence assumptions a closed-world
+// Checks that vestlang_evaluate surfaces the absence assumptions a closed-world
 // reading leaned on — the events it took to still be unfired, and by when. The
 // derivation itself is covered in @vestlang/evaluator; here we only confirm the
 // tool layer passes the list through (with its rendered message).
@@ -28,12 +28,12 @@ async function connectClient(): Promise<Client> {
 type Absence = { eventId: string; through: string; message: string };
 
 describe("mcp-server / absence-assumption surfacing", () => {
-  it("evaluate_program discloses a gated start's assumed-absent event", async () => {
+  it("discloses a gated start's assumed-absent event", async () => {
     const client = await connectClient();
     // Vest from a fixed date, on the understanding it lands before ipo — pending
     // while ipo is unfired, so the reading assumes ipo absent through that date.
     const res = (await client.callTool({
-      name: "vestlang_evaluate_program",
+      name: "vestlang_evaluate",
       arguments: {
         dsl: "VEST FROM DATE 2025-01-01 BEFORE EVENT ipo OVER 48 months EVERY 1 month",
         grant_date: "2025-01-01",
@@ -52,7 +52,7 @@ describe("mcp-server / absence-assumption surfacing", () => {
   it("a plain date program discloses no absence assumptions", async () => {
     const client = await connectClient();
     const res = (await client.callTool({
-      name: "vestlang_evaluate_program",
+      name: "vestlang_evaluate",
       arguments: {
         dsl: "VEST FROM DATE 2025-01-01 OVER 1 year EVERY 1 year",
         grant_date: "2025-01-01",

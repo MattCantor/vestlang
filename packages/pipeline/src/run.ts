@@ -8,8 +8,8 @@
 // means something. Don't fold them back into one ctx argument.
 
 import {
+  evaluateProgramAsOf,
   evaluateStatements,
-  evaluateStatementsAsOf,
   toScheduleView,
   type ScheduleView,
 } from "@vestlang/evaluator";
@@ -39,7 +39,7 @@ export type RecoveredView = {
   residualError: number;
 };
 
-// One statement's point-in-time partition, plus the roll-up.
+// The whole grant's point-in-time partition, plus the roll-up.
 export type AsOfView = {
   vested: Installment[];
   unvested: Installment[];
@@ -48,98 +48,100 @@ export type AsOfView = {
   summary: Summary;
 };
 
-// One statement's resolved tranches inside a [from, to] window.
+// The grant's resolved tranches inside a [from, to] window.
 export type WindowView = {
   vested_in_window: number;
   tranches_in_window: number;
   installments: Installment[];
 };
 
-// Every installment for every statement, each statement classified on its own.
+// One clause's contribution to the program: its own tranches and the blockers
+// holding it back. No verdict — a clause has no storable schedule of its own
+// (the grant stores one template). This is for attribution: which clause
+// produced what, and which is still waiting on something.
+export type ClauseBreakdown = Pick<ScheduleView, "installments" | "blockers">;
+
+// Evaluate a grant. The program collapses into ONE schedule with one verdict and
+// one allocation finding (`view`); on top of that the breakdown shows what each
+// clause contributed, for callers that want per-clause attribution.
+//
+// The collapse runs template recovery: an events-only program whose realized
+// projection happens to have a single-template form is rescued back to a
+// template, transparently. The breakdown is the same statements evaluated one at
+// a time — it's an extra pass, but a cheap one, and the only way to keep each
+// clause's tranches separable after the collapse has merged them.
 export function runEvaluate(
   dsl: string,
   g: GrantInput,
-): Result<{ views: ScheduleView[] }> {
-  const parsed = parseToProgram(dsl);
-  if (!parsed.ok) return parsed;
-  const ctx = buildContext(g);
-  try {
-    const schedules = evaluateStatements(parsed.program, ctx);
-    return { ok: true, views: schedules.map(toScheduleView) };
-  } catch (err) {
-    return { ok: false, error: toEvaluationError(err) };
-  }
-}
-
-// The whole program collapsed into one schedule, with the program-level verdict.
-// Runs template recovery: an events-only program whose realized projection has a
-// single-template form is rescued back to a template, transparently.
-export function runEvaluateProgram(
-  dsl: string,
-  g: GrantInput,
-): Result<{ view: ScheduleView; recovered?: RecoveredView }> {
+): Result<{
+  view: ScheduleView;
+  recovered?: RecoveredView;
+  breakdown: ClauseBreakdown[];
+}> {
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) return parsed;
   const ctx = buildContext(g);
   try {
     const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
     const view = toScheduleView(outcome.schedule);
-    if (outcome.rescued) {
-      const r = outcome.recovered;
-      return {
-        ok: true,
-        view,
-        recovered: {
-          from: r.from,
-          reason: r.reason,
-          dsl: r.dsl,
-          vestingDayOfMonth: r.vestingDayOfMonth,
-          residualError: r.residualError,
-        },
-      };
-    }
-    return { ok: true, view };
-  } catch (err) {
-    return { ok: false, error: toEvaluationError(err) };
-  }
-}
-
-// Point-in-time view: each statement partitioned into vested/unvested/impossible
-// as of `asOf` (defaulting to today), with a summary.
-export function runAsOf(
-  dsl: string,
-  g: GrantInput,
-  asOf?: OCTDate,
-): Result<{ asOf: OCTDate; statements: AsOfView[] }> {
-  const parsed = parseToProgram(dsl);
-  if (!parsed.ok) return parsed;
-  const ctx = buildContext({ ...g, as_of: asOf });
-  try {
-    const results = evaluateStatementsAsOf(parsed.program, ctx);
+    const breakdown = evaluateStatements(parsed.program, ctx)
+      .map(toScheduleView)
+      .map(({ installments, blockers }) => ({ installments, blockers }));
+    const recovered = outcome.rescued
+      ? {
+          from: outcome.recovered.from,
+          reason: outcome.recovered.reason,
+          dsl: outcome.recovered.dsl,
+          vestingDayOfMonth: outcome.recovered.vestingDayOfMonth,
+          residualError: outcome.recovered.residualError,
+        }
+      : undefined;
     return {
       ok: true,
-      asOf: ctx.asOf,
-      statements: results.map((r) => ({
-        vested: r.vested,
-        unvested: r.unvested,
-        impossible: r.impossible,
-        unresolved: r.unresolved,
-        summary: computeSummary(r, ctx.grantQuantity),
-      })),
+      view,
+      breakdown,
+      ...(recovered ? { recovered } : {}),
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };
   }
 }
 
-// Resolved tranches whose vest date falls within [from, to], inclusive. The
-// cutoff is `to`, so there's no separate as-of to pass. Owns the ordering check.
+// Point-in-time view: the whole grant partitioned into vested/unvested/impossible
+// as of `asOf` (defaulting to today), with a summary.
+export function runAsOf(
+  dsl: string,
+  g: GrantInput,
+  asOf?: OCTDate,
+): Result<{ asOf: OCTDate } & AsOfView> {
+  const parsed = parseToProgram(dsl);
+  if (!parsed.ok) return parsed;
+  const ctx = buildContext({ ...g, as_of: asOf });
+  try {
+    const result = evaluateProgramAsOf(parsed.program, ctx);
+    return {
+      ok: true,
+      asOf: ctx.asOf,
+      vested: result.vested,
+      unvested: result.unvested,
+      impossible: result.impossible,
+      unresolved: result.unresolved,
+      summary: computeSummary(result, ctx.grantQuantity),
+    };
+  } catch (err) {
+    return { ok: false, error: toEvaluationError(err) };
+  }
+}
+
+// The grant's resolved tranches whose vest date falls within [from, to],
+// inclusive. The cutoff is `to`, so there's no separate as-of to pass. Owns the
+// ordering check.
 export function runVestedBetween(
   dsl: string,
   g: GrantInput,
   from: OCTDate,
   to: OCTDate,
-): Result<{ from: OCTDate; to: OCTDate; statements: WindowView[] }> {
+): Result<{ from: OCTDate; to: OCTDate } & WindowView> {
   if (from > to) {
     return {
       ok: false,
@@ -153,19 +155,15 @@ export function runVestedBetween(
   if (!parsed.ok) return parsed;
   const ctx = buildContext({ ...g, as_of: to });
   try {
-    const results = evaluateStatementsAsOf(parsed.program, ctx);
+    const result = evaluateProgramAsOf(parsed.program, ctx);
+    const { installments, total } = filterByWindow(result.vested, from, to);
     return {
       ok: true,
       from,
       to,
-      statements: results.map((r) => {
-        const { installments, total } = filterByWindow(r.vested, from, to);
-        return {
-          vested_in_window: total,
-          tranches_in_window: installments.length,
-          installments,
-        };
-      }),
+      vested_in_window: total,
+      tranches_in_window: installments.length,
+      installments,
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };

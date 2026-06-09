@@ -115,10 +115,6 @@ program
     {} as Record<string, string>,
   )
   .option("--stdin", "read input from stdin")
-  .option(
-    "--program",
-    "collapse the whole program into ONE schedule and report its verdict (template / events-only / unresolved / impossible)",
-  )
   .argument("[input...]", "DSL text")
   .action(
     (
@@ -128,7 +124,6 @@ program
         grantDate: string;
         event: Record<string, string>;
         stdin?: boolean;
-        program?: boolean;
       },
     ) => {
       withBoundary(() => evaluate(parts, opts));

@@ -1,6 +1,7 @@
 export {
   evaluateStatementAsOf,
   evaluateStatementsAsOf,
+  evaluateProgramAsOf,
   type VestedResult,
 } from "./asof.js";
 export {

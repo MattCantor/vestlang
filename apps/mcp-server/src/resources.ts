@@ -39,7 +39,7 @@ export const RESOURCES: ResourceSpec[] = [
     uri: "vestlang://docs/evaluation",
     title: "Vestlang Evaluation Semantics",
     description:
-      "Explains the evaluation model: the two verdicts (interchange = storable, resolution = resolves-to), the representable/pending/valid flags, absence assumptions, gate (BEFORE/AFTER) provisos, and the resolved/unresolved/impossible installment states. Fetch this when interpreting vestlang_evaluate or vestlang_evaluate_as_of output.",
+      "Explains the evaluation model: the two verdicts (interchange = storable, resolution = resolves-to), the representable/pending/valid flags, absence assumptions, gate (BEFORE/AFTER) provisos, and the resolved/unresolved/impossible installment states. Fetch this to interpret vestlang_evaluate output; vestlang_evaluate_as_of partitions the same installments by date but carries no verdict.",
     mimeType: "text/markdown",
     path: "apps/docs/docs/evaluation.md",
   },
