@@ -58,20 +58,27 @@ const mergedUnresolved = (
 };
 
 /* ------------------------
- * A Before B
+ * Deciding a BEFORE/AFTER proviso ("vest from X, so long as it lands before/
+ * after Y") comes down to one rule: we can only compare two dates we actually
+ * know.
  *
- * |                | B can't happen | B might happen | B has happened |
- * |----------------|----------------|----------------|----------------|
- * | A might happen | Indeterminate  | Indeterminate  | False          |
- * | A has happened | True           | True           | Evaluate       |
+ * Each side is one of three things:
+ *   - a known date — a literal date, or an event that has already fired;
+ *   - an unfired event — we don't know its date yet, and (because an event can
+ *     later be recorded with any effective date, even a backdated one) we can't
+ *     assume it never happens;
+ *   - an impossible operand — an event the schedule has established can never
+ *     occur at all.
  *
- * A After B
- *
- * |                | B can't happen | B might happen | B has happened |
- * |----------------|----------------|----------------|----------------|
- * | A might happen | False          | Indeterminate  | Indeterminate  |
- * | A has happened | False          | False          | Evaluate       |
-
+ * Both sides known     -> compare them; the proviso holds or it doesn't.
+ * Either side unfired   -> wait. Absence isn't an answer: the missing event
+ *                          could still be recorded on either side of the other
+ *                          date, so neither "satisfied" nor "impossible" is safe
+ *                          to commit to.
+ * The far side can't    -> only AFTER is decidable: you can never be after
+ * happen at all            something that never occurs (impossible). BEFORE an
+ *                          event that never occurs is vacuously satisfied once
+ *                          our own date is known.
  * ------------------------ */
 
 /** BEFORE/AFTER with unresolved semantics + strictness */
@@ -83,58 +90,31 @@ export function evaluateConstraint(
   const { constraint } = vestingNode.condition;
   const isStrict = constraint.strict;
 
-  // B can't happen
+  // The constraint base can never occur.
   if (b.type === "IMPOSSIBLE") {
-    if (constraint.type == "BEFORE") {
-      if (a.type === "UNRESOLVED") {
-        // A might happen, B can't happen -> Indeterminate (A might still occcur)
-        return mergedUnresolved([a, b], vestingNode);
-      }
-      // A has happened, B can't happen -> condition satisfied
-      return undefined; // no blockers
+    if (constraint.type === "BEFORE") {
+      // "Before something that never happens" holds once our own side is known,
+      // but stays pending while our side is itself an unfired event.
+      return a.type === "UNRESOLVED"
+        ? mergedUnresolved([a, b], vestingNode)
+        : undefined;
     }
-
-    // relation === "AFTER": cannot be satisified because B will never occur
+    // "After something that never happens" can't be satisfied.
     return [createImpossibleBlocker(vestingNode)];
   }
 
-  // A and B might happen -> Indeterminate
-  if (a.type === "UNRESOLVED" && b.type === "UNRESOLVED") {
-    return mergedUnresolved([a, b], vestingNode);
+  // An unfired event on either side keeps the comparison pending — we only ever
+  // hand back the operand(s) we're actually waiting on.
+  if (a.type === "UNRESOLVED" || b.type === "UNRESOLVED") {
+    const pending = [a, b].filter(
+      (n): n is UnresolvedNode => n.type === "UNRESOLVED",
+    );
+    return mergedUnresolved(pending, vestingNode);
   }
 
-  // A has happened, B might happen
-  if (a.type === "RESOLVED" && b.type === "UNRESOLVED") {
-    if (constraint.type === "BEFORE") {
-      // A occurred before B -> condition satisfied
-      return undefined; // no blockers
-    }
-
-    // A did not occur after B -> condition not satisfied
+  // Both dates known: run the comparison.
+  if (failByRelation(constraint.type, isStrict, a.date, b.date)) {
     return [createImpossibleBlocker(vestingNode)];
   }
-
-  // A might happen, B has happened
-  if (a.type === "UNRESOLVED" && b.type === "RESOLVED") {
-    if (constraint.type === "BEFORE") {
-      // A did not occur before B -> condition not satisfied
-      return [createImpossibleBlocker(vestingNode)];
-    }
-
-    // relation === "AFTER": indeterminate because A might occur
-    return mergedUnresolved([a], vestingNode);
-  }
-  // A has happened, B has happened -> Evaluate
-  if (a.type === "RESOLVED" && b.type === "RESOLVED") {
-    const aDate = a.date;
-    const bDate = b.date;
-
-    if (failByRelation(constraint.type, isStrict, aDate, bDate)) {
-      return [createImpossibleBlocker(vestingNode)];
-    }
-
-    return undefined;
-  }
-
-  return assertNever(a as never);
+  return undefined;
 }

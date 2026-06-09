@@ -85,4 +85,30 @@ describe("evaluateConstraint", () => {
     const out = evaluateConstraint(a, b, constrainedNode)!;
     expect(out.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(true);
   });
+
+  // An unfired event on either side keeps the comparison pending — it never
+  // settles to satisfied (undefined) or impossible. These three cells used to
+  // commit a verdict off the event's absence; they must now wait.
+  const pendingEvent = () =>
+    makeUnresolvedNode({ type: "EVENT_NOT_YET_OCCURRED", event: "e" });
+  const isPending = (out: ReturnType<typeof evaluateConstraint>) => {
+    expect(out).toBeDefined();
+    expect(out!.some((x) => x.type === "UNRESOLVED_CONDITION")).toBe(true);
+    expect(out!.some((x) => x.type === "IMPOSSIBLE_CONDITION")).toBe(false);
+  };
+
+  it("BEFORE pending when A resolved and B is an unfired event", () => {
+    const cn = makeConstrainedNodeWithAtomCondition("BEFORE", aDate, bDate);
+    isPending(evaluateConstraint(makeResolvedNode(aDate), pendingEvent(), cn));
+  });
+
+  it("AFTER pending when A resolved and B is an unfired event", () => {
+    const cn = makeConstrainedNodeWithAtomCondition("AFTER", aDate, bDate);
+    isPending(evaluateConstraint(makeResolvedNode(aDate), pendingEvent(), cn));
+  });
+
+  it("BEFORE pending when A is an unfired event and B resolved", () => {
+    const cn = makeConstrainedNodeWithAtomCondition("BEFORE", aDate, bDate);
+    isPending(evaluateConstraint(pendingEvent(), makeResolvedNode(bDate), cn));
+  });
 });

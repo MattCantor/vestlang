@@ -6,10 +6,12 @@ import {
 import {
   baseCtx,
   makeVestingBaseDate,
+  makeVestingBaseEvent,
+  makeSingletonNode,
   makeSingletonSchedule,
   makeConstrainedNodeWithAtomCondition,
 } from "./helpers.js";
-import { VestingNodeExpr } from "@vestlang/types";
+import { VestingNode, VestingNodeExpr } from "@vestlang/types";
 
 describe("evaluateVestingNodeExpr selectors", () => {
   it("EARLIER_OF resolves to earliest resolved item", () => {
@@ -130,6 +132,43 @@ describe("evaluateVestingNodeExpr selectors", () => {
     expect((res as { blockers: { type: string }[] }).blockers[0].type).toBe(
       "IMPOSSIBLE_SELECTOR",
     );
+  });
+
+  // `DATE 2025-01-01 AFTER EVENT e`, e unfired. This used to be IMPOSSIBLE (we
+  // read the missing event as "never happened, so the date isn't after it") and
+  // that dead arm poisoned the whole LATER_OF. With the gate fix it's merely
+  // pending — e could still be recorded before 2025-01-01 — so it no longer
+  // poisons; the selector partial-resolves instead (#60 / #18).
+  const dateAfterUnfiredEvent: VestingNode = {
+    type: "NODE",
+    base: makeVestingBaseDate("2025-01-01"),
+    offsets: [],
+    condition: {
+      type: "ATOM",
+      constraint: {
+        type: "AFTER",
+        base: makeSingletonNode(makeVestingBaseEvent("e")),
+        strict: false,
+      },
+    },
+  };
+
+  it("LATER_OF with a DATE-AFTER-unfired-EVENT arm is pending, not poisoned (#60)", () => {
+    const ctx = baseCtx();
+    const expr = {
+      type: "NODE_LATER_OF",
+      items: [
+        dateAfterUnfiredEvent,
+        {
+          type: "NODE",
+          base: makeVestingBaseDate("2025-03-01"),
+          offsets: [],
+        },
+      ],
+    } as VestingNodeExpr;
+    const res = evaluateVestingNodeExpr(expr, ctx);
+    expect(res.type).toBe("PICKED");
+    expect((res as { meta: { type: string } }).meta.type).toBe("UNRESOLVED");
   });
 
   it("EARLIER_OF drops a statically-dead arm and resolves to the survivor", () => {

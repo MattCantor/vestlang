@@ -317,10 +317,11 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   });
 
   it("EARLIER OF(DATE future, EVENT ipo) before the cap → template + synthetic event", () => {
-    // A literal future DATE arm IS asOf-gated, so with asOf before it AND ipo
-    // unfired the EARLIER_OF stays pending (neither arm resolved) — rather than
-    // resolving early to a system-anchored offset. (Closed-world early resolution
-    // of EARLIER_OF is not attempted.)
+    // The 2030 date arm resolves on its own (a fixed date is always known), but
+    // EARLIER_OF still can't settle: ipo is unfired and could be recorded earlier
+    // than 2030, so the date isn't provably the earliest. The selector stays
+    // pending, and because it names an event the whole thing externalizes as one
+    // synthetic event rather than resolving early to the date.
     const earlierStmt = {
       type: "STATEMENT",
       amount: portion(1, 1),
@@ -418,8 +419,9 @@ describe("assemble — gated atomic start → synthetic event", () => {
   // what keeps the guard from being dropped at the storage boundary (#18), and it
   // makes the two word-orders of the same gate lower identically (#54).
   //
-  // asOf is BEFORE the 2030 deadline so the date operand is still in the future
-  // (UNRESOLVED) and the gate stays pending — not resolved or impossible.
+  // The 2030 date resolves fine even though asOf is years earlier; the gate stays
+  // pending because the *event* side is unfired (an unrecorded event can't settle
+  // a before/after test), not because the date is somehow unknown.
   const gatedCtx = ctxInput({ asOf: "2026-06-01" });
 
   // `FROM EVENT a BEFORE DATE 2030-01-01` — event in the base, date in the gate.
@@ -511,10 +513,14 @@ describe("assemble — gated atomic start → synthetic event", () => {
   });
 });
 
-describe("assemble — unresolved status", () => {
-  // A pure-date combinator that cannot fully resolve (a literal DATE arm still in
-  // the future under asOf, no named event to externalize) stays `unresolved`.
-  it("pure-date LATER OF with a future DATE arm → unresolved + blockers", () => {
+describe("assemble — future-dated pure-date schedules resolve", () => {
+  // A combinator over nothing but dates is fully determined, even when an arm is
+  // years out. A literal date is a known value no matter where asOf sits, so the
+  // LATER OF just picks the later of the two — here the 2030 arm — and lowers to
+  // a plain date template. The installments land in the future, but they're still
+  // RESOLVED: "has this vested yet?" is a projection question, asked later by
+  // comparing each date to asOf, not a reason to leave the schedule unresolved.
+  it("pure-date LATER OF with a future DATE arm resolves to a template", () => {
     const laterOfSchedule: Schedule = {
       type: "SCHEDULE",
       vesting_start: {
@@ -531,14 +537,17 @@ describe("assemble — unresolved status", () => {
     const program: Program = [
       { type: "STATEMENT", amount: portion(1, 1), expr: laterOfSchedule },
     ];
-    // asOf before the literal 2030 arm: LATER_OF can't resolve (all-arms policy),
-    // and with no named event there's nothing to externalize → unresolved.
     const out = evaluateStatement(program[0], ctxInput({ asOf: "2026-06-01" }));
-    expect(out.status).toBe("unresolved");
+    if (out.status !== "template")
+      throw new Error(`expected template, got ${out.status}`);
+    // Pure dates: nothing to externalize, so no synthetic event.
+    expect(out.sourceMap).toEqual({});
+    // Anchored on the later (2030) arm, with concrete RESOLVED installments.
     expect(out.installments.length).toBeGreaterThan(0);
-    expect(out.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(
+    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
       true,
     );
+    expect(out.installments[0].date >= "2030-01-01").toBe(true);
   });
 });
 
