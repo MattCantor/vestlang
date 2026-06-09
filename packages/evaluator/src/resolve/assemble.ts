@@ -21,6 +21,7 @@ import type {
 } from "@vestlang/types";
 import { compileToInstallments, gt } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
+import { foldBlocker } from "../evaluate/blockerTree.js";
 import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
 import type { ResolveResult } from "./types.js";
 
@@ -60,22 +61,19 @@ export const reasonToString = (r: NonTemplateReason): string => {
 const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
   const latest = new Map<string, OCTDate>();
 
-  const walk = (bs: Blocker[]): void => {
-    for (const b of bs) {
-      if (b.type === "UNRESOLVED_SELECTOR") {
-        walk(b.blockers);
-      } else if (
-        b.type === "EVENT_NOT_YET_OCCURRED" &&
-        b.through !== undefined &&
-        b.event !== VESTING_START_LABEL
+  for (const top of blockers) {
+    foldBlocker<void>(top, (node) => {
+      if (
+        node.type === "EVENT_NOT_YET_OCCURRED" &&
+        node.through !== undefined &&
+        node.event !== VESTING_START_LABEL
       ) {
-        const prior = latest.get(b.event);
-        if (prior === undefined || gt(b.through, prior))
-          latest.set(b.event, b.through);
+        const prior = latest.get(node.event);
+        if (prior === undefined || gt(node.through, prior))
+          latest.set(node.event, node.through);
       }
-    }
-  };
-  walk(blockers);
+    });
+  }
 
   return [...latest.entries()]
     .map(([eventId, through]) => ({ eventId, through }))
