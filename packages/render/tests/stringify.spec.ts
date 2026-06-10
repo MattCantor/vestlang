@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { Program } from "@vestlang/types";
+import type { Program, Statement } from "@vestlang/types";
 import {
   stringify,
   stringifyStatement,
@@ -381,5 +381,90 @@ describe("round-trip invariants", () => {
     const first = roundTrip(src);
     const second = roundTrip(first);
     expect(second).toBe(first);
+  });
+});
+
+/* ------------------------
+ * AST validation at the stringify boundary
+ * ------------------------ */
+
+describe("validation", () => {
+  it("rejects bad values rather than emitting un-parseable DSL", () => {
+    // The shape is plausible but the values aren't: a negative cadence step and
+    // a non-calendar DATE literal. Stringifying this used to produce DSL like
+    // `VEST FROM DATE not-a-date OVER 15 days EVERY -5 days`, which the parser
+    // then rejects. It must throw here instead.
+    const bad = {
+      type: "STATEMENT",
+      amount: { type: "PORTION", numerator: 1, denominator: 1 },
+      expr: {
+        type: "SCHEDULE",
+        vesting_start: {
+          type: "NODE",
+          base: { type: "DATE", value: "not-a-date" },
+          offsets: [],
+        },
+        periodicity: { type: "DAYS", length: -5, occurrences: -3 },
+      },
+    } as unknown as Statement;
+
+    expect(() => stringify(bad)).toThrow(/not a valid calendar date/);
+    expect(() => stringify(bad)).toThrow(/non-negative integer/);
+    // And it never leaks the garbage DSL.
+    let emitted = "";
+    try {
+      emitted = stringify(bad);
+    } catch {
+      emitted = "";
+    }
+    expect(emitted).not.toMatch(/EVERY -5/);
+  });
+
+  it("a valid AST of the same shape still round-trips", () => {
+    const src = "VEST FROM DATE 2025-01-15 OVER 15 days EVERY 5 days";
+    const program = norm(src);
+    const dsl = stringify(program);
+    expect(dsl).toBe(src);
+    // Re-parsing reproduces the program.
+    expect(norm(dsl)).toEqual(program);
+  });
+
+  it("gives a clean error for a bare {} instead of a raw TypeError", () => {
+    expect(() => stringify({} as unknown as Statement)).toThrow(
+      /Cannot stringify AST/,
+    );
+    expect(() => stringify({} as unknown as Statement)).not.toThrow(
+      /Cannot read properties/,
+    );
+  });
+
+  it("gives a clean error for a wrong-type node", () => {
+    expect(() => stringify({ type: "NOPE" } as unknown as Statement)).toThrow(
+      /expected a STATEMENT/,
+    );
+  });
+
+  it("rejects a raw, un-normalized DURATION cliff with a named cause", () => {
+    const raw = {
+      type: "STATEMENT",
+      amount: { type: "PORTION", numerator: 1, denominator: 1 },
+      expr: {
+        type: "SCHEDULE",
+        vesting_start: {
+          type: "NODE",
+          base: { type: "GRANT_DATE" },
+          offsets: [],
+        },
+        periodicity: {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff: { type: "DURATION", value: 12, unit: "MONTHS", sign: "PLUS" },
+        },
+      },
+    } as unknown as Statement;
+
+    expect(() => stringify(raw)).toThrow(/un-normalized/);
+    expect(() => stringify(raw)).not.toThrow(/reading '/);
   });
 });
