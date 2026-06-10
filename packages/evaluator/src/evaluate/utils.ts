@@ -22,10 +22,6 @@ export interface PickedResolved<T> extends Picked<T> {
   meta: ResolvedNode;
 }
 
-export interface PickedUnresolved<T> extends Picked<T> {
-  meta: UnresolvedNode;
-}
-
 export type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
 
 export function isPickedResolved<T>(x: PickReturn<T>): x is PickedResolved<T> {

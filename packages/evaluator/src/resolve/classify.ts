@@ -112,68 +112,70 @@ const eventsArm = (
   reason,
 });
 
+// A portion is "void" when nothing can ever vest from it: a contradictory start,
+// or a resolved start whose cliff is contradictory. A pending start is never void
+// even with a dead cliff — it waits on the start before the cliff matters.
+const isVoid = (r: StmtResolution): boolean =>
+  r.start.state === "IMPOSSIBLE" ||
+  (r.start.state === "RESOLVED" && r.cliff.state === "IMPOSSIBLE");
+
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
   program: Program,
 ): ResolveVerdict => {
-  const { ctx, totalShares } = build;
+  const { ctx, totalShares, resolutions } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   // The fully-resolved siblings, kept to materialize their dated tranches below.
   const resolvedResolutions: StmtResolution[] = [];
-  // Per-statement outcomes, tracked to decide whether the whole program is void.
-  let sawImpossible = false; // a contradictory portion
-  let sawPending = false; // an unfired-but-satisfiable portion
-  let sawResolvedLive = false; // a fully-resolved portion
   program.forEach((stmt, i) => {
-    // A THEN tail has no start of its own to re-resolve here; the cursor pre-pass
-    // already handed it one, so we work from that resolution rather than the
-    // start-from-scratch path below (which has nothing to go on).
+    const r = resolutions[i];
+    // A THEN tail has no start of its own; the cursor pre-pass already handed it
+    // one, so we work from that resolution rather than rendering it from scratch.
     if (stmt.chained) {
-      const tail = build.resolutions[i];
-      if (tail.start.state === "RESOLVED") {
+      if (r.start.state === "RESOLVED") {
         // A date chain, or a chain off a fired event: the tail has a concrete
         // date, so let the resolved producer materialize its tranches.
-        sawResolvedLive = true;
-        resolvedResolutions.push(tail);
-      } else {
+        resolvedResolutions.push(r);
+      } else if (r.start.state === "UNRESOLVED") {
         // A chain off an event that hasn't fired: the tail can't vest yet. It
         // contributes no tranches, only the blocker for what it's waiting on.
-        sawPending = true;
-        if (tail.start.state === "UNRESOLVED")
-          blockers.push(...tail.start.blockers);
+        blockers.push(...r.start.blockers);
       }
       return;
     }
-    const ev = unresolvedInstallments(stmt, ctx);
-    // EMPTY only comes back from unresolvedInstallments' fully-resolved paths.
-    // Those RESOLVED tranches are discarded there; collect the resolution so we
-    // can materialize them via the resolved producer instead of dropping them.
-    // (A vacuous 0-occurrence statement is also empty; treating it as live keeps
-    // it from forcing `impossible` — the safe direction.)
+    const ev = unresolvedInstallments(r, stmt, ctx);
+    // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
+    // are dropped there; collect the resolution so the resolved producer can
+    // materialize them. (A vacuous 0-occurrence statement is also empty — treating
+    // it as live keeps it out of the void rollup, the safe direction.)
     if (ev.installments.length === 0) {
-      sawResolvedLive = true;
-      resolvedResolutions.push(build.resolutions[i]);
+      resolvedResolutions.push(r);
     }
     for (const inst of ev.installments) {
-      if (inst.meta.state === "IMPOSSIBLE") sawImpossible = true;
-      else if (inst.meta.state === "UNRESOLVED") sawPending = true;
       if (inst.meta.state !== "RESOLVED")
         symbolic.push(inst as SymbolicInstallment);
     }
     blockers.push(...ev.blockers);
   });
 
-  // Lossless rollup: collapse to `impossible` only when every portion is void —
-  // nothing merely pending, nothing already resolving. A mix stays `unresolved`,
-  // where the leaf-level IMPOSSIBLE installments still carry the dead portion's
-  // truth. In this branch every symbolic installment is IMPOSSIBLE and every
-  // blocker is an ImpossibleBlocker, so the narrowing casts hold.
-  if (sawImpossible && !sawPending && !sawResolvedLive) {
+  // Lossless rollup: collapse to `impossible` only when every portion is void.
+  // A mix stays `unresolved`, where the leaf-level IMPOSSIBLE installments still
+  // carry each dead portion's truth. When every portion is void, every symbolic
+  // installment is IMPOSSIBLE (so the cast holds) and the blockers are exactly the
+  // records' IMPOSSIBLE blockers — typed, no cast needed.
+  if (resolutions.length > 0 && resolutions.every(isVoid)) {
+    const impossibleBlockers: ImpossibleBlocker[] = [];
+    for (const r of resolutions) {
+      if (r.start.state === "IMPOSSIBLE")
+        impossibleBlockers.push(...r.start.blockers);
+      else if (r.cliff.state === "IMPOSSIBLE")
+        impossibleBlockers.push(...r.cliff.blockers);
+    }
     return {
       kind: "impossible",
       installments: symbolic as ImpossibleInstallment[],
-      blockers: blockers as ImpossibleBlocker[],
+      blockers: impossibleBlockers,
     };
   }
 

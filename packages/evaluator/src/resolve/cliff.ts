@@ -29,7 +29,8 @@ import type {
 import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { isPickedResolved } from "../evaluate/utils.js";
+import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
+import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -126,12 +127,23 @@ export const lowerCliff = (
   if (evId) {
     const gated =
       cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
-    if (gated && res.type !== "PICKED")
-      // `dated` is computed in a later phase; false is a behavior-preserving
-      // placeholder while nothing reads it.
-      return { state: "UNRESOLVED", blockers: res.blockers, dated: false };
+    if (gated) {
+      // The gate decides whether the event cliff stands. A violated gate kills
+      // it; a still-pending gate keeps it unresolved (but `dated` — the grid is
+      // placeable from the resolved start). A satisfied gate falls through to the
+      // bare event cliff below. Carrying the gate here is what stops it being
+      // dropped (#113). The PICKED (satisfied) case falls through.
+      if (res.type === "IMPOSSIBLE")
+        return { state: "IMPOSSIBLE", blockers: res.blockers };
+      if (res.type === "UNRESOLVED")
+        return { state: "UNRESOLVED", blockers: res.blockers, dated: true };
+    }
     return { state: "EVENT", eventId: evId };
   }
+
+  // A violated gate (or any contradictory cliff) is dead.
+  if (res.type === "IMPOSSIBLE")
+    return { state: "IMPOSSIBLE", blockers: res.blockers };
 
   // A cliff date is known only when the expression fully resolves. A partial
   // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must not
@@ -144,14 +156,24 @@ export const lowerCliff = (
     : undefined;
 
   if (!cliffDate) {
-    const blockers: Blocker[] =
-      res.type === "PICKED"
-        ? res.meta.type === "UNRESOLVED"
-          ? res.meta.blockers
-          : []
-        : res.blockers;
-    // `dated` placeholder; populated in a later phase.
-    return { state: "UNRESOLVED", blockers, dated: false };
+    // Pending cliff. The grid is placeable from the resolved start, so it's
+    // `dated` — the renderer can lay the tranches and only the cliff lump's exact
+    // spot is still open. A partial LATER_OF additionally carries its resolved
+    // branch's date as the fold pivot (`probeDate`): the lump can only move later
+    // than that lower bound, so every pre-cliff tranche sits at the bound. With no
+    // resolved branch there's no pivot.
+    if (res.type === "PICKED") {
+      // Resolved meta was caught by `cliffDate` above, so meta is UNRESOLVED here.
+      const blockers = res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
+      const probeDate =
+        cliffExpr.type === "NODE_LATER_OF"
+          ? probeLaterOf(cliffExpr, overlayCtx)
+          : undefined;
+      return probeDate !== undefined
+        ? { state: "UNRESOLVED", blockers, dated: true, probeDate }
+        : { state: "UNRESOLVED", blockers, dated: false };
+    }
+    return { state: "UNRESOLVED", blockers: res.blockers, dated: true };
   }
 
   // Cliff at/before the start has no effect.
@@ -228,27 +250,50 @@ export const lowerDeferredCliff = (
   periodType: PeriodType,
   period: number,
   occurrences: number,
+  ctx: EvaluationContext,
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
   const off = vestingStartOffset(cliffExpr);
-  // Anchor-free only when the cliff and the grid share a unit; otherwise the
-  // pre-cliff count depends on the (still-unknown) firing date.
-  if (!off || off.unit !== periodType)
-    // Deferred-path gate blockers and `dated` are filled in a later phase; empty
-    // blockers / false here preserve today's behavior.
-    return { state: "UNRESOLVED", blockers: [], dated: false };
+  // Anchor-free only when the cliff is a bare `vestingStart + duration` in the
+  // grid's own unit; then length/period_type are the offset and the pre-cliff
+  // count is independent of when the start eventually fires.
+  if (off && off.unit === periodType) {
+    if (off.value <= 0) return { state: "NONE" };
+    const m = Math.min(Math.floor(off.value / period), occurrences);
+    if (m === 0) return { state: "NONE" };
+    return {
+      state: "RESOLVED",
+      cliff: {
+        length: off.value,
+        period_type: off.unit,
+        percentage: fracReduce({ numerator: m, denominator: occurrences }),
+      },
+    };
+  }
 
-  if (off.value <= 0) return { state: "NONE" };
-  const m = Math.min(Math.floor(off.value / period), occurrences);
-  if (m === 0) return { state: "NONE" };
+  // Not derivable without the firing date (an event cliff, a cross-unit duration,
+  // or a gated cliff). There's no start anchor to lay a grid against, so it can
+  // never be `dated`. If the cliff carries a BEFORE/AFTER gate, surface it:
+  // resolve the cliff with no vesting-start overlay (the subject stays pending)
+  // and report the gate's blockers, minus the vestingStart placeholder — that
+  // pending-ness is the start's, reported on the start, not doubled onto the
+  // cliff. An ungated non-derivable cliff has no gate to report.
+  const gated = cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
+  if (!gated) return { state: "UNRESOLVED", blockers: [], dated: false };
 
-  return {
-    state: "RESOLVED",
-    cliff: {
-      length: off.value,
-      period_type: off.unit,
-      percentage: fracReduce({ numerator: m, denominator: occurrences }),
-    },
-  };
+  const res = evaluateVestingNodeExpr(cliffExpr, ctx);
+  if (res.type === "IMPOSSIBLE")
+    return { state: "IMPOSSIBLE", blockers: res.blockers };
+  const raw: Blocker[] =
+    res.type === "UNRESOLVED"
+      ? res.blockers
+      : res.meta.type === "UNRESOLVED"
+        ? res.meta.blockers
+        : [];
+  const blockers = raw.filter(
+    (b) =>
+      b.type !== "EVENT_NOT_YET_OCCURRED" || b.event !== VESTING_START_LABEL,
+  );
+  return { state: "UNRESOLVED", blockers, dated: false };
 };

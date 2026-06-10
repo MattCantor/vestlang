@@ -26,7 +26,7 @@ import { stringifyVestingNodeExpr } from "@vestlang/render";
 import type {
   Cliff,
   Fraction,
-  PeriodType,
+  PeriodTag,
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
@@ -80,7 +80,10 @@ const isCombinator = (e: VestingNodeExpr): boolean =>
 
 export interface StmtResolution {
   percentage: Fraction;
-  periodicity: { type: PeriodType; length: number; occurrences: number };
+  // Mirrors the normalized cadence (`VestingPeriod`), so the unit is always a
+  // PeriodTag (DAYS/MONTHS — YEARS is desugared upstream); a cliff's own
+  // period_type can still widen to DAYS independently.
+  periodicity: { type: PeriodTag; length: number; occurrences: number };
   start:
     | {
         state: "RESOLVED";
@@ -96,7 +99,18 @@ export interface StmtResolution {
     // one synthetic event, lowering into the template. `expr` is the
     // raw combinator; `buildTemplate` mints its grant-scoped id (with dedup across
     // statements) and records its DSL definition in the source map.
-    | { state: "SYNTHETIC_EVENT"; expr: VestingNodeExpr; blockers: Blocker[] }
+    //
+    // `partial` is true when a branch of the combinator already settled to a date
+    // (a LATER OF whose later arm we know) — the cadence is then placeable as
+    // symbolic `start + N` tranches even though the anchor itself is pending. When
+    // nothing has settled (no arm resolved, or a gated atomic event), it's false
+    // and the whole portion is one undated lump. Only the projection reads it.
+    | {
+        state: "SYNTHETIC_EVENT";
+        expr: VestingNodeExpr;
+        blockers: Blocker[];
+        partial: boolean;
+      }
     | { state: "UNRESOLVED"; blockers: Blocker[] }
     // A contradictory start. Today a dead start flattens to UNRESOLVED, which is
     // why the projection has to re-resolve to recover the contradiction; carrying
@@ -179,10 +193,25 @@ const resolveNonChained = (
   // or as a bare floating EVENT (a plain named event the record keeper owns).
   // Both surface as a non-PICKED UNRESOLVED; a partially-picked LATER_OF surfaces
   // as PICKED with UNRESOLVED meta. Either way, IMPOSSIBLE is excluded — a dead
-  // start falls through to the UNRESOLVED return below.
+  // start falls through to the IMPOSSIBLE/UNRESOLVED return below.
   const pending =
     res.type === "UNRESOLVED" ||
     (res.type === "PICKED" && res.meta.type === "UNRESOLVED");
+
+  // Lower the cliff once and carry it on the record whatever the start turns out
+  // to be. A pending start has no anchor, so its cliff lowers on the deferred
+  // path; carrying it (rather than dropping it as NONE) keeps a cliff's own
+  // BEFORE/AFTER gate on the record so it can be disclosed even while the start
+  // is unfired. When the cliff itself doesn't resolve, buildTemplate's cliff
+  // guard still routes the program to `unresolved`, exactly as the old start
+  // guard did — the verdict is unchanged, only the carried detail is richer.
+  const cliff = lowerDeferredCliff(
+    p.cliff,
+    p.type,
+    p.length,
+    p.occurrences,
+    ctx,
+  );
 
   // Externalize as ONE synthetic event whenever the start references a named
   // event AND carries something a bare EVENT base can't hold: a combinator over
@@ -190,21 +219,23 @@ const resolveNonChained = (
   // stringifies the whole `expr` into the source map, so the guard rides across
   // the storage boundary — a gated start stores its definition, never a
   // guard-stripped event (#18), and the same gate reads the same in either word
-  // order, `EVENT a BEFORE DATE x` or `DATE x BEFORE EVENT a` (#54). A
-  // `vestingStart`-relative duration cliff lowers anchor-free and rides along; a
-  // cliff that needs the firing date (event cliff, cross-unit) keeps the
-  // statement UNRESOLVED so it isn't silently dropped.
+  // order, `EVENT a BEFORE DATE x` or `DATE x BEFORE EVENT a` (#54).
   const isGated = vs.type === "NODE" && vs.condition !== undefined;
   if (pending && (isCombinator(vs) || isGated) && referencesEvent(vs)) {
-    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
-    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
-      return {
-        percentage,
-        periodicity,
-        start: { state: "SYNTHETIC_EVENT", expr: vs, blockers },
-        cliff,
-      };
-    }
+    return {
+      percentage,
+      periodicity,
+      // `partial` is true exactly when a branch already settled (PICKED with
+      // pending siblings) — the projection then lays the cadence as start+N
+      // tranches rather than one lump.
+      start: {
+        state: "SYNTHETIC_EVENT",
+        expr: vs,
+        blockers,
+        partial: res.type === "PICKED",
+      },
+      cliff,
+    };
   }
 
   // A bare, ungated atomic EVENT start — a plain named event with no guard. It's
@@ -212,22 +243,25 @@ const resolveNonChained = (
   // statement with no firing (no synthetic indirection, no source-map entry).
   // Gated event-base nodes were already claimed by the synthetic branch above.
   if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
-    const cliff = lowerDeferredCliff(p.cliff, p.type, p.length, p.occurrences);
-    if (cliff.state === "NONE" || cliff.state === "RESOLVED") {
-      return {
-        percentage,
-        periodicity,
-        start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
-        cliff,
-      };
-    }
+    return {
+      percentage,
+      periodicity,
+      start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
+      cliff,
+    };
   }
 
+  // Everything left over: a contradictory start poisons the program (IMPOSSIBLE,
+  // carried so the projection can emit the dead installments off the record); any
+  // other non-resolving start is plain UNRESOLVED. Both still carry the cliff.
   return {
     percentage,
     periodicity,
-    start: { state: "UNRESOLVED", blockers },
-    cliff: { state: "NONE" },
+    start:
+      res.type === "IMPOSSIBLE"
+        ? { state: "IMPOSSIBLE", blockers: res.blockers }
+        : { state: "UNRESOLVED", blockers },
+    cliff,
   };
 };
 

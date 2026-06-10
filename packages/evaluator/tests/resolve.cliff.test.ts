@@ -123,15 +123,16 @@ describe("lowerCliff — gated event cliff (#113)", () => {
     ]),
   );
 
-  it("gate violated (event fired before the gate) → UNRESOLVED with IMPOSSIBLE_CONDITION", () => {
-    // acquisition 2025-06-01 is not after grantDate + 12 months (2026-01-01).
+  it("gate violated (event fired before the gate) → IMPOSSIBLE with IMPOSSIBLE_CONDITION", () => {
+    // acquisition 2025-06-01 is not after grantDate + 12 months (2026-01-01). A
+    // violated gate kills the cliff outright, so it lowers to IMPOSSIBLE.
     const c = baseCtx({
       grantDate: "2025-01-01",
       events: { acquisition: "2025-06-01" },
     });
     const result = lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c);
-    expect(result.state).toBe("UNRESOLVED");
-    if (result.state === "UNRESOLVED") {
+    expect(result.state).toBe("IMPOSSIBLE");
+    if (result.state === "IMPOSSIBLE") {
       expect(
         result.blockers.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
       ).toBe(true);
@@ -170,13 +171,15 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     ]);
 
   it("no cliff → NONE", () => {
-    expect(lowerDeferredCliff(undefined, "MONTHS", 1, 48)).toEqual({
+    expect(lowerDeferredCliff(undefined, "MONTHS", 1, 48, ctx)).toEqual({
       state: "NONE",
     });
   });
 
   it("vestingStart + 12 months on a 1-month/48 grid → {12mo, 1/4}, anchor-free", () => {
-    expect(lowerDeferredCliff(vsCliff(12, "MONTHS"), "MONTHS", 1, 48)).toEqual({
+    expect(
+      lowerDeferredCliff(vsCliff(12, "MONTHS"), "MONTHS", 1, 48, ctx),
+    ).toEqual({
       state: "RESOLVED",
       cliff: {
         length: 12,
@@ -187,7 +190,9 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
   });
 
   it("off-grid duration cliff (7mo on a 2-month grid) → m = floor(7/2) = 3", () => {
-    expect(lowerDeferredCliff(vsCliff(7, "MONTHS"), "MONTHS", 2, 24)).toEqual({
+    expect(
+      lowerDeferredCliff(vsCliff(7, "MONTHS"), "MONTHS", 2, 24, ctx),
+    ).toEqual({
       state: "RESOLVED",
       cliff: {
         length: 7,
@@ -198,7 +203,9 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
   });
 
   it("day-unit cliff on a day-unit grid is anchor-free", () => {
-    expect(lowerDeferredCliff(vsCliff(90, "DAYS"), "DAYS", 30, 12)).toEqual({
+    expect(
+      lowerDeferredCliff(vsCliff(90, "DAYS"), "DAYS", 30, 12, ctx),
+    ).toEqual({
       state: "RESOLVED",
       cliff: {
         length: 90,
@@ -209,13 +216,17 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
   });
 
   it("cliff shorter than the first occurrence → NONE (no pre-cliff share)", () => {
-    expect(lowerDeferredCliff(vsCliff(11, "MONTHS"), "MONTHS", 12, 4)).toEqual({
+    expect(
+      lowerDeferredCliff(vsCliff(11, "MONTHS"), "MONTHS", 12, 4, ctx),
+    ).toEqual({
       state: "NONE",
     });
   });
 
   it("cross-unit cliff (months over a days grid) needs the anchor → UNRESOLVED", () => {
-    expect(lowerDeferredCliff(vsCliff(12, "MONTHS"), "DAYS", 30, 48)).toEqual({
+    expect(
+      lowerDeferredCliff(vsCliff(12, "MONTHS"), "DAYS", 30, 48, ctx),
+    ).toEqual({
       state: "UNRESOLVED",
       blockers: [],
       dated: false,
@@ -224,7 +235,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
 
   it("event-anchored cliff has no anchor-free form → UNRESOLVED", () => {
     const cliff = makeSingletonNode(makeVestingBaseEvent("ipo"));
-    expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48)).toEqual({
+    expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
       dated: false,
@@ -241,11 +252,41 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
         makeSingletonNode(makeVestingBaseEvent("ipo")),
       ],
     };
-    expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48)).toEqual({
+    expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
       dated: false,
     });
+  });
+
+  it("gated cliff surfaces the gate blocker (vestingStart placeholder dropped)", () => {
+    // CLIFF vestingStart + 12 months AFTER grantDate + 6 months, with no start
+    // anchor to overlay: the subject stays pending, so the gate can't settle. The
+    // condition is reported (UNRESOLVED_CONDITION) while the vestingStart
+    // placeholder — the start's own pending-ness — is filtered out.
+    const cliff = makeGatedNode(
+      makeVestingBaseVestingStart(),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(6, "MONTHS", "PLUS"),
+      ]),
+      false,
+      [makeDuration(12, "MONTHS", "PLUS")],
+    );
+    const result = lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx);
+    expect(result.state).toBe("UNRESOLVED");
+    if (result.state === "UNRESOLVED") {
+      expect(result.dated).toBe(false);
+      expect(
+        result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION"),
+      ).toBe(true);
+      expect(
+        result.blockers.some(
+          (b) =>
+            b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "vestingStart",
+        ),
+      ).toBe(false);
+    }
   });
 
   // A cliff measured from grant date can't reach this function any more: the
