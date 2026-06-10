@@ -27,18 +27,20 @@ A program is a flat list of statements. `THEN` and `PLUS` are the two ways to co
 {
   "program": [
     {
+      "type": "STATEMENT",
       "amount": { "type": "PORTION", "numerator": 1, "denominator": 4 },
       "expr": {
-        "type": "SINGLETON",
-        "vesting_start": { "type": "SINGLETON", "base": { "type": "EVENT", "value": "grantDate" }, "offsets": [] },
+        "type": "SCHEDULE",
+        "vesting_start": { "type": "NODE", "base": { "type": "GRANT_DATE" }, "offsets": [] },
         "periodicity": { "type": "MONTHS", "length": 1, "occurrences": 12 }
       }
     },
     {
+      "type": "STATEMENT",
       "chained": true,
       "amount": { "type": "PORTION", "numerator": 3, "denominator": 4 },
       "expr": {
-        "type": "SINGLETON",
+        "type": "SCHEDULE",
         "vesting_start": null,
         "periodicity": { "type": "MONTHS", "length": 1, "occurrences": 36 }
       }
@@ -62,18 +64,20 @@ A program is a flat list of statements. `THEN` and `PLUS` are the two ways to co
 {
   "program": [
     {
+      "type": "STATEMENT",
       "amount": { "type": "PORTION", "numerator": 1, "denominator": 2 },
       "expr": {
-        "type": "SINGLETON",
-        "vesting_start": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
+        "type": "SCHEDULE",
+        "vesting_start": { "type": "NODE", "base": { "type": "DATE", "value": "2025-01-01" }, "offsets": [] },
         "periodicity": { "type": "MONTHS", "length": 12, "occurrences": 1 }
       }
     },
     {
+      "type": "STATEMENT",
       "amount": { "type": "PORTION", "numerator": 1, "denominator": 2 },
       "expr": {
-        "type": "SINGLETON",
-        "vesting_start": { "type": "SINGLETON", "base": { "type": "DATE", "value": "2025-07-01" }, "offsets": [] },
+        "type": "SCHEDULE",
+        "vesting_start": { "type": "NODE", "base": { "type": "DATE", "value": "2025-07-01" }, "offsets": [] },
         "periodicity": { "type": "MONTHS", "length": 12, "occurrences": 1 }
       }
     }
@@ -147,9 +151,9 @@ Each periodic sequence of vesting installments requires a vesting start date fro
 The vesting-start is given by `FROM <vesting-expr>` in the grammar. The vesting start may be omitted, in which case it is assumed to be the grant date of the security.
 
 :::warning
-`EVENT vestingStart` is a system event that is derived during the normalization process. This is necessary so that the cliff can refer back to the resolved vesting start.
+`vestingStart` is a system anchor derived during normalization (it compiles to a base of `{ "type": "VESTING_START" }`, distinct from a named event). It exists so that a cliff can refer back to the resolved vesting start.
 
-However, this means that `EVENT vestingStart` may not be used in the `FROM <vesting-expr`, and doing so will throw an error.
+This also means `vestingStart` may not be used as the anchor of a `FROM`, and doing so will throw an error.
 :::
 
 #### Example: Omitted Vesting Start
@@ -165,12 +169,11 @@ VEST
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
-        "type": "EVENT",
-        "value": "grantDate"
+        "type": "GRANT_DATE"
       },
       "offsets": []
     },
@@ -196,9 +199,9 @@ VEST FROM EVENT milestone
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
         "type": "EVENT",
         "value": "milestone"
@@ -239,12 +242,11 @@ VEST
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
-        "type": "EVENT",
-        "value": "grantDate"
+        "type": "GRANT_DATE"
       },
       "offsets": []
     },
@@ -253,10 +255,9 @@ VEST
       "length": 1,
       "occurrences": 48,
       "cliff": {
-        "type": "SINGLETON",
+        "type": "NODE",
         "base": {
-          "type": "EVENT",
-          "value": "vestingStart"
+          "type": "VESTING_START"
         },
         "offsets": [
           {
@@ -297,12 +298,12 @@ VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "EARLIER_OF",
+      "type": "NODE_EARLIER_OF",
       "items": [
         {
-          "type": "SINGLETON",
+          "type": "NODE",
           "base": {
             "type": "DATE",
             "value": "2025-01-01"
@@ -310,7 +311,7 @@ VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
           "offsets": []
         },
         {
-          "type": "SINGLETON",
+          "type": "NODE",
           "base": {
             "type": "EVENT",
             "value": "milestone"
@@ -347,12 +348,12 @@ VEST EARLIER START OF(
 ```json
 {
   "expr": {
-    "type": "EARLIER_OF",
+    "type": "SCHEDULE_EARLIER_OF",
     "items": [
       {
-        "type": "SINGLETON",
+        "type": "SCHEDULE",
         "vesting_start": {
-          "type": "SINGLETON",
+          "type": "NODE",
           "base": {
             "type": "DATE",
             "value": "2026-01-01"
@@ -366,9 +367,9 @@ VEST EARLIER START OF(
         }
       },
       {
-        "type": "SINGLETON",
+        "type": "SCHEDULE",
         "vesting_start": {
-          "type": "SINGLETON",
+          "type": "NODE",
           "base": {
             "type": "DATE",
             "value": "2025-01-01"
@@ -404,12 +405,11 @@ VEST
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
-        "type": "EVENT",
-        "value": "grantDate"
+        "type": "GRANT_DATE"
       },
       "offsets": []
     },
@@ -418,10 +418,10 @@ VEST
       "length": 1,
       "occurrences": 48,
       "cliff": {
-        "type": "EARLIER_OF",
+        "type": "NODE_EARLIER_OF",
         "items": [
           {
-            "type": "SINGLETON",
+            "type": "NODE",
             "base": {
               "type": "EVENT",
               "value": "ipo"
@@ -429,10 +429,9 @@ VEST
             "offsets": []
           },
           {
-            "type": "SINGLETON",
+            "type": "NODE",
             "base": {
-              "type": "EVENT",
-              "value": "vestingStart"
+              "type": "VESTING_START"
             },
             "offsets": [
               {
@@ -471,9 +470,9 @@ VEST FROM EVENT milestone
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
         "type": "EVENT",
         "value": "milestone"
@@ -487,7 +486,7 @@ VEST FROM EVENT milestone
             "constraint": {
               "type": "BEFORE",
               "base": {
-                "type": "SINGLETON",
+                "type": "NODE",
                 "base": {
                   "type": "DATE",
                   "value": "2025-01-01"
@@ -502,7 +501,7 @@ VEST FROM EVENT milestone
             "constraint": {
               "type": "AFTER",
               "base": {
-                "type": "SINGLETON",
+                "type": "NODE",
                 "base": {
                   "type": "EVENT",
                   "value": "threshold"
@@ -615,7 +614,7 @@ Two-tier vesting refers to a periodic vesting cadence with a standard time-based
 
 The standard two-tier vesting schedule seen in the wild is a 4-year monthly vesting schedule with a 1-year cliff, as well as a cliff on the earlier of an IPO or change in control, so long as the IPO or change in control occurs on prior to the 7th anniversary of the grant date.
 
-This is expressed in vestlang DSL as follows. Note that the `12 months` duration in the cliff statement refers to the resolved vesting start, and we use the `EVENT grantDate` system event to provide the expiration dates for the cliffs.
+This is expressed in vestlang DSL as follows. Note that the `12 months` duration in the cliff statement refers to the resolved vesting start, and we use the `grantDate` system anchor to provide the expiration dates for the cliffs.
 
 ##### DSL
 
@@ -638,12 +637,11 @@ VEST
 ```json
 {
   "expr": {
-    "type": "SINGLETON",
+    "type": "SCHEDULE",
     "vesting_start": {
-      "type": "SINGLETON",
+      "type": "NODE",
       "base": {
-        "type": "EVENT",
-        "value": "grantDate"
+        "type": "GRANT_DATE"
       },
       "offsets": []
     },
@@ -652,13 +650,12 @@ VEST
       "length": 1,
       "occurrences": 48,
       "cliff": {
-        "type": "LATER_OF",
+        "type": "NODE_LATER_OF",
         "items": [
           {
-            "type": "SINGLETON",
+            "type": "NODE",
             "base": {
-              "type": "EVENT",
-              "value": "vestingStart"
+              "type": "VESTING_START"
             },
             "offsets": [
               {
@@ -670,10 +667,10 @@ VEST
             ]
           },
           {
-            "type": "EARLIER_OF",
+            "type": "NODE_EARLIER_OF",
             "items": [
               {
-                "type": "SINGLETON",
+                "type": "NODE",
                 "base": {
                   "type": "EVENT",
                   "value": "cic"
@@ -684,10 +681,9 @@ VEST
                   "constraint": {
                     "type": "BEFORE",
                     "base": {
-                      "type": "SINGLETON",
+                      "type": "NODE",
                       "base": {
-                        "type": "EVENT",
-                        "value": "grantDate"
+                        "type": "GRANT_DATE"
                       },
                       "offsets": [
                         {
@@ -703,7 +699,7 @@ VEST
                 }
               },
               {
-                "type": "SINGLETON",
+                "type": "NODE",
                 "base": {
                   "type": "EVENT",
                   "value": "ipo"
@@ -714,10 +710,9 @@ VEST
                   "constraint": {
                     "type": "BEFORE",
                     "base": {
-                      "type": "SINGLETON",
+                      "type": "NODE",
                       "base": {
-                        "type": "EVENT",
-                        "value": "grantDate"
+                        "type": "GRANT_DATE"
                       },
                       "offsets": [
                         {
