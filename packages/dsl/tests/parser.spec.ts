@@ -147,6 +147,30 @@ describe("Amount parsing", () => {
   it("rejects out-of-range decimal portion", () => {
     expect(() => parse(`1.1 VEST FROM EVENT a`)).toThrowError();
   });
+
+  it("rejects out-of-range fraction portion", () => {
+    expect(() => parse(`3/2 VEST FROM EVENT a`)).toThrowError(
+      /between 0 and 1 inclusive/,
+    );
+  });
+
+  it("accepts fractions at and within the [0,1] bounds", () => {
+    expect(first(`0/1 VEST FROM EVENT a`).amount).toEqual({
+      type: "PORTION",
+      numerator: 0,
+      denominator: 1,
+    });
+    expect(first(`1/2 VEST FROM EVENT a`).amount).toEqual({
+      type: "PORTION",
+      numerator: 1,
+      denominator: 2,
+    });
+    expect(first(`1/1 VEST FROM EVENT a`).amount).toEqual({
+      type: "PORTION",
+      numerator: 1,
+      denominator: 1,
+    });
+  });
 });
 
 describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
