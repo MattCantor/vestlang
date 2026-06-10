@@ -29,10 +29,11 @@ import type {
 } from "@vestlang/types";
 import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
+import { eventBaseId } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
-import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
+import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -106,17 +107,6 @@ const measureDuration = (
   return { length: dayCount(anchor, cliffDate), period_type: "DAYS" };
 };
 
-/** A genuine named-event cliff anchor: no time-based cliff field. The cliff slot
- *  is typed `VestingNodeExpr<"VESTING_START">`, so the base is DATE | EVENT |
- *  VESTING_START — GRANT_DATE can't occur, and `base.type === "EVENT"` cleanly
- *  picks out the event case. */
-const eventCliffId = (
-  expr: VestingNodeExpr<"VESTING_START">,
-): string | undefined =>
-  expr.type === "NODE" && expr.base.type === "EVENT"
-    ? expr.base.value
-    : undefined;
-
 // `origin` is the date the whole chain started from, used only to count how many
 // grid occurrences fall on/before the cliff. A chain segment whose anchor was
 // clamped onto a short month (Jan 31 handoff lands on Feb 28) still lays its grid
@@ -153,7 +143,7 @@ export const lowerCliff = (
   // impossible/pending does — the gate is enforced by the shared evaluator above,
   // never by re-deciding here. (This used to return EVENT unconditionally, so a
   // gate on an event cliff was silently dropped — #113.)
-  const evId = eventCliffId(cliffExpr);
+  const evId = eventBaseId(cliffExpr);
   if (evId) {
     // The gate decides whether the event cliff stands. A violated gate kills it; a
     // still-pending gate keeps it unresolved (but `dated` — the grid is placeable
@@ -317,10 +307,7 @@ export const lowerDeferredCliff = (
   // so it stays unresolved until the firing date arrives.
   const res = evaluateVestingNodeExpr(cliffExpr, ctx);
   const gate = gateVerdict(res, false, (bs) =>
-    bs.filter(
-      (b) =>
-        b.type !== "EVENT_NOT_YET_OCCURRED" || b.event !== VESTING_START_LABEL,
-    ),
+    bs.filter((b) => !isVestingStartPlaceholder(b)),
   );
   return gate ?? { state: "UNRESOLVED", blockers: [], dated: false };
 };
