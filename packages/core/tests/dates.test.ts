@@ -210,6 +210,29 @@ describe("year range — sub-100 preserved, out-of-range rejected", () => {
     expect(() => addPeriod("0001-01-01", 1, "YEARS")).not.toThrow(); // 0002 is fine
     expect(() => addMonthsRule("0001-01-15", -12)).toThrow(/range/);
   });
+
+  // A large day step can push the Date past its ±8.64e15 ms limit, at which point
+  // every UTC getter returns NaN. Without an explicit NaN check, the year-range
+  // comparison (every test against NaN is false) would let it through and emit
+  // "0NaN-NaN-NaN"; it must hit the same range error the in-bounds checks raise.
+  it("rejects a day step large enough to overflow the Date range", () => {
+    expect(() => addDays("2025-01-01", 300_000_000)).toThrow(/range/);
+    expect(() => addPeriod("2025-01-01", 300_000_000, "DAYS")).toThrow(/range/);
+    expect(() => addDays("2025-01-01", Number.MAX_SAFE_INTEGER)).toThrow(
+      /range/,
+    );
+  });
+
+  it("never returns a malformed NaN-laden date string", () => {
+    expect(() => addDays("2025-01-01", 1e17)).toThrow(/range/);
+    // The classic symptom of the overflow was a "0NaN-NaN-NaN" result; the
+    // clean range error must never carry "NaN" through to the caller.
+    try {
+      addDays("2025-01-01", 300_000_000);
+    } catch (e) {
+      expect((e as Error).message).not.toMatch(/NaN/);
+    }
+  });
 });
 
 describe("comparisons on ISO dates", () => {

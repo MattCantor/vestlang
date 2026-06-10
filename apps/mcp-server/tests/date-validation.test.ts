@@ -69,4 +69,34 @@ describe("mcp-server / calendar-date validation at the tool boundary", () => {
     });
     expect(res.isError).toBeFalsy();
   });
+
+  // A day count large enough to overflow Date's internal range once produced a
+  // "0NaN-NaN-NaN" string instead of erroring. The range guard now catches it
+  // before formatting, so the tool returns the clean out-of-range error.
+  it("returns a clean range error for a huge day offset in add_period", async () => {
+    const client = await connectClient();
+    const res = await call(client, "vestlang_add_period", {
+      date: "2025-01-01",
+      length: 300_000_000,
+      unit: "days",
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/representable range/i);
+    expect(res.content[0].text).not.toMatch(/NaN/);
+  });
+
+  // The same overflow reached through resolve_offset used to leak an internal
+  // runtime-validation message. It now surfaces the same clean range error,
+  // not the constructor's complaint about a malformed startDate.
+  it("returns a clean range error for a huge day offset in resolve_offset", async () => {
+    const client = await connectClient();
+    const res = await call(client, "vestlang_resolve_offset", {
+      expr: "+ 100000000 days",
+      grant_date: "2025-01-01",
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/representable range/i);
+    expect(res.content[0].text).not.toMatch(/VestingRuntime/);
+    expect(res.content[0].text).not.toMatch(/NaN/);
+  });
 });

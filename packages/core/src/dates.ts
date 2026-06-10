@@ -41,6 +41,16 @@ export const toDate = (iso: OCTDate): Date => {
 
 export const toISO = (d: Date): OCTDate => {
   const y = d.getUTCFullYear();
+  // A large day/week step can push the Date past the ±8.64e15 ms limit, at which
+  // point every UTC getter returns NaN. Comparisons against NaN are always false,
+  // so the plain `y < 1 || y > 9999` test would let it through and `pad` would
+  // emit "0NaN-NaN-NaN". Reject the overflow here too, on the same range error
+  // the in-bounds-year checks raise — there's no surviving year left to report.
+  if (Number.isNaN(y)) {
+    throw new RangeError(
+      "date out of representable range 0001–9999 (arithmetic overflowed)",
+    );
+  }
   if (y < 1 || y > 9999) {
     throw new RangeError(
       `date out of representable range 0001–9999 (got year ${y})`,
