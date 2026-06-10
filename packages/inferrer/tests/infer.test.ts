@@ -45,7 +45,7 @@ describe("inferSchedule — pure uniform", () => {
 
     const uniform = result.decomposition.uniforms[0];
     expect(uniform.occurrences).toBe(48);
-    expect(uniform.perTrancheAmount).toBe(1000);
+    expect(uniform.total).toBe(48000);
     expect(uniform.cadence).toEqual({ unit: "MONTHS", length: 1 });
 
     expect(result.dsl).toContain("48000 VEST");
