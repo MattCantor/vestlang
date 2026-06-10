@@ -325,11 +325,64 @@ const EVENT_REL_EVENT: Cell[] = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Orientation 5 — CLIFF <gate>  (the gate sits on a cliff anchor, not the start).
+// The same proviso floor as the start: a violated gate is impossible, an unfired
+// reference pends. The one difference is that an event-anchored cliff has no
+// template form, so a *satisfied* gate reads events-only rather than vests.
+// Regression cover for #113, where a cliff-anchor gate parsed and lint-clean was
+// then silently dropped at resolution (satisfied and violated both vested).
+// ─────────────────────────────────────────────────────────────────────────────
+const c = (expr: string) => `VEST ${CADENCE} CLIFF ${expr}`;
+
+const CLIFF_GATE: Cell[] = [
+  {
+    dsl: c("EVENT acquisition AFTER grantDate + 1 year"),
+    asOf: TODAY,
+    events: { acquisition: "2024-06-01" },
+    correct: "impossible",
+    basis: "direct",
+    why: "acquisition (2024-06-01) is not after grantDate + 1yr (2025-01-01); both known. The cliff gate is violated, exactly as it would be on a start.",
+  },
+  {
+    dsl: c("EVENT acquisition AFTER grantDate + 1 year"),
+    asOf: TODAY,
+    events: { acquisition: "2025-06-01" },
+    correct: "events-only",
+    basis: "direct",
+    why: "acquisition after grantDate + 1yr; the gate holds. An event cliff has no template form, so the schedule resolves to events-only.",
+  },
+  {
+    dsl: c("EVENT acquisition AFTER grantDate + 1 year"),
+    asOf: TODAY,
+    correct: "pending",
+    basis: "open-world",
+    why: "acquisition unfired — the gate can't be decided, so the cliff stays pending. (Pre-fix it was dropped and the schedule fell to events-only.)",
+  },
+  {
+    dsl: c("EVENT acquisition AFTER EVENT board"),
+    asOf: TODAY,
+    events: { acquisition: "2025-06-01", board: "2026-01-01" },
+    correct: "impossible",
+    basis: "direct",
+    why: "board fires after acquisition, so `acquisition AFTER board` is violated; both known. The reference is an event, not grantDate (issue comment: the drop is a property of the cliff position, not the reference).",
+  },
+  {
+    dsl: c("EVENT acquisition AFTER EVENT board"),
+    asOf: TODAY,
+    events: { acquisition: "2025-06-01", board: "2025-01-01" },
+    correct: "events-only",
+    basis: "direct",
+    why: "board fires before acquisition, so the gate holds; event cliff → events-only.",
+  },
+];
+
 const ORACLE: Array<[string, Cell[]]> = [
   ["EVENT <rel> DATE", EVENT_REL_DATE],
   ["DATE <rel> EVENT", DATE_REL_EVENT],
   ["DATE <rel> DATE", DATE_REL_DATE],
   ["EVENT <rel> EVENT", EVENT_REL_EVENT],
+  ["CLIFF <gate>", CLIFF_GATE],
 ];
 
 describe("gate oracle — BEFORE/AFTER proviso correctness floor", () => {

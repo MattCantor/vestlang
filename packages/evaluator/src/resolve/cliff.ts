@@ -91,14 +91,28 @@ export const lowerCliff = (
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
-  // A genuinely event-anchored cliff is not a time-based cliff field.
-  const evId = eventCliffId(cliffExpr);
-  if (evId) return { state: "EVENT", eventId: evId };
-
-  // Resolve the cliff date, overlaying the vesting start so a `vestingStart`-
-  // relative cliff (e.g. "+12 months") resolves.
+  // Resolve the cliff expression once, overlaying the vesting start so a
+  // `vestingStart`-relative cliff (e.g. "+12 months") resolves. Both the
+  // event-cliff routing just below and the time-based lowering further down read
+  // this single resolution.
   const overlayCtx: EvaluationContext = { ...ctx, vestingStart: anchor };
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
+
+  // A genuinely event-anchored cliff has no time-based cliff field, so it's
+  // reported as EVENT for the classifier (4b) to route to events-only. A gate on
+  // it still decides whether the cliff stands: a violated or still-pending gate
+  // routes it away (UNRESOLVED), exactly as a non-event cliff that resolves
+  // impossible/pending does — the gate is enforced by the shared evaluator above,
+  // never by re-deciding here. (This used to return EVENT unconditionally, so a
+  // gate on an event cliff was silently dropped — #113.)
+  const evId = eventCliffId(cliffExpr);
+  if (evId) {
+    const gated =
+      cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
+    if (gated && res.type !== "PICKED")
+      return { state: "UNRESOLVED", blockers: res.blockers };
+    return { state: "EVENT", eventId: evId };
+  }
 
   // A cliff date is known only when the expression fully resolves. A partial
   // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must not

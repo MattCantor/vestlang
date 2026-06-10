@@ -3,6 +3,7 @@ import type { OCTDate, VestingNodeExpr } from "@vestlang/types";
 import { lowerCliff, lowerDeferredCliff } from "../src/resolve/cliff";
 import {
   baseCtx,
+  makeGatedNode,
   makeSingletonNode,
   makeVestingBaseDate,
   makeVestingBaseEvent,
@@ -102,6 +103,57 @@ describe("lowerCliff", () => {
       ],
     };
     const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, noIpo);
+    expect(result.state).toBe("UNRESOLVED");
+    if (result.state === "UNRESOLVED") {
+      expect(
+        result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
+      ).toBe(true);
+    }
+  });
+});
+
+describe("lowerCliff — gated event cliff (#113)", () => {
+  // CLIFF EVENT acquisition AFTER grantDate + 1 year: the gate decides whether
+  // the event cliff stands, instead of being dropped. anchor is the grant date.
+  const gatedCliff = makeGatedNode(
+    makeVestingBaseEvent("acquisition"),
+    "AFTER",
+    makeSingletonNode(makeVestingBaseGrantDate(), [
+      makeDuration(12, "MONTHS", "PLUS"),
+    ]),
+  );
+
+  it("gate violated (event fired before the gate) → UNRESOLVED with IMPOSSIBLE_CONDITION", () => {
+    // acquisition 2025-06-01 is not after grantDate + 12 months (2026-01-01).
+    const c = baseCtx({
+      grantDate: "2025-01-01",
+      events: { acquisition: "2025-06-01" },
+    });
+    const result = lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c);
+    expect(result.state).toBe("UNRESOLVED");
+    if (result.state === "UNRESOLVED") {
+      expect(
+        result.blockers.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
+      ).toBe(true);
+    }
+  });
+
+  it("gate satisfied (event fired after the gate) → EVENT", () => {
+    // acquisition 2026-06-01 is after grantDate + 12 months; the gate holds, so
+    // the cliff is the bare event cliff again (events-only downstream).
+    const c = baseCtx({
+      grantDate: "2025-01-01",
+      events: { acquisition: "2026-06-01" },
+    });
+    expect(lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c)).toEqual({
+      state: "EVENT",
+      eventId: "acquisition",
+    });
+  });
+
+  it("gate pending (event unfired) → UNRESOLVED with EVENT_NOT_YET_OCCURRED", () => {
+    const c = baseCtx({ grantDate: "2025-01-01", events: {} });
+    const result = lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c);
     expect(result.state).toBe("UNRESOLVED");
     if (result.state === "UNRESOLVED") {
       expect(
