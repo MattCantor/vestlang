@@ -383,7 +383,9 @@ export function inferSchedule(input: InferInput): InferResult {
 
   const uniforms = best.components
     .filter((c): c is UniformComponent => c.kind === "UNIFORM")
-    .map(({ kind: _kind, ...rest }) => rest);
+    .map(
+      ({ kind: _kind, perTrancheAmount: _perTrancheAmount, ...rest }) => rest,
+    );
   const singles = best.components
     .filter((c): c is SingleTrancheComponent => c.kind === "SINGLE_TRANCHE")
     .map(({ kind: _kind, ...rest }) => rest);

@@ -29,10 +29,14 @@ export interface UniformComponent {
   startDate: OCTDate;
   cadence: { unit: PeriodTag; length: number };
   occurrences: number;
+  /** Representative per-tranche rate (the atom's fingerprint), used by the
+   * fold/pursuit passes. Not exposed on the public decomposition: integer
+   * allocation telescopes, so the rate alone can't reconstruct the train. */
   perTrancheAmount: number;
-  /** Exact total shares for the train. For jittery (rounded) trains the per-tranche
-   * amounts are unequal, so total !== perTrancheAmount * occurrences; this field
-   * preserves the true total for faithful reconstruction. */
+  /** Exact total shares for the train, and the authoritative quantity. Rounding
+   * makes the per-tranche amounts unequal, so the total is not a clean multiple
+   * of any single rate — this field preserves the true total for faithful
+   * reconstruction. */
   total: number;
 }
 
@@ -60,7 +64,7 @@ export interface InferResult {
   dsl: string;
   program: Program;
   decomposition: {
-    uniforms: Array<Omit<UniformComponent, "kind">>;
+    uniforms: Array<Omit<UniformComponent, "kind" | "perTrancheAmount">>;
     singles: Array<Omit<SingleTrancheComponent, "kind">>;
     cliffFolds: number;
     preGrantFolds: number;
