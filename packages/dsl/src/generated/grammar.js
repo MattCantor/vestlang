@@ -424,13 +424,13 @@ function peg$parse(input, options) {
            occurrences: 1
          };  }
   function peg$f41(a) {
-    if (a.type === "NODE" && a.base.type === "VESTING_START") {
+    if (hasSystemAnchor(a, "VESTING_START")) {
       error('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
     }
     return a
   }
   function peg$f42(a) {
-    if (a.type === "NODE" && a.base.type === "GRANT_DATE") {
+    if (hasSystemAnchor(a, "GRANT_DATE")) {
       error('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
     }
     return a
@@ -2787,31 +2787,17 @@ function peg$parse(input, options) {
     }
     return node;
   }
-  function mkVestingNode(duration, context) {
-    return {
-      type: "NODE",
-      base: context === "FROM" ? mkGrantDate() : mkVestingStart(),
-      offsets: normalizeOffsets([duration]),
+  // True if `node` carries the given system-anchor base anywhere — directly, or
+  // inside a selector's arms. Lets FROM/CLIFF reject a forbidden anchor smuggled
+  // through EARLIER OF / LATER OF, not just at the top level.
+  function hasSystemAnchor(node, anchor) {
+    if (!node || typeof node !== "object") return false;
+    if (node.type === "NODE") return node.base && node.base.type === anchor;
+    if (node.type === "NODE_EARLIER_OF" || node.type === "NODE_LATER_OF") {
+      return Array.isArray(node.items)
+        && node.items.some((item) => hasSystemAnchor(item, anchor));
     }
-  }
-  function coerceToVestingNode(x, context) {
-    // Duration -> Vesting Node, depending on context
-    if (x && typeof x === "object" && x.type === "DURATION") {
-      return mkVestingNode(x, context)
-    }
-
-    // Pass through a plain vesting node (anything that isn't a selector)
-    if (x && (x.type === "NODE")) return x;
-
-    // Recurse into selectors and coerce their items
-    if (x && (x.type === "NODE_EARLIER_OF" || x.type === "NODE_LATER_OF") && Array.isArray(x.items)) {
-      return {
-        type: x.type,
-        items: x.items.map((item) => coerceToVestingNode(item, context))
-      }
-    }
-
-    throw new SyntaxError(`${context} must be an anchor (EVENT/DATE), a selector (EARLIER/LATER OF...), or a duration.`)
+    return false;
   }
 
   peg$result = peg$startRuleFunction();
