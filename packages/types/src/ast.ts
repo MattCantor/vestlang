@@ -93,15 +93,36 @@ export type VestingBase =
 /** The two normalizer-minted system anchors, distinct from genuine events. */
 export type VestingBaseSystem = VestingBaseGrantDate | VestingBaseVestingStart;
 
+/** The tag of one of the two system anchors: "GRANT_DATE" | "VESTING_START". */
+export type SystemAnchorTag = VestingBaseSystem["type"];
+
 /* ------------------------
  * Vesting Node
  * ------------------------ */
 
+// A node's structural slot decides which system anchor it may carry: a start
+// anchors on GRANT_DATE, a cliff on VESTING_START, never the other way round
+// (the positional invariant). The `A` parameter names the *permitted* system
+// anchor, so the base excludes the other one — `Extract` keeps only the matching
+// system base, alongside the always-legal DATE and EVENT. `A` defaults to both
+// tags (the wide union), so an unparameterized `VestingNode` still means "any
+// anchor" and a narrowed node assigns into a wide one (its base is a subset).
+// DATE/EVENT bases are anchor-agnostic, so a DATE-anchored node fits either slot.
+//
 // primitives/types/vestlang/VestingNode.schema.json
-export interface VestingNode {
+export interface VestingNode<A extends SystemAnchorTag = SystemAnchorTag> {
   type: "NODE";
-  base: VestingBase;
+  base:
+    | VestingBaseDate
+    | VestingBaseEvent
+    | Extract<VestingBaseSystem, { type: A }>;
   offsets: Offsets;
+  // Deliberately NOT parameterized by `A`: a BEFORE/AFTER reference anchor (the
+  // node inside this condition's Constraint) is positionally unrelated to this
+  // node's own slot and may be any anchor. Threading `A` here would wrongly
+  // forbid a grant-date reference on a cliff's constraint — e.g. the enforced
+  // `CLIFF EVENT x AFTER grantDate + 1 year` (#113): the cliff slot is
+  // VESTING_START, but the gate legitimately references GRANT_DATE.
   condition?: Condition;
 }
 
@@ -109,14 +130,18 @@ export type ConstrainedVestingNode = VestingNode & {
   condition: Condition;
 };
 
-export type LaterOfVestingNode = Selector<VestingNodeExpr, "NODE_LATER_OF">;
+export type LaterOfVestingNode<A extends SystemAnchorTag = SystemAnchorTag> =
+  Selector<VestingNodeExpr<A>, "NODE_LATER_OF">;
 
-export type EarlierOfVestingNode = Selector<VestingNodeExpr, "NODE_EARLIER_OF">;
+export type EarlierOfVestingNode<A extends SystemAnchorTag = SystemAnchorTag> =
+  Selector<VestingNodeExpr<A>, "NODE_EARLIER_OF">;
 
-export type VestingNodeExpr =
-  | VestingNode
-  | LaterOfVestingNode
-  | EarlierOfVestingNode;
+// `A` threads through the selector arms too, so a forbidden anchor can't hide
+// inside an EARLIER OF / LATER OF arm — the invariant holds at every depth.
+export type VestingNodeExpr<A extends SystemAnchorTag = SystemAnchorTag> =
+  | VestingNode<A>
+  | LaterOfVestingNode<A>
+  | EarlierOfVestingNode<A>;
 
 /* ------------------------
  * Conditions & Constraints
@@ -173,8 +198,8 @@ export interface VestingPeriod<P extends Phase = "normalized"> {
   occurrences: number;
   length: number;
   cliff?: P extends "normalized"
-    ? VestingNodeExpr | undefined
-    : Duration | VestingNodeExpr | undefined;
+    ? VestingNodeExpr<"VESTING_START"> | undefined
+    : Duration | VestingNodeExpr<"VESTING_START"> | undefined;
 }
 
 export type RawVestingPeriod = VestingPeriod<"raw">;
@@ -186,8 +211,8 @@ export type RawVestingPeriod = VestingPeriod<"raw">;
 export interface Schedule<P extends Phase = "normalized"> {
   type: "SCHEDULE";
   vesting_start: P extends "normalized"
-    ? VestingNodeExpr
-    : VestingNodeExpr | null;
+    ? VestingNodeExpr<"GRANT_DATE">
+    : VestingNodeExpr<"GRANT_DATE"> | null;
   periodicity: VestingPeriod<P>;
 }
 

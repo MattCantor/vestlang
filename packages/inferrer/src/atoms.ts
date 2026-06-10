@@ -2,6 +2,7 @@ import { addDays, addMonthsRule } from "@vestlang/evaluator";
 import type {
   OCTDate,
   Statement,
+  SystemAnchorTag,
   VestingDayOfMonth,
   VestingNodeExpr,
   VestingPeriod,
@@ -14,7 +15,11 @@ import type {
   UniformComponent,
 } from "./types.js";
 
-function bareDate(date: OCTDate): VestingNodeExpr {
+// A bare DATE anchor is positionally neutral — it fits a start or a cliff slot —
+// so the result is generic over the permitted anchor and infers it from context.
+function bareDate<A extends SystemAnchorTag = SystemAnchorTag>(
+  date: OCTDate,
+): VestingNodeExpr<A> {
   return {
     type: "NODE",
     base: { type: "DATE", value: date },

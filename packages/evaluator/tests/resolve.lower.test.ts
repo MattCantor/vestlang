@@ -5,7 +5,7 @@ import type {
   EvaluationContextInput,
   OCTDate,
   Program,
-  VestingNode,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
@@ -40,7 +40,7 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const stmt = (
   amount: Amount,
-  start: VestingNode,
+  start: VestingNodeExpr<"GRANT_DATE">,
   periodicity: VestingPeriod,
 ) => ({
   type: "STATEMENT" as const,

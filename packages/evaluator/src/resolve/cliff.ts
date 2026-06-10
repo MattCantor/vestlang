@@ -62,9 +62,13 @@ const measureDuration = (
   return { length: dayCount(anchor, cliffDate), period_type: "DAYS" };
 };
 
-/** A genuine named-event cliff anchor: no time-based cliff field. The VESTING_START
- *  anchor is its own tag now, so a plain `base.type === "EVENT"` already excludes it. */
-const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
+/** A genuine named-event cliff anchor: no time-based cliff field. The cliff slot
+ *  is typed `VestingNodeExpr<"VESTING_START">`, so the base is DATE | EVENT |
+ *  VESTING_START — GRANT_DATE can't occur, and `base.type === "EVENT"` cleanly
+ *  picks out the event case. */
+const eventCliffId = (
+  expr: VestingNodeExpr<"VESTING_START">,
+): string | undefined =>
   expr.type === "NODE" && expr.base.type === "EVENT"
     ? expr.base.value
     : undefined;
@@ -81,7 +85,7 @@ const eventCliffId = (expr: VestingNodeExpr): string | undefined =>
 // is a fixed duration from this segment's anchor, so it lands wherever that
 // duration puts it regardless of how the grid day springs back.
 export const lowerCliff = (
-  cliffExpr: VestingNodeExpr | undefined,
+  cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
   anchor: OCTDate,
   periodType: PeriodType,
   period: number,
@@ -168,10 +172,11 @@ export const lowerCliff = (
 
 /** A `vestingStart + <duration>` cliff's offset, when the expression is exactly
  *  that: a single node on the `vestingStart` anchor with one positive duration
- *  offset and no condition. Any other shape (a different anchor, a condition, a
- *  combinator, multiple offsets) returns undefined. */
+ *  offset and no condition. Any other shape (a DATE anchor, a condition, a
+ *  combinator, multiple offsets) returns undefined — and GRANT_DATE can't reach
+ *  here, the cliff slot's type excludes it. */
 const vestingStartOffset = (
-  expr: VestingNodeExpr,
+  expr: VestingNodeExpr<"VESTING_START">,
 ): { value: number; unit: PeriodTag } | undefined => {
   if (
     expr.type !== "NODE" ||
@@ -203,7 +208,7 @@ const vestingStartOffset = (
  * depending on the anchor).
  */
 export const lowerDeferredCliff = (
-  cliffExpr: VestingNodeExpr | undefined,
+  cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
   periodType: PeriodType,
   period: number,
   occurrences: number,

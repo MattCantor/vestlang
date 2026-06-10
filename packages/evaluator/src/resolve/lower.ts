@@ -61,12 +61,13 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
 };
 
 /** DATE vs floating EVENT, from the (winning) schedule's vesting_start leaf.
- *  A genuine named event (`base.type === "EVENT"`) floats; the system anchors are
- *  their own tags (GRANT_DATE/VESTING_START) — resolved absolute dates — and fall
- *  to DATE, so `FROM +N months` chains and never registers a spurious event
- *  firing. The tag is the distinction; no value test needed. */
+ *  A genuine named event (`base.type === "EVENT"`) floats; the start slot's system
+ *  anchor is GRANT_DATE (VESTING_START is excluded by the slot's type) — a resolved
+ *  absolute date — and falls to DATE, so `FROM +N months` chains and never
+ *  registers a spurious event firing. The tag is the distinction; no value test
+ *  needed. */
 const startBase = (
-  vs: VestingNodeExpr,
+  vs: VestingNodeExpr<"GRANT_DATE">,
 ): { base: "DATE" | "EVENT"; eventId?: string } =>
   vs.type === "NODE" && vs.base.type === "EVENT"
     ? { base: "EVENT", eventId: vs.base.value }
