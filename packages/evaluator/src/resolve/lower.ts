@@ -13,6 +13,7 @@ import type {
   Amount,
   Blocker,
   EvaluationContext,
+  ImpossibleBlocker,
   Program,
   Schedule,
   ScheduleExpr,
@@ -96,7 +97,11 @@ export interface StmtResolution {
     // raw combinator; `buildTemplate` mints its grant-scoped id (with dedup across
     // statements) and records its DSL definition in the source map.
     | { state: "SYNTHETIC_EVENT"; expr: VestingNodeExpr; blockers: Blocker[] }
-    | { state: "UNRESOLVED"; blockers: Blocker[] };
+    | { state: "UNRESOLVED"; blockers: Blocker[] }
+    // A contradictory start. Today a dead start flattens to UNRESOLVED, which is
+    // why the projection has to re-resolve to recover the contradiction; carrying
+    // it lets buildTemplate poison the program directly off the record.
+    | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
   cliff: LoweredCliff;
   // True for a THEN tail (a segment that continues the previous one). The
   // start above was injected by the chaining walk rather than read off the
@@ -462,11 +467,19 @@ export const buildTemplate = (
     totalShares,
   });
 
-  // Only a genuinely-unresolved start poisons the program. An unfired atomic
-  // EVENT start (PENDING_EVENT) lowers into the template.
-  if (resolutions.some((r) => r.start.state === "UNRESOLVED"))
+  // Only a genuinely-unresolved or contradictory start poisons the program. An
+  // unfired atomic EVENT start (PENDING_EVENT) lowers into the template.
+  if (
+    resolutions.some(
+      (r) => r.start.state === "UNRESOLVED" || r.start.state === "IMPOSSIBLE",
+    )
+  )
     return unresolved();
-  if (resolutions.some((r) => r.cliff.state === "UNRESOLVED"))
+  if (
+    resolutions.some(
+      (r) => r.cliff.state === "UNRESOLVED" || r.cliff.state === "IMPOSSIBLE",
+    )
+  )
     return unresolved();
   const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT");
   if (eventCliff && eventCliff.cliff.state === "EVENT") {
@@ -512,7 +525,10 @@ export const buildTemplate = (
       }
       vesting_base = { type: "EVENT", event_id: eventId };
       blockers.push(...r.start.blockers);
-    } else if (r.start.state === "UNRESOLVED") {
+    } else if (
+      r.start.state === "UNRESOLVED" ||
+      r.start.state === "IMPOSSIBLE"
+    ) {
       return unresolved(); // narrowing; unreachable after the guard above
     } else if (r.start.base === "EVENT") {
       const eventId = r.start.eventId!;

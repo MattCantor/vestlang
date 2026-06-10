@@ -218,6 +218,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     expect(lowerDeferredCliff(vsCliff(12, "MONTHS"), "DAYS", 30, 48)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
+      dated: false,
     });
   });
 
@@ -226,6 +227,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
+      dated: false,
     });
   });
 
@@ -242,6 +244,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
+      dated: false,
     });
   });
 

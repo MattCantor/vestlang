@@ -16,6 +16,7 @@
 import type {
   Blocker,
   EvaluationContext,
+  ImpossibleBlocker,
   OCTDate,
   VestingNodeExpr,
 } from "@vestlang/types";
@@ -37,7 +38,19 @@ export type LoweredCliff =
   | { state: "RESOLVED"; cliff: Cliff }
   // Event-anchored cliff: no time-based `cliff` representation.
   | { state: "EVENT"; eventId: string }
-  | { state: "UNRESOLVED"; blockers: Blocker[] };
+  // A pending cliff the renderer reproduces without re-resolving. `dated` picks
+  // the render shape (grid occurrences placeable vs. fully symbolic) and
+  // `probeDate` is the partial-`LATER OF` lower bound the dated case folds from;
+  // both are populated in a later phase (placeholders until then).
+  | {
+      state: "UNRESOLVED";
+      blockers: Blocker[];
+      dated: boolean;
+      probeDate?: OCTDate;
+    }
+  // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
+  // are already ImpossibleBlocker[], so no cast is needed when it's produced.
+  | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
 
 const dayCount = (from: OCTDate, to: OCTDate): number =>
   Math.round((toDate(to).getTime() - toDate(from).getTime()) / MS_PER_DAY);
@@ -114,7 +127,9 @@ export const lowerCliff = (
     const gated =
       cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
     if (gated && res.type !== "PICKED")
-      return { state: "UNRESOLVED", blockers: res.blockers };
+      // `dated` is computed in a later phase; false is a behavior-preserving
+      // placeholder while nothing reads it.
+      return { state: "UNRESOLVED", blockers: res.blockers, dated: false };
     return { state: "EVENT", eventId: evId };
   }
 
@@ -135,7 +150,8 @@ export const lowerCliff = (
           ? res.meta.blockers
           : []
         : res.blockers;
-    return { state: "UNRESOLVED", blockers };
+    // `dated` placeholder; populated in a later phase.
+    return { state: "UNRESOLVED", blockers, dated: false };
   }
 
   // Cliff at/before the start has no effect.
@@ -219,7 +235,9 @@ export const lowerDeferredCliff = (
   // Anchor-free only when the cliff and the grid share a unit; otherwise the
   // pre-cliff count depends on the (still-unknown) firing date.
   if (!off || off.unit !== periodType)
-    return { state: "UNRESOLVED", blockers: [] };
+    // Deferred-path gate blockers and `dated` are filled in a later phase; empty
+    // blockers / false here preserve today's behavior.
+    return { state: "UNRESOLVED", blockers: [], dated: false };
 
   if (off.value <= 0) return { state: "NONE" };
   const m = Math.min(Math.floor(off.value / period), occurrences);
