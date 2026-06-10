@@ -4,8 +4,13 @@
 // it resolves to today), the installments, the blockers, the findings (each with
 // a human-readable message), the absence assumptions the resolution leaned on (also
 // with a message), and the four orthogonal read-flags. It drops the engine's working
-// state: the compiled template, the runtime inputs, and the source map all stay
-// server-side.
+// state: the compiled template and the runtime inputs stay server-side.
+//
+// The one piece of template-arm working state that does survive is the `sourceMap`
+// — the DSL behind any synthetic event the lowering had to mint when externalizing
+// a gated or combinator-over-anchors start. Without it a consumer sees a template
+// gated on an opaque `evt_<n>` with no way to read what it stands for, so it rides
+// along on the template arm of each verdict (and is `{}` for a plain schedule).
 //
 // Both consumers used to build this object by hand, and drifted. This is the one
 // place that derivation lives.
@@ -18,6 +23,7 @@ import type {
   Finding,
   Installment,
   InterchangeVerdict,
+  SourceMap,
 } from "@vestlang/types";
 import { presentSchedule } from "./present.js";
 import { reasonToString } from "./resolve/assemble.js";
@@ -27,16 +33,18 @@ import { formatAbsenceAssumption } from "./absence.js";
 // The here-and-now verdict, against the events we currently know. `reason` rides
 // along only on the events-only arm — it's what explains the fall back to bare
 // events — so the type ties it to that status rather than leaving it a loose
-// optional everywhere.
+// optional everywhere. The template arm carries the `sourceMap` (see header).
 type ResolutionView =
-  | { status: "template" | "unresolved" | "impossible" }
+  | { status: "template"; sourceMap: SourceMap }
+  | { status: "unresolved" | "impossible" }
   | { status: "events-only"; reason: string };
 
 // The storable-floor verdict, independent of which events have fired. Both the
 // events-only and the unrepresentable arms carry a `reason` describing what kept
-// it off a single template.
+// it off a single template; the template arm carries the `sourceMap`.
 type InterchangeView =
-  | { status: "template" | "impossible" }
+  | { status: "template"; sourceMap: SourceMap }
+  | { status: "impossible" }
   | { status: "events-only" | "unrepresentable"; reason: string };
 
 export type ScheduleView = {
@@ -57,10 +65,17 @@ export type ScheduleView = {
   blockers: Blocker[];
 };
 
-const resolutionView = (r: EvaluatedScheduleVerdict): ResolutionView =>
-  r.status === "events-only"
-    ? { status: r.status, reason: r.reason }
-    : { status: r.status };
+const resolutionView = (r: EvaluatedScheduleVerdict): ResolutionView => {
+  switch (r.status) {
+    case "template":
+      return { status: r.status, sourceMap: r.sourceMap };
+    case "events-only":
+      return { status: r.status, reason: r.reason };
+    case "unresolved":
+    case "impossible":
+      return { status: r.status };
+  }
+};
 
 const interchangeView = (i: InterchangeVerdict): InterchangeView => {
   switch (i.status) {
@@ -68,6 +83,7 @@ const interchangeView = (i: InterchangeVerdict): InterchangeView => {
     case "unrepresentable":
       return { status: i.status, reason: reasonToString(i.reason) };
     case "template":
+      return { status: i.status, sourceMap: i.sourceMap };
     case "impossible":
       return { status: i.status };
   }
