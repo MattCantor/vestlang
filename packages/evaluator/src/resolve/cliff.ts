@@ -18,6 +18,7 @@ import type {
   EvaluationContext,
   ImpossibleBlocker,
   OCTDate,
+  VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
 import type {
@@ -30,6 +31,7 @@ import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
+import type { PickReturn } from "../evaluate/utils.js";
 import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
 
 const MS_PER_DAY = 86_400_000;
@@ -52,6 +54,34 @@ export type LoweredCliff =
   // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
   // are already ImpossibleBlocker[], so no cast is needed when it's produced.
   | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
+
+// The verdict a BEFORE/AFTER gate forces on a cliff, read off the cliff
+// expression's resolution: a violated gate kills it (IMPOSSIBLE), a still-pending
+// gate holds it (UNRESOLVED), a satisfied gate clears (undefined) and the caller
+// proceeds with its own lowering. Both cliff lowering paths route their gate
+// through here so the violated/pending/satisfied split can't drift between them —
+// that drift was #113/#116. The caller supplies `dated` (is the grid placeable
+// yet?) and an optional blocker filter (the deferred path drops the vestingStart
+// placeholder, which it reports on the start, not the cliff).
+const gateVerdict = (
+  res: PickReturn<VestingNode>,
+  dated: boolean,
+  filter: (b: Blocker[]) => Blocker[] = (b) => b,
+):
+  | Extract<LoweredCliff, { state: "IMPOSSIBLE" | "UNRESOLVED" }>
+  | undefined => {
+  if (res.type === "IMPOSSIBLE")
+    return { state: "IMPOSSIBLE", blockers: res.blockers };
+  const pending =
+    res.type === "UNRESOLVED"
+      ? res.blockers
+      : res.meta.type === "UNRESOLVED"
+        ? res.meta.blockers
+        : undefined;
+  return pending === undefined
+    ? undefined // gate satisfied — caller proceeds
+    : { state: "UNRESOLVED", blockers: filter(pending), dated };
+};
 
 const dayCount = (from: OCTDate, to: OCTDate): number =>
   Math.round((toDate(to).getTime() - toDate(from).getTime()) / MS_PER_DAY);
@@ -125,18 +155,16 @@ export const lowerCliff = (
   // gate on an event cliff was silently dropped — #113.)
   const evId = eventCliffId(cliffExpr);
   if (evId) {
+    // The gate decides whether the event cliff stands. A violated gate kills it; a
+    // still-pending gate keeps it unresolved (but `dated` — the grid is placeable
+    // from the resolved start); a satisfied gate clears and falls through to the
+    // bare event cliff below. Carrying the gate here is what stops it being dropped
+    // (#113).
     const gated =
       cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
     if (gated) {
-      // The gate decides whether the event cliff stands. A violated gate kills
-      // it; a still-pending gate keeps it unresolved (but `dated` — the grid is
-      // placeable from the resolved start). A satisfied gate falls through to the
-      // bare event cliff below. Carrying the gate here is what stops it being
-      // dropped (#113). The PICKED (satisfied) case falls through.
-      if (res.type === "IMPOSSIBLE")
-        return { state: "IMPOSSIBLE", blockers: res.blockers };
-      if (res.type === "UNRESOLVED")
-        return { state: "UNRESOLVED", blockers: res.blockers, dated: true };
+      const gate = gateVerdict(res, true);
+      if (gate) return gate;
     }
     return { state: "EVENT", eventId: evId };
   }
@@ -282,18 +310,17 @@ export const lowerDeferredCliff = (
   const gated = cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
   if (!gated) return { state: "UNRESOLVED", blockers: [], dated: false };
 
+  // Resolve the gate with no vesting-start overlay (the subject stays pending) and
+  // report its verdict, dropping the vestingStart placeholder — that pending-ness
+  // is the start's, reported on the start, not doubled onto the cliff. A satisfied
+  // gate doesn't rescue this cliff: with no start anchor it still can't be placed,
+  // so it stays unresolved until the firing date arrives.
   const res = evaluateVestingNodeExpr(cliffExpr, ctx);
-  if (res.type === "IMPOSSIBLE")
-    return { state: "IMPOSSIBLE", blockers: res.blockers };
-  const raw: Blocker[] =
-    res.type === "UNRESOLVED"
-      ? res.blockers
-      : res.meta.type === "UNRESOLVED"
-        ? res.meta.blockers
-        : [];
-  const blockers = raw.filter(
-    (b) =>
-      b.type !== "EVENT_NOT_YET_OCCURRED" || b.event !== VESTING_START_LABEL,
+  const gate = gateVerdict(res, false, (bs) =>
+    bs.filter(
+      (b) =>
+        b.type !== "EVENT_NOT_YET_OCCURRED" || b.event !== VESTING_START_LABEL,
+    ),
   );
-  return { state: "UNRESOLVED", blockers, dated: false };
+  return gate ?? { state: "UNRESOLVED", blockers: [], dated: false };
 };
