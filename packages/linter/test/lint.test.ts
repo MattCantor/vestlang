@@ -120,15 +120,16 @@ describe("@vestlang/linter", () => {
       expect(flagged[0].severity).toBe("warning");
     });
 
-    it("errors on a lone explicit portion that over-allocates (3/2)", () => {
-      const diagnostics = diagnosticsOf(`
-        3/2 VEST OVER 12 months EVERY 1 month
-      `);
-      const flagged = diagnostics.filter(
-        (d) => d.ruleId === "portion-allocation",
-      );
-      expect(flagged).toHaveLength(1);
-      expect(flagged[0].severity).toBe("error");
+    // A single portion above 100% never reaches the linter — the parser rejects
+    // it, the same way it rejects a 1.5 decimal. Over-allocation that the rule
+    // still owns is the *sum* case (see the 5/4 test above), where each portion
+    // is in range but they add up past the whole.
+    it("rejects a lone explicit portion over 100% (3/2) at parse time", () => {
+      expect(() =>
+        diagnosticsOf(`
+          3/2 VEST OVER 12 months EVERY 1 month
+        `),
+      ).toThrowError(/between 0 and 1 inclusive/);
     });
 
     it("leaves a lone quantity statement alone (no grant total to sum)", () => {

@@ -2734,6 +2734,11 @@ function peg$parse(input, options) {
     if (d === 0) error("Denominator cannot be 0")
     // keep denominator positive, move sign to numerator if ever needed
     if (d < 0) { n = -n; d = -d; }
+    // Same [0,1] bound the decimal portion enforces — a fraction over 1 (or below 0)
+    // is just as much an out-of-range portion as 1.5 is.
+    if (n < 0 || n > d) {
+      error("Fraction portion must be between 0 and 1 inclusive");
+    }
     const g = gcd(Math.abs(n), d);
     return { type: "PORTION", numerator: n / g, denominator: d / g };
   }
