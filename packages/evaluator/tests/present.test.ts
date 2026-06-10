@@ -16,6 +16,7 @@ import type {
   Program,
   Status,
   VestingNode,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { presentSchedule } from "../src/present";
@@ -162,7 +163,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
   });
   const stmt = (
     amount: Amount,
-    start: VestingNode,
+    start: VestingNodeExpr<"GRANT_DATE">,
     periodicity: VestingPeriod,
   ) => ({
     type: "STATEMENT" as const,
@@ -204,7 +205,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
   });
 
   it("[resolving, void] → storable as a template, yet resolves to unresolved", () => {
-    const voidStart: VestingNode = {
+    const voidStart: VestingNode<"GRANT_DATE"> = {
       type: "NODE",
       base: makeVestingBaseEvent("a"),
       offsets: [],

@@ -40,6 +40,7 @@ export {
   VestingBaseGrantDate,
   VestingBaseVestingStart,
   VestingBaseSystem,
+  SystemAnchorTag,
   VestingBaseEvent,
   VestingNode,
   ConstrainedVestingNode,

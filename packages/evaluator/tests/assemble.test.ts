@@ -13,6 +13,7 @@ import type {
   Schedule,
   Statement,
   VestingNode,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { evaluateStatement, evaluateProgram } from "../src/evaluate/index";
@@ -53,7 +54,7 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const stmt = (
   amount: Amount,
-  start: VestingNode,
+  start: VestingNodeExpr<"GRANT_DATE">,
   periodicity: VestingPeriod,
 ) => ({
   type: "STATEMENT" as const,
@@ -431,7 +432,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
   const gatedCtx = ctxInput({ asOf: "2026-06-01" });
 
   // `FROM EVENT a BEFORE DATE 2030-01-01` — event in the base, date in the gate.
-  const eventBeforeDate: VestingNode = {
+  const eventBeforeDate: VestingNode<"GRANT_DATE"> = {
     type: "NODE",
     base: makeVestingBaseEvent("a"),
     offsets: [],
@@ -447,7 +448,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
 
   // `FROM DATE 2030-01-01 BEFORE EVENT e` — the mirror: date in the base, event
   // in the gate. Logically equivalent ordering; must lower the same way.
-  const dateBeforeEvent: VestingNode = {
+  const dateBeforeEvent: VestingNode<"GRANT_DATE"> = {
     type: "NODE",
     base: makeVestingBaseDate("2030-01-01"),
     offsets: [],
@@ -560,7 +561,7 @@ describe("assemble — future-dated pure-date schedules resolve", () => {
 describe("assemble — impossible status", () => {
   // `EVENT a BEFORE DATE 2025-01-01` with a firing after the deadline: no witness
   // assignment can ever satisfy it → the whole (single-statement) grant is void.
-  const voidStart: VestingNode = {
+  const voidStart: VestingNode<"GRANT_DATE"> = {
     type: "NODE",
     base: makeVestingBaseEvent("a"),
     offsets: [],

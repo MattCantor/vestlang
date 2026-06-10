@@ -18,13 +18,17 @@ import {
   makeSingletonNode,
   makeVestingBaseDate,
   makeVestingBaseEvent,
+  makeVestingBaseGrantDate,
   makeDuration,
   makeVestingBaseVestingStart,
 } from "./helpers";
 
 // `EVENT <event> BEFORE DATE <deadline>` — void once the event fires after the
 // deadline (no witness assignment can satisfy it).
-const eventBeforeDate = (event: string, deadline: OCTDate): VestingNode => ({
+const eventBeforeDate = (
+  event: string,
+  deadline: OCTDate,
+): VestingNode<"GRANT_DATE"> => ({
   type: "NODE",
   base: makeVestingBaseEvent(event),
   offsets: [],
@@ -40,7 +44,10 @@ const eventBeforeDate = (event: string, deadline: OCTDate): VestingNode => ({
 
 // `DATE x AFTER DATE y` with x earlier than y — statically void: both dates are
 // fixed, so no witness assignment can ever satisfy it.
-const dateAfterDate = (date: OCTDate, after: OCTDate): VestingNode => ({
+const dateAfterDate = (
+  date: OCTDate,
+  after: OCTDate,
+): VestingNode<"GRANT_DATE"> => ({
   type: "NODE",
   base: makeVestingBaseDate(date),
   offsets: [],
@@ -66,7 +73,10 @@ const fourYearsAnnual: VestingPeriod = {
   occurrences: 4,
 };
 
-const laterOfEvents = (a: string, b: string): VestingNodeExpr => ({
+const laterOfEvents = (
+  a: string,
+  b: string,
+): VestingNodeExpr<"VESTING_START"> => ({
   type: "NODE_LATER_OF",
   items: [
     makeSingletonNode(makeVestingBaseEvent(a)),
@@ -99,7 +109,7 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const stmt = (
   amount: Amount,
-  start: VestingNode,
+  start: VestingNodeExpr<"GRANT_DATE">,
   periodicity: VestingPeriod,
 ) => ({
   type: "STATEMENT" as const,
@@ -204,7 +214,7 @@ describe("resolveToCore — atomic unfired EVENT → template", () => {
 
 describe("resolveToCore — unresolved (can't materialize yet)", () => {
   it("unresolved cliff (LATER_OF over unfired events) → unresolved with blockers", () => {
-    const cliff: VestingNodeExpr = {
+    const cliff: VestingNodeExpr<"VESTING_START"> = {
       type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseEvent("a")),
@@ -252,7 +262,7 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     // Arm 1 (Jan 1 AFTER Jun 1) is statically dead; arm 2 resolves to Mar 1.
     // LATER_OF is universal, so the dead arm sinks the whole start — it must not
     // masquerade as pending on a witness that will never arrive. (#60)
-    const start: VestingNodeExpr = {
+    const start: VestingNodeExpr<"GRANT_DATE"> = {
       type: "NODE_LATER_OF",
       items: [
         dateAfterDate("2025-01-01", "2025-06-01"),
@@ -276,7 +286,9 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
 
   it("merely-pending statement (unfired event) stays unresolved, not impossible", () => {
     // ipo unfired + an event cliff keeps it in the unresolved arm (satisfiable).
-    const cliff: VestingNodeExpr = makeSingletonNode(makeVestingBaseEvent("c"));
+    const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
+      makeVestingBaseEvent("c"),
+    );
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         ...twoYearsAnnual,
@@ -484,10 +496,10 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
   });
 
   it("unfired LATER_OF(+12mo, EVENT ipo) start carries the cliff as a pending template", () => {
-    const start: VestingNodeExpr = {
+    const start: VestingNodeExpr<"GRANT_DATE"> = {
       type: "NODE_LATER_OF",
       items: [
-        makeSingletonNode(makeVestingBaseVestingStart(), [
+        makeSingletonNode(makeVestingBaseGrantDate(), [
           makeDuration(12, "MONTHS", "PLUS"),
         ]),
         makeSingletonNode(makeVestingBaseEvent("ipo")),

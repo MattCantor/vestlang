@@ -10,13 +10,10 @@ import {
   Schedule,
   ScheduleExpr,
   Statement,
+  SystemAnchorTag,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-
-// Which system anchor a bare duration / default start normalizes onto. These are
-// the base tags directly, so minting a base is just `{ type: anchor }`.
-type SystemAnchorTag = "GRANT_DATE" | "VESTING_START";
 
 /* ------------------------
  * Orchestration
@@ -128,14 +125,16 @@ function normalizeNode(
         offsets: [c],
       };
     case "NODE_LATER_OF":
-    case "NODE_EARLIER_OF":
-      return NormalizeAndSort(
-        c,
+    case "NODE_EARLIER_OF": {
+      // Each arm normalizes under the same anchor as the selector. The wrappers
+      // return slot-narrowed exprs; widen back to VestingNodeExpr here so the two
+      // branches share one return type (NormalizeAndSort infers a single arm type).
+      const normalizeArm = (x: VestingNodeExpr): VestingNodeExpr =>
         anchor === "GRANT_DATE"
-          ? (x) => normalizeVestingStart(x, report)
-          : (x) => normalizeCliff(x, report),
-        report,
-      );
+          ? normalizeVestingStart(x, report)
+          : normalizeCliff(x, report);
+      return NormalizeAndSort(c, normalizeArm, report);
+    }
     case "NODE":
       return normalizeVestingNodeExpr(c, report);
     default:
@@ -145,18 +144,35 @@ function normalizeNode(
   }
 }
 
+// The two slot wrappers are the one place where the positional invariant crosses
+// from a runtime guarantee into the type. The parser (70-schedule.peggy) already
+// rejects the forbidden anchor — VESTING_START in a FROM, GRANT_DATE in a CLIFF —
+// at any selector depth (#110), and normalizeNode mints the correct system anchor
+// for bare durations while preserving the parsed base otherwise. So the result
+// carries only DATE / EVENT / the slot's own anchor; the cast asserts what the
+// types can't derive from the runtime guard. This is the single checked point per
+// slot — everything downstream is structurally unable to re-introduce the mistake.
+
 function normalizeVestingStart(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
-): VestingNodeExpr {
-  return normalizeNode(c, "GRANT_DATE", report);
+): VestingNodeExpr<"GRANT_DATE"> {
+  return normalizeNode(
+    c,
+    "GRANT_DATE",
+    report,
+  ) as VestingNodeExpr<"GRANT_DATE">;
 }
 
 function normalizeCliff(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
-): VestingNodeExpr {
-  return normalizeNode(c, "VESTING_START", report);
+): VestingNodeExpr<"VESTING_START"> {
+  return normalizeNode(
+    c,
+    "VESTING_START",
+    report,
+  ) as VestingNodeExpr<"VESTING_START">;
 }
 
 /**

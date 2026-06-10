@@ -11,6 +11,7 @@ import type {
   Program,
   Statement,
   VestingNode,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { evaluateStatement, evaluateProgram } from "../src/evaluate/index";
@@ -42,7 +43,7 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const stmt = (
   amount: Amount,
-  start: VestingNode,
+  start: VestingNodeExpr<"GRANT_DATE">,
   periodicity: VestingPeriod,
 ): Statement => ({
   type: "STATEMENT",
@@ -201,7 +202,7 @@ describe("interchange — allocation is its own axis", () => {
   it("an over-allocating, impossible program still reports over-allocation", () => {
     // `FROM EVENT a BEFORE 2025-01-01` with `a` firing after the deadline can never
     // be satisfied — and two full-grant portions of it sum to 200%.
-    const voidStart: VestingNode = {
+    const voidStart: VestingNode<"GRANT_DATE"> = {
       type: "NODE",
       base: makeVestingBaseEvent("a"),
       offsets: [],

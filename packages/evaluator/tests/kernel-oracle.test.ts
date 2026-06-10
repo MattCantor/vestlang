@@ -6,7 +6,6 @@ import type {
   OCTDate,
   Program,
   ResolvedInstallment,
-  VestingNode,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
@@ -38,7 +37,7 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const stmt = (
   amount: Amount,
-  start: VestingNode,
+  start: VestingNodeExpr<"GRANT_DATE">,
   periodicity: VestingPeriod,
 ) => ({
   type: "STATEMENT" as const,
@@ -65,19 +64,19 @@ const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
   i.meta.state === "RESOLVED";
 
 // A one-year cliff written as a duration off the vesting start.
-const oneYearCliff: VestingNodeExpr = makeSingletonNode(
+const oneYearCliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
   makeVestingBaseVestingStart(),
   [makeDuration(12, "MONTHS", "PLUS")],
 );
 
 // A two-month cliff, likewise relative to the vesting start.
-const twoMonthCliff: VestingNodeExpr = makeSingletonNode(
+const twoMonthCliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
   makeVestingBaseVestingStart(),
   [makeDuration(2, "MONTHS", "PLUS")],
 );
 
 // A cliff waiting on the later of two events, neither of which has fired.
-const laterOfUnfired: VestingNodeExpr = {
+const laterOfUnfired: VestingNodeExpr<"VESTING_START"> = {
   type: "NODE_LATER_OF",
   items: [
     makeSingletonNode(makeVestingBaseEvent("a")),
@@ -193,7 +192,7 @@ describe("kernel oracle — a cliff gated on an event that fires", () => {
   // The cliff here isn't a date offset — it's an event ("ipo"). The grant vests
   // monthly over four years, but nothing is released until the IPO happens, at
   // which point everything up to that date lumps together.
-  const eventCliff: VestingNodeExpr = makeSingletonNode(
+  const eventCliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
     makeVestingBaseEvent("ipo"),
   );
   const program: Program = [
@@ -226,7 +225,7 @@ describe("kernel oracle — an off-grid event cliff derives its own percentage",
   // When an event cliff fires between two monthly grid points, the share that
   // lumps is whatever fraction of the grid sits at or before that date — here the
   // evaluator works out the percentage itself rather than being told one.
-  const eventCliff: VestingNodeExpr = makeSingletonNode(
+  const eventCliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
     makeVestingBaseEvent("ipo"),
   );
   const program: Program = [

@@ -46,7 +46,10 @@ const portion = (numerator: number, denominator: number): Amount => ({
 
 const monthly: VestingPeriod = { type: "MONTHS", length: 1, occurrences: 48 };
 
-const stmt = (amount: Amount, start: VestingNode): Statement => ({
+const stmt = (
+  amount: Amount,
+  start: VestingNodeExpr<"GRANT_DATE">,
+): Statement => ({
   type: "STATEMENT",
   amount,
   expr: makeSingletonSchedule(start, monthly),
@@ -56,7 +59,10 @@ const stmt = (amount: Amount, start: VestingNode): Statement => ({
 // understanding that the date lands before the event. While the event is unfired
 // the test can't be settled, so the start stays pending and leans on the event
 // not having occurred by that date.
-const dateBeforeEvent = (date: OCTDate, event: string): VestingNode => ({
+const dateBeforeEvent = (
+  date: OCTDate,
+  event: string,
+): VestingNode<"GRANT_DATE"> => ({
   type: "NODE",
   base: makeVestingBaseDate(date),
   offsets: [],
@@ -120,7 +126,7 @@ describe("absenceAssumptions", () => {
     // LATER OF ( DATE 2027-01-01, EVENT ipo ): the date has settled but ipo could
     // still land later and become the answer, so the result holds at 2027-01-01
     // only as long as ipo stays absent through that date.
-    const laterOf: VestingNodeExpr = {
+    const laterOf: VestingNodeExpr<"GRANT_DATE"> = {
       type: "NODE_LATER_OF",
       items: [
         makeSingletonNode(makeVestingBaseDate("2027-01-01")),
