@@ -91,3 +91,65 @@ describe("System event protections (reachable guards)", () => {
     expect(cliff.base).toEqual({ type: "VESTING_START" });
   });
 });
+
+// The FROM/CLIFF guards must reach inside selector arms, not just the top-level
+// node: a bare `CLIFF grantDate` is rejected, so `CLIFF EARLIER OF(grantDate, …)`
+// must be too — otherwise the forbidden anchor rides through an arm and resolves
+// to a silent no-op cliff.
+describe("System event protections (smuggled through selectors)", () => {
+  it("errors on vestingStart inside an EARLIER OF in FROM", () => {
+    expect(() =>
+      parse(
+        `VEST FROM EARLIER OF(vestingStart, EVENT ipo) OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/vestingStart is a reserved system event/);
+  });
+
+  it("errors on grantDate inside an EARLIER OF in CLIFF", () => {
+    expect(() =>
+      parse(
+        `VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF(grantDate, EVENT ipo)`,
+      ),
+    ).toThrowError(/grantDate is a reserved system event/);
+  });
+
+  it("errors on grantDate inside a LATER OF in CLIFF (other selector tag)", () => {
+    expect(() =>
+      parse(
+        `VEST OVER 48 months EVERY 1 month CLIFF LATER OF(EVENT ipo, grantDate)`,
+      ),
+    ).toThrowError(/grantDate is a reserved system event/);
+  });
+
+  it("errors on a forbidden anchor nested two selectors deep in FROM", () => {
+    expect(() =>
+      parse(
+        `VEST FROM EARLIER OF(EVENT ipo, LATER OF(vestingStart, EVENT acq))` +
+          ` OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/vestingStart is a reserved system event/);
+  });
+
+  it("errors on a smuggled grantDate in a THEN-segment cliff (shared Cliff rule)", () => {
+    expect(() =>
+      parse(
+        `VEST OVER 12 months EVERY 1 month` +
+          ` THEN VEST OVER 36 months EVERY 1 month CLIFF EARLIER OF(grantDate, EVENT ipo)`,
+      ),
+    ).toThrowError(/grantDate is a reserved system event/);
+  });
+
+  it("allows a selector of genuine events in CLIFF (no false positive)", () => {
+    const stmt = first(
+      `VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF(EVENT ipo, EVENT acq)`,
+    );
+    expect(stmt.expr.periodicity.cliff.type).toBe("NODE_EARLIER_OF");
+  });
+
+  it("allows a selector of genuine events in FROM (no false positive)", () => {
+    const stmt = first(
+      `VEST FROM EARLIER OF(EVENT a, EVENT b) OVER 12 months EVERY 1 month`,
+    );
+    expect(stmt.expr.vesting_start.type).toBe("NODE_EARLIER_OF");
+  });
+});
