@@ -70,6 +70,22 @@ describe("addPeriod — year range", () => {
       ),
     ).toThrow(/range/);
   });
+
+  // A day/week count big enough to overflow Date's internal range used to slip
+  // past the year guard and surface as "0NaN-NaN-NaN". The days and weeks paths
+  // must reject just as cleanly as years does.
+  it("throws cleanly on a day count that overflows, not a NaN date", () => {
+    const rule = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const;
+    expect(() => addPeriod("2025-01-01", 300_000_000, "days", rule)).toThrow(
+      /range/,
+    );
+    expect(() =>
+      addPeriod("2025-01-01", Number.MAX_SAFE_INTEGER, "days", rule),
+    ).toThrow(/range/);
+    expect(() => addPeriod("2025-01-01", 50_000_000, "weeks", rule)).toThrow(
+      /range/,
+    );
+  });
 });
 
 describe("dateDiff", () => {
@@ -142,6 +158,16 @@ describe("resolveOffset", () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/parse/i);
+  });
+
+  // A day offset large enough to overflow used to leak an internal runtime
+  // validation message (the overflowed date got fed to the runtime constructor).
+  // With the range guard running before formatting, it surfaces as the same
+  // clean out-of-range error the date arithmetic raises everywhere else.
+  it("raises a clean range error on an overflowing day offset", () => {
+    expect(() =>
+      resolveOffset({ expr: "+ 100000000 days", grant_date: "2025-01-01" }),
+    ).toThrow(/range/);
   });
 });
 
