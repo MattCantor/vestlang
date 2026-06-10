@@ -139,3 +139,14 @@ export function some(node: AstNode, pred: (n: AstNode) => boolean): boolean {
 export function referencesEvent(node: AstNode): boolean {
   return some(node, (n) => n.type === "EVENT");
 }
+
+// The named-event id when `expr` is a bare event-anchored node (`FROM EVENT x`,
+// `CLIFF EVENT x`), else undefined. A leaf-only read of the node's own base — it
+// does not descend, so a combinator or a gate reference doesn't count. Typed at
+// the widest anchor: DATE/EVENT bases are anchor-agnostic, so a node from any slot
+// (a GRANT_DATE start, a VESTING_START cliff) is accepted.
+export function eventBaseId(expr: VestingNodeExpr): string | undefined {
+  return expr.type === "NODE" && expr.base.type === "EVENT"
+    ? expr.base.value
+    : undefined;
+}

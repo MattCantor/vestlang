@@ -32,7 +32,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
-import { referencesEvent } from "@vestlang/walk";
+import { eventBaseId, referencesEvent } from "@vestlang/walk";
 import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -69,10 +69,10 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
  *  needed. */
 const startBase = (
   vs: VestingNodeExpr<"GRANT_DATE">,
-): { base: "DATE" | "EVENT"; eventId?: string } =>
-  vs.type === "NODE" && vs.base.type === "EVENT"
-    ? { base: "EVENT", eventId: vs.base.value }
-    : { base: "DATE" };
+): { base: "DATE" | "EVENT"; eventId?: string } => {
+  const eventId = eventBaseId(vs);
+  return eventId !== undefined ? { base: "EVENT", eventId } : { base: "DATE" };
+};
 
 /** A start expression that selects an anchor (EARLIER OF / LATER OF), not a leaf. */
 const isCombinator = (e: VestingNodeExpr): boolean =>

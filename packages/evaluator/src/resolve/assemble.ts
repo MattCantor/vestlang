@@ -22,7 +22,7 @@ import type {
 import { compileToInstallments, gt } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { foldBlocker } from "../evaluate/blockerTree.js";
-import { VESTING_START_LABEL } from "../evaluate/vestingNode/vestingBase.js";
+import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
 import type { ResolveResult } from "./types.js";
 
 /** Turn a structured "couldn't be one template" reason into a sentence for display.
@@ -66,7 +66,7 @@ const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
       if (
         node.type === "EVENT_NOT_YET_OCCURRED" &&
         node.through !== undefined &&
-        node.event !== VESTING_START_LABEL
+        !isVestingStartPlaceholder(node)
       ) {
         const prior = latest.get(node.event);
         if (prior === undefined || gt(node.through, prior))

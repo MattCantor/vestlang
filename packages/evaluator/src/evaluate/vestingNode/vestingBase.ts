@@ -1,4 +1,5 @@
 import type {
+  Blocker,
   EvaluationContext,
   OCTDate,
   Offsets,
@@ -10,10 +11,17 @@ import { assertNever } from "@vestlang/utils";
 import { addDays, addMonthsRule } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
-// now a type tag, not a string; this is purely the word a diagnostic prints. It's
-// exported so the absence-assumption collector can recognize and skip it — the
-// vesting start is a system placeholder, not an event anyone witnesses.
-export const VESTING_START_LABEL = "vestingStart";
+// a type tag, not a string; this is purely the word a diagnostic prints. Module-
+// local: callers recognize the placeholder through `isVestingStartPlaceholder`
+// below, not by comparing this string themselves.
+const VESTING_START_LABEL = "vestingStart";
+
+// The pending-vesting-start blocker this module mints (above) is a system
+// placeholder, not a real awaited event: it reads on the start, never on a cliff,
+// and it's not a disclosable absence assumption. Recognizing it lives here, next
+// to where it's constructed, so the two stay in step.
+export const isVestingStartPlaceholder = (b: Blocker): boolean =>
+  b.type === "EVENT_NOT_YET_OCCURRED" && b.event === VESTING_START_LABEL;
 
 export function evaluateVestingBase(
   node: VestingNode,
