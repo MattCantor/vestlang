@@ -19,6 +19,9 @@ import {
   makeSingletonNode,
   makeVestingBaseDate,
   makeVestingBaseEvent,
+  makeVestingBaseGrantDate,
+  makeGatedNode,
+  makeDuration,
 } from "./helpers";
 
 const ctxInput = (
@@ -125,6 +128,39 @@ describe("interchange — where the two verdicts diverge", () => {
     );
 
     expect(out.resolution.status).toBe("events-only");
+    expect(out.interchange.status).toBe("unrepresentable");
+  });
+
+  // A gated event cliff (#113): the gate is enforced, and the two verdicts split
+  // on it the way they should. Closed-world, the firing violates the gate so the
+  // cliff can never validly land (impossible); firing-blind, the gate is merely
+  // pending, so the cliff just can't be placed yet (unrepresentable, not a
+  // contradiction).
+  it("a gated event cliff is impossible to resolve when the firing violates the gate, unrepresentable to store", () => {
+    // CLIFF EVENT acquisition AFTER grantDate + 1 year, acquisition firing before
+    // grantDate + 1 year → the cliff gate is violated.
+    const gatedCliff = makeGatedNode(
+      makeVestingBaseEvent("acquisition"),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(12, "MONTHS", "PLUS"),
+      ]),
+    );
+    const out = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff: gatedCliff,
+        },
+      ),
+      ctxInput({ events: { acquisition: "2025-06-01" } }),
+    );
+
+    expect(out.resolution.status).toBe("impossible");
     expect(out.interchange.status).toBe("unrepresentable");
   });
 

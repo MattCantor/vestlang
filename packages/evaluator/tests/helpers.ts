@@ -118,6 +118,25 @@ export const makeConstrainedNodeWithAtomCondition = (
   };
 };
 
+// A node on any base carrying a single BEFORE/AFTER gate. Unlike
+// makeConstrainedNodeWithAtomCondition (which hardcodes a DATE subject), this
+// takes the subject base and the constraint's reference node directly — needed
+// for an event-anchored cliff gated against, say, grantDate + 12 months.
+export const makeGatedNode = (
+  base: VestingBase,
+  constraintTag: ConstraintTag,
+  constraintBase: VestingNode,
+  strict: boolean = false,
+  offsets: Offsets = [],
+): VestingNode & { condition: AtomCondition } => ({
+  type: "NODE",
+  base,
+  offsets,
+  condition: makeAtomCondition(
+    makeConstraint(constraintTag, constraintBase, strict),
+  ),
+});
+
 export const makeResolvedNode = (date: OCTDate): ResolvedNode => ({
   type: "RESOLVED",
   date,
