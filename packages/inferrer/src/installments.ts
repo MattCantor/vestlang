@@ -24,7 +24,7 @@ export function resolvedInstallmentMap(
   const { installments } = evaluateStatement(stmt, ctx).resolution;
   const map = new Map<OCTDate, number>();
   for (const inst of installments) {
-    if (inst.meta.state !== "RESOLVED" || inst.date === undefined) return null;
+    if (inst.state !== "RESOLVED") return null;
     map.set(inst.date, (map.get(inst.date) ?? 0) + inst.amount);
   }
   return map;

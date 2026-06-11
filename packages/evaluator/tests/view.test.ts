@@ -52,7 +52,7 @@ const stub = (fields: {
   }) as unknown as EvaluatedSchedule;
 
 const dated: Installment[] = [
-  { amount: 100, date: "2025-02-01", meta: { state: "RESOLVED" } },
+  { state: "RESOLVED", amount: 100, date: "2025-02-01" },
 ];
 const eventBlocker: Blocker[] = [
   { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },

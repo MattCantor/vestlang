@@ -63,13 +63,13 @@ const base = "VEST FROM EVENT X ";
 const expectedFalse = (result: Installment[]) => {
   expect(result.length).toBe(1);
   expect(result[0].amount).toBe(100);
-  expect(result[0].meta.state).toBe("IMPOSSIBLE");
+  expect(result[0].state).toBe("IMPOSSIBLE");
 };
 
 const expectedTrue = (result: Installment[]) => {
   expect(result.length).toBe(1);
   expect(result[0].amount).toBe(100);
-  expect(result[0].meta.state).toBe("RESOLVED");
+  expect(result[0].state).toBe("RESOLVED");
 };
 
 /* ------------------------

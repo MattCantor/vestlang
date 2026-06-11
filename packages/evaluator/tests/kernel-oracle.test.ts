@@ -60,8 +60,8 @@ const ctxInput = (
 };
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
-const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
-  i.meta.state === "RESOLVED";
+const isResolved = (i: { state: string }): i is ResolvedInstallment =>
+  i.state === "RESOLVED";
 
 // A one-year cliff written as a duration off the vesting start.
 const oneYearCliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
@@ -121,6 +121,7 @@ describe("kernel oracle — the two engines agree on a shared schedule", () => {
     expect(asEvents.kind).toBe("events");
     if (asEvents.kind !== "events") return;
     const fromEvents = asEvents.installments
+      .filter(isResolved)
       .filter((i) => i.date !== siblingDate)
       .map((i) => ({ date: i.date, amount: i.amount }));
 
@@ -139,9 +140,9 @@ describe("kernel oracle — the two engines agree on a shared schedule", () => {
 
     const asEvents = resolveToCore([cliffed, sibling], ctxInput());
     if (asEvents.kind !== "events") throw new Error("expected events");
-    const eventsLump = asEvents.installments.find(
-      (i) => i.date === "2026-01-01",
-    );
+    const eventsLump = asEvents.installments
+      .filter(isResolved)
+      .find((i) => i.date === "2026-01-01");
     expect(eventsLump?.amount).toBe(12000);
   });
 });
@@ -175,7 +176,9 @@ describe("kernel oracle — cliffs over the events path land on real month-ends"
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
     expect(
-      result.installments.map((i) => ({ date: i.date, amount: i.amount })),
+      result.installments
+        .filter(isResolved)
+        .map((i) => ({ date: i.date, amount: i.amount })),
     ).toEqual([
       { date: "2024-03-31", amount: 20000 },
       { date: "2024-04-30", amount: 10000 },
@@ -326,9 +329,8 @@ describe("kernel oracle — a schedule blocked by its cliff still lays out its g
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     const dates = result.installments.map((i) =>
-      i.meta.state === "UNRESOLVED" &&
-      i.meta.symbolicDate.type === "UNRESOLVED_CLIFF"
-        ? i.meta.symbolicDate.date
+      i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
+        ? i.symbolicDate.date
         : undefined,
     );
     expect(dates).toEqual([
@@ -368,7 +370,7 @@ describe("kernel oracle — resolved tranches surface alongside a blocked siblin
       { date: "2026-01-01", amount: 25000 },
       { date: "2027-01-01", amount: 25000 },
     ]);
-    expect(result.installments.some((i) => i.meta.state === "UNRESOLVED")).toBe(
+    expect(result.installments.some((i) => i.state === "UNRESOLVED")).toBe(
       true,
     );
   });

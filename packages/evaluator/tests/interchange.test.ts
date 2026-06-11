@@ -84,7 +84,9 @@ describe("interchange — the storable verdict ignores how a start is spelled (#
     // Same dated stream once the event lands on the date — the thing #75 says the
     // verdict must not disagree about.
     const dates = (r: typeof fromDate) =>
-      r.resolution.installments.map((i) => i.date);
+      r.resolution.installments.flatMap((i) =>
+        i.state === "RESOLVED" ? [i.date] : [],
+      );
     expect(dates(fromEvent)).toEqual(dates(fromDate));
   });
 });
@@ -414,7 +416,7 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
     expect(out.resolution.installments).toHaveLength(1);
-    expect(out.resolution.installments[0].meta.state).toBe("UNRESOLVED");
+    expect(out.resolution.installments[0].state).toBe("UNRESOLVED");
   });
 
   // A gated event cliff behind a pending start: the gate's verdict is the sharper

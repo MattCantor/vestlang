@@ -61,7 +61,7 @@ function footprint(
   for (const c of components) {
     const res = evaluateStatement(buildStatement(c, policy), ctx);
     for (const inst of res.resolution.installments) {
-      if (inst.meta.state === "RESOLVED" && inst.date) {
+      if (inst.state === "RESOLVED") {
         out.set(inst.date, (out.get(inst.date) ?? 0) + inst.amount);
       }
     }

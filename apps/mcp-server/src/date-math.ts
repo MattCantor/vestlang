@@ -125,12 +125,12 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
   ).resolution;
   const first = installments[0] ?? null;
 
-  if (first?.meta.state === "RESOLVED" && first.date) {
+  if (first?.state === "RESOLVED") {
     return { ok: true, date: first.date };
   }
 
   const unresolvedReason =
-    first?.meta.unresolved ?? blockerSummary(blockers) ?? "missing anchor";
+    first?.unresolved ?? blockerSummary(blockers) ?? "missing anchor";
   return {
     ok: false,
     error: `Expression is unresolved: ${unresolvedReason}`,

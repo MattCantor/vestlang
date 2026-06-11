@@ -70,16 +70,14 @@ const underAllocated: Finding[] = [
 ];
 
 const dated: Installment[] = [
-  { amount: 100, date: "2025-02-01", meta: { state: "RESOLVED" } },
+  { state: "RESOLVED", amount: 100, date: "2025-02-01" },
 ];
 const symbolic: Installment[] = [
   {
+    state: "UNRESOLVED",
     amount: 100,
-    meta: {
-      state: "UNRESOLVED",
-      symbolicDate: { type: "UNRESOLVED_VESTING_START" },
-      unresolved: "ipo",
-    },
+    symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+    unresolved: "ipo",
   },
 ];
 const eventBlocker: Blocker[] = [

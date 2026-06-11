@@ -2,7 +2,11 @@
 // when it finishes. The field names are snake_case because this is response
 // vocabulary (what a consumer prints/serializes), not the engine's vocabulary.
 
-import type { Installment, OCTDate } from "@vestlang/types";
+import type {
+  Installment,
+  OCTDate,
+  ResolvedInstallment,
+} from "@vestlang/types";
 import type { VestedResult } from "@vestlang/evaluator";
 
 export interface Summary {
@@ -31,10 +35,10 @@ export function computeSummary(
       ? 0
       : Math.round((total_vested / grantQuantity) * 10000) / 10000;
 
-  const resolvedUnvested = result.unvested.filter(
-    (i): i is Installment & { date: OCTDate } =>
-      i.meta.state === "RESOLVED" && typeof i.date === "string",
-  );
+  const isResolved = (i: Installment): i is ResolvedInstallment =>
+    i.state === "RESOLVED";
+
+  const resolvedUnvested = result.unvested.filter(isResolved);
 
   // Arrays are already date-ordered by the evaluator, but sort defensively.
   const byDate = (a: { date: OCTDate }, b: { date: OCTDate }) =>
@@ -47,21 +51,17 @@ export function computeSummary(
   const scheduleFullyResolved =
     result.unresolved === 0 &&
     result.impossible.length === 0 &&
-    result.unvested.every((i) => i.meta.state === "RESOLVED");
+    result.unvested.every(isResolved);
 
   let fully_vested_date: OCTDate | null = null;
   if (scheduleFullyResolved) {
-    const all = [...result.vested, ...resolvedUnvested].filter(
-      (i): i is Installment & { date: OCTDate } => typeof i.date === "string",
-    );
+    const all = [...result.vested, ...resolvedUnvested].filter(isResolved);
     if (all.length > 0) {
       fully_vested_date = all.sort(byDate)[all.length - 1].date;
     }
   }
 
-  const resolvedVested = result.vested.filter(
-    (i): i is Installment & { date: OCTDate } => typeof i.date === "string",
-  );
+  const resolvedVested = result.vested.filter(isResolved);
   const cliff_date =
     resolvedVested.length > 0 ? [...resolvedVested].sort(byDate)[0].date : null;
 
@@ -83,11 +83,7 @@ export function filterByWindow(
   to: OCTDate,
 ): { installments: Installment[]; total: number } {
   const inWindow = vested.filter(
-    (i) =>
-      i.meta.state === "RESOLVED" &&
-      typeof i.date === "string" &&
-      i.date >= from &&
-      i.date <= to,
+    (i) => i.state === "RESOLVED" && i.date >= from && i.date <= to,
   );
   return { installments: inWindow, total: sum(inWindow) };
 }

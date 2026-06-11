@@ -11,25 +11,24 @@ import type {
 import { blockerToString } from "./blockerToString.js";
 import { InstallmentSet } from "@vestlang/types";
 
-/** The blockers, rendered as the comma-joined string each installment's meta carries. */
+/** The blockers, rendered as the comma-joined string each installment carries. */
 function renderBlockers(bs: Blocker[]): string {
   return bs.map(blockerToString).join(", ");
 }
 
 /**
  * Scaffold shared by the symbolic builders: one installment per amount, all
- * carrying the same `blockers`, with the per-index `meta` supplied by `metaAt`.
- * The resolved builder stays separate — it sets a top-level `date`, which the
- * symbolic installments never do.
+ * carrying the same `blockers`, each built from its index by `installmentAt`.
+ * The resolved builder stays separate — it sets a `date`, which the symbolic
+ * installments never do.
  */
 function makeSchedule(
   amounts: number[],
   blockers: Blocker[],
-  metaAt: (i: number) => Installment["meta"],
+  installmentAt: (i: number, amount: number) => Installment,
 ): InstallmentSet {
-  const installments = Array.from(
-    { length: amounts.length },
-    (_, i) => ({ amount: amounts[i], meta: metaAt(i) }) as Installment,
+  const installments = Array.from({ length: amounts.length }, (_, i) =>
+    installmentAt(i, amounts[i]),
   );
 
   return { installments, blockers };
@@ -44,9 +43,9 @@ export function makeResolvedInstallment(
   amount: number,
 ): ResolvedInstallment {
   return {
+    state: "RESOLVED",
     amount,
     date,
-    meta: { state: "RESOLVED" },
   };
 }
 
@@ -68,8 +67,9 @@ export function makeImpossibleSchedule(
   amounts: number[],
   blockers: ImpossibleBlocker[],
 ): InstallmentSet {
-  return makeSchedule(amounts, blockers, () => ({
+  return makeSchedule(amounts, blockers, (_, amount) => ({
     state: "IMPOSSIBLE",
+    amount,
     unresolved: renderBlockers(blockers),
   }));
 }
@@ -84,8 +84,9 @@ export function makeStartPlusSchedule(
   steplength: number,
   blockers: Blocker[],
 ): InstallmentSet {
-  return makeSchedule(amounts, blockers, (i) => ({
+  return makeSchedule(amounts, blockers, (i, amount) => ({
     state: "UNRESOLVED",
+    amount,
     symbolicDate: { type: "START_PLUS", unit, steps: i * steplength },
     unresolved: renderBlockers(blockers),
   }));
@@ -99,8 +100,9 @@ export function makeUnresolvedVestingStartSchedule(
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): InstallmentSet {
-  return makeSchedule(amounts, blockers, () => ({
+  return makeSchedule(amounts, blockers, (_, amount) => ({
     state: "UNRESOLVED",
+    amount,
     symbolicDate: { type: "UNRESOLVED_VESTING_START" },
     unresolved: renderBlockers(blockers),
   }));
@@ -118,12 +120,10 @@ export function makeUnresolvedCliffInstallment(
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): UnresolvedInstallment {
   return {
+    state: "UNRESOLVED",
     amount,
-    meta: {
-      state: "UNRESOLVED",
-      symbolicDate: { type: "UNRESOLVED_CLIFF", date },
-      unresolved: renderBlockers(blockers),
-    },
+    symbolicDate: { type: "UNRESOLVED_CLIFF", date },
+    unresolved: renderBlockers(blockers),
   };
 }
 
@@ -132,9 +132,7 @@ export function makeUnresolvedCliffSchedule(
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): InstallmentSet {
-  return makeSchedule(
-    amounts,
-    blockers,
-    (i) => makeUnresolvedCliffInstallment(dates[i], amounts[i], blockers).meta,
+  return makeSchedule(amounts, blockers, (i, amount) =>
+    makeUnresolvedCliffInstallment(dates[i], amount, blockers),
   );
 }

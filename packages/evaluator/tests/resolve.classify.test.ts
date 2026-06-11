@@ -85,8 +85,8 @@ const laterOfEvents = (
   ],
 });
 
-const isResolved = (i: { meta: { state: string } }): i is ResolvedInstallment =>
-  i.meta.state === "RESOLVED";
+const isResolved = (i: { state: string }): i is ResolvedInstallment =>
+  i.state === "RESOLVED";
 
 const ctxInput = (
   events: Record<string, OCTDate> = {},
@@ -148,7 +148,7 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
     if (result.kind !== "events") return;
     expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
     expect(result.installments).toHaveLength(2);
-    expect(result.installments.map((i) => i.date)).toEqual([
+    expect(result.installments.filter(isResolved).map((i) => i.date)).toEqual([
       "2026-01-01",
       "2026-07-01",
     ]);
@@ -182,9 +182,7 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
     expect(
-      result.installments.every(
-        (i) => i.date !== undefined && i.date >= "2025-01-01",
-      ),
+      result.installments.every((i) => isResolved(i) && i.date >= "2025-01-01"),
     ).toBe(true);
     expect(sum(result.installments)).toBe(100000);
   });
@@ -255,9 +253,9 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     expect(result.kind).toBe("impossible");
     if (result.kind !== "impossible") return;
     expect(result.installments.length).toBeGreaterThan(0);
-    expect(
-      result.installments.every((i) => i.meta.state === "IMPOSSIBLE"),
-    ).toBe(true);
+    expect(result.installments.every((i) => i.state === "IMPOSSIBLE")).toBe(
+      true,
+    );
     expect(
       result.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION"),
     ).toBe(true);
@@ -361,7 +359,7 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
     expect(resolved.map((i) => i.date)).toEqual(["2026-01-01", "2027-01-01"]);
     expect(sum(resolved)).toBe(50000);
     // The void half is still reported at the leaf level.
-    expect(result.installments.some((i) => i.meta.state === "IMPOSSIBLE")).toBe(
+    expect(result.installments.some((i) => i.state === "IMPOSSIBLE")).toBe(
       true,
     );
   });
@@ -386,7 +384,7 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     expect(sum(result.installments.filter(isResolved))).toBe(50000);
-    expect(result.installments.some((i) => i.meta.state === "UNRESOLVED")).toBe(
+    expect(result.installments.some((i) => i.state === "UNRESOLVED")).toBe(
       true,
     );
   });
@@ -406,9 +404,7 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     // No even-grid RESOLVED tranche leaks in alongside the symbolic cliff ones.
-    expect(result.installments.every((i) => i.meta.state !== "RESOLVED")).toBe(
-      true,
-    );
+    expect(result.installments.every((i) => i.state !== "RESOLVED")).toBe(true);
     expect(result.installments).toHaveLength(2); // == occurrences, not doubled
   });
 
@@ -581,9 +577,9 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     expect(result.installments).toHaveLength(48);
-    expect(
-      result.installments.every((i) => i.meta.state === "UNRESOLVED"),
-    ).toBe(true);
+    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
+      true,
+    );
     // The shares are all still claimed — just not released.
     expect(sum(result.installments)).toBe(4800);
     expect(result.blockers).toEqual([
@@ -603,9 +599,9 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     // 17 monthly tranches fall at or before the firing → one 1,700-share lump
     // on the firing date, then 100/month.
     expect(result.installments[0]).toEqual({
+      state: "RESOLVED",
       date: "2026-06-01",
       amount: 1700,
-      meta: { state: "RESOLVED" },
     });
     expect(result.installments).toHaveLength(32);
     expect(sum(result.installments)).toBe(4800);
@@ -642,9 +638,7 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     if (result.kind !== "unresolved") return;
     const resolved = result.installments.filter(isResolved);
     expect(sum(resolved)).toBe(1200); // the head still vests
-    const held = result.installments.filter(
-      (i) => i.meta.state === "UNRESOLVED",
-    );
+    const held = result.installments.filter((i) => i.state === "UNRESOLVED");
     expect(sum(held)).toBe(1200); // the tail waits on ipo
     expect(
       result.blockers.some(
@@ -679,7 +673,7 @@ describe("resolveToCore — event cliff with an offset (CLIFF EVENT ipo + 1 mont
     // Both grid tranches (Feb 1, Mar 1) precede the effective cliff date, so
     // the whole grant folds into one lump there.
     expect(result.installments).toEqual([
-      { date: "2024-03-15", amount: 200, meta: { state: "RESOLVED" } },
+      { state: "RESOLVED", date: "2024-03-15", amount: 200 },
     ]);
   });
 
@@ -691,9 +685,9 @@ describe("resolveToCore — event cliff with an offset (CLIFF EVENT ipo + 1 mont
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     expect(result.installments).toHaveLength(2);
-    expect(
-      result.installments.every((i) => i.meta.state === "UNRESOLVED"),
-    ).toBe(true);
+    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
+      true,
+    );
     expect(sum(result.installments)).toBe(200);
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
@@ -742,7 +736,7 @@ describe("resolveToCore — events arm carries its pending siblings (#148)", () 
       { date: "2024-08-15", amount: 600 },
     ]);
     const symbolic = result.installments.filter(
-      (i) => i.meta.state === "UNRESOLVED",
+      (i) => i.state === "UNRESOLVED",
     );
     expect(sum(symbolic)).toBe(1200);
     // Every share of the grant is accounted for somewhere in the stream.

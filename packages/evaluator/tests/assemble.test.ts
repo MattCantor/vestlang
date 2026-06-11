@@ -8,6 +8,7 @@ import type {
   Amount,
   Blocker,
   EvaluationContextInput,
+  Installment,
   OCTDate,
   Program,
   Schedule,
@@ -64,6 +65,10 @@ const stmt = (
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 
+// Dates of the RESOLVED installments, in order — the dated part of an arm.
+const resolvedDates = (xs: Installment[]): OCTDate[] =>
+  xs.flatMap((i) => (i.state === "RESOLVED" ? [i.date] : []));
+
 describe("assemble — template status", () => {
   const cliff12mo = makeSingletonNode(makeVestingBaseVestingStart(), [
     makeDuration(12, "MONTHS", "PLUS"),
@@ -79,9 +84,7 @@ describe("assemble — template status", () => {
     expect(out.status).toBe("template");
     expect(out.blockers).toEqual([]);
     expect(out.installments).toHaveLength(37); // cliff lump + 36 monthly
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
-      true,
-    );
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(out.installments[0]).toMatchObject({
       date: "2026-01-01",
       amount: 25000,
@@ -141,10 +144,8 @@ describe("assemble — events-only status", () => {
     // The published resolution arm carries the reason structured (rendered to
     // prose only at the view boundary), so a consumer can gate on the kind.
     expect(out.reason).toEqual({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
-      true,
-    );
-    expect(out.installments.map((i) => i.date)).toEqual([
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
+    expect(resolvedDates(out.installments)).toEqual([
       "2026-01-01",
       "2026-07-01",
     ]);
@@ -173,9 +174,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
     ];
     expect(() => evalProgram(program, ctxInput())).not.toThrow();
     const [out] = evalProgram(program, ctxInput());
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
-      true,
-    );
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(sum(out.installments)).toBe(100000); // telescopes exactly
   });
 
@@ -254,9 +253,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
     const [out] = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
-      true,
-    );
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(sum(out.installments)).toBe(3600); // the 75% time-based portion, dated
     expect(
       out.blockers.some(
@@ -553,9 +550,7 @@ describe("assemble — future-dated pure-date schedules resolve", () => {
     expect(out.sourceMap).toEqual({});
     // Anchored on the later (2030) arm, with concrete RESOLVED installments.
     expect(out.installments.length).toBeGreaterThan(0);
-    expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
-      true,
-    );
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(out.installments[0].date >= "2030-01-01").toBe(true);
   });
 });
@@ -593,9 +588,7 @@ describe("assemble — impossible status", () => {
     expect(out.status).toBe("impossible");
     if (out.status !== "impossible") return;
     expect(out.installments.length).toBeGreaterThan(0);
-    expect(out.installments.every((i) => i.meta.state === "IMPOSSIBLE")).toBe(
-      true,
-    );
+    expect(out.installments.every((i) => i.state === "IMPOSSIBLE")).toBe(true);
     expect(out.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(
       true,
     );
@@ -628,13 +621,13 @@ describe("assemble — impossible status", () => {
       ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );
     expect(out.status).toBe("unresolved");
-    const resolved = out.installments.filter(
-      (i) => i.meta.state === "RESOLVED",
+    expect(resolvedDates(out.installments)).toEqual([
+      "2026-01-01",
+      "2027-01-01",
+    ]);
+    expect(sum(out.installments.filter((i) => i.state === "RESOLVED"))).toBe(
+      50000,
     );
-    expect(resolved.map((i) => i.date)).toEqual(["2026-01-01", "2027-01-01"]);
-    expect(sum(resolved)).toBe(50000);
-    expect(out.installments.some((i) => i.meta.state === "IMPOSSIBLE")).toBe(
-      true,
-    );
+    expect(out.installments.some((i) => i.state === "IMPOSSIBLE")).toBe(true);
   });
 });

@@ -74,8 +74,6 @@ export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
  * Node Meta
  * ------------------------ */
 
-export type NodeResolutionState = "IMPOSSIBLE" | "UNRESOLVED" | "RESOLVED";
-
 export type ResolvedNode = {
   type: "RESOLVED";
   date: OCTDate;
@@ -97,45 +95,27 @@ export type NodeMeta = ResolvedNode | UnresolvedNode | ImpossibleNode;
  * Installments
  * ------------------------ */
 
-export interface InstallmentMeta {
-  index?: number;
-  state: NodeResolutionState;
-  symbolicDate?: SymbolicDate;
-  unresolved?: string;
-}
+// `state` discriminates at the top level (not nested under a `meta` envelope) so
+// TypeScript narrows `date`/`symbolicDate` straight off it — the "date present iff
+// RESOLVED" invariant is the union's, not re-checked at each use site.
 
-export interface BaseInstallment {
+export interface ResolvedInstallment {
+  state: "RESOLVED";
   amount: number;
-  date?: OCTDate;
-  meta: InstallmentMeta;
-}
-
-export interface ImpossibleInstallment extends BaseInstallment {
-  amount: number;
-  date?: never;
-  meta: {
-    state: "IMPOSSIBLE";
-    symbolicDate?: never;
-    unresolved: string;
-  };
-}
-
-export interface UnresolvedInstallment extends BaseInstallment {
-  date?: never;
-  meta: {
-    state: "UNRESOLVED";
-    symbolicDate: SymbolicDate;
-    unresolved: string;
-  };
-}
-
-export interface ResolvedInstallment extends BaseInstallment {
   date: OCTDate;
-  meta: {
-    state: "RESOLVED";
-    symbolicDate?: never;
-    unresolved?: never;
-  };
+}
+
+export interface UnresolvedInstallment {
+  state: "UNRESOLVED";
+  amount: number;
+  symbolicDate: SymbolicDate;
+  unresolved: string;
+}
+
+export interface ImpossibleInstallment {
+  state: "IMPOSSIBLE";
+  amount: number;
+  unresolved: string;
 }
 
 export type Installment =

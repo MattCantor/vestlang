@@ -79,9 +79,14 @@ function printSchedule(view: ScheduleView): void {
   console.table(
     view.installments.map((item) => ({
       amount: item.amount,
-      date: item.date ?? JSON.stringify(item.meta.symbolicDate),
-      state: item.meta.state,
-      unresolved: item.meta.unresolved,
+      date:
+        item.state === "RESOLVED"
+          ? item.date
+          : item.state === "UNRESOLVED"
+            ? JSON.stringify(item.symbolicDate)
+            : undefined,
+      state: item.state,
+      unresolved: item.state === "RESOLVED" ? undefined : item.unresolved,
     })),
   );
   // Show the projection above, then flag it — the schedule is printed but not
