@@ -3,8 +3,6 @@ import type {
   EvaluatedScheduleVerdict,
   NonTemplateReason,
   VestingDayOfMonth,
-  VestingRuntime,
-  VestingScheduleTemplate,
 } from "@vestlang/types";
 
 /** An evaluated schedule whose resolution verdict is specifically a template. */
@@ -34,11 +32,6 @@ export interface RecoveredTemplate {
    *  was replaced with the template. Without this the provenance is lost: the
    *  published schedule is now a template and carries no reason of its own. */
   reason: NonTemplateReason;
-
-  // The template itself comes from the re-classify step (resolveToCore on the
-  // inferred program), not from the inferrer — the inferrer only hands back DSL.
-  template: VestingScheduleTemplate;
-  runtime: VestingRuntime;
 
   // From the inferrer.
   dsl: string;

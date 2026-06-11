@@ -110,8 +110,6 @@ export function evaluateProgramWithRecovery(
     recovered: {
       from: "events-only",
       reason,
-      template: reclassified.template,
-      runtime: reclassified.runtime,
       dsl: inferred.dsl,
       vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
       residualError,
