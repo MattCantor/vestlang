@@ -1,7 +1,6 @@
 import { Diagnostic, lintText, lintMarkdown } from "@vestlang/linter";
 import type { MarkdownDiagnostic } from "@vestlang/linter";
 import { input } from "./utils.js";
-import { parse } from "@vestlang/dsl";
 import { readFileSync } from "node:fs";
 
 function prettyPrint(diagnostics: Diagnostic[]) {
@@ -66,7 +65,7 @@ export function lint(
       console.error(`cannot read ${file}: ${(e as Error).message}`);
       process.exit(2);
     }
-    const diags = lintMarkdown(src, parse);
+    const diags = lintMarkdown(src);
     if (opts.format === "editor") {
       editorPrintMarkdown(file, diags);
       process.exit(0); // diagnostics are in stdout; editors read them there
@@ -77,7 +76,7 @@ export function lint(
 
   // Default: lint a DSL string (args or stdin).
   const src = input(parts, opts.stdin);
-  const { diagnostics } = lintText(src, parse);
+  const { diagnostics } = lintText(src);
   prettyPrint(diagnostics);
   process.exit(diagnostics.length ? 1 : 0);
 }

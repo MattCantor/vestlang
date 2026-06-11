@@ -1,29 +1,22 @@
-import { Program, RawProgram } from "@vestlang/types";
+import { Program } from "@vestlang/types";
 import { walk, type AstNode } from "@vestlang/walk";
 import {
   Diagnostic,
   LintContext,
   LintResult,
   NodePath,
-  RuleModule,
   SourcePosition,
 } from "./types.js";
 import { stableKey } from "@vestlang/utils";
 import { buildInRules } from "./rules/index.js";
 import { normalizeProgram } from "@vestlang/normalizer";
-
-export interface LintOptions {
-  rules?: Array<RuleModule>;
-}
+import { parse } from "@vestlang/dsl";
 
 // Every node-level hook has this shape once we've forgotten which exact node
 // kind it subscribed to — which is all the driver needs to fan a node out to it.
 type NodeHook = (node: AstNode, path: NodePath) => void;
 
-export function lintProgram(
-  program: Program,
-  opts: LintOptions = {},
-): LintResult {
+export function lintProgram(program: Program): LintResult {
   const diagnostics: Diagnostic[] = [];
 
   const ctx: LintContext = {
@@ -31,9 +24,7 @@ export function lintProgram(
     stableKey,
   };
 
-  const visitors = (opts.rules ?? Array.from(buildInRules)).map((r) =>
-    r.create(ctx),
-  );
+  const visitors = Array.from(buildInRules).map((r) => r.create(ctx));
 
   // Program-level rules look at the whole statement list at once. The shared
   // walk only ever hands us individual nodes (a program is a bare array, not a
@@ -62,13 +53,9 @@ function buildCodeFrame(source: string, loc: { start: SourcePosition }) {
   return `${line}\n${caret}`;
 }
 
-export function lintText(
-  source: string,
-  parseVestlang: (text: string) => unknown,
-  opts: LintOptions = {},
-): LintResult {
+export function lintText(source: string): LintResult {
   try {
-    const raw = parseVestlang(source) as RawProgram;
+    const raw = parse(source);
     // The normalizer dedupes duplicate selector arms (and the like) as part of
     // canonicalization. It reports each drop through this sink so we can surface
     // it — the catch the dead `no-duplicate-selector-items` rule couldn't make,
@@ -76,7 +63,7 @@ export function lintText(
     // are already gone. (`lintProgram` on its own never produces these.)
     const fromNormalizer: Diagnostic[] = [];
     const canonical = normalizeProgram(raw, (d) => fromNormalizer.push(d));
-    const { diagnostics } = lintProgram(canonical, opts);
+    const { diagnostics } = lintProgram(canonical);
     return { diagnostics: [...fromNormalizer, ...diagnostics] };
   } catch (err: unknown) {
     const e = err as {

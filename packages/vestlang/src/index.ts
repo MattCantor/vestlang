@@ -24,7 +24,7 @@ export type { RecoveryOutcome, RecoveredTemplate } from "@vestlang/recover";
 
 // Linter
 export { lintProgram, lintText } from "@vestlang/linter";
-export type { LintOptions, LintResult, Diagnostic } from "@vestlang/linter";
+export type { LintResult, Diagnostic } from "@vestlang/linter";
 
 // Stringify
 export {

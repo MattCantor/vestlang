@@ -8,7 +8,6 @@
 // surface by precision.
 
 import { lintText } from "./index.js";
-import type { LintOptions } from "./index.js";
 import type { Diagnostic, DiagnosticSeverity } from "./types.js";
 
 export interface MarkdownDiagnostic {
@@ -87,53 +86,33 @@ function extractBlocks(source: string): VestBlock[] {
 const isOnlySyntaxError = (diags: Diagnostic[]): boolean =>
   diags.length > 0 && diags.every((d) => d.ruleId === "syntax-error");
 
-const parsesClean = (
-  src: string,
-  parse: (t: string) => unknown,
-  opts: LintOptions,
-): boolean =>
-  !lintText(src, parse, opts).diagnostics.some(
-    (d) => d.ruleId === "syntax-error",
-  );
+const parsesClean = (src: string): boolean =>
+  !lintText(src).diagnostics.some((d) => d.ruleId === "syntax-error");
 
 // A block of one or more bare anchor/offset fragments (e.g. "EVENT ipo + 6 months"),
 // rather than a runnable program. True if the whole block — or every non-blank line
 // — parses once wrapped as a `VEST FROM` start.
-function isFragmentBlock(
-  text: string,
-  parse: (t: string) => unknown,
-  opts: LintOptions,
-): boolean {
-  if (parsesClean("VEST FROM " + text.trim(), parse, opts)) return true;
+function isFragmentBlock(text: string): boolean {
+  if (parsesClean("VEST FROM " + text.trim())) return true;
   const lines = text
     .split("\n")
     .map((l) => l.trim())
     .filter((l) => l !== "");
-  return (
-    lines.length > 0 &&
-    lines.every((l) => parsesClean("VEST FROM " + l, parse, opts))
-  );
+  return lines.length > 0 && lines.every((l) => parsesClean("VEST FROM " + l));
 }
 
-export function lintMarkdown(
-  source: string,
-  parseVestlang: (text: string) => unknown,
-  opts: LintOptions = {},
-): MarkdownDiagnostic[] {
+export function lintMarkdown(source: string): MarkdownDiagnostic[] {
   const out: MarkdownDiagnostic[] = [];
 
   for (const block of extractBlocks(source)) {
     if (block.ignored || block.text.trim() === "") continue;
 
-    const { diagnostics } = lintText(block.text, parseVestlang, opts);
+    const { diagnostics } = lintText(block.text);
 
     // Fragment fallback: a block that won't parse as a program may be one or
     // more bare anchor/offset fragments. If so, treat it as valid illustrative
     // syntax and skip it.
-    if (
-      isOnlySyntaxError(diagnostics) &&
-      isFragmentBlock(block.text, parseVestlang, opts)
-    ) {
+    if (isOnlySyntaxError(diagnostics) && isFragmentBlock(block.text)) {
       continue;
     }
 
