@@ -1,7 +1,7 @@
 import type {
   Blocker,
   ImpossibleBlocker,
-  ImpossibleInstallment,
+  Installment,
   OCTDate,
   PeriodTag,
   ResolvedInstallment,
@@ -10,6 +10,30 @@ import type {
 } from "@vestlang/types";
 import { blockerToString } from "./blockerToString.js";
 import { InstallmentSet } from "@vestlang/types";
+
+/** The blockers, rendered as the comma-joined string each installment's meta carries. */
+function renderBlockers(bs: Blocker[]): string {
+  return bs.map(blockerToString).join(", ");
+}
+
+/**
+ * Scaffold shared by the symbolic builders: one installment per amount, all
+ * carrying the same `blockers`, with the per-index `meta` supplied by `metaAt`.
+ * The resolved builder stays separate — it sets a top-level `date`, which the
+ * symbolic installments never do.
+ */
+function makeSchedule(
+  amounts: number[],
+  blockers: Blocker[],
+  metaAt: (i: number) => Installment["meta"],
+): InstallmentSet {
+  const installments = Array.from(
+    { length: amounts.length },
+    (_, i) => ({ amount: amounts[i], meta: metaAt(i) }) as Installment,
+  );
+
+  return { installments, blockers };
+}
 
 /* ------------------------
  * Resolved
@@ -40,57 +64,19 @@ export function makeResolvedSchedule(
  * Impossible
  * ------------------------ */
 
-function makeImpossibleInstallment(
-  amount: number,
-  blockers: ImpossibleBlocker[],
-): ImpossibleInstallment {
-  return {
-    amount,
-    meta: {
-      state: "IMPOSSIBLE",
-      unresolved: blockers.map(blockerToString).join(", "),
-    },
-  };
-}
-
 export function makeImpossibleSchedule(
   amounts: number[],
   blockers: ImpossibleBlocker[],
 ): InstallmentSet {
-  const installments = Array.from({ length: amounts.length }, (_, i) => {
-    return makeImpossibleInstallment(amounts[i], blockers);
-  });
-
-  return {
-    installments,
-    blockers,
-  };
+  return makeSchedule(amounts, blockers, () => ({
+    state: "IMPOSSIBLE",
+    unresolved: renderBlockers(blockers),
+  }));
 }
 
 /* ------------------------
  * Start Plus
  * ------------------------ */
-
-function makeStartPlusInstallment(
-  index: number,
-  amount: number,
-  unit: PeriodTag,
-  stepLength: number,
-  blockers: Blocker[],
-): UnresolvedInstallment {
-  return {
-    amount,
-    meta: {
-      state: "UNRESOLVED",
-      symbolicDate: {
-        type: "START_PLUS",
-        unit,
-        steps: index * stepLength,
-      },
-      unresolved: blockers.map(blockerToString).join(", "),
-    },
-  };
-}
 
 export function makeStartPlusSchedule(
   amounts: number[],
@@ -98,52 +84,34 @@ export function makeStartPlusSchedule(
   steplength: number,
   blockers: Blocker[],
 ): InstallmentSet {
-  const installments = Array.from({ length: amounts.length }, (_, i) => {
-    return makeStartPlusInstallment(i, amounts[i], unit, steplength, blockers);
-  });
-
-  return {
-    installments,
-    blockers,
-  };
+  return makeSchedule(amounts, blockers, (i) => ({
+    state: "UNRESOLVED",
+    symbolicDate: { type: "START_PLUS", unit, steps: i * steplength },
+    unresolved: renderBlockers(blockers),
+  }));
 }
 
 /* ------------------------
  * Unresolved Vesting Start
  * ------------------------ */
 
-function makeUnresolvedVestingStartInstallment(
-  amount: number,
-  blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
-): UnresolvedInstallment {
-  return {
-    amount,
-    meta: {
-      state: "UNRESOLVED",
-      symbolicDate: { type: "UNRESOLVED_VESTING_START" },
-      unresolved: blockers.map(blockerToString).join(", "),
-    },
-  };
-}
-
 export function makeUnresolvedVestingStartSchedule(
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): InstallmentSet {
-  const installments = Array.from({ length: amounts.length }, (_, i) => {
-    return makeUnresolvedVestingStartInstallment(amounts[i], blockers);
-  });
-
-  return {
-    installments,
-    blockers,
-  };
+  return makeSchedule(amounts, blockers, () => ({
+    state: "UNRESOLVED",
+    symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+    unresolved: renderBlockers(blockers),
+  }));
 }
 
 /* ------------------------
  * Unresolved Cliff
  * ------------------------ */
 
+// Exported for the partial-LATER-OF fold in resolve/unresolved.ts, which builds
+// the cliff installments itself rather than going through the schedule scaffold.
 export function makeUnresolvedCliffInstallment(
   date: OCTDate,
   amount: number,
@@ -154,7 +122,7 @@ export function makeUnresolvedCliffInstallment(
     meta: {
       state: "UNRESOLVED",
       symbolicDate: { type: "UNRESOLVED_CLIFF", date },
-      unresolved: blockers.map(blockerToString).join(", "),
+      unresolved: renderBlockers(blockers),
     },
   };
 }
@@ -164,12 +132,9 @@ export function makeUnresolvedCliffSchedule(
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
 ): InstallmentSet {
-  const installments = Array.from({ length: amounts.length }, (_, i) => {
-    return makeUnresolvedCliffInstallment(dates[i], amounts[i], blockers);
-  });
-
-  return {
-    installments,
+  return makeSchedule(
+    amounts,
     blockers,
-  };
+    (i) => makeUnresolvedCliffInstallment(dates[i], amounts[i], blockers).meta,
+  );
 }
