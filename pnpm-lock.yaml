@@ -63,9 +63,6 @@ importers:
 
   apps/cli:
     dependencies:
-      '@vestlang/dsl':
-        specifier: workspace:*
-        version: link:../../packages/dsl
       '@vestlang/linter':
         specifier: workspace:*
         version: link:../../packages/linter
@@ -164,9 +161,6 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@vestlang/dsl':
-        specifier: workspace:*
-        version: link:../../packages/dsl
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
@@ -340,9 +334,6 @@ importers:
 
   packages/normalizer:
     dependencies:
-      '@vestlang/dsl':
-        specifier: workspace:*
-        version: link:../dsl
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -350,6 +341,9 @@ importers:
         specifier: workspace:*
         version: link:../utils
     devDependencies:
+      '@vestlang/dsl':
+        specifier: workspace:*
+        version: link:../dsl
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1

@@ -12,7 +12,6 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vestlang/dsl": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/pipeline": "workspace:*",
     "commander": "^14.0.1",

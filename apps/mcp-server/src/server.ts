@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { parse } from "@vestlang/dsl";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
@@ -456,7 +455,7 @@ export function createServer(): McpServer {
       },
     },
     async ({ dsl }) => {
-      const { diagnostics } = lintText(dsl, parse);
+      const { diagnostics } = lintText(dsl);
       return jsonResult({
         ok: diagnostics.length === 0,
         diagnostics,

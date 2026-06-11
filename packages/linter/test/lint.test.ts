@@ -272,7 +272,7 @@ describe("@vestlang/linter", () => {
   // by the normalizer itself and surfaced through `lintText`, which threads a
   // sink into `normalizeProgram` and merges what comes back.
   describe("duplicate selector arm (via lintText)", () => {
-    const lint = (src: string) => lintText(src, parse).diagnostics;
+    const lint = (src: string) => lintText(src).diagnostics;
 
     it("warns on a repeated selector arm, with the plain keyword", () => {
       const flagged = lint(
@@ -312,10 +312,9 @@ describe("@vestlang/linter", () => {
   describe("implicit mixed boolean (via lintText)", () => {
     const OVER = `OVER 4 years EVERY 1 month`;
     const lint = (condition: string) =>
-      lintText(
-        `VEST FROM EVENT m ${condition} ${OVER}`,
-        parse,
-      ).diagnostics.filter((d) => d.ruleId === "no-implicit-mixed-boolean");
+      lintText(`VEST FROM EVENT m ${condition} ${OVER}`).diagnostics.filter(
+        (d) => d.ruleId === "no-implicit-mixed-boolean",
+      );
 
     it("warns on a bare mixed AND/OR and teaches the grouping", () => {
       const flagged = lint(

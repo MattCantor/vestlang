@@ -5,7 +5,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lintMarkdown } from "@vestlang/linter";
-import { parse } from "@vestlang/dsl";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const docsDir = join(repoRoot, "apps/docs/docs");
@@ -30,7 +29,7 @@ describe("docs vest blocks", () => {
   for (const file of files) {
     const rel = file.slice(repoRoot.length + 1);
     it(`vest blocks parse: ${rel}`, () => {
-      const errors = lintMarkdown(readFileSync(file, "utf8"), parse).filter(
+      const errors = lintMarkdown(readFileSync(file, "utf8")).filter(
         (d) => d.severity === "error",
       );
       const report = errors
