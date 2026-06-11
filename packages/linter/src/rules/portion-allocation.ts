@@ -1,5 +1,5 @@
 import { RuleModule } from "../types.js";
-import { fracCmp, fracSum, ONE } from "@vestlang/utils";
+import { classifyAllocation, formatPct, fracSum } from "@vestlang/utils";
 
 const meta = {
   id: "portion-allocation",
@@ -8,8 +8,6 @@ const meta = {
   recommended: true,
   severity: "error" as const,
 };
-
-const pct = (num: number, den: number) => `${Math.round((num / den) * 100)}%`;
 
 export const rulePortionAllocation: RuleModule = {
   meta,
@@ -42,19 +40,20 @@ export const rulePortionAllocation: RuleModule = {
           return;
         }
 
-        const { numerator, denominator } = fracSum(portions);
-        const cmp = fracCmp({ numerator, denominator }, ONE);
-        if (cmp > 0) {
+        const sum = fracSum(portions);
+        const { numerator, denominator } = sum;
+        const where = classifyAllocation(sum);
+        if (where === "over") {
           ctx.report({
             ruleId: id,
-            message: `portion amounts sum to ${numerator}/${denominator} (${pct(numerator, denominator)}), over-allocating the grant`,
+            message: `portion amounts sum to ${numerator}/${denominator} (${formatPct(sum)}), over-allocating the grant`,
             severity: "error",
             path: ["Program"],
           });
-        } else if (cmp < 0) {
+        } else if (where === "under") {
           ctx.report({
             ruleId: id,
-            message: `portion amounts sum to ${numerator}/${denominator} (${pct(numerator, denominator)}); the grant is not fully allocated`,
+            message: `portion amounts sum to ${numerator}/${denominator} (${formatPct(sum)}); the grant is not fully allocated`,
             severity: "warning",
             path: ["Program"],
           });

@@ -15,7 +15,7 @@ import {
   assertValidVestingScheduleTemplate,
   MAX_INSTALLMENTS,
 } from "@vestlang/core";
-import { assertNever, fracCmp, fracSum, ONE } from "@vestlang/utils";
+import { assertNever, classifyAllocation, fracSum } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
@@ -114,13 +114,13 @@ const allocationFindings = (
   if (totalShares === 0) return [];
 
   const sum = fracSum(resolutions.map((r) => r.percentage));
-  const cmp = fracCmp(sum, ONE);
-  if (cmp > 0) {
+  const where = classifyAllocation(sum);
+  if (where === "over") {
     return [
       { kind: "over-allocation", severity: "error", sum, path: ["Program"] },
     ];
   }
-  if (cmp < 0) {
+  if (where === "under") {
     return [
       { kind: "under-allocation", severity: "warning", sum, path: ["Program"] },
     ];

@@ -52,3 +52,19 @@ export const fracCmp = (a: Fraction, b: Fraction): -1 | 0 | 1 => {
   const rhs = b.numerator * a.denominator;
   return lhs < rhs ? -1 : lhs > rhs ? 1 : 0;
 };
+
+// Where an allocation total sits relative to the whole grant: over the whole is
+// "over", short of it "under", on the nose "exact". The over=error / under=warning
+// severity policy is the caller's to apply; this just names the three cases so the
+// linter rule and the evaluator's findings classify them the same way.
+export const classifyAllocation = (
+  sum: Fraction,
+): "over" | "under" | "exact" => {
+  const cmp = fracCmp(sum, ONE);
+  return cmp > 0 ? "over" : cmp < 0 ? "under" : "exact";
+};
+
+// A fraction as a rounded percent, e.g. 3/2 → "150%". The exact fraction stays the
+// source of truth; this is purely for human-facing messages.
+export const formatPct = (f: Fraction): string =>
+  `${Math.round((f.numerator / f.denominator) * 100)}%`;
