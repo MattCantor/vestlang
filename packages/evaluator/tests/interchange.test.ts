@@ -333,6 +333,117 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       eventId: "ipo",
     });
   });
+
+  // An event cliff behind a *pending* start. The whole schedule waits on the start
+  // event, so firing-blind it's unresolved — but the storable cause is still the
+  // event cliff (no schema home), not a cliff merely waiting on a firing. The
+  // record keeper acts on the same fact whether the start has resolved or not, so
+  // the reason must not flip to DEFERRED_CLIFF just because the start is pending.
+  it("an event cliff behind a pending event start is EVENT_CLIFF, not DEFERRED_CLIFF", () => {
+    const out = evaluateStatement(
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: makeSingletonNode(makeVestingBaseEvent("acquisition")),
+      }),
+      ctxInput(),
+    );
+
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "acquisition",
+    });
+  });
+
+  // Start-invariance: the same event cliff with a resolved DATE start gets the
+  // identical reason. The pending-ness of the start can't change what the schema
+  // can hold for the cliff.
+  it("the event-cliff reason is the same behind a pending start as behind a date start", () => {
+    const periodicity: VestingPeriod = {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 48,
+      cliff: makeSingletonNode(makeVestingBaseEvent("acquisition")),
+    };
+    const pendingStart = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        periodicity,
+      ),
+      ctxInput(),
+    ).interchange;
+    const dateStart = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        periodicity,
+      ),
+      ctxInput(),
+    ).interchange;
+
+    expect(pendingStart).toEqual(dateStart);
+    expect(pendingStart).toEqual({
+      status: "unrepresentable",
+      reason: { kind: "EVENT_CLIFF", eventId: "acquisition" },
+    });
+  });
+
+  // The resolution side is untouched by the interchange reason change: the pending
+  // start still holds the whole grid as one undated lump, blocked only on the start
+  // event (`ipo`). The event cliff contributes no blocker of its own here — the
+  // start gates everything before the cliff can matter, so there's no spurious
+  // `acquisition` blocker.
+  it("a pending start with an event cliff resolves unchanged — one lump, only the start's blocker", () => {
+    const out = evaluateStatement(
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: makeSingletonNode(makeVestingBaseEvent("acquisition")),
+      }),
+      ctxInput(),
+    );
+
+    expect(out.resolution.status).toBe("unresolved");
+    if (out.resolution.status !== "unresolved") return;
+    expect(out.resolution.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+    expect(out.resolution.installments).toHaveLength(1);
+    expect(out.resolution.installments[0].meta.state).toBe("UNRESOLVED");
+  });
+
+  // A gated event cliff behind a pending start: the gate's verdict is the sharper
+  // answer and still wins. `CLIFF EVENT acquisition AFTER grantDate + 1 year` with
+  // acquisition unfired reads as a pending gate, so the cliff stays UNRESOLVED and
+  // the storable reason is DEFERRED_CLIFF — the event-anchoredness is deliberately
+  // not surfaced when there's a live gate to report.
+  it("a gated event cliff behind a pending start keeps the gate's verdict (DEFERRED_CLIFF)", () => {
+    const gatedCliff = makeGatedNode(
+      makeVestingBaseEvent("acquisition"),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(12, "MONTHS", "PLUS"),
+      ]),
+    );
+    const out = evaluateStatement(
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: gatedCliff,
+      }),
+      ctxInput(),
+    );
+
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
 });
 
 describe("interchange — allocation is its own axis", () => {

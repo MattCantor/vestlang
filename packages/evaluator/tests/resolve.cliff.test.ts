@@ -261,12 +261,16 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     });
   });
 
-  it("event-anchored cliff has no anchor-free form → UNRESOLVED", () => {
+  it("bare event-anchored cliff keeps its event-anchoredness → EVENT (no effectiveAt)", () => {
+    // A pending start means this cliff's event can never be placed on this path, so
+    // there's no effectiveAt. Lowering it to EVENT (rather than flattening to
+    // UNRESOLVED) preserves the fact that the schema has no home for an event cliff
+    // at all — buildTemplate's unfired-EVENT-cliff guard still routes it to the
+    // unresolved arm, so the routing is unchanged.
     const cliff = makeSingletonNode(makeVestingBaseEvent("ipo"));
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx)).toEqual({
-      state: "UNRESOLVED",
-      blockers: [],
-      dated: false,
+      state: "EVENT",
+      eventId: "ipo",
     });
   });
 
