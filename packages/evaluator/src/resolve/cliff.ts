@@ -30,7 +30,10 @@ import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
-import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
+import {
+  isVestingStartPlaceholder,
+  type CliffEvaluationContext,
+} from "../evaluate/vestingNode/vestingBase.js";
 
 export type LoweredCliff =
   | { state: "NONE" }
@@ -130,7 +133,7 @@ export const lowerCliff = (
   // `vestingStart`-relative cliff (e.g. "+12 months") resolves. Both the
   // event-cliff routing just below and the time-based lowering further down read
   // this single resolution.
-  const overlayCtx: EvaluationContext = { ...ctx, vestingStart: anchor };
+  const overlayCtx: CliffEvaluationContext = { ...ctx, vestingStart: anchor };
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
   // A genuinely event-anchored cliff has no time-based cliff field, so it's

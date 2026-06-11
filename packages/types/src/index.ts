@@ -1,4 +1,5 @@
 export type { VestingDayOfMonth } from "./oct_types.js";
+export { VESTING_DAY_OF_MONTH_VALUES } from "./oct_types.js";
 export type {
   PeriodType,
   VestingScheduleTemplate,

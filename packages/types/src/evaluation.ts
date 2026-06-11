@@ -9,9 +9,6 @@ export interface EvaluationContext {
   /** The grant-date system anchor. A runtime input, not a fired milestone, so it
    *  is its own field (mirroring VestingRuntime) rather than an `events` entry. */
   grantDate: OCTDate;
-  /** The vesting-start system anchor a cliff hangs off. Overlaid per-statement
-   *  during cliff/unresolved resolution; absent on the base context. */
-  vestingStart?: OCTDate;
   /** Genuine fired named events only (`ipo`, `milestone`) — no system anchors. */
   events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
@@ -19,11 +16,10 @@ export interface EvaluationContext {
   vesting_day_of_month: VestingDayOfMonth;
 }
 
-// Callers supply everything but the day-of-month rule (the evaluator defaults it)
-// and the transient `vestingStart` overlay (set internally during resolution).
+// Callers supply everything but the day-of-month rule (the evaluator defaults it).
 export type EvaluationContextInput = Omit<
   EvaluationContext,
-  "vesting_day_of_month" | "vestingStart"
+  "vesting_day_of_month"
 > &
   Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
 

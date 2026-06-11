@@ -93,6 +93,8 @@ EVENT ipo + 6 months
 DATE 2025-01-01 - 2 days
 ```
 
+Mixed-unit offsets are aggregated per unit and applied **months-first, regardless of the order written**: `+ 20 days + 1 month` and `+ 1 month + 20 days` both apply the month shift, then the day shift. Because calendar month arithmetic isn't commutative with day arithmetic, the authored order isn't preserved — but the rule is the same on every anchor, and offsets round-trip (the stringifier emits the normalized form).
+
 ### Selectors over anchors
 
 `EARLIER OF` / `LATER OF` choose between anchors. `EARLIER OF` selects the first to occur (acting like an OR); `LATER OF` requires all of them and selects the latest (an AND). The temporal naming keeps selectors distinct from conditions.

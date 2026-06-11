@@ -2696,6 +2696,13 @@ function peg$parse(input, options) {
   function mkDuration(value, unit, sign) {
     return { type: "DURATION", value, unit, sign };
   }
+  // Offsets are aggregated per unit and applied months-first, regardless of the
+  // order they were written: `+ 20 days + 1 month` and `+ 1 month + 20 days`
+  // both normalize to one months term then one days term, so both apply as
+  // months-then-days. This is deliberate and consistent everywhere — the same
+  // rule runs on every anchor — and it round-trips (the stringifier emits the
+  // normalized pair, which re-parses to itself). Calendar month math isn't
+  // commutative with day math, so authored order is not preserved here.
   function normalizeOffsets(offs) {
     if (!offs || offs.length === 0) return [];
 
