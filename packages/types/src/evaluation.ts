@@ -248,8 +248,9 @@ export type NonTemplateReason =
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
   // A THEN tail chained behind a head that's waiting on an event: the tail can't
   // be dated until the head's event fires, and there's no cliff involved at all.
-  // `eventId` is the head's event (the name for a bare `FROM EVENT x`, or the
-  // synthetic gate id when the head is a combinator/gated/offset anchor).
+  // `eventId` is what the head waits on: the event's name for a bare
+  // `FROM EVENT x`, or the anchor's DSL definition when the head is a
+  // combinator/gated/offset expression.
   | { kind: "EVENT_CHAINED_TAIL"; eventId: string; detail?: string }
   // The cliff can only be placed once we know when an event fired, so we can't
   // pin it down ahead of time and there's nothing storable to hand over.

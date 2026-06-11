@@ -63,10 +63,11 @@ const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
 /**
  * The event a chained tail is waiting on: a THEN tail whose start went UNRESOLVED
  * because its chain head is a pending event. We walk back from each such tail to the
- * nearest non-chained head and read its event id — the named event for a bare
- * `FROM EVENT x`, or the synthetic gate id (minted off the start expression the same
- * way `buildTemplate` does) for a combinator/gated/offset head. Undefined when no
- * chained tail is pending on a head we can name.
+ * nearest non-chained head and read what it waits on — the named event for a bare
+ * `FROM EVENT x`, or the anchor's DSL definition for a combinator/gated/offset head
+ * (no synthetic id exists yet on this path; the definition is the same dedup key
+ * `buildTemplate` would mint one from). Undefined when no chained tail is pending
+ * on a head we can name.
  */
 const pendingHeadEvent = (
   resolutions: StmtResolution[],
