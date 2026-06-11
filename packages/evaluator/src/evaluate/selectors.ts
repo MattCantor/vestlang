@@ -7,8 +7,12 @@ import type {
   ImpossibleBlocker,
   VestingNode,
   ScheduleExpr,
+  ScheduleExprTag,
+  NodeExprTag,
+  Selector,
   SelectorTag,
 } from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
 import { lt } from "./time.js";
 import {
   isPickedResolved,
@@ -200,68 +204,87 @@ function handleSelector<T extends Schedule | VestingNode>(
 }
 
 /* ------------------------
+ * Generic leaf-or-selector fold
+ * ------------------------ */
+
+// Every selector tag across both expression families. Concrete and finite, so a
+// switch over it is what keeps the `switch-exhaustiveness-check` tripwire live:
+// add a selector kind to either family's enum and this union grows, breaking the
+// build until the switch in `evaluateSelectorExpr` handles it.
+type AnySelectorTag = Exclude<
+  ScheduleExprTag | NodeExprTag,
+  "SCHEDULE" | "NODE"
+>;
+
+// A non-leaf arm is a selector: a list of same-family arms tagged EARLIER/LATER.
+// `Selector<E>` exposes `items` as same-family arms; the `type` is pinned to the
+// concrete selector-tag union above so the switch below can be exhaustive.
+type SelectorOf<E> = Omit<Selector<E>, "type"> & { type: AnySelectorTag };
+
+// The two layers (ScheduleExpr, VestingNodeExpr) are the same fold modulo their
+// leaf: a leaf is picked by `isLeaf` and evaluated by `evalLeaf`, while every
+// non-leaf is a selector whose arms fold back through here. `handleSelector` and
+// the policy table are shared, so only the leaf differs between callers.
+function evaluateSelectorExpr<E extends { type: string }, L extends E & object>(
+  expr: E,
+  isLeaf: (e: E) => e is L,
+  evalLeaf: (leaf: L) => PickReturn<Extract<L, Schedule | VestingNode>>,
+): PickReturn<Extract<L, Schedule | VestingNode>> {
+  if (isLeaf(expr)) return evalLeaf(expr);
+
+  // Not a leaf, so it's a selector. Keeping the EARLIER/LATER split as a switch
+  // (with no default) means a newly added selector tag is a build break here —
+  // the `switch-exhaustiveness-check` tripwire that collapsing the per-layer
+  // switches would otherwise have dropped. `sel.type` narrows to the concrete
+  // selector tags, so the switch stays exhaustive over real union members.
+  const sel = expr as unknown as SelectorOf<E>;
+  const candidates = sel.items.map((item) =>
+    evaluateSelectorExpr(item, isLeaf, evalLeaf),
+  );
+
+  switch (sel.type) {
+    case "SCHEDULE_EARLIER_OF":
+    case "NODE_EARLIER_OF":
+      return handleSelector(candidates, EARLIER_POLICY);
+    case "SCHEDULE_LATER_OF":
+    case "NODE_LATER_OF":
+      return handleSelector(candidates, LATER_POLICY);
+    default:
+      return assertNever(sel.type);
+  }
+}
+
+/* ------------------------
  * Public API: pickers for ScheduleExpr / VestingNodeExpr
  * ------------------------ */
+
+const isScheduleLeaf = (e: ScheduleExpr): e is Schedule =>
+  e.type === "SCHEDULE";
 
 export function evaluateScheduleExpr(
   expr: ScheduleExpr,
   ctx: EvaluationContext,
 ): PickReturn<Schedule> {
-  switch (expr.type) {
-    case "SCHEDULE": {
-      const res = evaluateVestingNodeExpr(expr.vesting_start, ctx);
-      if (res.type === "PICKED") {
-        return {
-          type: res.type,
-          picked: expr,
-          meta: res.meta,
-        };
-      }
-      return res;
+  return evaluateSelectorExpr(expr, isScheduleLeaf, (leaf) => {
+    const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
+    if (res.type === "PICKED") {
+      return { type: res.type, picked: leaf, meta: res.meta };
     }
-
-    case "SCHEDULE_EARLIER_OF": {
-      const candidates = expr.items.map((item) =>
-        evaluateScheduleExpr(item, ctx),
-      );
-      return handleSelector(candidates, EARLIER_POLICY);
-    }
-
-    case "SCHEDULE_LATER_OF": {
-      const candidates = expr.items.map((item) =>
-        evaluateScheduleExpr(item, ctx),
-      );
-      return handleSelector(candidates, LATER_POLICY);
-    }
-  }
+    return res;
+  });
 }
+
+const isNodeLeaf = (e: VestingNodeExpr): e is VestingNode => e.type === "NODE";
 
 export function evaluateVestingNodeExpr(
   expr: VestingNodeExpr,
   ctx: EvaluationContext,
 ): PickReturn<VestingNode> {
-  switch (expr.type) {
-    case "NODE": {
-      const res = evaluateVestingNode(expr, ctx);
-
-      if (res.type === "RESOLVED") {
-        return { type: "PICKED", picked: expr, meta: res };
-      }
-      return res;
+  return evaluateSelectorExpr(expr, isNodeLeaf, (leaf) => {
+    const res = evaluateVestingNode(leaf, ctx);
+    if (res.type === "RESOLVED") {
+      return { type: "PICKED", picked: leaf, meta: res };
     }
-
-    case "NODE_EARLIER_OF": {
-      const candidates = expr.items.map((item) =>
-        evaluateVestingNodeExpr(item, ctx),
-      );
-      return handleSelector(candidates, EARLIER_POLICY);
-    }
-
-    case "NODE_LATER_OF": {
-      const candidates = expr.items.map((item) =>
-        evaluateVestingNodeExpr(item, ctx),
-      );
-      return handleSelector(candidates, LATER_POLICY);
-    }
-  }
+    return res;
+  });
 }
