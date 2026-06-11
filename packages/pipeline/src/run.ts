@@ -7,13 +7,8 @@
 // The signatures deliberately differ — an "as of" date only appears where it
 // means something. Don't fold them back into one ctx argument.
 
-import {
-  evaluateProgramAsOf,
-  evaluateClauseGroups,
-  toScheduleView,
-  reasonToString,
-  type ScheduleView,
-} from "@vestlang/evaluator";
+import { evaluateProgramAsOf, evaluateClauseGroups } from "@vestlang/evaluator";
+import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type { Installment, OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";

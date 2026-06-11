@@ -1,10 +1,44 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
-import { evaluateProgram, reasonToString } from "@vestlang/evaluator";
+import { evaluateProgram } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput, OCTDate } from "@vestlang/types";
+import type {
+  EvaluationContextInput,
+  NonTemplateReason,
+  OCTDate,
+} from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import type { TrancheInput } from "../src/types.js";
+
+// Render an events-only reason to the legible sentence the snapshot pins. The
+// production prose renderer (`reasonToString`) lives in the pipeline's
+// presentation layer, which the inferrer can't depend on (it sits below
+// recover → pipeline). This test only ever exercises OVERLAPPING_ABSOLUTE_STARTS,
+// but the other arms are spelled out so a new reason kind shows up here rather
+// than going silently unrendered.
+const renderReason = (r: NonTemplateReason): string => {
+  switch (r.kind) {
+    case "OVERLAPPING_ABSOLUTE_STARTS":
+      return (
+        r.detail ?? "Two independent absolute-date vesting grids on one grant."
+      );
+    case "EVENT_CLIFF":
+      return (
+        r.detail ??
+        `Event-anchored cliff on "${r.eventId}" has no template form.`
+      );
+    case "EVENT_CHAINED_TAIL":
+      return (
+        r.detail ??
+        `A THEN segment chained behind a start waiting on event "${r.eventId}" can't be dated until that event fires.`
+      );
+    case "DEFERRED_CLIFF":
+      return (
+        r.detail ??
+        "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."
+      );
+  }
+};
 
 /*
  * A frozen baseline for upcoming inferrer work.
@@ -92,7 +126,7 @@ function characterize(c: CorpusCase): CaseSnapshot {
     // The resolution reason is structured; render it so the snapshot stays the
     // legible sentence it has always pinned.
     ...(schedule.resolution.status === "events-only"
-      ? { reason: reasonToString(schedule.resolution.reason) }
+      ? { reason: renderReason(schedule.resolution.reason) }
       : {}),
     residual: inferred.diagnostics.residualError,
     decomposition: {

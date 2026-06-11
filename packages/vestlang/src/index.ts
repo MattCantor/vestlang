@@ -7,9 +7,12 @@ export { parse } from "@vestlang/dsl";
 // Normalizer
 export { normalizeProgram } from "@vestlang/normalizer";
 
-// Evaluator
-export { presentSchedule } from "@vestlang/evaluator";
-export type { VestedResult, SchedulePresentation } from "@vestlang/evaluator";
+// Evaluator (the spec-to-canonical compiler)
+export type { VestedResult } from "@vestlang/evaluator";
+
+// Pipeline — the consumer front door; owns schedule presentation.
+export { presentSchedule } from "@vestlang/pipeline";
+export type { SchedulePresentation } from "@vestlang/pipeline";
 
 // Recover — the public program-eval surface: it runs the evaluator, then rescues
 // an events-only verdict back to a template when the projection soundly has one.

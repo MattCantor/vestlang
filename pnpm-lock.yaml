@@ -524,6 +524,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/pipeline':
+        specifier: workspace:*
+        version: link:../pipeline
       '@vestlang/recover':
         specifier: workspace:*
         version: link:../recover
