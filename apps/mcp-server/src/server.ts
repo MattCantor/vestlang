@@ -21,6 +21,7 @@ import {
   resolveOffset,
   resolveVestingDay,
 } from "./date-math.js";
+import { PERSISTED_ARTIFACT, runPersist, runRehydrate } from "./persist.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
 exposes the full vestlang pipeline (parse, compile, evaluate, lint, stringify)
@@ -53,6 +54,15 @@ Typical workflows:
   minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
   encoded in the DSL — pass it back as EvaluationContext when evaluating the
   returned DSL.
+- Persistence lifecycle: vestlang_persist compiles a DSL program ONCE into a
+  storable artifact (canonical template + runtime + an out-of-band sidecar that
+  maps each synthetic event to its definition). Only a program that resolves to a
+  single \`template\` is storable; anything else returns a clear error. As the
+  real-world events the schedule gates on actually fire, call vestlang_rehydrate
+  with the stored artifact and the world's named-event firings — it returns the
+  DELTA of synthetic events to now fire in the system of record (each with the
+  date and the definition it resolved against), what's still pending, and the
+  dated projection the record keeper will show once those firings are applied.
 
 Dates are YYYY-MM-DD. Statements that reference named events (e.g.
 EVENT "ipo") require those events to appear in the events map — otherwise the
@@ -430,6 +440,98 @@ export function createServer(): McpServer {
         ok: diagnostics.length === 0,
         diagnostics,
       });
+    },
+  );
+
+  /* ------------------------
+   * Persistence tools
+   * ------------------------ */
+
+  /* persist: DSL + grant context → a storable PersistedArtifact */
+  server.registerTool(
+    "vestlang_persist",
+    {
+      title: "Persist a vesting schedule to a storable artifact",
+      description:
+        "Compile a vestlang program ONCE into a persisted artifact: the canonical template + runtime, plus an out-of-band `sidecar` mapping each synthetic event (minted when a combinator/gated/offset start is lowered into a template) to its definition. Only a program whose `resolution` is a single `template` is storable — anything else (events-only, unresolved, impossible) returns a clear error naming the status. Also returns the template arm's `blockers`: advisory pending witnesses still floating at store time (e.g. a gate whose event hasn't fired), which vestlang_rehydrate later resolves. Mirrors vestlang_evaluate's input conventions.",
+      inputSchema: z
+        .object({
+          dsl: DSL_INPUT,
+          ...EVAL_CONTEXT_FIELDS,
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const result = runPersist({
+        dsl: params.dsl,
+        grant_date: params.grant_date,
+        grant_quantity: params.grant_quantity,
+        events: params.events,
+        vesting_day_of_month: params.vesting_day_of_month,
+      });
+      if (!result.ok) return toolError(result.error);
+      return jsonResult({
+        artifact: result.artifact,
+        blockers: result.blockers,
+      });
+    },
+  );
+
+  /* rehydrate: stored artifact + the world's firings → delta + pending + projection */
+  server.registerTool(
+    "vestlang_rehydrate",
+    {
+      title: "Rehydrate a persisted artifact against fired events",
+      description:
+        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns THREE things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — synthetic events whose definitions still don't resolve (their gating events haven't fired); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). Pass the same grant_date the artifact was built with; supply newly-fired events in the events map.",
+      inputSchema: z
+        .object({
+          artifact: PERSISTED_ARTIFACT,
+          grant_date: ISO_DATE.describe(
+            "Grant date the artifact was built with (YYYY-MM-DD)",
+          ),
+          grant_quantity: z
+            .number()
+            .int("grant_quantity must be a whole number")
+            .min(0, "grant_quantity must be non-negative")
+            .describe("Total shares granted, used to size the projection"),
+          events: z
+            .record(z.string().min(1), ISO_DATE)
+            .optional()
+            .describe(
+              `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
+            ),
+          as_of: ISO_DATE.optional().describe(
+            "As-of date (YYYY-MM-DD). Defaults to grant_date.",
+          ),
+          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
+            "OCT VestingDayOfMonth. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+          ),
+        })
+        .strict().shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const result = runRehydrate({
+        artifact: params.artifact,
+        grant_date: params.grant_date,
+        grant_quantity: params.grant_quantity,
+        events: params.events,
+        as_of: params.as_of,
+        vesting_day_of_month: params.vesting_day_of_month,
+      });
+      return jsonResult(result);
     },
   );
 
