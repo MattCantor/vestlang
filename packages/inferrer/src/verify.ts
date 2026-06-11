@@ -3,7 +3,7 @@ import type {
   OCTDate,
   Program,
   ResolvedInstallment,
-  Status,
+  ResolutionStatus,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { EPSILON, projectionResidual } from "./residual.js";
@@ -91,7 +91,7 @@ export function collapseAgainstInput(
   program: Program,
   input: TrancheInput[],
   ctx: VerifyContext,
-): { residual: number; status: Status } {
+): { residual: number; status: ResolutionStatus } {
   const [schedule] = evaluateProgram(program, {
     grantDate: ctx.grantDate,
     events: {},
@@ -128,7 +128,10 @@ export function collapseAgainstInput(
  * recovers a template over one that only reproduces the numbers. The built
  * statements are evaluated as-is, exactly like the per-statement residual does.
  */
-export function programStatus(program: Program, ctx: VerifyContext): Status {
+export function programStatus(
+  program: Program,
+  ctx: VerifyContext,
+): ResolutionStatus {
   const [schedule] = evaluateProgram(program, {
     grantDate: ctx.grantDate,
     events: {},

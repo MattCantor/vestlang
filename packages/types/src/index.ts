@@ -90,7 +90,7 @@ export {
   InstallmentSet,
   EvaluatedScheduleVerdict,
   EvaluatedSchedule,
-  Status,
+  ResolutionStatus,
   NonTemplateReason,
   InterchangeVerdict,
   AbsenceAssumption,

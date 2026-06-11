@@ -13,8 +13,8 @@ import type {
   Installment,
   InterchangeVerdict,
   NonTemplateReason,
+  ResolutionStatus,
   SourceMap,
-  Status,
 } from "@vestlang/types";
 import { toScheduleView } from "../src/view";
 
@@ -24,7 +24,7 @@ import { toScheduleView } from "../src/view";
 // storable verdict passes its own. Everything is cast through `unknown`, so the
 // stub only has to carry the fields toScheduleView actually reads.
 const stub = (fields: {
-  status: Status;
+  status: ResolutionStatus;
   blockers?: Blocker[];
   installments?: Installment[];
   findings?: Finding[];

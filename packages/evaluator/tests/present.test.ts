@@ -14,7 +14,7 @@ import type {
   Installment,
   InterchangeVerdict,
   Program,
-  Status,
+  ResolutionStatus,
   VestingNode,
   VestingNodeExpr,
   VestingPeriod,
@@ -35,11 +35,13 @@ import {
 // "unresolved" has no interchange equivalent and reads as "unrepresentable" — but
 // a test can pass its own to exercise the two verdicts diverging. Findings default
 // to none (a well-formed schedule).
-const interchangeFor = (status: Status): InterchangeVerdict["status"] =>
+const interchangeFor = (
+  status: ResolutionStatus,
+): InterchangeVerdict["status"] =>
   status === "unresolved" ? "unrepresentable" : status;
 
 const stub = (
-  status: Status,
+  status: ResolutionStatus,
   blockers: Blocker[],
   installments: Installment[],
   findings: Finding[] = [],
