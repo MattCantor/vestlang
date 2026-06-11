@@ -43,9 +43,10 @@ const expandResolution = (
 ): RawEvent[] => {
   if (r.start.state !== "RESOLVED") return [];
   const anchor = r.start.date;
-  // For a chain tail, `anchor` is the clamped handoff (Feb 28 off a Jan 31 head)
-  // while `origin` keeps the chain's first day (the 31st), so the grid springs
-  // back to the month-end where it can. A non-tail is its own origin.
+  // For a chain tail, `anchor` is the handoff the previous segment ended on (Feb 28
+  // off a Jan 31 head, or mid-month off a DAYS run) while `origin` keeps the chain's
+  // first day (the 31st), so the grid lands on the grant's vesting day. A non-tail
+  // is its own origin.
   const origin = r.origin ?? anchor;
   const { type, length: period, occurrences } = r.periodicity;
   const dom = ctx.vesting_day_of_month;

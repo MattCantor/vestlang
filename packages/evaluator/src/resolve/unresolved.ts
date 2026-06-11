@@ -75,9 +75,9 @@ export const unresolvedInstallments = (
     return makeUnresolvedVestingStartSchedule([statementQuantity], blockers);
   }
 
-  // Resolved start: lay the grid from the start date (sprung off the chain origin
-  // so a clamped month-end handoff springs back), fold the grant-date lump, then
-  // read the cliff off the record.
+  // Resolved start: lay the grid from the start date (gridded on the chain origin's
+  // day, the grant's vesting day, not the handoff this tail landed on), fold the
+  // grant-date lump, then read the cliff off the record.
   const start = r.start.date;
   const origin = r.origin ?? start;
   const { type, length, occurrences } = r.periodicity;

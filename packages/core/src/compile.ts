@@ -47,7 +47,8 @@ export interface CompiledInstallment {
  * the anchor (so the lump lands on its true date, off-grid or not), and the EVENT
  * `multiplier` — realized_fraction for a partial payout, ONE otherwise — folds into
  * the statement's share of the grant before the grid splits it. `origin` carries
- * the chain's first date for day-of-month spring-back; it defaults to `anchor`.
+ * the chain's first date, the grant's single vesting day that every MONTHS grid
+ * anchors to; it defaults to `anchor`.
  */
 const expandAnchored = (
   statement: VestingStatement,
@@ -105,9 +106,10 @@ const expandStatement = (
     // Validator guarantees dateCursor is defined when any DATE statement exists.
     const anchor = dateCursor as OCTDate;
     // Every DATE statement in a template chains from the same starting date, so
-    // that's the origin for the day-of-month. For the head statement anchor and
-    // origin are equal (no effect); for a later segment whose anchor was clamped
-    // onto a short month, the origin pulls the grid back onto the start's day.
+    // that's the origin for the day-of-month — the grant's single vesting day.
+    // For the head, anchor and origin are equal (no effect); for a later segment
+    // whose anchor landed off the start day, the origin pulls the grid back onto
+    // it.
     const origin = runtime.startDate as OCTDate;
     const events = expandAnchored(statement, anchor, ONE, dom, origin);
     const nextCursor = advanceCursor(

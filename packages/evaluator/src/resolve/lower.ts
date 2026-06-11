@@ -138,10 +138,11 @@ export interface StmtResolution {
   // when an event-anchored chain can't become a single template.
   chained?: boolean;
   // The date the chain this segment belongs to started from, set only on tails.
-  // A tail's own `start` is a clamped handoff (Feb 28 from a Jan 31 head); the
-  // origin keeps the chain's first day-of-month (the 31st) around so the dates
-  // can spring back when materialized. Absent on a non-tail, where the segment is
-  // its own origin and consumers fall back to `start.date`.
+  // A tail's own `start` is wherever the previous segment handed off (Feb 28 off
+  // a Jan 31 head, or mid-month off a DAYS run); the origin keeps the chain's
+  // first day-of-month (the 31st) around so every tail grids on the grant's one
+  // vesting day rather than the handoff. Absent on a non-tail, where the segment
+  // is its own origin and consumers fall back to `start.date`.
   origin?: OCTDate;
 }
 
@@ -297,13 +298,14 @@ const resolveNonChained = (
 // How the next THEN tail should begin. The chaining walk recomputes this after
 // every statement and hands it to the following tail.
 // `origin` on the live variants is the date the whole chain started from — the
-// head's start for a date chain, or the firing date for a fired-event chain. Every
-// segment takes its day-of-month from the origin, not from `cursor`. That matters
-// at a month boundary: stepping Jan 31 forward a month clamps to Feb 28 (February
-// has no 31st), and if the next segment read its day off that clamped cursor it
-// would stay on the 28th for the rest of the chain. Carrying the origin lets it
-// spring back to the 31st (or the month's last day) the way an un-split schedule
-// would. See packages/core/src/dates.ts for the matching stepper parameter.
+// head's start for a date chain, or the firing date for a fired-event chain. The
+// policy: a grant has one vesting day, the origin's, and every segment takes its
+// day-of-month from the origin rather than from `cursor`. The cursor is just
+// wherever the previous segment ended, which need not be the vesting day — a DAYS
+// run can leave it mid-month (Jan 31 + 27d → Feb 27), and a MONTHS step can clamp
+// it onto a short month (Feb has no 31st). Reading the day off the origin keeps
+// the whole chain on the grant's day instead of inheriting that accident. See
+// packages/core/src/dates.ts for the matching stepper parameter.
 type ChainAnchor =
   // A live date chain: the tail starts on `cursor` as a plain DATE.
   | { kind: "DATE"; cursor: OCTDate; origin: OCTDate }
@@ -338,9 +340,9 @@ const anchorAfter = (
   const { occurrences, length, type } = r.periodicity;
   if (r.start.state === "RESOLVED") {
     // This statement heads the chain, so it is its own origin. Passing its start
-    // as the origin makes this first handoff identical to the old call (origin
-    // defaults to the date being stepped from); the origin only changes later
-    // handoffs, once the cursor has been clamped onto a short month.
+    // as the origin makes this first handoff a step from the vesting day onto
+    // itself (no effect); the origin only bites on later handoffs, once the cursor
+    // has drifted off the vesting day or clamped onto a short month.
     const cursor = advanceCursor(
       r.start.date,
       occurrences,
@@ -439,8 +441,8 @@ export const resolveStatements = (
               }
             : { state: "RESOLVED", date, base: { type: "DATE" } },
         // Pass the chain origin so a sub-annual cliff counts its pre-cliff
-        // tranches on the same sprung grid this tail vests on, rather than on
-        // the clamped handoff day.
+        // tranches on the same grid this tail vests on — the grant's vesting day
+        // — rather than on the handoff day the previous segment happened to end on.
         cliff: lowerCliff(
           p.cliff,
           date,
@@ -451,15 +453,16 @@ export const resolveStatements = (
           anchor.origin,
         ),
         chained: true,
-        // The chain's starting date, not this tail's clamped handoff. Carried so
-        // a later materialization can re-derive the original day-of-month.
+        // The chain's starting date, not this tail's handoff. Carried so a later
+        // materialization grids the tail on the grant's vesting day.
         origin: anchor.origin,
       });
       anchor = {
         ...anchor,
-        // Step the next handoff off the chain origin's day-of-month, so a boundary
-        // that clamped onto a short month doesn't strand the rest of the chain on
-        // the clamped day. The `...anchor` spread keeps `origin` for later tails.
+        // Step the next handoff off the chain origin's day-of-month, so the rest
+        // of the chain stays on the grant's vesting day rather than on whatever
+        // day this segment ended on. The `...anchor` spread keeps `origin` for
+        // later tails.
         cursor: advanceCursor(
           date,
           p.occurrences,

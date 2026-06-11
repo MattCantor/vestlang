@@ -112,8 +112,9 @@ export function buildStatement(
  * Re-express a built statement as a THEN continuation: drop its FROM anchor and
  * mark it chained, so the evaluator picks its start up from where the previous
  * segment ended rather than from a date we wrote down. Keeping the date out is
- * what makes a chain survive month-end clamping — a written-down handoff can land
- * a day off the running cursor, but a chained tail can't.
+ * what lets the tail grid on the grant's vesting day (the chain origin's): a
+ * written-down handoff would pin the tail to whatever day the previous segment
+ * landed on, but a chained tail inherits the origin instead.
  *
  * Only a plain dated segment can become a tail; a selector head or an existing
  * tail has nothing to continue from, so those are caller bugs.

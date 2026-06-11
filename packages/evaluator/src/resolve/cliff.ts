@@ -105,16 +105,17 @@ const measureDuration = (
 };
 
 // `origin` is the date the whole chain started from, used only to count how many
-// grid occurrences fall on/before the cliff. A chain segment whose anchor was
-// clamped onto a short month (Jan 31 handoff lands on Feb 28) still lays its grid
-// on the chain's original day where the calendar allows it, so the count has to
-// be taken against that sprung grid — the same grid core later partitions the
-// lump on. If the two disagreed, the percentage baked in here wouldn't match how
-// core splits the tranches and the boundary tranche would be misallocated. It
-// defaults to `anchor`, so a head or any non-chained statement (its own origin)
-// is unaffected. The cliff *date* below is left origin-blind on purpose: a cliff
-// is a fixed duration from this segment's anchor, so it lands wherever that
-// duration puts it regardless of how the grid day springs back.
+// grid occurrences fall on/before the cliff. Every MONTHS segment grids on the
+// origin's day-of-month — the grant's one vesting day — not on the handoff its
+// anchor landed on (mid-month off a DAYS run, or clamped onto a short month like
+// Feb 28 off a Jan 31 head). So the count has to be taken against that same grid,
+// the one core later partitions the lump on. If the two disagreed, the percentage
+// baked in here wouldn't match how core splits the tranches and the boundary
+// tranche would be misallocated. It defaults to `anchor`, so a head or any
+// non-chained statement (its own origin) is unaffected. The cliff *date* below is
+// left origin-blind on purpose: a cliff is a fixed duration from this segment's
+// anchor, so it lands wherever that duration puts it regardless of which day the
+// grid anchors to.
 export const lowerCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
   anchor: OCTDate,
@@ -202,7 +203,7 @@ export const lowerCliff = (
   const dom: VestingDayOfMonth = ctx.vesting_day_of_month;
 
   // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate,
-  // counted on the origin-sprung grid (see the note on `origin` above) — the same
+  // counted on the origin-day grid (see the note on `origin` above) — the same
   // grid core later partitions the lump on.
   const at = gridDate({ anchor, origin, period, periodType, dom });
   let m = 0;

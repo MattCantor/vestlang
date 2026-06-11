@@ -199,8 +199,8 @@ function verdictRank(status: ResolutionStatus): number {
 
 /** How many statements carry their own explicit start. A THEN chain has one (the
  * head); an N-statement PLUS list has N. Fewer is better: the chained form reads
- * as one schedule and computes its handoffs from the chain origin, so it can't
- * miss a clamped month-end the way a written-down date can. */
+ * as one schedule and grids every segment on the chain origin's day (the grant's
+ * one vesting day), which a list of written-down dates can't reproduce. */
 function explicitStarts(program: Program): number {
   return program.filter((s) => !s.chained).length;
 }
