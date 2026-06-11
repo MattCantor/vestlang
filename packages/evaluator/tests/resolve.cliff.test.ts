@@ -63,6 +63,7 @@ describe("lowerCliff", () => {
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
       state: "EVENT",
       eventId: "ipo",
+      firedAt: "2026-04-01",
     });
   });
 
@@ -149,6 +150,7 @@ describe("lowerCliff — gated event cliff (#113)", () => {
     expect(lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c)).toEqual({
       state: "EVENT",
       eventId: "acquisition",
+      firedAt: "2026-06-01",
     });
   });
 

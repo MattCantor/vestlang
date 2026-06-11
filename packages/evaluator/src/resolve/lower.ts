@@ -477,8 +477,9 @@ export type TemplateBuild =
 
 /**
  * Assemble one canonical template from the per-statement resolutions, or report
- * why it can't be one: any unresolved start/cliff → `unresolved`; an event cliff
- * or non-chaining independent DATE grids → `events`.
+ * why it can't be one: any unresolved start/cliff or unfired event cliff →
+ * `unresolved`; a fired event cliff or non-chaining independent DATE grids →
+ * `events`.
  */
 export const buildTemplate = (
   resolutions: StmtResolution[],
@@ -512,6 +513,17 @@ export const buildTemplate = (
   if (
     resolutions.some(
       (r) => r.cliff.state === "UNRESOLVED" || r.cliff.state === "IMPOSSIBLE",
+    )
+  )
+    return unresolved();
+  // An event-anchored cliff never fits a template, but where it goes depends on
+  // the firing, read off the cliff record. Unfired, the cliff still gates its
+  // whole grid — the program is pending, and routing it to the events arm would
+  // release the very installments the cliff holds back. Fired, the lump is
+  // datable and the program flattens to dated events.
+  if (
+    resolutions.some(
+      (r) => r.cliff.state === "EVENT" && r.cliff.firedAt === undefined,
     )
   )
     return unresolved();

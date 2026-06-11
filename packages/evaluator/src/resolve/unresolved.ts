@@ -35,11 +35,14 @@ export const unresolvedInstallments = (
   stmt: Statement,
   ctx: EvaluationContext,
 ): InstallmentSet => {
-  // Defensive: a chained THEN segment is materialized from its resolution by the
-  // unresolved arm, never routed here. If this throws, that routing broke.
-  if (stmt.chained) {
+  // A chained THEN tail is welcome once the chaining walk has handed it a
+  // concrete start — from there it reads like any self-anchored statement (its
+  // own cliff can still gate it). A tail still waiting on its head has nothing
+  // to render and is the caller's job to report; reaching here means the
+  // routing broke.
+  if (stmt.chained && r.start.state !== "RESOLVED") {
     throw new Error(
-      "unresolvedInstallments received a chained THEN tail; chained tails are materialized from their resolution, not rendered here.",
+      "unresolvedInstallments received a chained THEN tail with no handoff date; a pending tail is reported from its resolution, not rendered here.",
     );
   }
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
@@ -106,9 +109,9 @@ export const unresolvedInstallments = (
       return makeImpossibleSchedule(amounts, r.cliff.blockers);
     case "EVENT": {
       // A bare event cliff: once the event fires the lump is dated (core.compile
-      // places it); until then the whole grid waits on that event.
-      const fired = ctx.events[r.cliff.eventId] !== undefined;
-      return fired
+      // places it); until then the whole grid waits on that event. The firing is
+      // read off the record, the same place the routing reads it.
+      return r.cliff.firedAt !== undefined
         ? EMPTY
         : makeUnresolvedCliffSchedule(dates, amounts, [
             { type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.eventId },

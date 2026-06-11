@@ -257,6 +257,42 @@ describe("presentSchedule — end-to-end hybrid", () => {
     });
   });
 
+  it("two date grids + 25% unfired EVENT → events-only that is still pending", () => {
+    // The dated portions force the events arm, but the event portion is still
+    // waiting — the collapsed verdict must read pending off its blocker, not
+    // pretend the schedule is settled because most of it dated.
+    const monthly2: VestingPeriod = {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+    };
+    const program: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        monthly2,
+      ),
+      stmt(
+        portion(1, 4),
+        makeSingletonNode(makeVestingBaseDate("2025-06-15")),
+        monthly2,
+      ),
+      stmt(
+        portion(1, 4),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        monthly2,
+      ),
+    ];
+    const [out] = evaluateProgram(program, ctxInput()); // ipo unfired
+    expect(out.resolution.status).toBe("events-only");
+    expect(presentSchedule(out)).toEqual({
+      representable: true,
+      pending: true, // the event portion's blocker survives the events arm
+      projected: true,
+      valid: true,
+    });
+  });
+
   it("3/4 + 3/4 over one grant → projected but invalid (don't hide the projection)", () => {
     const program: Program = [
       stmt(

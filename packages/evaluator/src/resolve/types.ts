@@ -2,7 +2,8 @@
 //
 // extended.resolve(program, runtime) maps one DSL program to exactly one verdict:
 //   template     resolves and fits canonical's one-template shape (the best case).
-//   events       resolves to concrete dated amounts but doesn't fit a template.
+//   events       resolves to dated amounts but doesn't fit a template; pending
+//                sibling portions ride along symbolically, with blockers.
 //   unresolved   can't be materialized yet (unfired event), still satisfiable.
 //   impossible   every portion is void — no witness assignment can ever resolve it.
 //                The lossless rollup of leaf-level IMPOSSIBLE: emitted only when
@@ -16,7 +17,6 @@ import type {
   ImpossibleInstallment,
   Installment,
   NonTemplateReason,
-  ResolvedInstallment,
   SourceMap,
 } from "@vestlang/types";
 
@@ -36,7 +36,12 @@ export type ResolveVerdict =
     }
   | {
       kind: "events";
-      installments: ResolvedInstallment[];
+      // Dated tranches from the resolved portions, plus symbolic (UNRESOLVED)
+      // ones for any sibling still waiting on an event — a pending portion's
+      // shares stay accounted for even when the dated part forced this arm.
+      installments: Installment[];
+      // The pending siblings' witnesses. Empty when every portion resolved.
+      blockers: Blocker[];
       reason: NonTemplateReason;
     }
   | {

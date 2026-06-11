@@ -1,9 +1,11 @@
 // Verdict classification — the `events` and `unresolved` arms of ResolveResult.
 //
 //  - events: the program resolves to concrete dated amounts but doesn't fit one
-//    template (independent non-chaining grids, or an event-anchored cliff). Each
-//    statement is expanded to dated events, flattened, sorted, and allocated with
-//    the single running cumulative (core's allocator). The facts survive; the
+//    template (independent non-chaining grids, or a fired event-anchored cliff).
+//    Each resolved statement is expanded to dated events, flattened, sorted, and
+//    allocated with the single running cumulative (core's allocator). A sibling
+//    portion still waiting on an event isn't dropped: its shares ride along as
+//    symbolic installments, its witnesses as blockers. The facts survive; the
 //    intent does not.
 //  - unresolved: a start/cliff can't be materialized yet. Reuses vestlang's
 //    evaluator to produce the symbolic (dateless) installments + blockers.
@@ -13,7 +15,6 @@ import type {
   EvaluationContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
-  NonTemplateReason,
   Program,
   ResolvedInstallment,
   SymbolicInstallment,
@@ -63,12 +64,20 @@ const expandResolution = (
       percentage: r.cliff.cliff.percentage,
     };
   } else if (r.cliff.state === "EVENT") {
-    // An event cliff has no percentage of its own — the lump takes whatever share
-    // of the grid lands at or before the firing. Unfired → no lump.
-    const date = ctx.events[r.cliff.eventId];
-    cliff = date ? { kind: "proportional", date } : { kind: "none" };
-  } else {
+    // An event cliff has no percentage of its own — the lump takes whatever
+    // share of the grid lands at or before the firing, read off the record.
+    // Unfired, the cliff still gates every installment, so there are no dated
+    // tranches to emit; the routing holds such portions back before this
+    // expander runs, and the empty return keeps the failure mode "withheld",
+    // never "released".
+    if (r.cliff.firedAt === undefined) return [];
+    cliff = { kind: "proportional", date: r.cliff.firedAt };
+  } else if (r.cliff.state === "NONE") {
     cliff = { kind: "none" };
+  } else {
+    // UNRESOLVED / IMPOSSIBLE: nothing here is datable. Only a vacuous
+    // 0-occurrence statement legitimately reaches this with nothing to lose.
+    return [];
   }
 
   return expandGrid({
@@ -101,16 +110,49 @@ const resolvedInstallments = (
     ctx.grantDate,
   ).map((t) => makeResolvedInstallment(t.date, t.amount));
 
+/**
+ * The events arm routes here when the *dated* part of the program forced it (a
+ * second independent grid, a fired event cliff) — which says nothing about the
+ * sibling portions. A statement whose start is still waiting (a pending event,
+ * an unsettled combinator) passed buildTemplate's guards and must not vanish:
+ * its shares are emitted as symbolic installments and its witnesses as
+ * blockers, the same rendering the unresolved arm uses for a mixed program.
+ */
 const eventsArm = (
-  resolutions: StmtResolution[],
-  ctx: EvaluationContext,
-  totalShares: number,
-  reason: NonTemplateReason,
-): ResolveVerdict => ({
-  kind: "events",
-  installments: resolvedInstallments(resolutions, ctx, totalShares),
-  reason,
-});
+  build: Extract<TemplateBuild, { why: "events" }>,
+  program: Program,
+): ResolveVerdict => {
+  const { ctx, totalShares, resolutions, reason } = build;
+  const symbolic: SymbolicInstallment[] = [];
+  const blockers: Blocker[] = [];
+  const dated: StmtResolution[] = [];
+  program.forEach((stmt, i) => {
+    const r = resolutions[i];
+    if (r.start.state === "RESOLVED") {
+      dated.push(r);
+      return;
+    }
+    // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE starts to the
+    // unresolved arm, and a pending chain head keeps its tails out of the
+    // events build too — so what lands here is a pending event or synthetic
+    // combinator start on a statement of its own.
+    const ev = unresolvedInstallments(r, stmt, ctx);
+    for (const inst of ev.installments) {
+      if (inst.meta.state !== "RESOLVED")
+        symbolic.push(inst as SymbolicInstallment);
+    }
+    blockers.push(...ev.blockers);
+  });
+  return {
+    kind: "events",
+    installments: [
+      ...resolvedInstallments(dated, ctx, totalShares),
+      ...symbolic,
+    ],
+    blockers,
+    reason,
+  };
+};
 
 // A portion is "void" when nothing can ever vest from it: a contradictory start,
 // or a resolved start whose cliff is contradictory. A pending start is never void
@@ -132,16 +174,13 @@ const unresolvedArm = (
     const r = resolutions[i];
     // A THEN tail has no start of its own; the cursor pre-pass already handed it
     // one, so we work from that resolution rather than rendering it from scratch.
-    if (stmt.chained) {
-      if (r.start.state === "RESOLVED") {
-        // A date chain, or a chain off a fired event: the tail has a concrete
-        // date, so let the resolved producer materialize its tranches.
-        resolvedResolutions.push(r);
-      } else if (r.start.state === "UNRESOLVED") {
-        // A chain off an event that hasn't fired: the tail can't vest yet. It
-        // contributes no tranches, only the blocker for what it's waiting on.
-        blockers.push(...r.start.blockers);
-      }
+    // A tail whose chain head hasn't fired can't vest yet — it contributes no
+    // tranches, only the blocker for what it's waiting on. A tail with a concrete
+    // handoff date falls through to the shared rendering below: its own cliff can
+    // still gate it (an unfired event cliff, a pending gate), the same as a
+    // statement that anchors itself.
+    if (stmt.chained && r.start.state !== "RESOLVED") {
+      if (r.start.state === "UNRESOLVED") blockers.push(...r.start.blockers);
       return;
     }
     const ev = unresolvedInstallments(r, stmt, ctx);
@@ -198,4 +237,4 @@ export const classify = (
 ): ResolveVerdict =>
   build.why === "unresolved"
     ? unresolvedArm(build, program)
-    : eventsArm(build.resolutions, build.ctx, build.totalShares, build.reason);
+    : eventsArm(build, program);

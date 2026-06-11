@@ -10,8 +10,10 @@
 //     always proportional; non-proportional cliffs arrive only via OCF data).
 //
 // A bare event cliff (`CLIFF EVENT "ipo"`) is not a `cliff` field; Carta has no
-// event anchor on the cliff. It's reported so the classifier (4b) can route it
-// structurally, to events-only. An unresolved cliff is reported with blockers.
+// event anchor on the cliff. It's reported (with its firing, if any) so the
+// classifier (4b) can route it structurally: a fired event cliff flattens to
+// dated events, an unfired one keeps the whole grid pending. An unresolved
+// cliff is reported with blockers.
 
 import type {
   Blocker,
@@ -40,8 +42,11 @@ const MS_PER_DAY = 86_400_000;
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
-  // Event-anchored cliff: no time-based `cliff` representation.
-  | { state: "EVENT"; eventId: string }
+  // Event-anchored cliff: no time-based `cliff` representation. `firedAt` is the
+  // firing date when the event is on record — the record carries the firing so
+  // downstream routing never has to re-consult the events map (and can't quietly
+  // treat an unfired cliff as no cliff).
+  | { state: "EVENT"; eventId: string; firedAt?: OCTDate }
   // A pending cliff the renderer reproduces without re-resolving. `dated` picks
   // the render shape (grid occurrences placeable vs. fully symbolic) and
   // `probeDate` is the partial-`LATER OF` lower bound the dated case folds from;
@@ -137,7 +142,7 @@ export const lowerCliff = (
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
   // A genuinely event-anchored cliff has no time-based cliff field, so it's
-  // reported as EVENT for the classifier (4b) to route to events-only. A gate on
+  // reported as EVENT for the classifier (4b) to route on. A gate on
   // it still decides whether the cliff stands: a violated or still-pending gate
   // routes it away (UNRESOLVED), exactly as a non-event cliff that resolves
   // impossible/pending does — the gate is enforced by the shared evaluator above,
@@ -156,7 +161,10 @@ export const lowerCliff = (
       const gate = gateVerdict(res, true);
       if (gate) return gate;
     }
-    return { state: "EVENT", eventId: evId };
+    const firedAt = ctx.events[evId];
+    return firedAt !== undefined
+      ? { state: "EVENT", eventId: evId, firedAt }
+      : { state: "EVENT", eventId: evId };
   }
 
   // A violated gate (or any contradictory cliff) is dead.

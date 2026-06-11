@@ -205,8 +205,13 @@ export type EvaluatedScheduleVerdict =
     }
   | {
       status: "events-only";
-      installments: ResolvedInstallment[];
+      // Mostly dated (RESOLVED) tranches — that's what earned the arm — but a
+      // sibling portion still waiting on an event keeps its shares here as
+      // symbolic (UNRESOLVED) installments, the same mixed-stream rule as the
+      // unresolved arm.
+      installments: Installment[];
       reason: string;
+      // The pending portions' missing witnesses. Empty when everything dated.
       blockers: Blocker[];
     }
   | {
@@ -266,7 +271,10 @@ export type InterchangeVerdict =
     }
   | {
       status: "events-only";
-      installments: ResolvedInstallment[];
+      // Same mixed stream as the resolution arm: a portion that floats on an
+      // event reads as unfired here (firings are ignored), so its share claim
+      // rides along symbolically rather than vanishing from the total.
+      installments: Installment[];
       reason: NonTemplateReason;
     }
   | { status: "unrepresentable"; reason: NonTemplateReason }
