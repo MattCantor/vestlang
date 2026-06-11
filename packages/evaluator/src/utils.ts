@@ -4,14 +4,11 @@ import {
   EvaluationContextInput,
   Statement,
 } from "@vestlang/types";
+import { floorSharesAt } from "@vestlang/core";
 
 export function prepare(stmt: Statement, ctx_input: EvaluationContextInput) {
   const ctx = createEvaluationContext(ctx_input);
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
-  if (statementQuantity % 1 !== 0 || statementQuantity < 0)
-    throw new Error(
-      `expandAllocatedSchedule: totalQuantity must be a positive whole number or zero: ${statementQuantity}`,
-    );
   return { ctx, statementQuantity };
 }
 
@@ -25,8 +22,15 @@ export function createEvaluationContext(
   };
 }
 
+// An integer share claim for a statement. A QUANTITY is its own count; a PORTION
+// floors grant × fraction the same way the template arm does (one cumulative
+// through floorSharesAt), so the symbolic and template arms agree on a statement's
+// total — and the result is always integral, never a fractional BigInt input.
 export function amountToQuantify(a: Amount, grantQuantity: number): number {
   return a.type === "QUANTITY"
     ? a.value
-    : grantQuantity * (a.numerator / a.denominator);
+    : floorSharesAt(grantQuantity, {
+        numerator: a.numerator,
+        denominator: a.denominator,
+      });
 }
