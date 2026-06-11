@@ -5,6 +5,8 @@
 
 import { describe, it, expect } from "vitest";
 import { addPeriod, compile } from "@vestlang/core";
+import { parse } from "@vestlang/dsl";
+import { normalizeProgram } from "@vestlang/normalizer";
 import type {
   Amount,
   EvaluationContextInput,
@@ -14,6 +16,7 @@ import type {
   Statement,
   VestingPeriod,
 } from "@vestlang/types";
+import { evaluateProgram } from "../src/index";
 import { resolveToCore } from "../src/resolve/index";
 import { resolveStatements } from "../src/resolve/lower";
 import { createEvaluationContext } from "../src/utils";
@@ -251,6 +254,44 @@ describe("resolveToCore — month-end chain, resolve pre-pass agrees with core",
     expect(result.template.statements).toHaveLength(3);
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(dates(events)).toEqual(["2025-02-28", "2025-03-31", "2025-04-30"]);
+  });
+});
+
+describe("chain origin day-of-month — never-clamped DAYS handoff (#171)", () => {
+  // The #34 cases above all hand off on a *clamped* month-end (Jan 31 + 1mo →
+  // Feb 28), which made it tempting to read the origin re-anchoring as a repair
+  // for short-month clamping. It isn't: it's the policy that a grant has one
+  // vesting day (the origin's), and every MONTHS segment anchors to it.
+  //
+  // This case has no clamp anywhere. The head is a DAYS run, so it lands on an
+  // exact day count — Jan 31 + 27 days = Feb 27, nothing clamped. The MONTHS tail
+  // still returns to the origin's day-of-month (31) rather than inheriting the
+  // 27th the head happened to leave it on: Mar 31, Apr 30, May 31. That is the
+  // ratified behavior — monthly vesting anchors schedule-wide to the commencement
+  // day, not to wherever an odd-unit segment ended.
+  const dsl =
+    "0.25 VEST FROM DATE 2025-01-31 OVER 27 days EVERY 27 days " +
+    "THEN 0.75 VEST OVER 3 months EVERY 1 month";
+
+  it("the MONTHS tail springs to the origin's day, not the DAYS handoff", () => {
+    const program = normalizeProgram(parse(dsl));
+    const [schedule] = evaluateProgram(program, {
+      grantDate: "2025-01-31",
+      grantQuantity: 100000,
+      asOf: "2035-01-01",
+      events: {},
+    });
+    const installments = schedule.resolution.installments.map((i) =>
+      i.state === "RESOLVED"
+        ? { date: i.date, amount: i.amount }
+        : { date: undefined, amount: i.amount },
+    );
+    expect(installments).toEqual([
+      { date: "2025-02-27", amount: 25000 }, // head: exact 27-day count, unclamped
+      { date: "2025-03-31", amount: 25000 }, // tail returns to day 31
+      { date: "2025-04-30", amount: 25000 }, // April clamps to 30 (the calendar, not the handoff)
+      { date: "2025-05-31", amount: 25000 },
+    ]);
   });
 });
 

@@ -52,9 +52,10 @@ export type GridCliff =
 
 export interface ExpandGridArgs {
   anchor: OCTDate;
-  // The chain's first date. Used only for day-of-month spring-back: a segment
-  // whose anchor was clamped onto a short month still vests on the original day
-  // where the calendar allows. Equal to `anchor` for a self-anchored statement.
+  // The chain's first date, and the day-of-month every MONTHS segment grids on:
+  // one vesting day per grant. A segment whose anchor landed mid-month or clamped
+  // onto a short month still vests on the origin's day where the calendar allows.
+  // Equal to `anchor` for a self-anchored statement.
   origin: OCTDate;
   period: number;
   periodType: PeriodType;

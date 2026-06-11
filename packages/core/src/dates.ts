@@ -67,10 +67,13 @@ export const toISO = (d: Date): OCTDate => {
  * `origin` is the date whose day-of-month the VESTING_START policy targets. It
  * defaults to `iso` — the date we're stepping from — which reproduces the
  * plain "keep the day you started on" behavior. Callers walking a chain across
- * several segments pass the chain's first date instead, so a handoff that got
- * clamped to a short month (Jan 31 → Feb 28) doesn't drag the rest of the chain
- * onto the 28th: the day still springs back to 31 wherever the month allows it.
- * Only this policy reads `origin`; the others target a fixed day regardless.
+ * several segments pass the chain's first date instead, which is the policy: a
+ * grant keeps one vesting day, the origin's, and every MONTHS segment anchors to
+ * it. A preceding DAYS segment can hand off mid-month (Jan 31 + 27d → Feb 27),
+ * and a short month can clamp the handoff (Feb has no 31st), but neither sticks
+ * — this step targets the origin day and clamps to the month's last day only
+ * where the calendar forces it. Only this policy reads `origin`; the others
+ * target a fixed day regardless.
  */
 export function addMonthsRule(
   iso: OCTDate,
@@ -125,9 +128,10 @@ export const addDays = (iso: OCTDate, n: number): OCTDate => {
  * Step `units` of `periodType` from `start`. YEARS are months × 12 (so the same
  * day-of-month clamping applies). DAYS ignore the day-of-month policy.
  *
- * `origin` is forwarded to the month stepper (see `addMonthsRule`); it defaults
- * to `start`, so callers that don't care about chain origin get the usual
- * step-from-start behavior. DAYS ignore it.
+ * `origin` is forwarded to the month stepper (see `addMonthsRule`), which targets
+ * the origin's day-of-month — the grant's single vesting day. It defaults to
+ * `start`, so callers that don't chain get the usual step-from-start behavior.
+ * DAYS ignore it.
  */
 export const addPeriod = (
   start: OCTDate,
@@ -150,11 +154,12 @@ export const addPeriod = (
 // covers `occurrences` periods of `period` units each, so its end — and the start
 // of whatever follows it — is that whole span stepped forward from the anchor.
 // The canonical compiler and the evaluator's chaining pre-pass both call this, so
-// the short-month clamping quirk (Jan 31 handoff lands on Feb 28, see #34) has a
-// single place to be fixed rather than two that could drift apart. Pass `origin`
-// (the chain's first date) so the clamped day-of-month is taken from there rather
-// than from this segment's anchor; it defaults to the anchor for callers that
-// don't chain.
+// the chain-origin day-of-month policy (#34, #171) is computed in one place rather
+// than two that could drift apart. Pass `origin` (the chain's first date) so the
+// day-of-month is taken from there rather than from this segment's anchor: the
+// whole grant vests on the origin's day, so a handoff that fell mid-month or got
+// clamped onto a short month doesn't carry that day forward. It defaults to the
+// anchor for callers that don't chain.
 export const advanceCursor = (
   anchor: OCTDate,
   occurrences: number,
