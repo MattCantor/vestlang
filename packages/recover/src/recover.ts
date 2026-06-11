@@ -1,8 +1,4 @@
-import {
-  assemble,
-  resolveToCore,
-  resolveInterchange,
-} from "@vestlang/evaluator";
+import { evaluateProgram } from "@vestlang/evaluator";
 import {
   inferSchedule,
   projectionResidual,
@@ -28,30 +24,20 @@ export function evaluateProgramWithRecovery(
   stmts: Program,
   ctx: EvaluationContextInput,
 ): RecoveryOutcome {
-  const r = resolveToCore(stmts, ctx);
-  // The storable-floor verdict for the authored program, paired with every
-  // schedule we assemble from `r` below.
-  const interchange = resolveInterchange(stmts, ctx);
+  // The collapse the public surface produces — one schedule carrying both the
+  // closed-world resolution and the storable-floor interchange verdict. It's both
+  // the value we return when there's no rescue, and the only place the original
+  // events-only reason survives: once we publish a recovered template, that
+  // schedule carries no reason of its own.
+  const [schedule] = evaluateProgram(stmts, ctx);
+  const noRescue: RecoveryOutcome = { rescued: false, schedule };
 
   // Anything that already fits a template (or can't resolve yet) leaves here
-  // untouched — no inference cost on the common path.
-  if (r.kind !== "events")
-    return { rescued: false, schedule: assemble(r, interchange) };
-
-  // From here `r` is the events arm. Assemble it once: it's both the value we
-  // return when there's no rescue, and the only place the original events-only
-  // reason survives — once we publish a recovered template, that schedule carries
-  // no reason of its own.
-  const eventsSchedule = assemble(r, interchange);
-  const noRescue: RecoveryOutcome = {
-    rescued: false,
-    schedule: eventsSchedule,
-  };
-  // `assemble` produced the events-only arm from the events build above; the guard
-  // narrows the published union so the gate and the captured provenance read the
-  // structured reason straight off the type recover hands back.
-  if (eventsSchedule.resolution.status !== "events-only") return noRescue;
-  const { reason, installments } = eventsSchedule.resolution;
+  // untouched — no inference cost on the common path. The guard also narrows the
+  // resolution union so the gate and the captured provenance read the structured
+  // reason straight off the type.
+  if (schedule.resolution.status !== "events-only") return noRescue;
+  const { reason, installments } = schedule.resolution;
 
   if (!admitsRecovery(reason, installments, stmts)) return noRescue;
 
@@ -76,18 +62,10 @@ export function evaluateProgramWithRecovery(
     ...ctx,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
-  const reclassified = resolveToCore(inferred.program, reclassifiedCtx);
-  if (reclassified.kind !== "template") return noRescue;
-
-  // The published schedule describes the inferred program now, so its storable
-  // verdict comes from that program too — and since recovery only runs on
-  // firing-invariant inputs, the inferred template is itself storable.
-  const published = assemble(
-    reclassified,
-    resolveInterchange(inferred.program, reclassifiedCtx),
-  );
-  // assemble preserves a template verdict; the guard is here to narrow the type,
-  // not because the other branch is reachable.
+  const [published] = evaluateProgram(inferred.program, reclassifiedCtx);
+  // Recovery only runs on firing-invariant inputs, so the inferred template is
+  // itself storable; the guard narrows the published resolution to the template
+  // arm. Anything else and the inferred DSL didn't reclassify as one template.
   if (published.resolution.status !== "template") return noRescue;
   // Rebuild with the narrowed resolution so the value matches the rescued-arm
   // type. Narrowing the nested `resolution` doesn't re-type the whole object, so

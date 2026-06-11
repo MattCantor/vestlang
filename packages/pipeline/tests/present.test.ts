@@ -19,8 +19,8 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+import { evaluateProgram } from "@vestlang/evaluator";
 import { presentSchedule } from "../src/present";
-import { evaluateProgram } from "../src/evaluate/index";
 import {
   makeSingletonSchedule,
   makeSingletonNode,

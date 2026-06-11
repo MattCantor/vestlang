@@ -16,7 +16,11 @@ export type {
   ClauseBreakdown,
 } from "./run.js";
 
-// Re-exported so the apps can type their rendering off the pipeline alone,
-// without taking a direct dependency on the evaluator / summary internals.
-export type { ScheduleView } from "@vestlang/evaluator";
+// The schedule presentation helpers, derived here off an EvaluatedSchedule:
+// `presentSchedule` (the four orthogonal reads) and `ScheduleView` (the
+// serializable display shape) so apps type their rendering off the pipeline
+// alone, without reaching into the evaluator or summary internals.
+export { presentSchedule } from "./present.js";
+export type { SchedulePresentation } from "./present.js";
+export type { ScheduleView } from "./view.js";
 export type { Summary } from "./summary.js";

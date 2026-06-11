@@ -50,6 +50,7 @@
     "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
+    "@vestlang/pipeline": "workspace:*",
     "@vestlang/recover": "workspace:*",
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
