@@ -1,13 +1,12 @@
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { resolvedInstallmentMap } from "./installments.js";
+import { EPSILON, wholeMultiple } from "./residual.js";
 import type {
   Component,
   SingleTrancheComponent,
   UniformComponent,
 } from "./types.js";
-
-const EPSILON = 1e-6;
 
 /**
  * The train's installment dates, earliest first.
@@ -99,9 +98,8 @@ export function splitCoincidentCliffs(
     );
     if (!lump) continue;
 
-    const ratio = lump.amount / u.perTrancheAmount;
-    const k = Math.round(ratio);
-    if (k < 1 || Math.abs(ratio - k) > EPSILON) continue;
+    const { k, whole } = wholeMultiple(lump.amount, u.perTrancheAmount);
+    if (k < 1 || !whole) continue;
 
     consumed.add(lump);
     bumped.set(lump, {

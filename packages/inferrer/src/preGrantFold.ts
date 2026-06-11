@@ -2,14 +2,13 @@ import type { OCTDate, Statement, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
 import { minimalCtx, walk } from "./cadence.js";
 import { resolvedInstallmentMap } from "./installments.js";
+import { EPSILON } from "./residual.js";
 import type {
   Component,
   SingleTrancheComponent,
   TrancheInput,
   UniformComponent,
 } from "./types.js";
-
-const EPSILON = 1e-6;
 
 type AmtMap = Map<string, number>;
 

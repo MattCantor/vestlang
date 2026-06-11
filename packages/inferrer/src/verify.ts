@@ -6,15 +6,24 @@ import type {
   Status,
   VestingDayOfMonth,
 } from "@vestlang/types";
+import { EPSILON } from "./residual.js";
 import type { TrancheInput } from "./types.js";
-
-const EPSILON = 1e-6;
 
 export interface VerifyContext {
   grantDate: OCTDate;
   totalQuantity: number;
   asOf: OCTDate;
   vestingDayOfMonth: VestingDayOfMonth;
+}
+
+/** Assemble the context every scoring call needs from the loose grant inputs. */
+export function makeVerifyContext(
+  grantDate: OCTDate,
+  totalQuantity: number,
+  asOf: OCTDate,
+  policy: VestingDayOfMonth,
+): VerifyContext {
+  return { grantDate, totalQuantity, asOf, vestingDayOfMonth: policy };
 }
 
 /** Total absolute disagreement, date by date, between what the program produced
