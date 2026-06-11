@@ -4,18 +4,18 @@ import type {
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { allocateVector } from "@vestlang/core";
+import { type Cadence, minimalCtx } from "./cadence.js";
 import {
-  type Cadence,
-  cadenceKey,
-  estimateCadences,
-  minimalCtx,
-  walk,
-} from "./cadence.js";
+  EPSILON,
+  type Residual,
+  cadenceTracker,
+  fingerprintFitsWithLeftover,
+  gridRun,
+  massAt,
+  occupied,
+  toResidual,
+} from "./residual.js";
 import type { Component, TrancheInput, UniformComponent } from "./types.js";
-
-type Residual = Map<string, number>;
-
-const EPSILON = 1e-6;
 
 /** Max branches explored per decision node. Realistic schedules need few; this
  * caps pathological blow-up while staying optimal on clean inputs. */
@@ -23,15 +23,6 @@ const MAX_BRANCH = 16;
 /** Hard cap on candidate cadences considered per residual, in estimator rank
  * order (data-derived modes first, then priors). */
 const TOP_CADENCES = 5;
-
-function toResidual(tranches: TrancheInput[]): Residual {
-  const m = new Map<string, number>();
-  for (const t of tranches) {
-    const prev = m.get(t.date) ?? 0;
-    m.set(t.date, prev + t.amount);
-  }
-  return m;
-}
 
 /** allocateVector fingerprints are monotonic in the total: increasing T never
  * decreases any position's share. So the set of T for which fingerprint <= mass
@@ -56,29 +47,6 @@ function maxFeasibleTotal(mass: number[], n: number): number {
     else hi = mid - 1;
   }
   return lo;
-}
-
-/** walk can throw on degenerate policy/date combinations; treat a throw as "this
- * grid position does not exist" so a bad (policy, date) pair scores poorly rather
- * than crashing the whole inference. */
-function safeWalk(
-  from: OCTDate,
-  cadence: Cadence,
-  steps: number,
-  ctx: EvaluationContext,
-): OCTDate | null {
-  try {
-    return walk(from, cadence, steps, ctx);
-  } catch {
-    return null;
-  }
-}
-
-function occupiedDates(r: Residual): OCTDate[] {
-  return Array.from(r.keys())
-    .filter((k) => (r.get(k) ?? 0) > EPSILON)
-    .sort()
-    .map((s) => s);
 }
 
 /** A candidate UNIFORM atom: a train whose allocation fingerprint fits (pointwise
@@ -109,23 +77,13 @@ function trainAtomsCovering(
   ctx: EvaluationContext,
 ): TrainAtom[] {
   const atoms: TrainAtom[] = [];
-  const has = (d: OCTDate) => (residual.get(d) ?? 0) > EPSILON;
-  const massAt = (d: OCTDate) => residual.get(d) ?? 0;
 
   for (const cadence of cadences) {
-    // Build the maximal on-grid run that begins at `target`.
-    const run: OCTDate[] = [];
-    for (let i = 0; ; i++) {
-      const g = safeWalk(target, cadence, i, ctx);
-      if (g === null) break;
-      if (!has(g)) break;
-      run.push(g);
-      if (i > 600) break;
-    }
+    const run = gridRun(residual, target, cadence, ctx);
 
     for (let n = run.length; n >= 2; n--) {
       const positions = run.slice(0, n);
-      const mass = positions.map(massAt);
+      const mass = positions.map((d) => massAt(residual, d));
       const sum = mass.reduce((a, b) => a + b, 0);
 
       // The train's total T must satisfy: allocateVector(T, n)[k] <= mass[k]
@@ -141,14 +99,7 @@ function trainAtomsCovering(
 
       for (const total of candidateTotals) {
         const fp = allocateVector(total, n);
-        let fits = true;
-        for (let k = 0; k < n; k++) {
-          if (fp[k] - mass[k] > EPSILON || fp[k] <= 0) {
-            fits = false;
-            break;
-          }
-        }
-        if (!fits) continue;
+        if (!fingerprintFitsWithLeftover(fp, mass)) continue;
         atoms.push({
           start: target,
           cadence,
@@ -181,6 +132,17 @@ function applyAtom(residual: Residual, atom: TrainAtom): Residual {
   return next;
 }
 
+function atomToComponent(atom: TrainAtom): UniformComponent {
+  return {
+    kind: "UNIFORM",
+    startDate: atom.start,
+    cadence: atom.cadence,
+    occurrences: atom.occurrences,
+    perTrancheAmount: atom.perTrancheAmount,
+    total: atom.total,
+  };
+}
+
 export interface DecomposeResult {
   components: Component[];
   cadencesTried: string[];
@@ -200,14 +162,12 @@ export function decompose(
 
   // Per-residual cadence estimate (CLEAN-style): re-derive the candidate
   // dictionary from the *current* residual so a secondary cadence emerges once
-  // the dominant train is peeled off. Records every cadence considered, so the
-  // reported `cadencesTried` is the union across all passes.
-  const triedKeys = new Set<string>();
-  const estimate = (dates: OCTDate[]): Cadence[] => {
-    const ranked = estimateCadences(dates).slice(0, TOP_CADENCES);
-    for (const c of ranked) triedKeys.add(cadenceKey(c));
-    return ranked;
-  };
+  // the dominant train is peeled off. The tracker records every cadence
+  // considered (capped at TOP_CADENCES per pass), so the reported `cadencesTried`
+  // is the union across all passes.
+  const tracker = cadenceTracker();
+  const estimate = (dates: OCTDate[]): Cadence[] =>
+    tracker.estimate(dates, TOP_CADENCES);
 
   // Greedy seed for an initial upper bound (also a valid answer if search is capped).
   const seed = greedyCover(root, estimate, ctx);
@@ -223,7 +183,7 @@ export function decompose(
     if (budget <= 0) return;
     budget--;
     if (chosen.length >= bestCost) return; // bound: cannot beat current best
-    const dates = occupiedDates(residual);
+    const dates = occupied(residual);
     if (dates.length === 0) {
       best = chosen.slice();
       bestCost = chosen.length;
@@ -240,15 +200,7 @@ export function decompose(
     // Branch: cover `target` with each candidate train.
     for (const atom of atoms) {
       const next = applyAtom(residual, atom);
-      const comp: UniformComponent = {
-        kind: "UNIFORM",
-        startDate: atom.start,
-        cadence: atom.cadence,
-        occurrences: atom.occurrences,
-        perTrancheAmount: atom.perTrancheAmount,
-        total: atom.total,
-      };
-      recurse(next, [...chosen, comp]);
+      recurse(next, [...chosen, atomToComponent(atom)]);
     }
 
     // Branch: cover `target` as a lone pulse.
@@ -265,7 +217,7 @@ export function decompose(
 
   recurse(root, []);
 
-  return { components: best, cadencesTried: [...triedKeys] };
+  return { components: best, cadencesTried: tracker.tried() };
 }
 
 /** Greedy fallback / upper-bound seed: repeatedly take the highest-mass fitting
@@ -278,7 +230,7 @@ function greedyCover(
   const residual = new Map(root);
   const components: Component[] = [];
   for (let iter = 0; iter < 100; iter++) {
-    const dates = occupiedDates(residual);
+    const dates = occupied(residual);
     if (dates.length === 0) break;
     const cadences = estimate(dates);
     let bestAtom: TrainAtom | null = null;
@@ -292,20 +244,13 @@ function greedyCover(
       }
     }
     if (bestAtom === null) break;
-    components.push({
-      kind: "UNIFORM",
-      startDate: bestAtom.start,
-      cadence: bestAtom.cadence,
-      occurrences: bestAtom.occurrences,
-      perTrancheAmount: bestAtom.perTrancheAmount,
-      total: bestAtom.total,
-    });
+    components.push(atomToComponent(bestAtom));
     const applied = applyAtom(residual, bestAtom);
     residual.clear();
     for (const [k, v] of applied) residual.set(k, v);
   }
-  for (const d of occupiedDates(residual)) {
-    const amt = residual.get(d) ?? 0;
+  for (const d of occupied(residual)) {
+    const amt = massAt(residual, d);
     if (amt > EPSILON)
       components.push({ kind: "SINGLE_TRANCHE", date: d, amount: amt });
   }

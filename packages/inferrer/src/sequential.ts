@@ -4,21 +4,25 @@ import type {
   OCTDate,
   VestingDayOfMonth,
 } from "@vestlang/types";
+import { type Cadence, minimalCtx } from "./cadence.js";
 import {
-  type Cadence,
-  cadenceKey,
-  estimateCadences,
-  minimalCtx,
-  walk,
-} from "./cadence.js";
+  EPSILON,
+  type Residual,
+  cadenceTracker,
+  fingerprintMatchesExact,
+  gridRun,
+  massAt,
+  occupied,
+  toResidual,
+  tryWalk,
+  wholeMultiple,
+} from "./residual.js";
 import type {
   CliffUniformComponent,
   Component,
   TrancheInput,
   UniformComponent,
 } from "./types.js";
-
-const EPSILON = 1e-6;
 
 /**
  * A sequential reading of the tranche stream: one schedule whose rate (and even
@@ -38,38 +42,6 @@ export interface SequentialResult {
   continuation: boolean[];
   /** Every cadence the estimator considered, for diagnostics. */
   cadencesTried: string[];
-}
-
-type Residual = Map<OCTDate, number>;
-
-function toResidual(tranches: TrancheInput[]): Residual {
-  const m: Residual = new Map();
-  for (const t of tranches) m.set(t.date, (m.get(t.date) ?? 0) + t.amount);
-  return m;
-}
-
-/** Dates that still carry mass, earliest first. */
-function occupied(r: Residual): OCTDate[] {
-  return [...r.keys()]
-    .filter((d) => (r.get(d) ?? 0) > EPSILON)
-    .sort((a, b) => a.localeCompare(b));
-}
-
-const massAt = (r: Residual, d: OCTDate): number => r.get(d) ?? 0;
-
-/** `walk`, but a degenerate (policy, date) pair returns null instead of throwing,
- * so a bad grid position just ends a run rather than crashing the segmenter. */
-function tryWalk(
-  from: OCTDate,
-  cadence: Cadence,
-  steps: number,
-  ctx: EvaluationContext,
-): OCTDate | null {
-  try {
-    return walk(from, cadence, steps, ctx);
-  } catch {
-    return null;
-  }
 }
 
 interface Run {
@@ -99,13 +71,7 @@ function longestExactRun(
   for (const cadence of cadences) {
     // Walk forward from `target` collecting consecutive on-grid dates that still
     // carry mass; the run can't extend past the first gap.
-    const grid: OCTDate[] = [];
-    for (let i = 0; ; i++) {
-      const g = tryWalk(target, cadence, i, ctx);
-      if (g === null || massAt(r, g) <= EPSILON) break;
-      grid.push(g);
-      if (i > 600) break; // guard against a pathological cadence
-    }
+    const grid = gridRun(r, target, cadence, ctx);
 
     // Longest-first so the first exact prefix we find is the maximal one.
     for (let n = grid.length; n >= 2; n--) {
@@ -113,8 +79,7 @@ function longestExactRun(
       const mass = dates.map((d) => massAt(r, d));
       const total = Math.round(mass.reduce((a, b) => a + b, 0));
       const fp = allocateVector(total, n);
-      const exact = fp.every((v, k) => Math.abs(v - mass[k]) <= EPSILON);
-      if (!exact) continue;
+      if (!fingerprintMatchesExact(fp, mass)) continue;
 
       if (best === null || n > best.occurrences) {
         best = {
@@ -168,9 +133,8 @@ function tryHeadCliff(
       continue;
     }
 
-    const ratio = lump / run.perTrancheAmount;
-    const k = Math.round(ratio);
-    if (k < 2 || Math.abs(ratio - k) > EPSILON) continue;
+    const { k, whole } = wholeMultiple(lump, run.perTrancheAmount);
+    if (k < 2 || !whole) continue;
 
     const grantDate = tryWalk(lumpDate, cadence, -k, ctx);
     if (grantDate === null) continue;
@@ -217,7 +181,7 @@ export function segmentSequential(
   const r = toResidual(tranches);
   const components: Component[] = [];
   const continuation: boolean[] = [];
-  const triedKeys = new Set<string>();
+  const tracker = cadenceTracker();
 
   // The earliest date the next segment is allowed to start on. Null until the
   // first segment is placed; afterwards it advances one period past each
@@ -233,8 +197,7 @@ export function segmentSequential(
       return null; // a tranche fell behind the cursor — interleaved grid
     }
 
-    const cadences = estimateCadences(dates);
-    for (const c of cadences) triedKeys.add(cadenceKey(c));
+    const cadences = tracker.estimate(dates);
 
     const run = longestExactRun(r, target, cadences, ctx);
     if (run) {
@@ -272,5 +235,5 @@ export function segmentSequential(
 
   if (components.length < 2) return null;
 
-  return { components, continuation, cadencesTried: [...triedKeys] };
+  return { components, continuation, cadencesTried: tracker.tried() };
 }

@@ -455,6 +455,9 @@ importers:
       '@vestlang/utils':
         specifier: workspace:*
         version: link:../utils
+      '@vestlang/walk':
+        specifier: workspace:*
+        version: link:../walk
     devDependencies:
       '@vestlang/dsl':
         specifier: workspace:*

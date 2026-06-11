@@ -1,14 +1,13 @@
 import { addMonthsRule, addDays } from "@vestlang/evaluator";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { minimalCtx, walk } from "./cadence.js";
+import { EPSILON, wholeMultiple } from "./residual.js";
 import type {
   CliffUniformComponent,
   Component,
   SingleTrancheComponent,
   UniformComponent,
 } from "./types.js";
-
-const EPSILON = 1e-6;
 
 function walkBack(
   from: OCTDate,
@@ -69,10 +68,8 @@ export function foldCliffs(
         continue;
       }
 
-      const ratio = s.amount / u.perTrancheAmount;
-      const k = Math.round(ratio);
-      if (k < 2) continue;
-      if (Math.abs(ratio - k) > EPSILON) continue;
+      const { k, whole } = wholeMultiple(s.amount, u.perTrancheAmount);
+      if (k < 2 || !whole) continue;
 
       const grantDate = walkBack(s.date, u.cadence, k, policy);
 

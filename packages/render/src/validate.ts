@@ -148,6 +148,28 @@ function validateConstraint(
   validateVestingNode(c.base, `${path}.base`, errors);
 }
 
+// The TwoOrMore grammar rule (types/helpers.ts) shows up in three selector shapes
+// — AND/OR conditions, node selectors, schedule selectors. Same array check, same
+// indexed recursion; only the noun and the per-item validator change. Kept local
+// rather than routed through @vestlang/walk: this file validates untrusted shapes,
+// and walk's forEachChild throws on anything off-union.
+function validateItems<T>(
+  items: T[],
+  path: string,
+  errors: AstError[],
+  what: string,
+  each: (item: T, itemPath: string, errors: AstError[]) => void,
+): void {
+  if (!Array.isArray(items) || items.length < 2) {
+    errors.push({
+      path: `${path}.items`,
+      message: `must hold two or more ${what}`,
+    });
+    return;
+  }
+  items.forEach((item, i) => each(item, `${path}.items[${i}]`, errors));
+}
+
 function validateCondition(
   cond: Condition,
   path: string,
@@ -163,16 +185,7 @@ function validateCondition(
       break;
     case "AND":
     case "OR":
-      if (!Array.isArray(cond.items) || cond.items.length < 2) {
-        errors.push({
-          path: `${path}.items`,
-          message: "must hold two or more conditions",
-        });
-      } else {
-        cond.items.forEach((item, i) =>
-          validateCondition(item, `${path}.items[${i}]`, errors),
-        );
-      }
+      validateItems(cond.items, path, errors, "conditions", validateCondition);
       break;
     default:
       pushTypeError(cond, "an ATOM, AND, or OR condition", path, errors);
@@ -210,16 +223,13 @@ function validateVestingNodeExpr(
       break;
     case "NODE_LATER_OF":
     case "NODE_EARLIER_OF":
-      if (!Array.isArray(node.items) || node.items.length < 2) {
-        errors.push({
-          path: `${path}.items`,
-          message: "must hold two or more candidates",
-        });
-      } else {
-        node.items.forEach((item, i) =>
-          validateVestingNodeExpr(item, `${path}.items[${i}]`, errors),
-        );
-      }
+      validateItems(
+        node.items,
+        path,
+        errors,
+        "candidates",
+        validateVestingNodeExpr,
+      );
       break;
     default:
       // A raw parse AST leaves cliffs as bare DURATIONs and the like; those have
@@ -292,16 +302,7 @@ function validateScheduleExpr(
       break;
     case "SCHEDULE_LATER_OF":
     case "SCHEDULE_EARLIER_OF":
-      if (!Array.isArray(e.items) || e.items.length < 2) {
-        errors.push({
-          path: `${path}.items`,
-          message: "must hold two or more candidates",
-        });
-      } else {
-        e.items.forEach((item, i) =>
-          validateScheduleExpr(item, `${path}.items[${i}]`, errors),
-        );
-      }
+      validateItems(e.items, path, errors, "candidates", validateScheduleExpr);
       break;
     default:
       pushTypeError(e, "a SCHEDULE or schedule selector", path, errors);

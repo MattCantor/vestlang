@@ -13,6 +13,7 @@ import { foldPreGrant } from "./preGrantFold.js";
 import { decompose } from "./pursuit.js";
 import { InferInputError } from "./errors.js";
 import { POLICY_CANDIDATES } from "./policy.js";
+import { EPSILON } from "./residual.js";
 import { segmentSequential } from "./sequential.js";
 import type {
   CliffUniformComponent,
@@ -25,10 +26,14 @@ import type {
 } from "./types.js";
 import {
   collapseAgainstInput,
+  makeVerifyContext,
   programStatus,
   residualAgainstInput,
-  type VerifyContext,
 } from "./verify.js";
+
+/** Strict tiebreak slack for comparing two candidates' residuals — finer than
+ * EPSILON so a genuine residual difference is never flattened into a tie. */
+const RESIDUAL_TIE_SLACK = 1e-9;
 
 function sortInput(tranches: TrancheInput[]): TrancheInput[] {
   return [...tranches].sort((a, b) => a.date.localeCompare(b.date));
@@ -126,12 +131,7 @@ function runOne(
   const ordered = orderByCursorChain(folded, policy);
   const program: Program = ordered.map((c) => buildStatement(c, policy));
 
-  const verifyCtx: VerifyContext = {
-    grantDate,
-    totalQuantity,
-    asOf,
-    vestingDayOfMonth: policy,
-  };
+  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, asOf, policy);
   const { residual } = residualAgainstInput(program, sorted, verifyCtx);
 
   return {
@@ -168,12 +168,7 @@ function runSequential(
     const stmt = buildStatement(c, policy);
     return seq.continuation[i] ? asChainedTail(stmt) : stmt;
   });
-  const verifyCtx: VerifyContext = {
-    grantDate,
-    totalQuantity,
-    asOf,
-    vestingDayOfMonth: policy,
-  };
+  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, asOf, policy);
   const { residual, status } = collapseAgainstInput(program, sorted, verifyCtx);
 
   return {
@@ -231,15 +226,13 @@ function selectBest(
   asOf: OCTDate,
 ): Attempt {
   const verdictOf = (a: Attempt): number => {
-    if (a.residual >= 1e-6) return 0;
+    if (a.residual >= EPSILON) return 0;
     const status =
       a.status ??
-      programStatus(a.program, {
-        grantDate,
-        totalQuantity,
-        asOf,
-        vestingDayOfMonth: a.policy,
-      });
+      programStatus(
+        a.program,
+        makeVerifyContext(grantDate, totalQuantity, asOf, a.policy),
+      );
     return verdictRank(status);
   };
 
@@ -247,12 +240,12 @@ function selectBest(
   let bestVerdict = verdictOf(best);
   for (let i = 1; i < attempts.length; i++) {
     const cur = attempts[i];
-    if (cur.residual < best.residual - 1e-9) {
+    if (cur.residual < best.residual - RESIDUAL_TIE_SLACK) {
       best = cur;
       bestVerdict = verdictOf(cur);
       continue;
     }
-    if (cur.residual > best.residual + 1e-9) continue;
+    if (cur.residual > best.residual + RESIDUAL_TIE_SLACK) continue;
 
     const curVerdict = verdictOf(cur);
     if (curVerdict !== bestVerdict) {
@@ -288,12 +281,11 @@ function rescoreOnCollapse(
   asOf: OCTDate,
 ): Attempt {
   if (attempt.status !== undefined) return attempt;
-  const { residual, status } = collapseAgainstInput(attempt.program, sorted, {
-    grantDate,
-    totalQuantity,
-    asOf,
-    vestingDayOfMonth: attempt.policy,
-  });
+  const { residual, status } = collapseAgainstInput(
+    attempt.program,
+    sorted,
+    makeVerifyContext(grantDate, totalQuantity, asOf, attempt.policy),
+  );
   return { ...attempt, residual, status };
 }
 
@@ -367,7 +359,7 @@ export function inferSchedule(input: InferInput): InferResult {
   // so rescore only when it doesn't.
   best = rescoreOnCollapse(best, sorted, grantDate, totalQuantity, lastDate);
 
-  if (best.residual >= 1e-6) {
+  if (best.residual >= EPSILON) {
     const fallbackComponents = explicitListFallback(sorted);
     const fallbackProgram: Program = fallbackComponents.map((c) =>
       buildStatement(c, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
@@ -375,12 +367,12 @@ export function inferSchedule(input: InferInput): InferResult {
     const { residual: fallbackResidual } = collapseAgainstInput(
       fallbackProgram,
       sorted,
-      {
+      makeVerifyContext(
         grantDate,
         totalQuantity,
-        asOf: lastDate,
-        vestingDayOfMonth: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      },
+        lastDate,
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      ),
     );
     if (fallbackResidual < best.residual) {
       notes.push(
