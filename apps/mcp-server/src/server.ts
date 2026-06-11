@@ -14,6 +14,7 @@ import {
   type GrantInput,
 } from "@vestlang/pipeline";
 import type { OCTDate, Program, Statement } from "@vestlang/types";
+import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
 import { registerResources } from "./resources.js";
 import {
   addPeriod,
@@ -76,40 +77,9 @@ const ISO_DATE = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD")
   .refine(isValidCalendarDate, "must be a real calendar date (YYYY-MM-DD)");
 
-const VESTING_DAY_OF_MONTH = z.enum([
-  "01",
-  "02",
-  "03",
-  "04",
-  "05",
-  "06",
-  "07",
-  "08",
-  "09",
-  "10",
-  "11",
-  "12",
-  "13",
-  "14",
-  "15",
-  "16",
-  "17",
-  "18",
-  "19",
-  "20",
-  "21",
-  "22",
-  "23",
-  "24",
-  "25",
-  "26",
-  "27",
-  "28",
-  "29_OR_LAST_DAY_OF_MONTH",
-  "30_OR_LAST_DAY_OF_MONTH",
-  "31_OR_LAST_DAY_OF_MONTH",
-  "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-]);
+// Consumes the canonical value array from @vestlang/types rather than re-spelling
+// the 32 codes here — a dropped or renamed entry fails typecheck at the source.
+const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
 
 const DSL_INPUT = z
   .string()

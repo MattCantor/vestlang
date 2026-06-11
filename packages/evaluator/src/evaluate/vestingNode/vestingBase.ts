@@ -17,6 +17,16 @@ import { addMonthsRule } from "../time.js";
 // below, not by comparing this string themselves.
 const VESTING_START_LABEL = "vestingStart";
 
+// The vesting-start system anchor a cliff hangs off. It's engine working state,
+// overlaid onto the context per-statement while resolving a cliff (see
+// resolve/cliff.ts), not a stored field — so it rides on an evaluator-local
+// extension of the published context rather than on the published type itself.
+// Optional because the base (un-overlaid) context has no start: a VESTING_START
+// anchor evaluated without the overlay falls through to the pending arm below.
+export type CliffEvaluationContext = EvaluationContext & {
+  vestingStart?: OCTDate;
+};
+
 // The pending-vesting-start blocker this module mints (above) is a system
 // placeholder, not a real awaited event: it reads on the start, never on a cliff,
 // and it's not a disclosable absence assumption. Recognizing it lives here, next
@@ -26,7 +36,7 @@ export const isVestingStartPlaceholder = (b: Blocker): boolean =>
 
 export function evaluateVestingBase(
   node: VestingNode,
-  ctx: EvaluationContext,
+  ctx: CliffEvaluationContext,
 ): ResolvedNode | UnresolvedNode {
   const base = node.base;
   switch (base.type) {
