@@ -19,10 +19,10 @@ import { withBoundary } from "../boundary.js";
  * ------------------------ */
 
 const createImpossibleBlocker = (
-  n: VestingNode & { condition: AtomCondition },
+  node: VestingNode & { condition: AtomCondition },
 ): ImpossibleBlocker => ({
   type: "IMPOSSIBLE_CONDITION",
-  condition: { base: n.base, offsets: n.offsets, condition: n.condition },
+  node,
 });
 
 const failByRelation = (
@@ -50,7 +50,7 @@ const failByRelation = (
 
 const mergedUnresolved = (
   nodes: (UnresolvedNode | ImpossibleNode)[],
-  condition: Omit<VestingNode, "type">,
+  node: VestingNode,
   // The date the still-pending side is being measured against, if we know one.
   // It gets stamped onto the pending-event blockers (not the condition blocker)
   // so the schedule can later disclose what it's assuming stayed absent.
@@ -59,7 +59,7 @@ const mergedUnresolved = (
   const operandBlockers = nodes.map((n) => n.blockers).flat();
   return [
     ...(through ? withBoundary(operandBlockers, through) : operandBlockers),
-    { type: "UNRESOLVED_CONDITION", condition },
+    { type: "UNRESOLVED_CONDITION", node },
   ];
 };
 
