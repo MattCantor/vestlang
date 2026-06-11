@@ -32,7 +32,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
-import { eventBaseId, referencesEvent } from "@vestlang/walk";
+import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { isPickedResolved } from "../evaluate/utils.js";
@@ -246,10 +246,9 @@ const resolveNonChained = (
   // (#18), the same gate reads the same in either word order, `EVENT a BEFORE
   // DATE x` or `DATE x BEFORE EVENT a` (#54), and an offset anchor stores the
   // offset so a replay against the true firing derives the same dates.
-  const isGated = vs.type === "NODE" && vs.condition !== undefined;
   if (
     pending &&
-    (isCombinator(vs) || isGated || hasOffsets(vs)) &&
+    (isCombinator(vs) || isGatedNode(vs) || hasOffsets(vs)) &&
     referencesEvent(vs)
   ) {
     return {

@@ -15,6 +15,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { selectorKeyword } from "@vestlang/utils";
+import { systemAnchorOffset } from "@vestlang/walk";
 import { group, indent, join, line, softline, type Doc } from "./doc.js";
 
 /**
@@ -243,21 +244,17 @@ function isDefaultVestingStart(vs: Schedule["vesting_start"]): boolean {
 }
 
 /**
- * If `node` is exactly `EVENT <systemEvent> + <one positive duration>` with no
+ * If `node` is exactly `<systemAnchor> + <one positive duration>` with no
  * conditions, return the bare-duration text the grammar's sugar accepts
- * (`FROM 6 months` for `FROM EVENT grantDate + 6 months`, likewise for CLIFF).
+ * (`FROM 6 months` for `FROM grantDate + 6 months`, likewise for CLIFF).
  * Otherwise null, so the caller emits the full form.
  */
 function sugaredAnchorDuration(
   node: VestingNodeExpr,
   systemAnchor: "GRANT_DATE" | "VESTING_START",
 ): string | null {
-  if (node.type !== "NODE") return null;
-  if (node.base.type !== systemAnchor) return null;
-  if (node.condition) return null;
-  if (!node.offsets || node.offsets.length !== 1) return null;
-  const offset = node.offsets[0];
-  if (offset.sign !== "PLUS") return null;
+  const offset = systemAnchorOffset(node, systemAnchor);
+  if (!offset) return null;
   return toDocDuration(offset).slice(1); // drop the leading '+'
 }
 

@@ -19,8 +19,10 @@ import type {
   ChainedSchedule,
   Condition,
   Constraint,
+  Duration,
   ScheduleExpr,
   Statement,
+  SystemAnchorTag,
   VestingBase,
   VestingNodeExpr,
 } from "@vestlang/types";
@@ -152,4 +154,37 @@ export function eventBaseId(expr: VestingNodeExpr): string | undefined {
   return expr.type === "NODE" && expr.base.type === "EVENT"
     ? expr.base.value
     : undefined;
+}
+
+// True when `expr` is a plain node carrying a BEFORE/AFTER gate (a combinator's
+// arms can be gated, but the combinator itself isn't a gated node). Several
+// evaluator paths fork on exactly this — a gated cliff routes its gate's verdict
+// rather than its bare resolution — so it lives here as one spelling.
+export function isGatedNode(expr: VestingNodeExpr): boolean {
+  return expr.type === "NODE" && expr.condition !== undefined;
+}
+
+// The lone offset of a bare "system anchor + one positive duration" node — the
+// shape `FROM <anchor> + <duration>` / `CLIFF <anchor> + <duration>` collapses to
+// in print, lowers anchor-free to a `cliff` field, and lints as a comparable span.
+// Returns that single `Duration` when `expr` is exactly: a plain NODE on the given
+// system anchor (`GRANT_DATE` for a start, `VESTING_START` for a cliff), no
+// condition, and exactly one PLUS offset. Any richer shape — a DATE or EVENT
+// anchor, the *other* system anchor, a gate, a combinator, multiple offsets, or a
+// MINUS offset — returns undefined, because none of those is a plain forward
+// duration the three callers can treat uniformly. Callers needing a tighter cut
+// (the deferred-cliff lowering also rejects `value <= 0`) keep that guard local.
+export function systemAnchorOffset(
+  expr: VestingNodeExpr,
+  anchor: SystemAnchorTag,
+): Duration | undefined {
+  if (
+    expr.type !== "NODE" ||
+    expr.base.type !== anchor ||
+    expr.condition !== undefined ||
+    expr.offsets.length !== 1
+  )
+    return undefined;
+  const off = expr.offsets[0];
+  return off.sign === "PLUS" ? off : undefined;
 }

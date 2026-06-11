@@ -1,4 +1,4 @@
-import { Duration, VestingNodeExpr } from "@vestlang/types";
+import { systemAnchorOffset } from "@vestlang/walk";
 import { RuleModule } from "../types.js";
 
 const meta = {
@@ -8,22 +8,6 @@ const meta = {
   recommended: true,
   severity: "warning" as const,
 };
-
-// The cliff offset of a plain `vestingStart + <duration>` cliff: a single vesting
-// node on the vestingStart anchor with one positive duration and no condition. Any
-// richer shape (an event anchor, a condition, a selector, multiple offsets) isn't
-// a single comparable duration, so we don't second-guess it here.
-function startRelativeOffset(expr: VestingNodeExpr): Duration | undefined {
-  if (
-    expr.type !== "NODE" ||
-    expr.base.type !== "VESTING_START" ||
-    expr.condition !== undefined ||
-    expr.offsets.length !== 1
-  )
-    return undefined;
-  const off = expr.offsets[0];
-  return off.sign === "PLUS" ? off : undefined;
-}
 
 const unit = (u: string, n: number) =>
   `${n} ${n === 1 ? u.toLowerCase().replace(/s$/, "") : u.toLowerCase()}`;
@@ -37,7 +21,10 @@ export const ruleCliffExceedsSpan: RuleModule = {
         const { type, length, occurrences, cliff } = node.periodicity;
         if (!cliff) return;
 
-        const off = startRelativeOffset(cliff);
+        // Only a plain `vestingStart + <duration>` cliff is a single comparable
+        // duration; a richer shape (event anchor, gate, selector, multiple
+        // offsets) we don't second-guess here.
+        const off = systemAnchorOffset(cliff, "VESTING_START");
         // A cross-unit cliff (e.g. a days cliff over a months grid) can't be
         // compared to the span without a calendar anchor, which the linter
         // doesn't have. Leave it to the evaluator.

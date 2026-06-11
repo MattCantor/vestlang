@@ -23,15 +23,10 @@ import type {
   VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type {
-  Cliff,
-  PeriodTag,
-  PeriodType,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
-import { eventBaseId } from "@vestlang/walk";
+import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
@@ -157,9 +152,7 @@ export const lowerCliff = (
     // from the resolved start); a satisfied gate clears and falls through to the
     // bare event cliff below. Carrying the gate here is what stops it being dropped
     // (#113).
-    const gated =
-      cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
-    if (gated) {
+    if (isGatedNode(cliffExpr)) {
       const gate = gateVerdict(res, true);
       if (gate) return gate;
     }
@@ -240,25 +233,6 @@ export const lowerCliff = (
   };
 };
 
-/** A `vestingStart + <duration>` cliff's offset, when the expression is exactly
- *  that: a single node on the `vestingStart` anchor with one positive duration
- *  offset and no condition. Any other shape (a DATE anchor, a condition, a
- *  combinator, multiple offsets) returns undefined — and GRANT_DATE can't reach
- *  here, the cliff slot's type excludes it. */
-const vestingStartOffset = (
-  expr: VestingNodeExpr<"VESTING_START">,
-): { value: number; unit: PeriodTag } | undefined => {
-  if (
-    expr.type !== "NODE" ||
-    expr.base.type !== "VESTING_START" ||
-    expr.condition !== undefined ||
-    expr.offsets.length !== 1
-  )
-    return undefined;
-  const off = expr.offsets[0];
-  return off.sign === "PLUS" ? { value: off.value, unit: off.unit } : undefined;
-};
-
 /**
  * Lower a cliff for a *deferred* start — a pending atomic event or a synthetic
  * combinator event — where there is no concrete anchor date to resolve against.
@@ -292,10 +266,12 @@ export const lowerDeferredCliff = (
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
-  const off = vestingStartOffset(cliffExpr);
+  const off = systemAnchorOffset(cliffExpr, "VESTING_START");
   // Anchor-free only when the cliff is a bare `vestingStart + duration` in the
   // grid's own unit; then length/period_type are the offset and the pre-cliff
-  // count is independent of when the start eventually fires.
+  // count is independent of when the start eventually fires. The shared shape-match
+  // already excludes MINUS and richer shapes; the `value <= 0` guard is this
+  // caller's own (a zero-length forward duration is no cliff here).
   if (off && off.unit === periodType) {
     if (off.value <= 0) return { state: "NONE" };
     const m = Math.min(Math.floor(off.value / period), occurrences);
@@ -313,7 +289,7 @@ export const lowerDeferredCliff = (
   // Not derivable without the firing date (an event cliff, a cross-unit duration,
   // or a gated cliff). There's no start anchor to lay a grid against, so it can
   // never be `dated`.
-  const gated = cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
+  const gated = isGatedNode(cliffExpr);
 
   // A bare (ungated) event cliff keeps its event-anchoredness rather than
   // flattening to a generic UNRESOLVED: it's an EVENT record with no effectiveAt,

@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@vestlang/types": "workspace:*",
-    "@vestlang/utils": "workspace:*"
+    "@vestlang/utils": "workspace:*",
+    "@vestlang/walk": "workspace:*"
   },
   "devDependencies": {
     "@vestlang/dsl": "workspace:*",
