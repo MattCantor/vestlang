@@ -9,7 +9,7 @@
 
 import {
   evaluateProgramAsOf,
-  evaluateStatements,
+  evaluateClauseGroups,
   toScheduleView,
   type ScheduleView,
 } from "@vestlang/evaluator";
@@ -55,11 +55,30 @@ export type WindowView = {
   installments: Installment[];
 };
 
-// One clause's contribution to the program: its own tranches and the blockers
-// holding it back. No verdict — a clause has no storable schedule of its own
-// (the grant stores one template). This is for attribution: which clause
+// One clause-group's contribution to the program: its own tranches and the
+// blockers holding it back. A group is a single statement, except for a THEN
+// chain, whose segments evaluate together (a tail has no start without its head)
+// and so report as one entry. No verdict — a clause has no storable schedule of
+// its own (the grant stores one template). This is for attribution: which clause
 // produced what, and which is still waiting on something.
 export type ClauseBreakdown = Pick<ScheduleView, "installments" | "blockers">;
+
+// Attribute the program to its clause-groups. A second resolution pass, separate
+// from the collapse — the only way to keep each clause's tranches apart once the
+// collapse has merged them. Wrapped so a breakdown failure degrades to no
+// breakdown rather than sinking the whole-program result, which already succeeded.
+function clauseBreakdown(
+  program: Parameters<typeof evaluateClauseGroups>[0],
+  ctx: Parameters<typeof evaluateClauseGroups>[1],
+): ClauseBreakdown[] {
+  try {
+    return evaluateClauseGroups(program, ctx)
+      .map(toScheduleView)
+      .map(({ installments, blockers }) => ({ installments, blockers }));
+  } catch {
+    return [];
+  }
+}
 
 // Evaluate a grant. The program collapses into ONE schedule with one verdict and
 // one allocation finding (`view`); on top of that the breakdown shows what each
@@ -67,9 +86,7 @@ export type ClauseBreakdown = Pick<ScheduleView, "installments" | "blockers">;
 //
 // The collapse runs template recovery: an events-only program whose realized
 // projection happens to have a single-template form is rescued back to a
-// template, transparently. The breakdown is the same statements evaluated one at
-// a time — it's an extra pass, but a cheap one, and the only way to keep each
-// clause's tranches separable after the collapse has merged them.
+// template, transparently.
 export function runEvaluate(
   dsl: string,
   g: GrantInput,
@@ -84,9 +101,7 @@ export function runEvaluate(
   try {
     const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
     const view = toScheduleView(outcome.schedule);
-    const breakdown = evaluateStatements(parsed.program, ctx)
-      .map(toScheduleView)
-      .map(({ installments, blockers }) => ({ installments, blockers }));
+    const breakdown = clauseBreakdown(parsed.program, ctx);
     const recovered = outcome.rescued
       ? {
           from: outcome.recovered.from,

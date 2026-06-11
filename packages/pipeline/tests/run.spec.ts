@@ -40,6 +40,39 @@ describe("runEvaluate", () => {
     }
   });
 
+  it("evaluates a THEN program without stranding the tail's breakdown", () => {
+    // The repro from #143: a THEN tail can't resolve on its own, so the old
+    // per-statement breakdown threw and sank the whole-program result. The chain
+    // now resolves as one unit — head + tail land in a single breakdown entry.
+    const r = runEvaluate(
+      "0.25 VEST OVER 12 months EVERY 1 month THEN 0.75 VEST OVER 36 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 48 },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.view.resolution.status).toBe("template");
+      // 48 monthly tranches over the 12+36 chain, summing to the whole grant.
+      expect(sumInstallments(r.view.installments)).toBe(48);
+      // One THEN chain → one breakdown entry, carrying all 48 tranches.
+      expect(r.breakdown).toHaveLength(1);
+      expect(r.breakdown[0].installments).toHaveLength(48);
+    }
+  });
+
+  it("keeps PLUS clauses and THEN chains as separate breakdown entries", () => {
+    // An independent PLUS clause stands beside a two-segment THEN chain: two
+    // groups, not three statements. The chain collapses to one entry; the PLUS
+    // clause keeps its own.
+    const r = runEvaluate(
+      "0.5 VEST OVER 6 months EVERY 1 month THEN 0.25 VEST OVER 6 months EVERY 1 month PLUS 0.25 VEST OVER 6 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.breakdown).toHaveLength(2);
+    }
+  });
+
   it("reports a single over-allocation finding over the whole program", () => {
     const r = runEvaluate(
       "750 VEST OVER 12 months EVERY 1 month PLUS 750 VEST OVER 12 months EVERY 1 month",
