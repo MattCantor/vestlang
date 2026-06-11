@@ -3,7 +3,11 @@ import {
   resolveToCore,
   resolveInterchange,
 } from "@vestlang/evaluator";
-import { inferSchedule, type TrancheInput } from "@vestlang/inferrer";
+import {
+  inferSchedule,
+  projectionResidual,
+  type TrancheInput,
+} from "@vestlang/inferrer";
 import type {
   EvaluationContextInput,
   Program,
@@ -94,7 +98,7 @@ export function evaluateProgramWithRecovery(
   // This is what licenses flipping the verdict events-only → template: not just
   // "the inferred DSL fits the stream" but "the rescued template reproduces the
   // original projection exactly." Anything but a clean zero and we don't rescue.
-  const residualError = residualBetween(
+  const residualError = projectionResidual(
     dated,
     published.resolution.installments,
   );
@@ -113,20 +117,4 @@ export function evaluateProgramWithRecovery(
       residualError,
     },
   };
-}
-
-// Total absolute share difference between two projections, bucketed by date. Zero
-// iff they vest the same amounts on exactly the same dates.
-function residualBetween(
-  expected: ResolvedInstallment[],
-  actual: ResolvedInstallment[],
-): number {
-  const byDate = new Map<string, number>();
-  for (const i of expected)
-    byDate.set(i.date, (byDate.get(i.date) ?? 0) + i.amount);
-  for (const i of actual)
-    byDate.set(i.date, (byDate.get(i.date) ?? 0) - i.amount);
-  let residual = 0;
-  for (const delta of byDate.values()) residual += Math.abs(delta);
-  return residual;
 }
