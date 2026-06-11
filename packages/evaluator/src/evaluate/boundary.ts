@@ -1,4 +1,5 @@
 import type { Blocker, OCTDate } from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
 import { gt } from "./time.js";
 import { foldBlocker } from "./blockerTree.js";
 
@@ -23,8 +24,16 @@ export const withBoundary = (blockers: Blocker[], date: OCTDate): Blocker[] =>
           };
         case "UNRESOLVED_SELECTOR":
           return { ...node, blockers: children };
-        default:
+        // Nothing to stamp: a condition blocker wraps an AST, not nested pending
+        // events, and impossible arms hold no pending events. Left untouched —
+        // enumerated rather than defaulted so a new blocker kind has to be
+        // classified here instead of silently passing through.
+        case "UNRESOLVED_CONDITION":
+        case "IMPOSSIBLE_SELECTOR":
+        case "IMPOSSIBLE_CONDITION":
           return node;
+        default:
+          return assertNever(node);
       }
     }),
   );
