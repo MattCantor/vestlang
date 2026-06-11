@@ -10,6 +10,6 @@ export default defineConfig({
   // (negative lookahead) — the engine ships once as a real external dependency,
   // shared with OCF-Tools.
   noExternal: [/@vestlang\/(?!core)/],
-  // External runtime deps: the engine (shipped separately) + date-fns.
-  external: ["date-fns", "@vestlang/core"],
+  // External runtime dep: the engine, shipped separately.
+  external: ["@vestlang/core"],
 });
