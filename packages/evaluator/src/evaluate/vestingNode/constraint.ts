@@ -11,7 +11,7 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { eq, gt, lt } from "../time.js";
+import { eq, gt, lt } from "@vestlang/core";
 import { withBoundary } from "../boundary.js";
 
 /* ------------------------

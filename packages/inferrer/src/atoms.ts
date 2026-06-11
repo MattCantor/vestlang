@@ -1,4 +1,3 @@
-import { addDays, addMonthsRule } from "@vestlang/evaluator";
 import type {
   OCTDate,
   Statement,
@@ -7,7 +6,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { minimalCtx } from "./cadence.js";
+import { walk } from "./cadence.js";
 import type {
   CliffUniformComponent,
   Component,
@@ -27,24 +26,14 @@ function bareDate<A extends SystemAnchorTag = SystemAnchorTag>(
   };
 }
 
-function backOnePeriod(
-  date: OCTDate,
-  cadence: { unit: "DAYS" | "MONTHS"; length: number },
-  policy: VestingDayOfMonth,
-): OCTDate {
-  const ctx = minimalCtx(policy);
-  if (cadence.unit === "MONTHS") {
-    return addMonthsRule(date, -cadence.length, ctx);
-  }
-  return addDays(date, -cadence.length);
-}
-
 function buildUniform(
   c: UniformComponent,
   policy: VestingDayOfMonth,
 ): Statement {
   const total = c.total;
-  const vestingStart = backOnePeriod(c.startDate, c.cadence, policy);
+  // The vesting start sits one period before the first installment: a FROM-anchored
+  // train's first tranche lands at start + 1 period, so back the start out by one.
+  const vestingStart = walk(c.startDate, c.cadence, -1, policy);
   const periodicity: VestingPeriod = {
     type: c.cadence.unit,
     length: c.cadence.length,

@@ -1,12 +1,13 @@
 import { parseToProgram } from "@vestlang/pipeline";
+import { evaluateStatement } from "@vestlang/evaluator";
 import {
   addDays,
   addMonthsRule,
-  evaluateStatement,
+  addPeriod as addPeriodCore,
+  daysBetween,
   toDate,
-} from "@vestlang/evaluator";
+} from "@vestlang/core";
 import type {
-  EvaluationContext,
   EvaluationContextInput,
   OCTDate,
   VestingDayOfMonth,
@@ -14,18 +15,9 @@ import type {
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";
 
-const MS_PER_DAY = 86_400_000;
-
-function stubCtx(rule: VestingDayOfMonth): EvaluationContext {
-  return {
-    grantDate: "1970-01-01",
-    events: {},
-    grantQuantity: 0,
-    asOf: "1970-01-01",
-    vesting_day_of_month: rule,
-  };
-}
-
+// The tool surface offers `weeks`, which core's PeriodType doesn't carry; map it
+// to its day count and hand everything else straight to core's stepper. core
+// takes the day-of-month policy directly, so there's no dummy context to build.
 export function addPeriod(
   date: OCTDate,
   length: number,
@@ -38,9 +30,9 @@ export function addPeriod(
     case "weeks":
       return addDays(date, length * 7);
     case "months":
-      return addMonthsRule(date, length, stubCtx(rule));
+      return addPeriodCore(date, length, "MONTHS", rule);
     case "years":
-      return addMonthsRule(date, length * 12, stubCtx(rule));
+      return addPeriodCore(date, length, "YEARS", rule);
   }
 }
 
@@ -49,15 +41,14 @@ export function dateDiff(
   to: OCTDate,
   unit: "days" | "months",
 ): { diff: number; remainder_days?: number } {
-  const f = toDate(from);
-  const t = toDate(to);
   if (unit === "days") {
-    const diff = Math.floor((t.getTime() - f.getTime()) / MS_PER_DAY);
-    return { diff };
+    return { diff: daysBetween(from, to) };
   }
 
   // Calendar months between (fy, fm, fd) and (ty, tm, td).
   // If td < fd, we haven't completed the final month yet — decrement.
+  const f = toDate(from);
+  const t = toDate(to);
   const fy = f.getUTCFullYear();
   const fm = f.getUTCMonth();
   const fd = f.getUTCDate();
@@ -75,11 +66,9 @@ export function dateDiff(
   const anchor = addMonthsRule(
     from,
     monthsBetween,
-    stubCtx("VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
+    "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
   );
-  const remainder_days = Math.floor(
-    (t.getTime() - toDate(anchor).getTime()) / MS_PER_DAY,
-  );
+  const remainder_days = daysBetween(anchor, to);
 
   return { diff: monthsBetween, remainder_days };
 }
@@ -166,12 +155,12 @@ function blockerSummary(blockers: unknown[]): string | null {
 
 /**
  * Resolve a date under a VestingDayOfMonth rule, without crossing months.
- * Equivalent to `addMonthsRule(date, 0, { vesting_day_of_month: rule })`:
- * keeps year+month fixed and applies the rule's day-picker for that month.
+ * Equivalent to `addMonthsRule(date, 0, rule)`: keeps year+month fixed and
+ * applies the rule's day-picker for that month.
  */
 export function resolveVestingDay(
   date: OCTDate,
   rule: VestingDayOfMonth,
 ): OCTDate {
-  return addMonthsRule(date, 0, stubCtx(rule));
+  return addMonthsRule(date, 0, rule);
 }

@@ -1,10 +1,6 @@
 import { allocateVector } from "@vestlang/core";
-import type {
-  EvaluationContext,
-  OCTDate,
-  VestingDayOfMonth,
-} from "@vestlang/types";
-import { type Cadence, minimalCtx } from "./cadence.js";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
+import type { Cadence } from "./cadence.js";
 import {
   EPSILON,
   type Residual,
@@ -64,14 +60,14 @@ function longestExactRun(
   r: Residual,
   target: OCTDate,
   cadences: Cadence[],
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): Run | null {
   let best: Run | null = null;
 
   for (const cadence of cadences) {
     // Walk forward from `target` collecting consecutive on-grid dates that still
     // carry mass; the run can't extend past the first gap.
-    const grid = gridRun(r, target, cadence, ctx);
+    const grid = gridRun(r, target, cadence, policy);
 
     // Longest-first so the first exact prefix we find is the maximal one.
     for (let n = grid.length; n >= 2; n--) {
@@ -115,16 +111,16 @@ function tryHeadCliff(
   r: Residual,
   lumpDate: OCTDate,
   cadences: Cadence[],
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): HeadCliff | null {
   const lump = massAt(r, lumpDate);
   if (lump <= EPSILON) return null;
 
   for (const cadence of cadences) {
-    const runStart = tryWalk(lumpDate, cadence, 1, ctx);
+    const runStart = tryWalk(lumpDate, cadence, 1, policy);
     if (runStart === null || massAt(r, runStart) <= EPSILON) continue;
 
-    const run = longestExactRun(r, runStart, [cadence], ctx);
+    const run = longestExactRun(r, runStart, [cadence], policy);
     if (!run) continue;
     // A cliff vests equal periods at once, so the tail must be an even train.
     if (
@@ -136,7 +132,7 @@ function tryHeadCliff(
     const { k, whole } = wholeMultiple(lump, run.perTrancheAmount);
     if (k < 2 || !whole) continue;
 
-    const grantDate = tryWalk(lumpDate, cadence, -k, ctx);
+    const grantDate = tryWalk(lumpDate, cadence, -k, policy);
     if (grantDate === null) continue;
 
     return {
@@ -177,7 +173,6 @@ export function segmentSequential(
   tranches: TrancheInput[],
   policy: VestingDayOfMonth,
 ): SequentialResult | null {
-  const ctx = minimalCtx(policy);
   const r = toResidual(tranches);
   const components: Component[] = [];
   const continuation: boolean[] = [];
@@ -199,7 +194,7 @@ export function segmentSequential(
 
     const cadences = tracker.estimate(dates);
 
-    const run = longestExactRun(r, target, cadences, ctx);
+    const run = longestExactRun(r, target, cadences, policy);
     if (run) {
       const last = run.dates[run.dates.length - 1];
       components.push({
@@ -212,20 +207,20 @@ export function segmentSequential(
       } satisfies UniformComponent);
       continuation.push(cursorMin !== null);
       for (const d of run.dates) r.delete(d);
-      cursorMin = tryWalk(last, run.cadence, 1, ctx) ?? last;
+      cursorMin = tryWalk(last, run.cadence, 1, policy) ?? last;
       continue;
     }
 
     // A cliff is only recognized at the very head of the chain; a lump appearing
     // mid-chain (a cliff measured from a synthetic handoff) is out of scope.
     if (cursorMin === null) {
-      const head = tryHeadCliff(r, target, cadences, ctx);
+      const head = tryHeadCliff(r, target, cadences, policy);
       if (head) {
         const last = head.dates[head.dates.length - 1];
         components.push(head.cliff);
         continuation.push(false);
         for (const d of head.dates) r.delete(d);
-        cursorMin = tryWalk(last, head.cliff.cadence, 1, ctx) ?? last;
+        cursorMin = tryWalk(last, head.cliff.cadence, 1, policy) ?? last;
         continue;
       }
     }

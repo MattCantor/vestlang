@@ -6,7 +6,7 @@ import type {
   ResolvedNode,
   UnresolvedNode,
 } from "@vestlang/types";
-import { lt } from "./time.js";
+import { lt } from "@vestlang/core";
 import { evaluateVestingNodeExpr } from "./selectors.js";
 
 // A Picked result carries the chosen item plus its resolution meta. When meta is

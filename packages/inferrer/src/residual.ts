@@ -1,4 +1,4 @@
-import type { EvaluationContext, OCTDate } from "@vestlang/types";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { type Cadence, cadenceKey, estimateCadences, walk } from "./cadence.js";
 import type { TrancheInput } from "./types.js";
 
@@ -32,10 +32,10 @@ export function tryWalk(
   from: OCTDate,
   cadence: Cadence,
   steps: number,
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): OCTDate | null {
   try {
-    return walk(from, cadence, steps, ctx);
+    return walk(from, cadence, steps, policy);
   } catch {
     return null;
   }
@@ -52,11 +52,11 @@ export function gridRun(
   r: Residual,
   target: OCTDate,
   cadence: Cadence,
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): OCTDate[] {
   const run: OCTDate[] = [];
   for (let i = 0; ; i++) {
-    const g = tryWalk(target, cadence, i, ctx);
+    const g = tryWalk(target, cadence, i, policy);
     if (g === null || massAt(r, g) <= EPSILON) break;
     run.push(g);
     if (i > MAX_RUN_STEPS) break;

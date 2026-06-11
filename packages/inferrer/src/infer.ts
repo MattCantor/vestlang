@@ -6,7 +6,7 @@ import type {
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { asChainedTail, buildStatement } from "./atoms.js";
-import { minimalCtx, walk } from "./cadence.js";
+import { walk } from "./cadence.js";
 import { foldCliffs } from "./cliffFold.js";
 import { splitCoincidentCliffs } from "./coincidentCliff.js";
 import { foldPreGrant } from "./preGrantFold.js";
@@ -47,7 +47,7 @@ function firstInstallmentDate(
 ): OCTDate {
   if (c.kind === "SINGLE_TRANCHE") return c.date;
   if (c.kind === "UNIFORM") return c.startDate;
-  return walk(c.grantDate, c.cadence, c.cliffSteps, minimalCtx(policy));
+  return walk(c.grantDate, c.cadence, c.cliffSteps, policy);
 }
 
 /** Emit components in cursor-chain order: each segment's first installment is

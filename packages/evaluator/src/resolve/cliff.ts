@@ -24,15 +24,13 @@ import type {
   VestingNodeExpr,
 } from "@vestlang/types";
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
-import { addPeriod, gridDate, gt, toDate } from "@vestlang/core";
+import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
 import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
-
-const MS_PER_DAY = 86_400_000;
 
 export type LoweredCliff =
   | { state: "NONE" }
@@ -86,9 +84,6 @@ const gateVerdict = (
     : { state: "UNRESOLVED", blockers: filter(pending), dated };
 };
 
-const dayCount = (from: OCTDate, to: OCTDate): number =>
-  Math.round((toDate(to).getTime() - toDate(from).getTime()) / MS_PER_DAY);
-
 /**
  * Find (length, period_type) such that `addPeriod(anchor, length, period_type)`
  * === cliffDate: prefer the statement's period_type when the cliff lands on an
@@ -106,7 +101,7 @@ const measureDuration = (
     if (d === cliffDate) return { length: k, period_type: periodType };
     if (gt(d, cliffDate)) break;
   }
-  return { length: dayCount(anchor, cliffDate), period_type: "DAYS" };
+  return { length: daysBetween(anchor, cliffDate), period_type: "DAYS" };
 };
 
 // `origin` is the date the whole chain started from, used only to count how many

@@ -1,10 +1,6 @@
-import type {
-  EvaluationContext,
-  OCTDate,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { allocateVector } from "@vestlang/core";
-import { type Cadence, minimalCtx } from "./cadence.js";
+import type { Cadence } from "./cadence.js";
 import {
   EPSILON,
   type Residual,
@@ -74,12 +70,12 @@ function trainAtomsCovering(
   residual: Residual,
   target: OCTDate,
   cadences: Cadence[],
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): TrainAtom[] {
   const atoms: TrainAtom[] = [];
 
   for (const cadence of cadences) {
-    const run = gridRun(residual, target, cadence, ctx);
+    const run = gridRun(residual, target, cadence, policy);
 
     for (let n = run.length; n >= 2; n--) {
       const positions = run.slice(0, n);
@@ -157,7 +153,6 @@ export function decompose(
   tranches: TrancheInput[],
   policy: VestingDayOfMonth,
 ): DecomposeResult {
-  const ctx = minimalCtx(policy);
   const root = toResidual(tranches);
 
   // Per-residual cadence estimate (CLEAN-style): re-derive the candidate
@@ -170,7 +165,7 @@ export function decompose(
     tracker.estimate(dates, TOP_CADENCES);
 
   // Greedy seed for an initial upper bound (also a valid answer if search is capped).
-  const seed = greedyCover(root, estimate, ctx);
+  const seed = greedyCover(root, estimate, policy);
   let best: Component[] = seed;
   let bestCost = seed.length;
 
@@ -192,10 +187,12 @@ export function decompose(
 
     const target = dates[0];
     const localRanked = estimate(dates);
-    const atoms = trainAtomsCovering(residual, target, localRanked, ctx).slice(
-      0,
-      MAX_BRANCH,
-    );
+    const atoms = trainAtomsCovering(
+      residual,
+      target,
+      localRanked,
+      policy,
+    ).slice(0, MAX_BRANCH);
 
     // Branch: cover `target` with each candidate train.
     for (const atom of atoms) {
@@ -225,7 +222,7 @@ export function decompose(
 function greedyCover(
   root: Residual,
   estimate: (dates: OCTDate[]) => Cadence[],
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): Component[] {
   const residual = new Map(root);
   const components: Component[] = [];
@@ -235,7 +232,7 @@ function greedyCover(
     const cadences = estimate(dates);
     let bestAtom: TrainAtom | null = null;
     for (const target of dates) {
-      const atoms = trainAtomsCovering(residual, target, cadences, ctx);
+      const atoms = trainAtomsCovering(residual, target, cadences, policy);
       if (
         atoms.length &&
         (bestAtom === null || atoms[0].coverMass > bestAtom.coverMass)

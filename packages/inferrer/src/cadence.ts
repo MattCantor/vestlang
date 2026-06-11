@@ -1,10 +1,5 @@
-import { addDays, addMonthsRule, toDate } from "@vestlang/evaluator";
-import type {
-  EvaluationContext,
-  OCTDate,
-  PeriodTag,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import { addDays, addMonthsRule, daysBetween, toDate } from "@vestlang/core";
+import type { OCTDate, PeriodTag, VestingDayOfMonth } from "@vestlang/types";
 
 export interface Cadence {
   unit: PeriodTag;
@@ -36,31 +31,19 @@ export function cadenceKey(c: Cadence): string {
   return `${c.length} ${c.unit.toLowerCase()}`;
 }
 
-export function minimalCtx(policy: VestingDayOfMonth): EvaluationContext {
-  return {
-    grantDate: "1970-01-01",
-    events: {},
-    grantQuantity: 0,
-    asOf: "1970-01-01",
-    vesting_day_of_month: policy,
-  };
-}
-
+// Step `steps` cadences (forward or back) from `from`, applying the day-of-month
+// policy on the MONTHS path. core's addMonthsRule takes the policy directly, so
+// the inferrer no longer fabricates a dummy EvaluationContext just to carry it.
 export function walk(
   from: OCTDate,
   cadence: Cadence,
   steps: number,
-  ctx: EvaluationContext,
+  policy: VestingDayOfMonth,
 ): OCTDate {
   if (cadence.unit === "MONTHS") {
-    return addMonthsRule(from, cadence.length * steps, ctx);
+    return addMonthsRule(from, cadence.length * steps, policy);
   }
   return addDays(from, cadence.length * steps);
-}
-
-function dayDiff(a: OCTDate, b: OCTDate): number {
-  const ms = toDate(b).getTime() - toDate(a).getTime();
-  return Math.round(ms / (1000 * 60 * 60 * 24));
 }
 
 function monthDiff(a: OCTDate, b: OCTDate): number {
@@ -102,7 +85,7 @@ function modesOverN(gaps: number[], nGaps: number): GapMode[] {
  *  - MONTH lattice (calendar-month index via `monthDiff`): invariant to the
  *    `VestingDayOfMonth` convention — Jan 31 → Feb 28 → Mar 31 is a flat
  *    1, 1 here. Clean for the monthly family (monthly, every-2-month, ...).
- *  - DAY lattice (via `dayDiff`): clean for sub-monthly cadences that are not
+ *  - DAY lattice (via `daysBetween`): clean for sub-monthly cadences that are not
  *    month-anchored (weekly/biweekly/daily).
  *
  * The dominant lattice (higher top-mode support) wins, so weekly data stays in
@@ -120,7 +103,7 @@ export function estimateCadences(dates: OCTDate[]): Cadence[] {
   const dayGaps: number[] = [];
   const monthGaps: number[] = [];
   for (let i = 1; i < sorted.length; i++) {
-    dayGaps.push(dayDiff(sorted[i - 1], sorted[i]));
+    dayGaps.push(daysBetween(sorted[i - 1], sorted[i]));
     monthGaps.push(monthDiff(sorted[i - 1], sorted[i]));
   }
   const nGaps = dayGaps.length;
