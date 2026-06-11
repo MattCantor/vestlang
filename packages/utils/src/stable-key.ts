@@ -1,4 +1,11 @@
-// Stable stringify to prevent recursion explosion */
+// A deterministic string key for an arbitrary value, for sorting and dedupe.
+// Object keys are recursively sorted before stringifying so that two values with
+// the same content but different key order collapse to the same key. The WeakSet
+// guards against cycles so a self-referential structure can't blow the stack.
+//
+// Both the linter (lint dedupe keys) and the normalizer (canonical selector-arm
+// ordering) key on this, and those two have to agree byte-for-byte — keep them
+// reading the one implementation here.
 export function stableKey(x: unknown): string {
   const seen = new WeakSet<object>();
   const stringify = (v: unknown): unknown => {

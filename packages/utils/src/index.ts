@@ -9,3 +9,4 @@ export * from "./fractions.js";
 export * from "./display.js";
 export * from "./dates.js";
 export * from "./assert.js";
+export * from "./stable-key.js";

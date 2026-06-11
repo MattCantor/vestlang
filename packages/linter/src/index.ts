@@ -8,7 +8,7 @@ import {
   RuleModule,
   SourcePosition,
 } from "./types.js";
-import { stableKey } from "./utils.js";
+import { stableKey } from "@vestlang/utils";
 import { buildInRules } from "./rules/index.js";
 import { normalizeProgram } from "@vestlang/normalizer";
 
