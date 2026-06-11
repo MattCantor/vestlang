@@ -34,9 +34,11 @@ describe("evaluateProgramWithRecovery", () => {
     if (!outcome.rescued) return; // narrow for the assertions below
     expect(outcome.schedule.resolution.status).toBe("template");
     expect(outcome.recovered.from).toBe("events-only");
-    expect(outcome.recovered.reason).toBe(
-      "Two independent absolute-date vesting grids on one grant.",
-    );
+    // The captured provenance is the structured reason now (recover gates off the
+    // published EvaluatedSchedule, not the evaluator's internal verdict).
+    expect(outcome.recovered.reason).toEqual({
+      kind: "OVERLAPPING_ABSOLUTE_STARTS",
+    });
     expect(outcome.recovered.dsl).toContain("THEN");
     expect(outcome.recovered.residualError).toBe(0);
     expect(outcome.recovered.vestingDayOfMonth).toBe(

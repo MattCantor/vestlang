@@ -138,7 +138,9 @@ describe("assemble — events-only status", () => {
     const [out] = evalProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
     if (out.status !== "events-only") throw new Error("expected events-only");
-    expect(out.reason).toBeTruthy();
+    // The published resolution arm carries the reason structured (rendered to
+    // prose only at the view boundary), so a consumer can gate on the kind.
+    expect(out.reason).toEqual({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
     expect(out.installments.every((i) => i.meta.state === "RESOLVED")).toBe(
       true,
     );

@@ -21,6 +21,7 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeVestingBaseGrantDate,
+  makeVestingBaseVestingStart,
   makeGatedNode,
   makeDuration,
 } from "./helpers";
@@ -246,6 +247,91 @@ describe("interchange — where the two verdicts diverge", () => {
     const [out] = evaluateProgram(program, ctxInput());
     expect(out.resolution.status).toBe("events-only");
     expect(out.interchange.status).toBe("events-only");
+  });
+});
+
+describe("interchange — distinguishing why an unresolved build is unstorable", () => {
+  // A THEN tail behind an unfired event head, with no cliff anywhere. The whole
+  // chain waits on `ipo`, so firing-blind it's unresolved — but the cause is the
+  // pending event head, not a cliff. It used to be mislabeled DEFERRED_CLIFF.
+  it("a no-cliff chained tail behind a pending event head is EVENT_CHAINED_TAIL", () => {
+    const monthly2: VestingPeriod = {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+    };
+    const program: Program = [
+      {
+        type: "STATEMENT",
+        amount: portion(1, 2),
+        expr: makeSingletonSchedule(
+          makeSingletonNode(makeVestingBaseEvent("ipo")),
+          monthly2,
+        ),
+      },
+      {
+        type: "STATEMENT",
+        chained: true,
+        amount: portion(1, 2),
+        expr: { type: "SCHEDULE", vesting_start: null, periodicity: monthly2 },
+      },
+    ];
+
+    const [out] = evaluateProgram(program, ctxInput());
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CHAINED_TAIL",
+      eventId: "ipo",
+    });
+  });
+
+  // A cliff that genuinely can't be placed until a firing is known — a
+  // `vestingStart + N months` cliff over a days grid, whose pre-cliff count
+  // depends on the (unfired) anchor — keeps DEFERRED_CLIFF.
+  it("a cliff that can't be placed until a firing is known stays DEFERRED_CLIFF", () => {
+    const out = evaluateStatement(
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "DAYS",
+        length: 30,
+        occurrences: 48,
+        // months cliff over a days grid: cross-unit, so the pre-cliff share
+        // can't be derived anchor-free and the unfired build stays unresolved.
+        cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+      }),
+      ctxInput(),
+    );
+
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
+
+  // An event-anchored cliff still maps to EVENT_CLIFF (the stacked commit's
+  // derivation), even firing-blind where the cliff event never reads as fired.
+  it("an event cliff stays EVENT_CLIFF", () => {
+    const out = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+        },
+      ),
+      ctxInput(),
+    );
+
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "ipo",
+    });
   });
 });
 

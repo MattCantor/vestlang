@@ -210,7 +210,10 @@ export type EvaluatedScheduleVerdict =
       // symbolic (UNRESOLVED) installments, the same mixed-stream rule as the
       // unresolved arm.
       installments: Installment[];
-      reason: string;
+      // Structured, like the interchange verdict's — the same fact lands a
+      // schedule off a single template in both. Rendered to prose only at the
+      // view boundary, so a consumer can still gate on the kind.
+      reason: NonTemplateReason;
       // The pending portions' missing witnesses. Empty when everything dated.
       blockers: Blocker[];
     }
@@ -243,6 +246,11 @@ export type NonTemplateReason =
   // The cliff hangs off a named event. The canonical cliff is a fixed duration, so
   // it has nowhere to put an event-anchored cliff.
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
+  // A THEN tail chained behind a head that's waiting on an event: the tail can't
+  // be dated until the head's event fires, and there's no cliff involved at all.
+  // `eventId` is the head's event (the name for a bare `FROM EVENT x`, or the
+  // synthetic gate id when the head is a combinator/gated/offset anchor).
+  | { kind: "EVENT_CHAINED_TAIL"; eventId: string; detail?: string }
   // The cliff can only be placed once we know when an event fired, so we can't
   // pin it down ahead of time and there's nothing storable to hand over.
   | { kind: "DEFERRED_CLIFF"; detail?: string };
@@ -259,7 +267,11 @@ export type NonTemplateReason =
  *   - "events-only"      stores as a flat list of dated vesting events, but not one
  *                        template (e.g. two independent date grids).
  *   - "unrepresentable"  the record keeper has no home for it at all, even as bare
- *                        events — the only case today is an event-anchored cliff.
+ *                        events. Three causes today: an event-anchored cliff
+ *                        (EVENT_CLIFF), a cliff that can't be placed until a firing
+ *                        is known (DEFERRED_CLIFF), and a THEN tail behind a head
+ *                        still waiting on an event (EVENT_CHAINED_TAIL) — no cliff,
+ *                        just a sequence that can't be dated yet.
  *   - "impossible"       self-contradictory no matter what events fire (e.g. a date
  *                        required to fall after a strictly later date).
  */

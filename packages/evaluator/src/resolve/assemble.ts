@@ -17,7 +17,6 @@ import type {
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
   InterchangeVerdict,
-  NonTemplateReason,
   OCTDate,
 } from "@vestlang/types";
 import { compileToInstallments, gt } from "@vestlang/core";
@@ -25,27 +24,6 @@ import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
 import { foldBlocker } from "../evaluate/blockerTree.js";
 import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
 import type { ResolveResult } from "./types.js";
-
-/** Turn a structured "couldn't be one template" reason into a sentence for display.
- *  Shared by both verdicts, so the same code reads the same wherever it surfaces. */
-export const reasonToString = (r: NonTemplateReason): string => {
-  switch (r.kind) {
-    case "OVERLAPPING_ABSOLUTE_STARTS":
-      return (
-        r.detail ?? "Two independent absolute-date vesting grids on one grant."
-      );
-    case "EVENT_CLIFF":
-      return (
-        r.detail ??
-        `Event-anchored cliff on "${r.eventId}" has no template form.`
-      );
-    case "DEFERRED_CLIFF":
-      return (
-        r.detail ??
-        "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."
-      );
-  }
-};
 
 /**
  * The non-occurrences this resolution is leaning on. Closed-world resolution reads
@@ -109,7 +87,8 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
       return {
         status: "events-only",
         installments: result.installments,
-        reason: reasonToString(result.reason),
+        // Structured reason, rendered to prose only at the view boundary.
+        reason: result.reason,
         // Pending siblings' witnesses; empty when every portion resolved to a date.
         blockers: result.blockers,
       };

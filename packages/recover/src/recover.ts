@@ -39,21 +39,22 @@ export function evaluateProgramWithRecovery(
   // reason survives — once we publish a recovered template, that schedule carries
   // no reason of its own.
   const eventsSchedule = assemble(r, interchange);
-  const reason =
-    eventsSchedule.resolution.status === "events-only"
-      ? eventsSchedule.resolution.reason
-      : "";
   const noRescue: RecoveryOutcome = {
     rescued: false,
     schedule: eventsSchedule,
   };
+  // `assemble` produced the events-only arm from the events build above; the guard
+  // narrows the published union so the gate and the captured provenance read the
+  // structured reason straight off the type recover hands back.
+  if (eventsSchedule.resolution.status !== "events-only") return noRescue;
+  const { reason, installments } = eventsSchedule.resolution;
 
-  if (!admitsRecovery(r, stmts)) return noRescue;
+  if (!admitsRecovery(reason, installments, stmts)) return noRescue;
 
   // Project. The gate only admits firing-invariant programs (no event anchors),
   // so the stream is fully dated; the filter narrows the type rather than
   // dropping anything.
-  const dated = r.installments.filter(
+  const dated = installments.filter(
     (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
   );
   const tranches: TrancheInput[] = dated.map((i) => ({
