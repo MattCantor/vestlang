@@ -293,4 +293,65 @@ describe("allocateEvents", () => {
       { date: "2025-04-01", amount: 100 },
     ]);
   });
+
+  it("never allocates more than the grant when two statements emit on the grant date", () => {
+    // Two half-grant statements, both firing on the grant date (#144 repro:
+    // `0.5 VEST PLUS 0.5 VEST`). They stay separate entries, so the fold must
+    // not re-emit the first half against the second.
+    const events: RawEvent[] = [
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 2),
+        statementOrder: 1,
+        occurrence: 1,
+      },
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 2),
+        statementOrder: 2,
+        occurrence: 1,
+      },
+    ];
+    const out = allocateEvents(events, 1000, "2025-02-01");
+    expect(out).toEqual([
+      { date: "2025-02-01", amount: 500 },
+      { date: "2025-02-01", amount: 500 },
+    ]);
+    expect(out.reduce((a, e) => a + e.amount, 0)).toBe(1000);
+  });
+
+  it("never allocates more than the grant total (invariant)", () => {
+    // Stack several statements landing on and around the grant date; the
+    // emitted installments must telescope to at most the grant.
+    const total = 1000;
+    const events: RawEvent[] = [
+      {
+        date: "2025-01-01",
+        fractionOfGrant: frac(1, 4),
+        statementOrder: 1,
+        occurrence: 1,
+      },
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 4),
+        statementOrder: 1,
+        occurrence: 2,
+      },
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 4),
+        statementOrder: 2,
+        occurrence: 1,
+      },
+      {
+        date: "2025-03-01",
+        fractionOfGrant: frac(1, 4),
+        statementOrder: 1,
+        occurrence: 3,
+      },
+    ];
+    const out = allocateEvents(events, total, "2025-02-01");
+    const sum = out.reduce((a, e) => a + e.amount, 0);
+    expect(sum).toBeLessThanOrEqual(total);
+  });
 });
