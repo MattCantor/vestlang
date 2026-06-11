@@ -354,4 +354,22 @@ describe("allocateEvents", () => {
     const sum = out.reduce((a, e) => a + e.amount, 0);
     expect(sum).toBeLessThanOrEqual(total);
   });
+
+  // At extreme grant sizes the fraction denominators (grant × occurrences) run
+  // past 2^53. Before the fraction layer moved to BigInt these rounded
+  // silently: the first month of a 999,999,999,999,989-share grant vanished and
+  // a 123,456,789,012,345-share grant summed one share short.
+  it("a near-2^50 grant over 48 months loses no share", () => {
+    const total = 999_999_999_999_989;
+    const out = allocateEvents(grid(48, { kind: "none" }), total);
+    expect(out).toHaveLength(48);
+    expect(out[0].amount).toBeGreaterThan(0);
+    expect(out.reduce((a, e) => a + e.amount, 0)).toBe(total);
+  });
+
+  it("a 123456789012345-share grant over 37 months sums exactly", () => {
+    const total = 123_456_789_012_345;
+    const out = allocateEvents(grid(37, { kind: "none" }), total);
+    expect(out.reduce((a, e) => a + e.amount, 0)).toBe(total);
+  });
 });
