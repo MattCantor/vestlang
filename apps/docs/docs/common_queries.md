@@ -41,7 +41,7 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 | `absenceAssumptions` | array | Events the resolves-to reading is assuming stayed absent — each `{ eventId, through, message }`, i.e. "`eventId` did not occur on/before `through`". A later/backdated firing of one of these could change the result. Empty for a date-only or fully-fired schedule. |
 | `installments` | array | The dated projection (RESOLVED), or symbolic tranches when something is pending. |
 | `blockers` | array | What's unfired/contradictory, structurally. |
-| `breakdown` | array | Per-clause attribution — one entry per statement, each with its own `installments` and `blockers` (no verdict; a clause has no storable schedule of its own). |
+| `breakdown` | array | Per-clause attribution — one entry per statement (a THEN chain is one entry, since its segments can't be placed apart), each with its own `installments` and `blockers` (no verdict; a clause has no storable schedule of its own). |
 
 ## Summary fields on `vestlang_evaluate_as_of`
 

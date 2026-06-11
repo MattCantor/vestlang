@@ -6,7 +6,7 @@ export {
 } from "./asof.js";
 export {
   evaluateStatement,
-  evaluateStatements,
+  evaluateClauseGroups,
   evaluateProgram,
 } from "./evaluate/index.js";
 export { presentSchedule, type SchedulePresentation } from "./present.js";

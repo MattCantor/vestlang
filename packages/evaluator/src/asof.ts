@@ -68,9 +68,13 @@ export function evaluateStatementAsOf(
 }
 
 /**
- * As-of sibling of `evaluateStatements`: evaluate each statement of a program as
- * of `ctx.asOf`. The per-statement as-of consumers use this rather than a
+ * As-of sibling of `evaluateClauseGroups`: evaluate each statement of a program
+ * as of `ctx.asOf`. The per-statement as-of consumers use this rather than a
  * hand-rolled map, so the whole-program installment cap is enforced once.
+ *
+ * Unlike `evaluateClauseGroups`, this still maps statement by statement, so it
+ * throws on a THEN tail (a tail has no start of its own). It has no in-repo
+ * production consumer; #167 owns deleting it.
  */
 export function evaluateStatementsAsOf(
   program: Program,
