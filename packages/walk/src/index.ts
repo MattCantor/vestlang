@@ -142,9 +142,12 @@ export function referencesEvent(node: AstNode): boolean {
 
 // The named-event id when `expr` is a bare event-anchored node (`FROM EVENT x`,
 // `CLIFF EVENT x`), else undefined. A leaf-only read of the node's own base — it
-// does not descend, so a combinator or a gate reference doesn't count. Typed at
-// the widest anchor: DATE/EVENT bases are anchor-agnostic, so a node from any slot
-// (a GRANT_DATE start, a VESTING_START cliff) is accepted.
+// does not descend, so a combinator or a gate reference doesn't count. It does
+// read through offsets (`EVENT x + 1 month` still answers `x`): offsets shift
+// the anchor, they don't change which event it is, so a caller that can't carry
+// an offset must check `node.offsets` itself. Typed at the widest anchor:
+// DATE/EVENT bases are anchor-agnostic, so a node from any slot (a GRANT_DATE
+// start, a VESTING_START cliff) is accepted.
 export function eventBaseId(expr: VestingNodeExpr): string | undefined {
   return expr.type === "NODE" && expr.base.type === "EVENT"
     ? expr.base.value

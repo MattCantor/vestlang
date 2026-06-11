@@ -78,6 +78,12 @@ const startBase = (
 const isCombinator = (e: VestingNodeExpr): boolean =>
   e.type === "NODE_EARLIER_OF" || e.type === "NODE_LATER_OF";
 
+/** Non-empty offsets on a leaf node — one of the things a bare EVENT base in the
+ *  template can't hold. (`eventBaseId` reads through offsets on purpose, so the
+ *  check is the caller's.) */
+const hasOffsets = (e: VestingNodeExpr): boolean =>
+  e.type === "NODE" && e.offsets.length > 0;
+
 export interface StmtResolution {
   percentage: Fraction;
   // Mirrors the normalized cadence (`VestingPeriod`), so the unit is always a
@@ -90,15 +96,25 @@ export interface StmtResolution {
         date: OCTDate;
         base: "DATE" | "EVENT";
         eventId?: string;
+        // Set when an EVENT base carries offsets (`FROM EVENT ipo + 1 month`,
+        // fired): the full anchor expression. A bare EVENT statement can't hold
+        // the offset — storing `eventId` with `date` as its firing would assert
+        // the event fired a month after it actually did — so buildTemplate
+        // externalizes this as a synthetic event whose definition keeps the
+        // offset and whose recorded firing is `date`, true by that definition.
+        offsetExpr?: VestingNodeExpr;
       }
-    // An unfired *atomic* EVENT start: canonical holds it as an EVENT statement
-    // with no firing, so it lowers into the template rather than poisoning the
-    // program to `unresolved`. The blockers carry the pending-ness.
+    // An unfired *bare* EVENT start — atomic, ungated, offset-free: canonical
+    // holds it as an EVENT statement with no firing, so it lowers into the
+    // template rather than poisoning the program to `unresolved`. The blockers
+    // carry the pending-ness.
     | { state: "PENDING_EVENT"; eventId: string; blockers: Blocker[] }
-    // A combinator-over-anchors start referencing ≥1 named EVENT: it collapses to
-    // one synthetic event, lowering into the template. `expr` is the
-    // raw combinator; `buildTemplate` mints its grant-scoped id (with dedup across
-    // statements) and records its DSL definition in the source map.
+    // A pending start that references a named EVENT and carries structure a bare
+    // EVENT base can't hold — a combinator over anchors, a BEFORE/AFTER gate, or
+    // offsets on the anchor. It collapses to one synthetic event, lowering into
+    // the template. `expr` is the raw start expression; `buildTemplate` mints its
+    // grant-scoped id (with dedup across statements) and records its DSL
+    // definition in the source map.
     //
     // `partial` is true when a branch of the combinator already settled to a date
     // (a LATER OF whose later arm we know) — the cadence is then placeable as
@@ -150,13 +166,20 @@ const resolveNonChained = (
       length: p.length,
       occurrences: p.occurrences,
     };
+    const sb = startBase(schedule.vesting_start);
     return {
       percentage,
       periodicity,
       start: {
         state: "RESOLVED",
         date: res.meta.date,
-        ...startBase(schedule.vesting_start),
+        ...sb,
+        // A fired event anchor with offsets resolved to firing+offset; keep the
+        // expression so buildTemplate externalizes it rather than recording a
+        // firing date the event never fired at.
+        ...(sb.base === "EVENT" && hasOffsets(schedule.vesting_start)
+          ? { offsetExpr: schedule.vesting_start }
+          : {}),
       },
       cliff: lowerCliff(
         p.cliff,
@@ -215,13 +238,20 @@ const resolveNonChained = (
 
   // Externalize as ONE synthetic event whenever the start references a named
   // event AND carries something a bare EVENT base can't hold: a combinator over
-  // anchors (EARLIER_OF/LATER_OF), or a BEFORE/AFTER gate. `buildTemplate`
-  // stringifies the whole `expr` into the source map, so the guard rides across
-  // the storage boundary — a gated start stores its definition, never a
-  // guard-stripped event (#18), and the same gate reads the same in either word
-  // order, `EVENT a BEFORE DATE x` or `DATE x BEFORE EVENT a` (#54).
+  // anchors (EARLIER_OF/LATER_OF), a BEFORE/AFTER gate, or offsets on the anchor
+  // (`FROM EVENT ipo + 1 month` — a bare EVENT statement would anchor the grid
+  // at the raw firing, a month early). `buildTemplate` stringifies the whole
+  // `expr` into the source map, so the structure rides across the storage
+  // boundary — a gated start stores its definition, never a guard-stripped event
+  // (#18), the same gate reads the same in either word order, `EVENT a BEFORE
+  // DATE x` or `DATE x BEFORE EVENT a` (#54), and an offset anchor stores the
+  // offset so a replay against the true firing derives the same dates.
   const isGated = vs.type === "NODE" && vs.condition !== undefined;
-  if (pending && (isCombinator(vs) || isGated) && referencesEvent(vs)) {
+  if (
+    pending &&
+    (isCombinator(vs) || isGated || hasOffsets(vs)) &&
+    referencesEvent(vs)
+  ) {
     return {
       percentage,
       periodicity,
@@ -238,10 +268,11 @@ const resolveNonChained = (
     };
   }
 
-  // A bare, ungated atomic EVENT start — a plain named event with no guard. It's
+  // A bare atomic EVENT start — a plain named event, no guard, no offsets. It's
   // a real event the record keeper fires directly, so it lowers as an EVENT
   // statement with no firing (no synthetic indirection, no source-map entry).
-  // Gated event-base nodes were already claimed by the synthetic branch above.
+  // Gated or offset event-base nodes were already claimed by the synthetic
+  // branch above.
   if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
     return {
       percentage,
@@ -281,8 +312,17 @@ type ChainAnchor =
   // A chain whose head is an event that has already fired. The tail still steps
   // forward by calendar math (off `cursor`), but it stays anchored to the same
   // event so the firing guard in buildTemplate recognizes the whole run as one
-  // event-origin chain rather than a date template.
-  | { kind: "EVENT"; eventId: string; cursor: OCTDate; origin: OCTDate }
+  // event-origin chain rather than a date template. `offsetExpr` rides along
+  // from an offset head for the same reason: the tail then collides on the
+  // synthetic identity instead of minting a bare-event firing the head's
+  // externalization no longer backs.
+  | {
+      kind: "EVENT";
+      eventId: string;
+      offsetExpr?: VestingNodeExpr;
+      cursor: OCTDate;
+      origin: OCTDate;
+    }
   // A chain whose head is an event with no date yet (unfired atomic event, or a
   // selector still waiting on one). There's nothing to hand the tail, so the
   // tail can't vest until the event arrives. We carry the head's blockers so the
@@ -315,6 +355,7 @@ const anchorAfter = (
       ? {
           kind: "EVENT",
           eventId: r.start.eventId!,
+          ...(r.start.offsetExpr ? { offsetExpr: r.start.offsetExpr } : {}),
           cursor,
           origin: r.start.date,
         }
@@ -397,6 +438,7 @@ export const resolveStatements = (
                 date,
                 base: "EVENT",
                 eventId: anchor.eventId,
+                ...(anchor.offsetExpr ? { offsetExpr: anchor.offsetExpr } : {}),
               }
             : { state: "RESOLVED", date, base: "DATE" },
         // Pass the chain origin so a sub-annual cliff counts its pre-cliff
@@ -523,7 +565,7 @@ export const buildTemplate = (
   // datable and the program flattens to dated events.
   if (
     resolutions.some(
-      (r) => r.cliff.state === "EVENT" && r.cliff.firedAt === undefined,
+      (r) => r.cliff.state === "EVENT" && r.cliff.effectiveAt === undefined,
     )
   )
     return unresolved();
@@ -536,12 +578,22 @@ export const buildTemplate = (
   const statements: VestingStatement[] = [];
   const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
   const blockers: Blocker[] = [];
-  // Synthetic events: minted once per distinct gate (keyed by its DSL
-  // definition), so two portions on the byte-identical anchor share one id and
-  // one source-map entry.
+  // Synthetic events: minted once per distinct externalized anchor (keyed by its
+  // DSL definition), so two portions on the byte-identical anchor share one id
+  // and one source-map entry.
   const sourceMap: SourceMap = {};
   const synthByDef = new Map<string, string>();
   let synthOrdinal = 0;
+  const mintSynthetic = (expr: VestingNodeExpr): string => {
+    const definition = stringifyVestingNodeExpr(expr);
+    let eventId = synthByDef.get(definition);
+    if (eventId === undefined) {
+      eventId = `evt_${++synthOrdinal}`;
+      synthByDef.set(definition, eventId);
+      sourceMap[eventId] = { definition };
+    }
+    return eventId;
+  };
   // Core dates are plain ISO strings (OCTDate); advanceCursor returns the same.
   let startDate: string | undefined;
   let cursor: string | undefined;
@@ -558,18 +610,10 @@ export const buildTemplate = (
       vesting_base = { type: "EVENT", event_id: r.start.eventId };
       blockers.push(...r.start.blockers);
     } else if (r.start.state === "SYNTHETIC_EVENT") {
-      // Combinator-over-anchors: externalize the gate as one synthetic event.
-      // The definition (its DSL) is the dedup key — same anchor → same id, one
-      // source-map entry. No firing yet; the witness is computed by re-resolving
+      // A pending combinator, gate, or offset anchor: externalize as one
+      // synthetic event. No firing yet; the witness is computed by re-resolving
       // the definition at rehydration.
-      const definition = stringifyVestingNodeExpr(r.start.expr);
-      let eventId = synthByDef.get(definition);
-      if (eventId === undefined) {
-        eventId = `evt_${++synthOrdinal}`;
-        synthByDef.set(definition, eventId);
-        sourceMap[eventId] = { definition };
-      }
-      vesting_base = { type: "EVENT", event_id: eventId };
+      vesting_base = { type: "EVENT", event_id: mintSynthetic(r.start.expr) };
       blockers.push(...r.start.blockers);
     } else if (
       r.start.state === "UNRESOLVED" ||
@@ -577,7 +621,16 @@ export const buildTemplate = (
     ) {
       return unresolved(); // narrowing; unreachable after the guard above
     } else if (r.start.base === "EVENT") {
-      const eventId = r.start.eventId!;
+      // A fired offset anchor externalizes here too: the statement references
+      // the synthetic event, whose recorded firing is the resolved date
+      // (firing + offsets) — true by its definition. The named event's raw
+      // firing stays in the consumer's ledger; restating it would add a firing
+      // no statement references (runtime validation rejects exactly that), and
+      // lowering after the firing has to produce the same artifact that
+      // lowering before it plus rehydration would.
+      const eventId = r.start.offsetExpr
+        ? mintSynthetic(r.start.offsetExpr)
+        : r.start.eventId!;
       const firingDate = r.start.date;
       vesting_base = { type: "EVENT", event_id: eventId };
       // One firing per event_id: multiple portions may float to the same event.

@@ -65,13 +65,13 @@ const expandResolution = (
     };
   } else if (r.cliff.state === "EVENT") {
     // An event cliff has no percentage of its own — the lump takes whatever
-    // share of the grid lands at or before the firing, read off the record.
-    // Unfired, the cliff still gates every installment, so there are no dated
-    // tranches to emit; the routing holds such portions back before this
-    // expander runs, and the empty return keeps the failure mode "withheld",
-    // never "released".
-    if (r.cliff.firedAt === undefined) return [];
-    cliff = { kind: "proportional", date: r.cliff.firedAt };
+    // share of the grid lands at or before its effective date (the firing plus
+    // any offsets on the cliff anchor), read off the record. Unfired, the cliff
+    // still gates every installment, so there are no dated tranches to emit;
+    // the routing holds such portions back before this expander runs, and the
+    // empty return keeps the failure mode "withheld", never "released".
+    if (r.cliff.effectiveAt === undefined) return [];
+    cliff = { kind: "proportional", date: r.cliff.effectiveAt };
   } else if (r.cliff.state === "NONE") {
     cliff = { kind: "none" };
   } else {

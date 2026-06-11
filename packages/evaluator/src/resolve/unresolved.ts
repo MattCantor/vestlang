@@ -108,10 +108,11 @@ export const unresolvedInstallments = (
     case "IMPOSSIBLE":
       return makeImpossibleSchedule(amounts, r.cliff.blockers);
     case "EVENT": {
-      // A bare event cliff: once the event fires the lump is dated (core.compile
-      // places it); until then the whole grid waits on that event. The firing is
-      // read off the record, the same place the routing reads it.
-      return r.cliff.firedAt !== undefined
+      // An event cliff: once the event fires the lump is dated (the events arm
+      // places it at the cliff's effective date); until then the whole grid
+      // waits on that event. Fired-ness is read off the record, the same place
+      // the routing reads it.
+      return r.cliff.effectiveAt !== undefined
         ? EMPTY
         : makeUnresolvedCliffSchedule(dates, amounts, [
             { type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.eventId },

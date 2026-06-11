@@ -63,7 +63,33 @@ describe("lowerCliff", () => {
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
       state: "EVENT",
       eventId: "ipo",
-      firedAt: "2026-04-01",
+      effectiveAt: "2026-04-01",
+    });
+  });
+
+  it("event cliff with an offset → effectiveAt is the firing shifted by the offset", () => {
+    // CLIFF EVENT ipo + 1 month: the lump lands a month after the firing, not at
+    // the firing itself (#149).
+    const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
+      makeVestingBaseEvent("ipo"),
+      [makeDuration(1, "MONTHS", "PLUS")],
+    );
+    expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
+      state: "EVENT",
+      eventId: "ipo",
+      effectiveAt: "2026-05-01",
+    });
+  });
+
+  it("unfired event cliff with an offset → EVENT with no effectiveAt, eventId intact", () => {
+    const noIpo = baseCtx({ grantDate: "2025-01-01", events: {} });
+    const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
+      makeVestingBaseEvent("ipo"),
+      [makeDuration(1, "MONTHS", "PLUS")],
+    );
+    expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, noIpo)).toEqual({
+      state: "EVENT",
+      eventId: "ipo",
     });
   });
 
@@ -150,7 +176,7 @@ describe("lowerCliff — gated event cliff (#113)", () => {
     expect(lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c)).toEqual({
       state: "EVENT",
       eventId: "acquisition",
-      firedAt: "2026-06-01",
+      effectiveAt: "2026-06-01",
     });
   });
 
