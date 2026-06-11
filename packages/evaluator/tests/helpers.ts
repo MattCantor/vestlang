@@ -91,13 +91,10 @@ const makeConstraint = (
 export const makeImpossibleConditionBlocker = (
   base: VestingBase,
   offsets: Offsets = [],
-): Extract<ImpossibleBlocker, { type: "IMPOSSIBLE_CONDITION" }> => {
-  const { type: _type, ...rest } = makeSingletonNode(base, offsets);
-  return {
-    type: "IMPOSSIBLE_CONDITION",
-    condition: rest,
-  };
-};
+): Extract<ImpossibleBlocker, { type: "IMPOSSIBLE_CONDITION" }> => ({
+  type: "IMPOSSIBLE_CONDITION",
+  node: makeSingletonNode(base, offsets),
+});
 
 const makeAtomCondition = (constraint: Constraint): AtomCondition => ({
   type: "ATOM",

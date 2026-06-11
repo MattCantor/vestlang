@@ -54,7 +54,7 @@ export type UnresolvedBlocker =
     }
   | {
       type: "UNRESOLVED_CONDITION";
-      condition: Omit<VestingNode, "type">;
+      node: VestingNode;
     };
 
 export type ImpossibleBlocker =
@@ -65,7 +65,7 @@ export type ImpossibleBlocker =
     }
   | {
       type: "IMPOSSIBLE_CONDITION";
-      condition: Omit<VestingNode, "type">;
+      node: VestingNode;
     };
 
 export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
