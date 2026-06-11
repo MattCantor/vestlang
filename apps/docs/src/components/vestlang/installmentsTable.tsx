@@ -38,9 +38,11 @@ export function InstallmentsTable({
                   fontFamily: "var(--ifm-font-family-monospace)",
                 }}
               >
-                {installment.meta.state === "RESOLVED"
+                {installment.state === "RESOLVED"
                   ? installment.date
-                  : JSON.stringify(installment.meta.symbolicDate)}
+                  : installment.state === "UNRESOLVED"
+                    ? JSON.stringify(installment.symbolicDate)
+                    : null}
               </td>
             </tr>
           ))}

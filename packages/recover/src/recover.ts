@@ -59,7 +59,7 @@ export function evaluateProgramWithRecovery(
   // so the stream is fully dated; the filter narrows the type rather than
   // dropping anything.
   const dated = installments.filter(
-    (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
+    (i): i is ResolvedInstallment => i.state === "RESOLVED",
   );
   const tranches: TrancheInput[] = dated.map((i) => ({
     date: i.date,

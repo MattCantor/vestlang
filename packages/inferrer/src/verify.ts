@@ -55,11 +55,10 @@ export function residualAgainstInput(
       vesting_day_of_month: ctx.vestingDayOfMonth,
     });
     for (const inst of result.resolution.installments) {
-      if (inst.meta.state !== "RESOLVED") {
+      if (inst.state !== "RESOLVED") {
         return { residual: Number.POSITIVE_INFINITY, installments: [] };
       }
-      const key = inst.date as unknown as string;
-      produced.set(key, (produced.get(key) ?? 0) + inst.amount);
+      produced.set(inst.date, (produced.get(inst.date) ?? 0) + inst.amount);
     }
   }
 
@@ -69,9 +68,9 @@ export function residualAgainstInput(
   for (const [key, amount] of produced.entries()) {
     if (amount > EPSILON) {
       installments.push({
+        state: "RESOLVED",
         date: key,
         amount,
-        meta: { state: "RESOLVED" },
       });
     }
   }
@@ -106,7 +105,7 @@ export function collapseAgainstInput(
   // resolves to against the (empty) events — so read off the resolution verdict.
   const { status, installments } = schedule.resolution;
   for (const inst of installments) {
-    if (inst.meta.state !== "RESOLVED" || inst.date === undefined) {
+    if (inst.state !== "RESOLVED") {
       return { residual: Number.POSITIVE_INFINITY, status };
     }
     produced.set(inst.date, (produced.get(inst.date) ?? 0) + inst.amount);

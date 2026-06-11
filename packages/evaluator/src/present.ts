@@ -51,7 +51,7 @@ export function presentSchedule(s: EvaluatedSchedule): SchedulePresentation {
       interchange.status === "template" || interchange.status === "events-only",
     pending:
       resolution.status !== "impossible" && resolution.blockers.length > 0,
-    projected: resolution.installments.some((i) => i.meta.state === "RESOLVED"),
+    projected: resolution.installments.some((i) => i.state === "RESOLVED"),
     valid: s.findings.every((f) => f.severity !== "error"),
   };
 }

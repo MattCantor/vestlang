@@ -8,6 +8,7 @@ import { addPeriod, compile } from "@vestlang/core";
 import type {
   Amount,
   EvaluationContextInput,
+  Installment,
   OCTDate,
   Program,
   Statement,
@@ -85,7 +86,11 @@ const then = (amount: Amount, periodicity: VestingPeriod): Statement => ({
   expr: { type: "SCHEDULE", vesting_start: null, periodicity },
 });
 
+// Accepts both compile's dated events and resolved installments; a symbolic
+// installment (no date) maps to undefined.
 const dates = (events: { date?: OCTDate }[]) => events.map((e) => e.date);
+const installmentDates = (installments: Installment[]) =>
+  installments.map((i) => (i.state === "RESOLVED" ? i.date : undefined));
 const sum = (events: { amount: string }[]) =>
   events.reduce((a, e) => a + Number(e.amount), 0);
 // Resolved installments carry a numeric amount, unlike compile's string output.
@@ -315,7 +320,7 @@ describe("resolveToCore — events-only month-end chain springs back too", () =>
     if (result.kind !== "events") return;
     // Head one month after ipo (Feb has no 31st, so Feb 28), then the tail picks
     // up and returns to the month-end: Mar 31, Apr 30 — not stuck on the 28th.
-    expect(dates(result.installments)).toEqual([
+    expect(installmentDates(result.installments)).toEqual([
       "2025-02-28",
       "2025-03-31",
       "2025-04-30",
@@ -526,7 +531,10 @@ describe("resolveToCore — event-origin THEN chain, event fired", () => {
     if (result.kind !== "events") return;
     expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
     // Head one year after ipo, tail two years after.
-    expect(dates(result.installments)).toEqual(["2027-06-01", "2028-06-01"]);
+    expect(installmentDates(result.installments)).toEqual([
+      "2027-06-01",
+      "2028-06-01",
+    ]);
     expect(total(result.installments)).toBe(100000);
   });
 
@@ -603,7 +611,10 @@ describe("resolveToCore — THEN chain off a fired offset-event head", () => {
     if (result.reason.kind !== "OVERLAPPING_ABSOLUTE_STARTS") return;
     expect(result.reason.detail).toContain("THEN chain");
     // Head anchored a year after ipo + 12mo, tail a year after that.
-    expect(dates(result.installments)).toEqual(["2028-06-01", "2029-06-01"]);
+    expect(installmentDates(result.installments)).toEqual([
+      "2028-06-01",
+      "2029-06-01",
+    ]);
     expect(total(result.installments)).toBe(100000);
   });
 });
@@ -628,7 +639,7 @@ describe("resolveToCore — two event-origin chains on one fired event", () => {
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
     // Both tails vest two years after ipo; the whole grant is allocated.
-    expect(dates(result.installments)).toContain("2028-06-01");
+    expect(installmentDates(result.installments)).toContain("2028-06-01");
     expect(total(result.installments)).toBe(100000);
   });
 });
@@ -652,7 +663,7 @@ describe("resolveToCore — a date chain superimposed with an independent grid",
     if (result.kind !== "events") return;
     expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
     // The chained tail vests at 2027-01-01 regardless of the fallout.
-    expect(dates(result.installments)).toContain("2027-01-01");
+    expect(installmentDates(result.installments)).toContain("2027-01-01");
     expect(total(result.installments)).toBe(100000);
   });
 

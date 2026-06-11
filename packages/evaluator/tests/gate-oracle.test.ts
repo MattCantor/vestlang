@@ -69,7 +69,7 @@ function verdictOf(s: EvaluatedSchedule): Verdict {
     case "unresolved":
       return "pending";
     case "template": {
-      const resolved = installments.filter((i) => i.meta.state === "RESOLVED");
+      const resolved = installments.filter((i) => i.state === "RESOLVED");
       return resolved.length > 0 ? "vests" : "pending";
     }
   }

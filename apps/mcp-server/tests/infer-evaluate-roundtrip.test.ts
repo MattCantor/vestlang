@@ -47,7 +47,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
       expect(result.view.resolution.status).toBe("template");
       // Every original tranche is reproduced — the round-trip is exact.
       const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);
       expect(produced).toBe(grantQuantity(rateChange));
       // The whole chain attributes to one breakdown entry.
@@ -75,7 +75,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
     if (result.ok) {
       expect(result.view.resolution.status).toBe("template");
       const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);
       expect(produced).toBe(grantQuantity(cliffThenTail));
       expect(result.breakdown).toHaveLength(1);
@@ -99,7 +99,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
     if (result.ok) {
       expect(result.view.resolution.status).toBe("template");
       const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);
       expect(produced).toBe(grantQuantity(monthEnd));
     }

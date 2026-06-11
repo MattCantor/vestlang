@@ -311,7 +311,7 @@ describe("inferSchedule — policy detection", () => {
     const installments: Installment[] = evaluateStatement(stmt, ctx).resolution
       .installments;
     const tranches: TrancheInput[] = installments
-      .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+      .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
       .map((i) => ({ date: i.date, amount: i.amount }));
 
     const result = inferSchedule({ tranches });
@@ -362,9 +362,8 @@ function evalAllResolved(
   for (const stmt of program) {
     const result = evaluateStatement(stmt, ctx);
     for (const inst of result.resolution.installments) {
-      if (inst.meta.state === "RESOLVED") {
-        const key = inst.date as unknown as string;
-        map.set(key, (map.get(key) ?? 0) + inst.amount);
+      if (inst.state === "RESOLVED") {
+        map.set(inst.date, (map.get(inst.date) ?? 0) + inst.amount);
       }
     }
   }
@@ -526,7 +525,7 @@ describe("inferSchedule — rounded trains", () => {
       const installments: Installment[] = evaluateStatement(stmt, ctx)
         .resolution.installments;
       const tranches: TrancheInput[] = installments
-        .filter((i): i is ResolvedInstallment => i.meta.state === "RESOLVED")
+        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .map((i) => ({ date: i.date, amount: i.amount }));
 
       // Sanity: the run really is jittery (amounts are not all equal).

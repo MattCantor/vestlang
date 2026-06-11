@@ -61,7 +61,7 @@ describe("cliff-gate disclosure on an unfired-event start", () => {
     if (resolution.status !== "template") return;
 
     const cliffLump = resolution.installments.find(
-      (i) => i.meta.state === "RESOLVED" && i.amount === 1200,
+      (i) => i.state === "RESOLVED" && i.amount === 1200,
     );
     expect(cliffLump).toBeDefined();
     expect(cliffLump && "date" in cliffLump ? cliffLump.date : undefined).toBe(

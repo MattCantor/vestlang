@@ -34,9 +34,7 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
     expect(resolution.installments).toHaveLength(48);
     expect(
       resolution.installments.every(
-        (i) =>
-          i.meta.state === "UNRESOLVED" &&
-          i.meta.symbolicDate.type === "START_PLUS",
+        (i) => i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS",
       ),
     ).toBe(true);
     expect(resolution.installments.every((i) => i.amount === 100)).toBe(true);

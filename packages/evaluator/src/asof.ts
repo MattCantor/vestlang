@@ -37,7 +37,7 @@ function partitionAsOf(
   }
 
   for (const t of installments) {
-    switch (t.meta.state) {
+    switch (t.state) {
       case "IMPOSSIBLE":
         impossible.push(t);
         unresolved += t.amount;
@@ -46,7 +46,7 @@ function partitionAsOf(
         unresolved += t.amount;
         break;
       case "RESOLVED":
-        (t.date! <= asOf ? vested : unvested).push(t);
+        (t.date <= asOf ? vested : unvested).push(t);
     }
   }
 

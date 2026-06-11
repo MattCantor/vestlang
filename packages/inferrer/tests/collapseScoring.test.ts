@@ -23,7 +23,7 @@ function collapseEval(
   const [schedule] = evaluateProgram(program, ctx);
   const byDate = new Map<string, number>();
   for (const inst of schedule.resolution.installments) {
-    if (inst.meta.state === "RESOLVED" && inst.date !== undefined) {
+    if (inst.state === "RESOLVED") {
       byDate.set(inst.date, (byDate.get(inst.date) ?? 0) + inst.amount);
     }
   }

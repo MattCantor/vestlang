@@ -138,8 +138,7 @@ const eventsArm = (
     // combinator start on a statement of its own.
     const ev = unresolvedInstallments(r, stmt, ctx);
     for (const inst of ev.installments) {
-      if (inst.meta.state !== "RESOLVED")
-        symbolic.push(inst as SymbolicInstallment);
+      if (inst.state !== "RESOLVED") symbolic.push(inst);
     }
     blockers.push(...ev.blockers);
   });
@@ -192,8 +191,7 @@ const unresolvedArm = (
       resolvedResolutions.push(r);
     }
     for (const inst of ev.installments) {
-      if (inst.meta.state !== "RESOLVED")
-        symbolic.push(inst as SymbolicInstallment);
+      if (inst.state !== "RESOLVED") symbolic.push(inst);
     }
     blockers.push(...ev.blockers);
   });
