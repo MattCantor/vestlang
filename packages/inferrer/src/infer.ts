@@ -77,7 +77,7 @@ function explicitListFallback(sorted: TrancheInput[]): Component[] {
   );
 }
 
-interface Attempt {
+interface AttemptBase {
   program: Program;
   components: Component[];
   foldCount: number;
@@ -86,15 +86,16 @@ interface Attempt {
   residual: number;
   policy: VestingDayOfMonth;
   cadencesTried: string[];
-  /** Per-segment continuation flags for a sequential attempt — the marked tails
-   * are emitted as `THEN`. Absent for the ordinary parallel cover. */
-  continuation?: boolean[];
-  /** Program-level verdict, precomputed for the sequential attempt (its residual
-   * already comes from a collapse, which hands the verdict back at the same time).
-   * Absent for the parallel cover, whose verdict is computed lazily during
-   * selection. */
-  status?: ResolutionStatus;
 }
+
+/** Whether the attempt is the ordinary parallel cover or the sequential chain
+ * decides which fields it carries. The sequential branch comes with a
+ * program-level verdict already in hand: its residual is the product of a whole-
+ * chain collapse, which hands the verdict back at the same time. The parallel
+ * cover has no verdict yet — that gets computed lazily during selection. */
+type Attempt =
+  | (AttemptBase & { kind: "parallel" })
+  | (AttemptBase & { kind: "sequential"; status: ResolutionStatus });
 
 function runOne(
   sorted: TrancheInput[],
@@ -135,6 +136,7 @@ function runOne(
   const { residual } = residualAgainstInput(program, sorted, verifyCtx);
 
   return {
+    kind: "parallel",
     program,
     components: folded,
     foldCount,
@@ -172,6 +174,7 @@ function runSequential(
   const { residual, status } = collapseAgainstInput(program, sorted, verifyCtx);
 
   return {
+    kind: "sequential",
     program,
     components: seq.components,
     foldCount: seq.components.filter((c) => c.kind === "CLIFF_UNIFORM").length,
@@ -180,7 +183,6 @@ function runSequential(
     residual,
     policy,
     cadencesTried: seq.cadencesTried,
-    continuation: seq.continuation,
     status,
   };
 }
@@ -189,7 +191,7 @@ function runSequential(
  * interchange can hold as one template beats a flat events-only list; anything
  * that doesn't even reproduce (unresolved/impossible) ranks last and is only ever
  * reached through the residual gate anyway. */
-function verdictRank(status: string): number {
+function verdictRank(status: ResolutionStatus): number {
   if (status === "template") return 2;
   if (status === "events-only") return 1;
   return 0;
@@ -228,11 +230,12 @@ function selectBest(
   const verdictOf = (a: Attempt): number => {
     if (a.residual >= EPSILON) return 0;
     const status =
-      a.status ??
-      programStatus(
-        a.program,
-        makeVerifyContext(grantDate, totalQuantity, asOf, a.policy),
-      );
+      a.kind === "sequential"
+        ? a.status
+        : programStatus(
+            a.program,
+            makeVerifyContext(grantDate, totalQuantity, asOf, a.policy),
+          );
     return verdictRank(status);
   };
 
@@ -271,8 +274,10 @@ function selectBest(
 }
 
 /** Replace a winning attempt's per-statement residual with the one the consumer
- * path produces (a single program collapse). The sequential attempt already holds
- * a collapse residual — its `status` is the tell — so it passes through untouched. */
+ * path produces (a single program collapse). A sequential attempt already holds a
+ * collapse residual, so it passes through untouched; only the parallel cover needs
+ * the swap. The collapse also yields a verdict, but nothing downstream of the
+ * winner reads it, so it's dropped rather than stashed back on the attempt. */
 function rescoreOnCollapse(
   attempt: Attempt,
   sorted: TrancheInput[],
@@ -280,13 +285,13 @@ function rescoreOnCollapse(
   totalQuantity: number,
   asOf: OCTDate,
 ): Attempt {
-  if (attempt.status !== undefined) return attempt;
-  const { residual, status } = collapseAgainstInput(
+  if (attempt.kind === "sequential") return attempt;
+  const { residual } = collapseAgainstInput(
     attempt.program,
     sorted,
     makeVerifyContext(grantDate, totalQuantity, asOf, attempt.policy),
   );
-  return { ...attempt, residual, status };
+  return { ...attempt, residual };
 }
 
 export function inferSchedule(input: InferInput): InferResult {
@@ -379,6 +384,7 @@ export function inferSchedule(input: InferInput): InferResult {
         "exact-cover search left nonzero residual; emitted explicit list fallback",
       );
       best = {
+        kind: "parallel",
         program: fallbackProgram,
         components: fallbackComponents,
         foldCount: 0,
