@@ -270,12 +270,18 @@ const vestingStartOffset = (
  * always 12/48 = 25%). Core's compile then applies it at the firing date,
  * reproducing exactly what the already-fired case (anchored `lowerCliff`) yields.
  *
- * Everything else needs the firing date and is reported UNRESOLVED so the caller
- * keeps the statement unresolved: an event cliff (`CLIFF EVENT x`, no time-based
- * form — kept here so a pending start with one stays unresolved rather than
- * routing to events-only), or a cliff whose unit differs from the grid's (a
- * months-cliff over a days-grid counts a varying number of pre-cliff occurrences
- * depending on the anchor).
+ * Everything else needs the firing date and can't lower to a `cliff` field:
+ *   - a bare event cliff (`CLIFF EVENT x`, no time-based form) keeps its
+ *     event-anchoredness, lowered to the EVENT record state with no `effectiveAt`
+ *     (on this path the start is pending, so the cliff's event can never have a
+ *     placeable date). buildTemplate's unfired-EVENT-cliff guard still routes the
+ *     statement to `unresolved` — the routing is unchanged from when this returned
+ *     a bare UNRESOLVED — but the record now says *why* it's unstorable (no schema
+ *     home for an event cliff) rather than collapsing to "a cliff that can't be
+ *     placed yet", which is the same answer a resolved start with this cliff gets.
+ *   - a cliff whose unit differs from the grid's (a months-cliff over a days-grid
+ *     counts a varying number of pre-cliff occurrences depending on the anchor) is
+ *     UNRESOLVED — it genuinely can't be placed until the firing is known.
  */
 export const lowerDeferredCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
@@ -306,19 +312,30 @@ export const lowerDeferredCliff = (
 
   // Not derivable without the firing date (an event cliff, a cross-unit duration,
   // or a gated cliff). There's no start anchor to lay a grid against, so it can
-  // never be `dated`. If the cliff carries a BEFORE/AFTER gate, surface it:
-  // resolve the cliff with no vesting-start overlay (the subject stays pending)
-  // and report the gate's blockers, minus the vestingStart placeholder — that
-  // pending-ness is the start's, reported on the start, not doubled onto the
-  // cliff. An ungated non-derivable cliff has no gate to report.
+  // never be `dated`.
   const gated = cliffExpr.type === "NODE" && cliffExpr.condition !== undefined;
+
+  // A bare (ungated) event cliff keeps its event-anchoredness rather than
+  // flattening to a generic UNRESOLVED: it's an EVENT record with no effectiveAt,
+  // since a pending start means the cliff's firing can never be placed on this
+  // path. buildTemplate routes the unfired EVENT cliff to `unresolved` exactly as
+  // the old UNRESOLVED return did, but the record now reports the truer cause (no
+  // schema home for an event cliff at all). A gated event cliff is handled below —
+  // there the gate's own verdict is the sharper answer.
+  const evId = eventBaseId(cliffExpr);
+  if (evId && !gated) return { state: "EVENT", eventId: evId };
+
+  // An ungated, non-event non-derivable cliff (a cross-unit duration) has no gate
+  // to report; it stays unresolved until the firing date arrives.
   if (!gated) return { state: "UNRESOLVED", blockers: [], dated: false };
 
-  // Resolve the gate with no vesting-start overlay (the subject stays pending) and
-  // report its verdict, dropping the vestingStart placeholder — that pending-ness
-  // is the start's, reported on the start, not doubled onto the cliff. A satisfied
-  // gate doesn't rescue this cliff: with no start anchor it still can't be placed,
-  // so it stays unresolved until the firing date arrives.
+  // A gated cliff (including a gated *event* cliff): the gate's own verdict is the
+  // sharper answer, so surface it. Resolve the cliff with no vesting-start overlay
+  // (the subject stays pending) and report its verdict, dropping the vestingStart
+  // placeholder — that pending-ness is the start's, reported on the start, not
+  // doubled onto the cliff. A satisfied gate doesn't rescue this cliff: with no
+  // start anchor it still can't be placed, so it stays unresolved until the firing
+  // date arrives.
   const res = evaluateVestingNodeExpr(cliffExpr, ctx);
   const gate = gateVerdict(res, false, (bs) =>
     bs.filter((b) => !isVestingStartPlaceholder(b)),

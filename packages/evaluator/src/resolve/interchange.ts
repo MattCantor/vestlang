@@ -34,6 +34,9 @@ import { classify } from "./classify.js";
  *   - EVENT_CLIFF        a cliff hangs off a named event — the schema has no home
  *                        for it at all (kept firing-invariant: blind to firings an
  *                        event cliff always reads unfired, so it always lands here).
+ *                        Reported the same whether the start resolved or is itself
+ *                        pending: a pending start lowers its bare event cliff to the
+ *                        EVENT record too, so this scan sees it either way.
  *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
  *                        with no cliff anywhere — the tail just can't be dated yet.
  *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
