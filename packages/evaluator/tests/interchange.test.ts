@@ -132,6 +132,60 @@ describe("interchange — where the two verdicts diverge", () => {
     expect(out.interchange.status).toBe("unrepresentable");
   });
 
+  // The same event cliff before its event fires: the closed-world view now reads
+  // pending (the whole grid waits on the firing), while the storable answer keeps
+  // the precise reason — the schema has no home for an event-anchored cliff, not
+  // merely a cliff that can't be placed yet.
+  it("an unfired event cliff is unresolved to resolve, unrepresentable (EVENT_CLIFF) to store", () => {
+    const out = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+        },
+      ),
+      ctxInput(),
+    );
+
+    expect(out.resolution.status).toBe("unresolved");
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "ipo",
+    });
+  });
+
+  // Storability can't depend on the firing: the event-cliff schedule gets the
+  // identical interchange verdict whether ipo has fired or not.
+  it("the event-cliff interchange verdict is firing-invariant", () => {
+    const s = stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+      {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+      },
+    );
+    const unfired = evaluateStatement(s, ctxInput()).interchange;
+    const fired = evaluateStatement(
+      s,
+      ctxInput({ events: { ipo: "2026-01-01" } }),
+    ).interchange;
+
+    expect(fired).toEqual(unfired);
+    expect(unfired).toEqual({
+      status: "unrepresentable",
+      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+    });
+  });
+
   // A gated event cliff (#113): the gate is enforced, and the two verdicts split
   // on it the way they should. Closed-world, the firing violates the gate so the
   // cliff can never validly land (impossible); firing-blind, the gate is merely

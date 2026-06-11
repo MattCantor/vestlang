@@ -85,7 +85,7 @@ const then = (amount: Amount, periodicity: VestingPeriod): Statement => ({
   expr: { type: "SCHEDULE", vesting_start: null, periodicity },
 });
 
-const dates = (events: { date: OCTDate }[]) => events.map((e) => e.date);
+const dates = (events: { date?: OCTDate }[]) => events.map((e) => e.date);
 const sum = (events: { amount: string }[]) =>
   events.reduce((a, e) => a + Number(e.amount), 0);
 // Resolved installments carry a numeric amount, unlike compile's string output.

@@ -13,6 +13,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
+import { evaluateProgramAsOf } from "../src/asof";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -180,7 +181,11 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
-    expect(result.installments.every((i) => i.date >= "2025-01-01")).toBe(true);
+    expect(
+      result.installments.every(
+        (i) => i.date !== undefined && i.date >= "2025-01-01",
+      ),
+    ).toBe(true);
     expect(sum(result.installments)).toBe(100000);
   });
 });
@@ -550,6 +555,162 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
       }),
     ];
     expect(resolveToCore(program, ctx21()).kind).toBe("unresolved");
+  });
+});
+
+describe("resolveToCore — an unfired event cliff holds the whole grid back (#138)", () => {
+  // 4,800 shares, monthly over 4 years, gated by `CLIFF EVENT ipo`. The start is
+  // a plain date, so the grid is fully placeable — but until ipo fires, the
+  // cliff gates every installment. Nothing may surface as RESOLVED.
+  const eventCliff48: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 48,
+    cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+  };
+  const program: Program = [
+    stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+      eventCliff48,
+    ),
+  ];
+
+  it("unfired → unresolved: every installment held back, with the event blocker", () => {
+    const result = resolveToCore(program, ctxInput({}, 4800));
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments).toHaveLength(48);
+    expect(
+      result.installments.every((i) => i.meta.state === "UNRESOLVED"),
+    ).toBe(true);
+    // The shares are all still claimed — just not released.
+    expect(sum(result.installments)).toBe(4800);
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+  });
+
+  it("fired → events with the proportional holdback lump (regression guard)", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2026-06-01" }, 4800),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.reason.kind).toBe("EVENT_CLIFF");
+    expect(result.blockers).toEqual([]);
+    // 17 monthly tranches fall at or before the firing → one 1,700-share lump
+    // on the firing date, then 100/month.
+    expect(result.installments[0]).toEqual({
+      date: "2026-06-01",
+      amount: 1700,
+      meta: { state: "RESOLVED" },
+    });
+    expect(result.installments).toHaveLength(32);
+    expect(sum(result.installments)).toBe(4800);
+  });
+
+  it("a THEN tail's unfired event cliff holds the tail back, not the head", () => {
+    const monthly12 = (cliff?: VestingNodeExpr<"VESTING_START">) => ({
+      type: "MONTHS" as const,
+      length: 1,
+      occurrences: 12,
+      ...(cliff ? { cliff } : {}),
+    });
+    const chained: Program = [
+      stmt(
+        portion(1, 2),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        monthly12(),
+      ),
+      {
+        type: "STATEMENT",
+        chained: true,
+        amount: portion(1, 2),
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: null,
+          periodicity: monthly12(
+            makeSingletonNode(makeVestingBaseEvent("ipo")),
+          ),
+        },
+      },
+    ];
+    const result = resolveToCore(chained, ctxInput({}, 2400));
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    const resolved = result.installments.filter(isResolved);
+    expect(sum(resolved)).toBe(1200); // the head still vests
+    const held = result.installments.filter(
+      (i) => i.meta.state === "UNRESOLVED",
+    );
+    expect(sum(held)).toBe(1200); // the tail waits on ipo
+    expect(
+      result.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("resolveToCore — events arm carries its pending siblings (#148)", () => {
+  // Two independent DATE grids force the events arm; the third portion floats on
+  // an unfired event. Its 1,200 shares must not vanish from the collapsed
+  // result: they ride along symbolically, and the verdict keeps the blocker.
+  const monthly2: VestingPeriod = { type: "MONTHS", length: 1, occurrences: 2 };
+  const program: Program = [
+    stmt(
+      portion(1, 2),
+      makeSingletonNode(makeVestingBaseDate("2024-01-01")),
+      monthly2,
+    ),
+    stmt(
+      portion(1, 4),
+      makeSingletonNode(makeVestingBaseDate("2024-06-15")),
+      monthly2,
+    ),
+    stmt(
+      portion(1, 4),
+      makeSingletonNode(makeVestingBaseEvent("ipo")),
+      monthly2,
+    ),
+  ];
+  const ctx = ctxInput({ grantDate: "2024-01-01" }, 4800);
+
+  it("pending portion's shares and blocker survive into the events verdict", () => {
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+
+    const dated = result.installments.filter(isResolved);
+    expect(dated.map((i) => ({ date: i.date, amount: i.amount }))).toEqual([
+      { date: "2024-02-01", amount: 1200 },
+      { date: "2024-03-01", amount: 1200 },
+      { date: "2024-07-15", amount: 600 },
+      { date: "2024-08-15", amount: 600 },
+    ]);
+    const symbolic = result.installments.filter(
+      (i) => i.meta.state === "UNRESOLVED",
+    );
+    expect(sum(symbolic)).toBe(1200);
+    // Every share of the grant is accounted for somewhere in the stream.
+    expect(sum(result.installments)).toBe(4800);
+  });
+
+  it("as-of partitioning tallies the pending portion as unresolved", () => {
+    const result = evaluateProgramAsOf(program, {
+      grantDate: "2024-01-01",
+      events: {},
+      grantQuantity: 4800,
+      asOf: "2026-01-01",
+    });
+    expect(sum(result.vested)).toBe(3600);
+    expect(result.unresolved).toBe(1200);
   });
 });
 

@@ -21,9 +21,10 @@ export function admitsRecovery(result: EventsResult, stmts: Program): boolean {
   // gates on the structured `kind`, never the prose `detail`.
   if (!isOverlappingAbsoluteStarts(result.reason)) return false;
 
-  // A non-empty, fully-resolved projection to feed the inferrer. (The events arm
-  // is ResolvedInstallment[], so it's complete by construction; a pending program
-  // is `unresolved`, never `events`, and is turned away before reaching here.)
+  // A non-empty projection to feed the inferrer. The events arm can carry
+  // symbolic installments for a sibling portion still waiting on an event, but
+  // any such program references an event and the anchor check below turns it
+  // away — what survives the gate is fully dated.
   if (result.installments.length === 0) return false;
 
   // The load-bearing check. OVERLAPPING_ABSOLUTE_STARTS is raised by two

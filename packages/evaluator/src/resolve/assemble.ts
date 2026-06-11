@@ -5,7 +5,8 @@
 //
 //   - template    → core.compile (exact-rational installments) + the canonical
 //                   artifact (template, runtime, sourceMap), status "template".
-//   - events      → the resolved dated installments, status "events-only" + reason.
+//   - events      → the dated installments (plus any pending sibling's symbolic
+//                   ones), status "events-only" + reason.
 //   - unresolved  → symbolic installments + blockers, status "unresolved".
 //   - impossible  → all-void installments + contradiction blockers, status
 //                   "impossible".
@@ -82,11 +83,6 @@ const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
     );
 };
 
-/** The blockers a verdict left behind. Only template/unresolved/impossible carry
- *  them; an events-only result resolved to concrete dates and keeps none. */
-const verdictBlockers = (r: ResolveResult): Blocker[] =>
-  "blockers" in r ? r.blockers : [];
-
 /** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet). */
 const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
   switch (result.kind) {
@@ -114,7 +110,8 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
         status: "events-only",
         installments: result.installments,
         reason: reasonToString(result.reason),
-        blockers: [],
+        // Pending siblings' witnesses; empty when every portion resolved to a date.
+        blockers: result.blockers,
       };
     case "unresolved":
       return {
@@ -146,6 +143,6 @@ export const assemble = (
 ): EvaluatedSchedule => ({
   interchange,
   resolution: assembleVerdict(resolution),
-  absenceAssumptions: collectAbsences(verdictBlockers(resolution)),
+  absenceAssumptions: collectAbsences(resolution.blockers),
   findings: resolution.findings,
 });

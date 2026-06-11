@@ -50,8 +50,13 @@ export function evaluateProgramWithRecovery(
 
   if (!admitsRecovery(r, stmts)) return noRescue;
 
-  // Project: the events arm already carries the resolved {date, amount} stream.
-  const tranches: TrancheInput[] = r.installments.map((i) => ({
+  // Project. The gate only admits firing-invariant programs (no event anchors),
+  // so the stream is fully dated; the filter narrows the type rather than
+  // dropping anything.
+  const dated = r.installments.filter(
+    (i): i is ResolvedInstallment => i.meta.state === "RESOLVED",
+  );
+  const tranches: TrancheInput[] = dated.map((i) => ({
     date: i.date,
     amount: i.amount,
   }));
@@ -89,7 +94,7 @@ export function evaluateProgramWithRecovery(
   // "the inferred DSL fits the stream" but "the rescued template reproduces the
   // original projection exactly." Anything but a clean zero and we don't rescue.
   const residualError = residualBetween(
-    r.installments,
+    dated,
     published.resolution.installments,
   );
   if (residualError !== 0) return noRescue;

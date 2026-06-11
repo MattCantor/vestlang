@@ -60,6 +60,9 @@ const mapTemplateBuild = (
       // event cliff is the one place the two verdicts disagree: the record keeper
       // can list the dated events for it (so resolution calls it events-only), but
       // it can't store the cliff itself, so the storable answer is "no home".
+      // (Firing-blind a cliff event never reads as fired, so the EVENT_CLIFF
+      // reason can't actually arrive here anymore; the mapping stays for the
+      // exhaustiveness of the contract.)
       return v.reason.kind === "EVENT_CLIFF"
         ? { status: "unrepresentable", reason: v.reason }
         : {
@@ -69,10 +72,22 @@ const mapTemplateBuild = (
           };
     case "impossible":
       return { status: "impossible", blockers: v.blockers };
-    case "unresolved":
-      // Firing-blind, an unresolved start is one whose cliff can't be placed until
-      // an event fires — nothing storable to hand over.
-      return { status: "unrepresentable", reason: { kind: "DEFERRED_CLIFF" } };
+    case "unresolved": {
+      // Nothing storable to hand over — but say why off the cliff records, not
+      // off how the build routed. Firing-blind, an event-anchored cliff is
+      // always unfired and so always lands in this arm; the precise reason (the
+      // schema has no home for an event cliff at all) would be lost if we only
+      // reported the generic deferred-cliff one.
+      const eventCliff = build.resolutions
+        .map((r) => r.cliff)
+        .find((c) => c.state === "EVENT");
+      return eventCliff?.state === "EVENT"
+        ? {
+            status: "unrepresentable",
+            reason: { kind: "EVENT_CLIFF", eventId: eventCliff.eventId },
+          }
+        : { status: "unrepresentable", reason: { kind: "DEFERRED_CLIFF" } };
+    }
   }
 };
 
