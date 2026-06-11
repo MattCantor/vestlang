@@ -3,14 +3,14 @@
 import type {
   Cliff,
   Fraction,
+  OCTDate,
   PeriodType,
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-
-// ISO 8601 YYYY-MM-DD. Capture groups are harmless for the .test() used here.
-const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+import { isValidCalendarDate } from "@vestlang/utils";
+import { addPeriod, gt } from "./dates";
 
 // Upper bound on the installments a single schedule may materialize, summed
 // across its statements. Vesting that expands past this is almost always a
@@ -147,6 +147,17 @@ const validateStatement = (
     });
   }
   validateFraction(s.percentage, `${path}.percentage`, errors);
+  // A negative share is never meaningful — it makes the allocator emit negative
+  // installments — so reject it here. Over 1 is *not* rejected: the evaluator
+  // represents an over-allocating clause as a statement whose percentage exceeds
+  // 1 and surfaces it as an over-allocation finding rather than a hard error, so
+  // the upper bound stays a finding's job, not the validator's.
+  if (isInteger(s.percentage.numerator) && s.percentage.numerator < 0) {
+    errors.push({
+      path: `${path}.percentage`,
+      message: "must be >= 0",
+    });
+  }
   if (s.cliff) {
     validateCliff(s.cliff, `${path}.cliff`, errors);
   }
@@ -213,14 +224,50 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
   return f.numerator <= f.denominator;
 };
 
+const isWholeFraction = (f: Fraction): boolean => f.numerator === f.denominator;
+
+/**
+ * A fixed cliff smaller than the whole statement needs at least one occurrence
+ * strictly after the cliff date to carry the (1 − percentage) that the lump
+ * doesn't take. When the cliff lands on or past the last grid date, the kernel
+ * emits only the lump and the remainder has nowhere to vest — a silent share
+ * loss the allocator can't recover. Reject that here, where the anchor (start
+ * date for DATE statements, firing date for EVENT) and day-of-month are known.
+ * Mirrors the grid layout in kernel.expandGrid.
+ */
+const cliffLeavesNoTail = (
+  statement: VestingStatement,
+  anchor: OCTDate,
+  dom: VestingRuntime["vestingDayOfMonth"],
+): boolean => {
+  const cliff = statement.cliff;
+  if (!cliff || isWholeFraction(cliff.percentage)) return false;
+
+  const cliffDate = addPeriod(anchor, cliff.length, cliff.period_type, dom);
+  // A cliff at or before the anchor holds nothing back — the even grid runs.
+  if (!gt(cliffDate, anchor)) return false;
+
+  for (let i = 1; i <= statement.occurrences; i++) {
+    const at = addPeriod(
+      anchor,
+      i * statement.period,
+      statement.period_type,
+      dom,
+    );
+    if (gt(at, cliffDate)) return false;
+  }
+  return true;
+};
+
 /**
  * Validates the per-grant runtime data passed to the compiler against the
  * template. Catches mismatches that the static template validator cannot:
  *   - startDate required when any DATE-anchored statement exists
  *   - eventFirings must reference event_ids that exist on EVENT statements
  *   - no duplicate event_id in eventFirings (single firing per event_id)
- *   - dates must be ISO format
+ *   - dates must be real calendar dates (2025-02-31 is rejected, not rolled)
  *   - realized_fraction (if present) must be a valid Fraction in [0, 1]
+ *   - no fixed cliff swallows its whole grid (would lose 1 − percentage)
  */
 export const validateVestingRuntime = (
   runtime: VestingRuntime,
@@ -239,31 +286,31 @@ export const validateVestingRuntime = (
         message:
           "is required when the template contains any DATE-anchored statement",
       });
-    } else if (!ISO_DATE_PATTERN.test(runtime.startDate)) {
+    } else if (!isValidCalendarDate(runtime.startDate)) {
       errors.push({
         path: "startDate",
-        message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+        message: "must be a real calendar date (YYYY-MM-DD)",
       });
     }
   } else if (
     runtime.startDate !== undefined &&
-    !ISO_DATE_PATTERN.test(runtime.startDate)
+    !isValidCalendarDate(runtime.startDate)
   ) {
     // Tolerated but format-checked.
     errors.push({
       path: "startDate",
-      message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+      message: "must be a real calendar date (YYYY-MM-DD)",
     });
   }
 
   if (runtime.grantDate !== undefined) {
     if (
       typeof runtime.grantDate !== "string" ||
-      !ISO_DATE_PATTERN.test(runtime.grantDate)
+      !isValidCalendarDate(runtime.grantDate)
     ) {
       errors.push({
         path: "grantDate",
-        message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+        message: "must be a real calendar date (YYYY-MM-DD)",
       });
     }
   }
@@ -302,11 +349,11 @@ export const validateVestingRuntime = (
         }
         if (
           typeof firing?.date !== "string" ||
-          !ISO_DATE_PATTERN.test(firing.date)
+          !isValidCalendarDate(firing.date)
         ) {
           errors.push({
             path: `${path}.date`,
-            message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+            message: "must be a real calendar date (YYYY-MM-DD)",
           });
         }
         if (firing?.realized_fraction !== undefined) {
@@ -338,6 +385,29 @@ export const validateVestingRuntime = (
         }
       }
     }
+  }
+
+  // Once the dates are known good, check that no fixed cliff swallows its whole
+  // grid. Skip if any date already failed — `addPeriod` walks real dates only.
+  if (errors.length === 0) {
+    const dom = runtime.vestingDayOfMonth;
+    (template.statements ?? []).forEach((s, i) => {
+      if (!s?.cliff) return;
+      const base = s.vesting_base;
+      const anchor =
+        base?.type === "EVENT"
+          ? runtime.eventFirings?.find((f) => f.event_id === base.event_id)
+              ?.date
+          : runtime.startDate;
+      if (anchor === undefined) return; // unfired event / missing start: not ours
+      if (cliffLeavesNoTail(s, anchor, dom)) {
+        errors.push({
+          path: `statements[${i}].cliff`,
+          message:
+            "fixed cliff with percentage < 1 leaves no occurrence after the cliff date; the remaining fraction would silently vanish",
+        });
+      }
+    });
   }
 
   return { valid: errors.length === 0, errors };

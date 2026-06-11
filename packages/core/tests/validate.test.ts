@@ -353,4 +353,154 @@ describe("validateVestingRuntime", () => {
       /Invalid VestingRuntime/,
     );
   });
+
+  it("rejects an impossible calendar startDate instead of rolling it over", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2025-02-31" },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("startDate");
+  });
+
+  it("rejects an impossible calendar grantDate", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2024-01-01", grantDate: "2025-13-01" },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("grantDate");
+  });
+
+  it("rejects an impossible calendar firing date", () => {
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: [{ event_id: "ipo", date: "2026-02-30" }],
+      },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].date");
+  });
+});
+
+describe("validateStatement — percentage bounds", () => {
+  const withStatementPercentage = (p: {
+    numerator: number;
+    denominator: number;
+  }): VestingScheduleTemplate => ({
+    id: "tmpl-pct",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "DATE" },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: p,
+      },
+    ],
+  });
+
+  it("rejects a negative statement percentage", () => {
+    const result = validateVestingScheduleTemplate(
+      withStatementPercentage({ numerator: -1, denominator: 2 }),
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("statements[0].percentage");
+  });
+
+  it("accepts a statement percentage of exactly 1", () => {
+    const result = validateVestingScheduleTemplate(
+      withStatementPercentage({ numerator: 1, denominator: 1 }),
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  // Over-allocation is the evaluator's finding to raise, not the validator's to
+  // reject — a single clause above 1 stays structurally valid here.
+  it("accepts a statement percentage above 1 (over-allocation is a finding)", () => {
+    const result = validateVestingScheduleTemplate(
+      withStatementPercentage({ numerator: 3, denominator: 2 }),
+    );
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe("validateVestingRuntime — cliff vs grid span", () => {
+  // 12 monthly occurrences but a 24-month fixed cliff at 1/4: every occurrence
+  // lands at or behind the cliff, so the other 3/4 has nowhere to vest.
+  const swallowingCliff: VestingScheduleTemplate = {
+    id: "tmpl-cliff",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "DATE" },
+        occurrences: 12,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 24,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 4 },
+        },
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  };
+
+  it("rejects a fixed cliff that swallows the whole grid with percentage < 1", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2025-01-01" },
+      swallowingCliff,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("statements[0].cliff");
+  });
+
+  it("accepts the same swallowing cliff when percentage is exactly 1", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2025-01-01" },
+      {
+        ...swallowingCliff,
+        statements: [
+          {
+            ...swallowingCliff.statements[0],
+            cliff: {
+              length: 24,
+              period_type: "MONTHS",
+              percentage: { numerator: 1, denominator: 1 },
+            },
+          },
+        ],
+      },
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it("accepts a normal cliff that leaves occurrences after it", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2025-01-01" },
+      {
+        id: "tmpl-ok",
+        statements: [
+          {
+            order: 1,
+            vesting_base: { type: "DATE" },
+            occurrences: 48,
+            period: 1,
+            period_type: "MONTHS",
+            cliff: {
+              length: 12,
+              period_type: "MONTHS",
+              percentage: { numerator: 1, denominator: 4 },
+            },
+            percentage: { numerator: 1, denominator: 1 },
+          },
+        ],
+      },
+    );
+    expect(result.valid).toBe(true);
+  });
 });

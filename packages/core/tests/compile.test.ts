@@ -794,3 +794,69 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     expect(firstOfMonth[0].date).toBe("2025-02-01");
   });
 });
+
+describe("compile — boundary hardening", () => {
+  it("rejects a fixed cliff that would silently drop shares past the grid", () => {
+    // 12×1-month, cliff {24mo, 1/4}, 1200 shares: every occurrence is at or
+    // behind the cliff, so 900 shares used to vanish. The boundary now rejects.
+    const template: VestingScheduleTemplate = {
+      id: "swallow",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 24,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    expect(() => compile(template, 1200, startJan2025)).toThrow(
+      /Invalid VestingRuntime/,
+    );
+  });
+
+  it("rejects a negative statement percentage rather than emitting negatives", () => {
+    const template: VestingScheduleTemplate = {
+      id: "neg",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: -1, denominator: 2 },
+        },
+      ],
+    };
+    expect(() => compile(template, 100, startJan2025)).toThrow(
+      /Invalid VestingScheduleTemplate/,
+    );
+  });
+
+  it("rejects an impossible calendar startDate rather than rolling it forward", () => {
+    const template: VestingScheduleTemplate = {
+      id: "rollover",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    expect(() => compile(template, 100, { startDate: "2025-02-31" })).toThrow(
+      /Invalid VestingRuntime/,
+    );
+  });
+});
