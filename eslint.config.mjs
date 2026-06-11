@@ -72,6 +72,18 @@ export default tseslint.config(
       // MCP/CLI handlers are idiomatically `async` even when their current body
       // has no `await` (the signature is the contract); don't force churn there.
       "@typescript-eslint/require-await": "off",
+      // Drift tripwire for the discriminated-union switches that recur across the
+      // AST/blocker traversals. Strict on purpose: a `default` arm does NOT count
+      // as exhaustive (considerDefault* is false), so adding a node/blocker kind
+      // without a matching case is a build break here — the same guarantee
+      // @vestlang/walk gets from assertNever, extended to every union switch.
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        {
+          considerDefaultExhaustiveForUnions: false,
+          requireDefaultForNonUnion: true,
+        },
+      ],
     },
   },
 

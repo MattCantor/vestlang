@@ -91,6 +91,10 @@ export function addMonthsRule(
   const lastDay = utcMidnight(ty, tm + 1, 0).getUTCDate();
 
   const pickDay = (): number => {
+    // The numeric day-of-month literals "01"–"31" all share one path (parseInt
+    // then clamp to the month's last day), so they live in `default` rather than
+    // as 31 explicit cases — a deliberate non-exhaustive switch over the union.
+    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
     switch (dayOfMonth) {
       case "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH":
         return Math.min(toDate(origin).getUTCDate(), lastDay);
