@@ -8,7 +8,8 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { addDays, addMonthsRule } from "../time.js";
+import { addDays } from "@vestlang/core";
+import { addMonthsRule } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
 // a type tag, not a string; this is purely the word a diagnostic prints. Module-

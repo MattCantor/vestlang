@@ -169,3 +169,9 @@ export const advanceCursor = (
 export const lt = (a: OCTDate, b: OCTDate): boolean => a < b;
 export const gt = (a: OCTDate, b: OCTDate): boolean => a > b;
 export const eq = (a: OCTDate, b: OCTDate): boolean => a === b;
+
+// Whole calendar days from `a` to `b` (negative when `b` precedes `a`). Both
+// dates are UTC midnights via `toDate`, so the millisecond span is an exact
+// multiple of a day and the division is clean — no DST partial-day to round off.
+export const daysBetween = (a: OCTDate, b: OCTDate): number =>
+  Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86_400_000);

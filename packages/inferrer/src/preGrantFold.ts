@@ -1,6 +1,6 @@
 import type { OCTDate, Statement, VestingDayOfMonth } from "@vestlang/types";
 import { buildStatement } from "./atoms.js";
-import { minimalCtx, walk } from "./cadence.js";
+import { walk } from "./cadence.js";
 import { resolvedInstallmentMap } from "./installments.js";
 import { EPSILON } from "./residual.js";
 import type {
@@ -78,7 +78,6 @@ export function foldPreGrant(
   asOf: OCTDate,
   policy: VestingDayOfMonth,
 ): PreGrantResult {
-  const ctx = minimalCtx(policy);
   const gKey = grantDate;
 
   // The lump must sit exactly on the grant date.
@@ -139,7 +138,7 @@ export function foldPreGrant(
     for (let k = 1; k <= kMax; k++) {
       let extStart: OCTDate;
       try {
-        extStart = walk(u.startDate, u.cadence, -k, ctx);
+        extStart = walk(u.startDate, u.cadence, -k, policy);
       } catch {
         break;
       }
@@ -165,7 +164,7 @@ export function foldPreGrant(
         // buildUniform anchors FROM DATE one period before startDate; report it.
         let vestingStart = extStart;
         try {
-          vestingStart = walk(extStart, u.cadence, -1, ctx);
+          vestingStart = walk(extStart, u.cadence, -1, policy);
         } catch {
           /* keep extStart */
         }

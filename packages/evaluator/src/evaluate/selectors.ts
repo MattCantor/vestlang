@@ -13,7 +13,7 @@ import type {
   SelectorTag,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { lt } from "./time.js";
+import { lt } from "@vestlang/core";
 import {
   isPickedResolved,
   type PickedResolved,

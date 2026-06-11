@@ -1,6 +1,5 @@
-import { addMonthsRule, addDays } from "@vestlang/evaluator";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
-import { minimalCtx, walk } from "./cadence.js";
+import { walk } from "./cadence.js";
 import { EPSILON, wholeMultiple } from "./residual.js";
 import type {
   CliffUniformComponent,
@@ -8,19 +7,6 @@ import type {
   SingleTrancheComponent,
   UniformComponent,
 } from "./types.js";
-
-function walkBack(
-  from: OCTDate,
-  cadence: { unit: "DAYS" | "MONTHS"; length: number },
-  steps: number,
-  policy: VestingDayOfMonth,
-): OCTDate {
-  const ctx = minimalCtx(policy);
-  if (cadence.unit === "MONTHS") {
-    return addMonthsRule(from, -cadence.length * steps, ctx);
-  }
-  return addDays(from, -cadence.length * steps);
-}
 
 export interface FoldResult {
   components: Component[];
@@ -32,7 +18,6 @@ export function foldCliffs(
   policy: VestingDayOfMonth,
   grantDate: OCTDate | null,
 ): FoldResult {
-  const ctx = minimalCtx(policy);
   // `null` means the caller didn't supply a grant date. Without one, the
   // before/after-grant distinction that separates a cliff from pre-grant accrual
   // doesn't exist, so the guard below is skipped and folding is purely
@@ -63,7 +48,7 @@ export function foldCliffs(
       if (gKey !== null && s.date <= gKey) continue;
       if (s.amount < u.perTrancheAmount - EPSILON) continue;
 
-      const onePeriodAfter = walk(s.date, u.cadence, 1, ctx);
+      const onePeriodAfter = walk(s.date, u.cadence, 1, policy);
       if (onePeriodAfter !== u.startDate) {
         continue;
       }
@@ -71,7 +56,7 @@ export function foldCliffs(
       const { k, whole } = wholeMultiple(s.amount, u.perTrancheAmount);
       if (k < 2 || !whole) continue;
 
-      const grantDate = walkBack(s.date, u.cadence, k, policy);
+      const grantDate = walk(s.date, u.cadence, -k, policy);
 
       folded.push({
         kind: "CLIFF_UNIFORM",

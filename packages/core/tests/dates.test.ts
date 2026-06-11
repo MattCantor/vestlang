@@ -4,6 +4,7 @@ import {
   addDays,
   addPeriod,
   advanceCursor,
+  daysBetween,
   lt,
   gt,
   eq,
@@ -241,5 +242,20 @@ describe("comparisons on ISO dates", () => {
     expect(gt("2024-01-02", "2024-01-01")).toBe(true);
     expect(eq("2024-01-02", "2024-01-02")).toBe(true);
     expect(lt("2024-01-02", "2024-01-01")).toBe(false);
+  });
+});
+
+describe("daysBetween", () => {
+  it("counts whole calendar days, signed by direction", () => {
+    expect(daysBetween("2024-01-01", "2024-01-15")).toBe(14);
+    expect(daysBetween("2024-01-15", "2024-01-01")).toBe(-14);
+    expect(daysBetween("2024-01-10", "2024-01-10")).toBe(0);
+  });
+
+  // Both endpoints are UTC midnights, so a span crossing a DST transition is
+  // still an exact day count (no partial-day to round off).
+  it("is exact across a DST boundary and a leap day", () => {
+    expect(daysBetween("2024-02-26", "2024-03-11")).toBe(14); // spring-forward
+    expect(daysBetween("2024-02-28", "2024-03-01")).toBe(2); // leap day between
   });
 });

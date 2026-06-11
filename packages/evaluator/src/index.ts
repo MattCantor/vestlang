@@ -37,12 +37,3 @@ export {
   type Sidecar,
   type PersistedArtifact,
 } from "./resolve/index.js";
-export {
-  addMonthsRule,
-  addDays,
-  toDate,
-  toISO,
-  lt,
-  gt,
-  eq,
-} from "./evaluate/time.js";
