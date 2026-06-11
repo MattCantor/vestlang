@@ -6,7 +6,7 @@ import type {
   Status,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import { EPSILON } from "./residual.js";
+import { EPSILON, projectionResidual } from "./residual.js";
 import type { TrancheInput } from "./types.js";
 
 export interface VerifyContext {
@@ -26,22 +26,17 @@ export function makeVerifyContext(
   return { grantDate, totalQuantity, asOf, vestingDayOfMonth: policy };
 }
 
-/** Total absolute disagreement, date by date, between what the program produced
- * and the input stream. Zero means the program reproduces the stream exactly. */
+/** Disagreement between the program's per-date output and the input stream.
+ * Zero means the program reproduces the stream exactly. */
 function residualBetween(
   produced: Map<string, number>,
   input: TrancheInput[],
 ): number {
-  const expected = new Map<string, number>();
-  for (const t of input) {
-    expected.set(t.date, (expected.get(t.date) ?? 0) + t.amount);
-  }
-  let residual = 0;
-  const keys = new Set<string>([...produced.keys(), ...expected.keys()]);
-  for (const k of keys) {
-    residual += Math.abs((produced.get(k) ?? 0) - (expected.get(k) ?? 0));
-  }
-  return residual;
+  const producedStream = [...produced].map(([date, amount]) => ({
+    date,
+    amount,
+  }));
+  return projectionResidual(producedStream, input);
 }
 
 export function residualAgainstInput(
