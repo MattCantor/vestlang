@@ -2,12 +2,7 @@
 // the run* orchestrators and present the results; everything between user input
 // and the engine lives here, once.
 
-export {
-  parseToProgram,
-  parseRaw,
-  toPipelineError,
-  toEvaluationError,
-} from "./parse.js";
+export { parseToProgram, parseRaw } from "./parse.js";
 export type { PipelineError, Result, Loc } from "./parse.js";
 
 export { parseQuantity, validateDate } from "./validate.js";

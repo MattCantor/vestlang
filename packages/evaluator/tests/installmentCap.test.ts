@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type { EvaluationContextInput } from "@vestlang/types";
-import { evaluateClauseGroups, evaluateStatementsAsOf } from "../src/index.js";
+import { evaluateClauseGroups, evaluateProgramAsOf } from "../src/index.js";
 
 // The per-clause program evaluators own the installment cap. Every per-clause
 // consumer (CLI, MCP `vestlang_evaluate` family) routes through them, so the cap
@@ -19,7 +19,7 @@ const ctx: EvaluationContextInput = {
 
 const prog = (dsl: string) => normalizeProgram(parse(dsl));
 
-describe("evaluateClauseGroups / evaluateStatementsAsOf — installment cap", () => {
+describe("evaluateClauseGroups / evaluateProgramAsOf — installment cap", () => {
   it("rejects a single over-cap statement", () => {
     expect(() =>
       evaluateClauseGroups(prog("VEST OVER 1000000 months EVERY 1 month"), ctx),
@@ -37,9 +37,9 @@ describe("evaluateClauseGroups / evaluateStatementsAsOf — installment cap", ()
     ).toThrow(/exceeds the limit/);
   });
 
-  it("the as-of sibling enforces the same cap", () => {
+  it("the as-of program view enforces the same cap", () => {
     expect(() =>
-      evaluateStatementsAsOf(
+      evaluateProgramAsOf(
         prog(
           "VEST OVER 6000 days EVERY 1 day PLUS VEST OVER 6000 days EVERY 1 day",
         ),

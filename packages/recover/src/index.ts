@@ -8,5 +8,4 @@
 // to re-classify), which is why it's its own package rather than living in either.
 
 export { evaluateProgramWithRecovery } from "./recover.js";
-export { hasEventBase } from "./gate.js";
 export type { RecoveryOutcome, RecoveredTemplate } from "./types.js";

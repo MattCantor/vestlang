@@ -68,23 +68,6 @@ export function evaluateStatementAsOf(
 }
 
 /**
- * As-of sibling of `evaluateClauseGroups`: evaluate each statement of a program
- * as of `ctx.asOf`. The per-statement as-of consumers use this rather than a
- * hand-rolled map, so the whole-program installment cap is enforced once.
- *
- * Unlike `evaluateClauseGroups`, this still maps statement by statement, so it
- * throws on a THEN tail (a tail has no start of its own). It has no in-repo
- * production consumer; #167 owns deleting it.
- */
-export function evaluateStatementsAsOf(
-  program: Program,
-  ctx_input: EvaluationContextInput,
-): VestedResult[] {
-  assertProgramInstallmentCap(program);
-  return program.map((stmt) => evaluateStatementAsOf(stmt, ctx_input));
-}
-
-/**
  * As-of view of a whole program collapsed into ONE schedule. This is the answer
  * to "how much has vested?" for the grant — the program's statements merge into a
  * single tranche stream first, then we partition that. (Partitioning each
