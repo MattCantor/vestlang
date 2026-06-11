@@ -12,11 +12,13 @@ import { eq, lt } from "./dates";
 
 /**
  * Fold a parallel (dates, amounts) series against an anchor `cliffDate`:
- *   - amounts strictly before cliffDate aggregate; the aggregate is emitted once
- *     on cliffDate (when the run ends before it, or when the next date is past
- *     it), provided the aggregate is non-zero,
+ *   - amounts strictly before cliffDate aggregate; the aggregate is emitted on
+ *     cliffDate either when the run ends before it, or — if non-zero — when the
+ *     next date is past it,
  *   - the amount exactly on cliffDate absorbs the running aggregate,
  *   - amounts after cliffDate pass through unchanged.
+ * Each emission spends the aggregate, so it resets to zero — a second date on
+ * the cliff (e.g. installments from two statements) emits only its own amount.
  * `fn` maps each emitted {date, amount} to the caller's installment shape.
  */
 export function foldByCliffDate<T>(
@@ -43,6 +45,7 @@ export function foldByCliffDate<T>(
       // aggregate on the cliff date.
       if (i === dates.length - 1) {
         out.push(fn({ date: cliffDate, amount: aggregate }));
+        aggregate = 0;
       }
       continue;
     }
@@ -51,6 +54,7 @@ export function foldByCliffDate<T>(
     if (isAt) {
       aggregate += amt;
       out.push(fn({ date, amount: aggregate }));
+      aggregate = 0;
       cliffResolved = true;
       continue;
     }
@@ -59,6 +63,7 @@ export function foldByCliffDate<T>(
     // the (non-zero) aggregate onto the cliff date before this installment.
     if (!cliffResolved && lt(cliffDate, date) && aggregate > 0) {
       out.push(fn({ date: cliffDate, amount: aggregate }));
+      aggregate = 0;
       cliffResolved = true;
     }
     out.push(fn({ date, amount: amt }));
