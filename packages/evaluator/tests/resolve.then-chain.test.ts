@@ -540,10 +540,11 @@ describe("resolveToCore — event-origin THEN chain, event fired", () => {
   });
 });
 
-describe("resolveToCore — two independent portions on one fired event", () => {
-  // Not a chain: two ordinary statements that both float to ipo but want it on
-  // different days (ipo, and ipo + 12mo). Same overlap reason as the chain above,
-  // but the message must read as a genuine collision rather than a sequence.
+describe("resolveToCore — two independent portions, ipo and ipo + 12mo", () => {
+  // These used to collide: the offset portion recorded ipo's firing at the
+  // offset date, clashing with the bare portion's truthful one and forcing
+  // events-only. The offset anchor now externalizes as its own synthetic event,
+  // so the two coexist in one template and every recorded firing is true.
   const ctx = ctxInput({
     grantDate: "2025-01-01",
     events: { ipo: "2026-06-01" },
@@ -553,14 +554,57 @@ describe("resolveToCore — two independent portions on one fired event", () => 
     eventHead(portion(1, 2), "ipo", oneYear, 12),
   ];
 
-  it("words the overlap as two portions at different dates", () => {
+  it("lowers to one template with truthful firings for both anchors", () => {
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements.map((s) => s.vesting_base)).toEqual([
+      { type: "EVENT", event_id: "ipo" },
+      { type: "EVENT", event_id: "evt_1" },
+    ]);
+    // No firing claims ipo happened on the offset date; the synthetic event's
+    // date is the offset date by its own definition.
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: "ipo", date: "2026-06-01" },
+      { event_id: "evt_1", date: "2027-06-01" },
+    ]);
+    expect(result.sourceMap["evt_1"].definition).toMatch(/ipo/);
+    expect(result.sourceMap["evt_1"].definition).toMatch(/12 months/);
+  });
+
+  it("round-trips through core.compile to the dates the DSL means", () => {
+    const result = resolveToCore(program, ctx);
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events.map((e) => e.date)).toEqual(["2027-06-01", "2028-06-01"]);
+    expect(sum(events)).toBe(100000);
+  });
+});
+
+describe("resolveToCore — THEN chain off a fired offset-event head", () => {
+  // A chain headed on ipo + 12mo: the head and its tail land the same synthetic
+  // anchor on different dates, the same shape as a chain off a bare event — so
+  // it stays events-only rather than minting a template whose firing record
+  // backdates the tail onto the named event.
+  const ctx = ctxInput({
+    grantDate: "2025-01-01",
+    events: { ipo: "2026-06-01" },
+  });
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", oneYear, 12),
+    then(portion(1, 2), oneYear),
+  ];
+
+  it("classifies to events-only with the chain wording, dates offset-true", () => {
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
-    if (result.reason.kind !== "OVERLAPPING_ABSOLUTE_STARTS")
-      throw new Error("expected an overlapping-starts reason");
-    expect(result.reason.detail).toContain("two portions");
-    expect(result.reason.detail).not.toContain("THEN");
+    expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
+    if (result.reason.kind !== "OVERLAPPING_ABSOLUTE_STARTS") return;
+    expect(result.reason.detail).toContain("THEN chain");
+    // Head anchored a year after ipo + 12mo, tail a year after that.
+    expect(dates(result.installments)).toEqual(["2028-06-01", "2029-06-01"]);
+    expect(total(result.installments)).toBe(100000);
   });
 });
 

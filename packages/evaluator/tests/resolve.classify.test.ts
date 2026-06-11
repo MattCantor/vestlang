@@ -654,6 +654,53 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
   });
 });
 
+describe("resolveToCore — event cliff with an offset (CLIFF EVENT ipo + 1 month)", () => {
+  // 200 shares, monthly over 2 months from 2024-01-01. The cliff lands one month
+  // after the firing, so with ipo on 2024-02-15 the lump belongs on 2024-03-15 —
+  // reading the raw firing instead used to land it on 2024-02-15.
+  const program: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2024-01-01")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+      cliff: makeSingletonNode(makeVestingBaseEvent("ipo"), [
+        makeDuration(1, "MONTHS", "PLUS"),
+      ]),
+    }),
+  ];
+
+  it("fired → the lump lands at firing + offset, within one evaluation", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01", ipo: "2024-02-15" }, 200),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    // Both grid tranches (Feb 1, Mar 1) precede the effective cliff date, so
+    // the whole grant folds into one lump there.
+    expect(result.installments).toEqual([
+      { date: "2024-03-15", amount: 200, meta: { state: "RESOLVED" } },
+    ]);
+  });
+
+  it("unfired → the grid is still held back, with the named event's blocker", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01" }, 200),
+    );
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments).toHaveLength(2);
+    expect(
+      result.installments.every((i) => i.meta.state === "UNRESOLVED"),
+    ).toBe(true);
+    expect(sum(result.installments)).toBe(200);
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+  });
+});
+
 describe("resolveToCore — events arm carries its pending siblings (#148)", () => {
   // Two independent DATE grids force the events arm; the third portion floats on
   // an unfired event. Its 1,200 shares must not vanish from the collapsed

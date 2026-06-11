@@ -8,7 +8,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { resolveToCore } from "../src/resolve/index";
+import { rehydrate, resolveToCore } from "../src/resolve/index";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -155,6 +155,122 @@ describe("resolveToCore — EVENT-anchored portion", () => {
     if (result.kind !== "template") throw new Error("expected template");
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events).toEqual([{ date: "2026-04-01", amount: "100000" }]);
+  });
+});
+
+describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)", () => {
+  // A bare EVENT statement can't hold the offset: storing `ipo` and anchoring
+  // the grid at its raw firing would land everything a month early, and storing
+  // the shifted date as ipo's firing would falsify the record. So the anchor
+  // externalizes as a synthetic event whose definition keeps the offset.
+  const program: Program = [
+    stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseEvent("ipo"), [
+        makeDuration(1, "MONTHS", "PLUS"),
+      ]),
+      { type: "MONTHS", length: 1, occurrences: 2 },
+    ),
+  ];
+
+  it("unfired → template anchored on a synthetic event, offset in the sourceMap", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01" }),
+    );
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements[0].vesting_base).toEqual({
+      type: "EVENT",
+      event_id: "evt_1",
+    });
+    expect(result.sourceMap["evt_1"].definition).toMatch(/ipo/);
+    expect(result.sourceMap["evt_1"].definition).toMatch(/\+1 month/);
+    expect(result.runtime.eventFirings).toBeUndefined();
+    expect(result.blockers).toContainEqual({
+      type: "EVENT_NOT_YET_OCCURRED",
+      event: "ipo",
+    });
+  });
+
+  it("rehydrating the stored artifact with the true firing derives the offset date", () => {
+    const stored = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01" }),
+    );
+    if (stored.kind !== "template") throw new Error("expected template");
+    const { runtime } = rehydrate(
+      stored.template,
+      stored.sourceMap,
+      stored.runtime,
+      {
+        grantDate: "2024-01-01",
+        events: { ipo: "2024-03-01" },
+        grantQuantity: 100000,
+        asOf: "2035-01-01",
+      },
+    );
+    expect(runtime.eventFirings).toEqual([
+      { event_id: "evt_1", date: "2024-04-01" },
+    ]);
+    const events = compile(stored.template, stored.totalShares, runtime);
+    expect(events.map((e) => e.date)).toEqual(["2024-05-01", "2024-06-01"]);
+  });
+
+  it("fired → the recorded firing is the synthetic event's, never a shifted ipo", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
+    );
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.template.statements[0].vesting_base).toEqual({
+      type: "EVENT",
+      event_id: "evt_1",
+    });
+    // The one record is the synthetic event at its derived date — resolving its
+    // definition against the true firing. Nothing asserts ipo fired 2024-04-01.
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: "evt_1", date: "2024-04-01" },
+    ]);
+  });
+
+  it("fired projection lands at firing + offset", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
+    );
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events.map((e) => e.date)).toEqual(["2024-05-01", "2024-06-01"]);
+    expect(sum(events)).toBe(100000);
+  });
+
+  it("lowering after the firing equals lowering before it plus rehydration", () => {
+    const before = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01" }),
+    );
+    const after = resolveToCore(
+      program,
+      ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
+    );
+    if (before.kind !== "template" || after.kind !== "template")
+      throw new Error("expected templates");
+    const { runtime } = rehydrate(
+      before.template,
+      before.sourceMap,
+      before.runtime,
+      {
+        grantDate: "2024-01-01",
+        events: { ipo: "2024-03-01" },
+        grantQuantity: 100000,
+        asOf: "2035-01-01",
+      },
+    );
+    expect(after.template).toEqual(before.template);
+    expect(after.sourceMap).toEqual(before.sourceMap);
+    expect(after.runtime).toEqual(runtime);
   });
 });
 

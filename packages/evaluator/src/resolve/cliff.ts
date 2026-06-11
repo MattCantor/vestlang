@@ -42,11 +42,13 @@ const MS_PER_DAY = 86_400_000;
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
-  // Event-anchored cliff: no time-based `cliff` representation. `firedAt` is the
-  // firing date when the event is on record — the record carries the firing so
-  // downstream routing never has to re-consult the events map (and can't quietly
-  // treat an unfired cliff as no cliff).
-  | { state: "EVENT"; eventId: string; firedAt?: OCTDate }
+  // Event-anchored cliff: no time-based `cliff` representation. `effectiveAt` is
+  // where the cliff lands once the event is on record — the firing shifted by any
+  // offsets on the cliff anchor (`CLIFF EVENT ipo + 1 month` lands a month after
+  // the firing), absent while the event is unfired. The record carries the date
+  // so downstream routing never has to re-consult the events map (and can't
+  // quietly treat an unfired cliff as no cliff).
+  | { state: "EVENT"; eventId: string; effectiveAt?: OCTDate }
   // A pending cliff the renderer reproduces without re-resolving. `dated` picks
   // the render shape (grid occurrences placeable vs. fully symbolic) and
   // `probeDate` is the partial-`LATER OF` lower bound the dated case folds from;
@@ -161,9 +163,13 @@ export const lowerCliff = (
       const gate = gateVerdict(res, true);
       if (gate) return gate;
     }
-    const firedAt = ctx.events[evId];
-    return firedAt !== undefined
-      ? { state: "EVENT", eventId: evId, firedAt }
+    // The shared resolution above already applied the anchor's offsets to the
+    // firing, so the resolved date IS the cliff's effective spot. Reading the raw
+    // events map here instead would drop the offset and land the lump a period
+    // early. The expression resolves exactly when the event has fired (a pending
+    // gate was routed away just above).
+    return isPickedResolved(res)
+      ? { state: "EVENT", eventId: evId, effectiveAt: res.meta.date }
       : { state: "EVENT", eventId: evId };
   }
 
