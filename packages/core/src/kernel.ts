@@ -144,6 +144,22 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
   // The cliff sits before the first installment → nothing to hold back, even grid.
   if (preCount === 0) return evenGrid();
 
+  // A fixed cliff smaller than the whole statement needs at least one occurrence
+  // strictly after the cliff date to carry the (1 − percentage) the lump doesn't
+  // take. When the cliff swallows the entire grid there is nowhere for the
+  // remainder to vest — refuse loudly rather than drop it. The DSL can't get
+  // here: it pins the cliff percentage to the pre-cliff share of the grid, which
+  // is exactly 1 in the swallowed case. Only direct template input can.
+  if (
+    postOccurrences.length === 0 &&
+    cliff.kind === "fixed" &&
+    cliff.percentage.numerator !== cliff.percentage.denominator
+  ) {
+    throw new Error(
+      `expandGrid: statement ${statementOrder}: fixed cliff with percentage < 1 leaves no occurrence after the cliff date; the remaining fraction would silently vanish`,
+    );
+  }
+
   const pct =
     cliff.kind === "fixed"
       ? cliff.percentage

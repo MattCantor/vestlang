@@ -8,9 +8,7 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-
-// ISO 8601 YYYY-MM-DD. Capture groups are harmless for the .test() used here.
-const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+import { isValidCalendarDate } from "@vestlang/utils";
 
 // Upper bound on the installments a single schedule may materialize, summed
 // across its statements. Vesting that expands past this is almost always a
@@ -147,6 +145,17 @@ const validateStatement = (
     });
   }
   validateFraction(s.percentage, `${path}.percentage`, errors);
+  // A negative share is never meaningful — it makes the allocator emit negative
+  // installments — so reject it here. Over 1 is *not* rejected: the evaluator
+  // represents an over-allocating clause as a statement whose percentage exceeds
+  // 1 and surfaces it as an over-allocation finding rather than a hard error, so
+  // the upper bound stays a finding's job, not the validator's.
+  if (isInteger(s.percentage.numerator) && s.percentage.numerator < 0) {
+    errors.push({
+      path: `${path}.percentage`,
+      message: "must be >= 0",
+    });
+  }
   if (s.cliff) {
     validateCliff(s.cliff, `${path}.cliff`, errors);
   }
@@ -219,7 +228,7 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
  *   - startDate required when any DATE-anchored statement exists
  *   - eventFirings must reference event_ids that exist on EVENT statements
  *   - no duplicate event_id in eventFirings (single firing per event_id)
- *   - dates must be ISO format
+ *   - dates must be real calendar dates (2025-02-31 is rejected, not rolled)
  *   - realized_fraction (if present) must be a valid Fraction in [0, 1]
  */
 export const validateVestingRuntime = (
@@ -239,31 +248,31 @@ export const validateVestingRuntime = (
         message:
           "is required when the template contains any DATE-anchored statement",
       });
-    } else if (!ISO_DATE_PATTERN.test(runtime.startDate)) {
+    } else if (!isValidCalendarDate(runtime.startDate)) {
       errors.push({
         path: "startDate",
-        message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+        message: "must be a real calendar date (YYYY-MM-DD)",
       });
     }
   } else if (
     runtime.startDate !== undefined &&
-    !ISO_DATE_PATTERN.test(runtime.startDate)
+    !isValidCalendarDate(runtime.startDate)
   ) {
     // Tolerated but format-checked.
     errors.push({
       path: "startDate",
-      message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+      message: "must be a real calendar date (YYYY-MM-DD)",
     });
   }
 
   if (runtime.grantDate !== undefined) {
     if (
       typeof runtime.grantDate !== "string" ||
-      !ISO_DATE_PATTERN.test(runtime.grantDate)
+      !isValidCalendarDate(runtime.grantDate)
     ) {
       errors.push({
         path: "grantDate",
-        message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+        message: "must be a real calendar date (YYYY-MM-DD)",
       });
     }
   }
@@ -302,11 +311,11 @@ export const validateVestingRuntime = (
         }
         if (
           typeof firing?.date !== "string" ||
-          !ISO_DATE_PATTERN.test(firing.date)
+          !isValidCalendarDate(firing.date)
         ) {
           errors.push({
             path: `${path}.date`,
-            message: "must be an ISO 8601 date string (YYYY-MM-DD)",
+            message: "must be a real calendar date (YYYY-MM-DD)",
           });
         }
         if (firing?.realized_fraction !== undefined) {
