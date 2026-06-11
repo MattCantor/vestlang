@@ -798,7 +798,8 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
 describe("compile — boundary hardening", () => {
   it("rejects a fixed cliff that would silently drop shares past the grid", () => {
     // 12×1-month, cliff {24mo, 1/4}, 1200 shares: every occurrence is at or
-    // behind the cliff, so 900 shares used to vanish. The boundary now rejects.
+    // behind the cliff, so 900 shares used to vanish. The kernel now refuses at
+    // expansion time, where the statement's true anchor and origin are known.
     const template: VestingScheduleTemplate = {
       id: "swallow",
       statements: [
@@ -818,8 +819,126 @@ describe("compile — boundary hardening", () => {
       ],
     };
     expect(() => compile(template, 1200, startJan2025)).toThrow(
-      /Invalid VestingRuntime/,
+      /leaves no occurrence after the cliff date/,
     );
+  });
+
+  it("accepts a swallowing cliff at percentage exactly 1 and conserves the grant", () => {
+    // With the whole statement in the lump there is no remainder to lose: one
+    // installment on the cliff date, summing to the full grant.
+    const template: VestingScheduleTemplate = {
+      id: "swallow-whole",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 24,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 1 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    const out = compile(template, 1200, startJan2025);
+    expect(out).toEqual([{ date: "2027-01-01", amount: "1200" }]);
+  });
+
+  it("accepts a sub-1 cliff that leaves occurrences after it", () => {
+    const template: VestingScheduleTemplate = {
+      id: "normal-cliff",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 48,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    const out = compile(template, 1200, startJan2025);
+    expect(sumAmounts(out)).toBe(1200);
+  });
+
+  it("checks a chained statement's cliff and names the statement", () => {
+    // Statement 2 chains off statement 1 (anchor 2026-01-01); its 12×1-month
+    // grid ends at 2027-01-01, inside the 13-month cliff at 2027-02-01.
+    const template: VestingScheduleTemplate = {
+      id: "chained-swallow",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 2 },
+        },
+        {
+          order: 2,
+          vesting_base: DATE_BASE,
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 13,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
+          percentage: { numerator: 1, denominator: 2 },
+        },
+      ],
+    };
+    expect(() => compile(template, 1200, startJan2025)).toThrow(
+      /statement 2: fixed cliff/,
+    );
+  });
+
+  it("judges a mixed-unit cliff from the chained anchor, not startDate", () => {
+    // Days-vs-months is where the verdict depends on the anchor. Statement 2
+    // truly anchors at 2026-02-01: its 1-month cliff lands 2026-03-01, 28 days
+    // out, so the 30-day occurrence (2026-03-03) clears it — legal. Measured
+    // from startDate (2026-01-01) the same cliff spans 31 days and the
+    // occurrence would look swallowed; the check must not reject from there.
+    const template: VestingScheduleTemplate = {
+      id: "chained-mixed-units",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 1,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 2 },
+        },
+        {
+          order: 2,
+          vesting_base: DATE_BASE,
+          occurrences: 1,
+          period: 30,
+          period_type: "DAYS",
+          cliff: {
+            length: 1,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 2 },
+          },
+          percentage: { numerator: 1, denominator: 2 },
+        },
+      ],
+    };
+    const out = compile(template, 1200, { startDate: "2026-01-01" });
+    expect(sumAmounts(out)).toBe(1200);
   });
 
   it("rejects a negative statement percentage rather than emitting negatives", () => {
