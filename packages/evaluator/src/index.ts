@@ -1,6 +1,5 @@
 export {
   evaluateStatementAsOf,
-  evaluateStatementsAsOf,
   evaluateProgramAsOf,
   type VestedResult,
 } from "./asof.js";
@@ -11,8 +10,6 @@ export {
 } from "./evaluate/index.js";
 export { presentSchedule, type SchedulePresentation } from "./present.js";
 export { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
-export { formatFinding } from "./findings.js";
-export { formatAbsenceAssumption } from "./absence.js";
 export {
   rehydrate,
   reparseDefinition,
