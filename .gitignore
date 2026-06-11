@@ -4,6 +4,9 @@ dist/
 .DS_Store
 *.log
 
+# Stale npm lockfile — this is a pnpm workspace
+package-lock.json
+
 # Feature design-scratch — kept local, not tracked
 docs/scratch/
 
