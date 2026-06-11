@@ -277,6 +277,26 @@ function selectBest(
   return best;
 }
 
+/** Replace a winning attempt's per-statement residual with the one the consumer
+ * path produces (a single program collapse). The sequential attempt already holds
+ * a collapse residual — its `status` is the tell — so it passes through untouched. */
+function rescoreOnCollapse(
+  attempt: Attempt,
+  sorted: TrancheInput[],
+  grantDate: OCTDate,
+  totalQuantity: number,
+  asOf: OCTDate,
+): Attempt {
+  if (attempt.status !== undefined) return attempt;
+  const { residual, status } = collapseAgainstInput(attempt.program, sorted, {
+    grantDate,
+    totalQuantity,
+    asOf,
+    vestingDayOfMonth: attempt.policy,
+  });
+  return { ...attempt, residual, status };
+}
+
 export function inferSchedule(input: InferInput): InferResult {
   if (input.tranches.length === 0) {
     throw new InferInputError("tranches must not be empty");
@@ -338,36 +358,44 @@ export function inferSchedule(input: InferInput): InferResult {
   }
   let best: Attempt = selectBest(attempts, grantDate, totalQuantity, lastDate);
 
+  // The per-statement residual on `best` was a search heuristic; the number we
+  // report and gate on has to come from the collapse the consumer actually runs
+  // (one joint allocateEvents walk plus the grant-date fold over all statements).
+  // A parallel cover can score 0 statement-by-statement yet leave a residual once
+  // its statements share a grid — exactly the asymmetry that let #144 ship behind
+  // residualError: 0. The sequential candidate already carries a collapse residual,
+  // so rescore only when it doesn't.
+  best = rescoreOnCollapse(best, sorted, grantDate, totalQuantity, lastDate);
+
   if (best.residual >= 1e-6) {
     const fallbackComponents = explicitListFallback(sorted);
     const fallbackProgram: Program = fallbackComponents.map((c) =>
       buildStatement(c, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
     );
-    const fallbackAttempt: Attempt = {
-      program: fallbackProgram,
-      components: fallbackComponents,
-      foldCount: 0,
-      preGrantFolds: 0,
-      preGrantStarts: [],
-      residual: 0,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      cadencesTried: best.cadencesTried,
-    };
-    const { residual: fallbackResidual } = residualAgainstInput(
+    const { residual: fallbackResidual } = collapseAgainstInput(
       fallbackProgram,
       sorted,
       {
         grantDate,
         totalQuantity,
         asOf: lastDate,
-        vestingDayOfMonth: fallbackAttempt.policy,
+        vestingDayOfMonth: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       },
     );
     if (fallbackResidual < best.residual) {
       notes.push(
         "exact-cover search left nonzero residual; emitted explicit list fallback",
       );
-      best = { ...fallbackAttempt, residual: fallbackResidual };
+      best = {
+        program: fallbackProgram,
+        components: fallbackComponents,
+        foldCount: 0,
+        preGrantFolds: 0,
+        preGrantStarts: [],
+        residual: fallbackResidual,
+        policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        cadencesTried: best.cadencesTried,
+      };
     }
   }
 
