@@ -69,9 +69,9 @@ const firstSchedule = (expr: ScheduleExpr): Schedule => {
  *  needed. */
 const startBase = (
   vs: VestingNodeExpr<"GRANT_DATE">,
-): { base: "DATE" | "EVENT"; eventId?: string } => {
+): { type: "DATE" } | { type: "EVENT"; eventId: string } => {
   const eventId = eventBaseId(vs);
-  return eventId !== undefined ? { base: "EVENT", eventId } : { base: "DATE" };
+  return eventId !== undefined ? { type: "EVENT", eventId } : { type: "DATE" };
 };
 
 /** A start expression that selects an anchor (EARLIER OF / LATER OF), not a leaf. */
@@ -94,8 +94,7 @@ export interface StmtResolution {
     | {
         state: "RESOLVED";
         date: OCTDate;
-        base: "DATE" | "EVENT";
-        eventId?: string;
+        base: { type: "DATE" } | { type: "EVENT"; eventId: string };
         // Set when an EVENT base carries offsets (`FROM EVENT ipo + 1 month`,
         // fired): the full anchor expression. A bare EVENT statement can't hold
         // the offset — storing `eventId` with `date` as its firing would assert
@@ -173,11 +172,11 @@ const resolveNonChained = (
       start: {
         state: "RESOLVED",
         date: res.meta.date,
-        ...sb,
+        base: sb,
         // A fired event anchor with offsets resolved to firing+offset; keep the
         // expression so buildTemplate externalizes it rather than recording a
         // firing date the event never fired at.
-        ...(sb.base === "EVENT" && hasOffsets(schedule.vesting_start)
+        ...(sb.type === "EVENT" && hasOffsets(schedule.vesting_start)
           ? { offsetExpr: schedule.vesting_start }
           : {}),
       },
@@ -272,11 +271,11 @@ const resolveNonChained = (
   // statement with no firing (no synthetic indirection, no source-map entry).
   // Gated or offset event-base nodes were already claimed by the synthetic
   // branch above.
-  if (res.type === "UNRESOLVED" && sb.base === "EVENT") {
+  if (res.type === "UNRESOLVED" && sb.type === "EVENT") {
     return {
       percentage,
       periodicity,
-      start: { state: "PENDING_EVENT", eventId: sb.eventId!, blockers },
+      start: { state: "PENDING_EVENT", eventId: sb.eventId, blockers },
       cliff,
     };
   }
@@ -350,10 +349,10 @@ const anchorAfter = (
       dom,
       r.start.date,
     );
-    return r.start.base === "EVENT"
+    return r.start.base.type === "EVENT"
       ? {
           kind: "EVENT",
-          eventId: r.start.eventId!,
+          eventId: r.start.base.eventId,
           ...(r.start.offsetExpr ? { offsetExpr: r.start.offsetExpr } : {}),
           cursor,
           origin: r.start.date,
@@ -435,11 +434,10 @@ export const resolveStatements = (
             ? {
                 state: "RESOLVED",
                 date,
-                base: "EVENT",
-                eventId: anchor.eventId,
+                base: { type: "EVENT", eventId: anchor.eventId },
                 ...(anchor.offsetExpr ? { offsetExpr: anchor.offsetExpr } : {}),
               }
-            : { state: "RESOLVED", date, base: "DATE" },
+            : { state: "RESOLVED", date, base: { type: "DATE" } },
         // Pass the chain origin so a sub-annual cliff counts its pre-cliff
         // tranches on the same sprung grid this tail vests on, rather than on
         // the clamped handoff day.
@@ -619,7 +617,7 @@ export const buildTemplate = (
       r.start.state === "IMPOSSIBLE"
     ) {
       return unresolved(); // narrowing; unreachable after the guard above
-    } else if (r.start.base === "EVENT") {
+    } else if (r.start.base.type === "EVENT") {
       // A fired offset anchor externalizes here too: the statement references
       // the synthetic event, whose recorded firing is the resolved date
       // (firing + offsets) — true by its definition. The named event's raw
@@ -629,7 +627,7 @@ export const buildTemplate = (
       // lowering before it plus rehydration would.
       const eventId = r.start.offsetExpr
         ? mintSynthetic(r.start.offsetExpr)
-        : r.start.eventId!;
+        : r.start.base.eventId;
       const firingDate = r.start.date;
       vesting_base = { type: "EVENT", event_id: eventId };
       // One firing per event_id: multiple portions may float to the same event.
