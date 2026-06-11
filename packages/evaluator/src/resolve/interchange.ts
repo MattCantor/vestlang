@@ -13,16 +13,79 @@
 import type {
   EvaluationContextInput,
   InterchangeVerdict,
+  NonTemplateReason,
   Program,
 } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
+import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { createEvaluationContext } from "../utils.js";
 import {
   resolveStatements,
   buildTemplate,
+  type StmtResolution,
   type TemplateBuild,
 } from "./lower.js";
 import { classify } from "./classify.js";
+
+/**
+ * Why an unresolved build can't be stored, read off the per-statement records.
+ * Three distinct causes, in precedence order:
+ *
+ *   - EVENT_CLIFF        a cliff hangs off a named event — the schema has no home
+ *                        for it at all (kept firing-invariant: blind to firings an
+ *                        event cliff always reads unfired, so it always lands here).
+ *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
+ *                        with no cliff anywhere — the tail just can't be dated yet.
+ *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
+ *
+ * The cliff causes win over the tail one: a chained tail behind a pending head can
+ * coexist with a cliff elsewhere, and the cliff is the harder constraint to act on.
+ * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
+ */
+const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
+  const eventCliff = resolutions
+    .map((r) => r.cliff)
+    .find((c) => c.state === "EVENT");
+  if (eventCliff?.state === "EVENT")
+    return { kind: "EVENT_CLIFF", eventId: eventCliff.eventId };
+
+  const hasDeferredCliff = resolutions.some(
+    (r) => r.cliff.state === "UNRESOLVED",
+  );
+  if (!hasDeferredCliff) {
+    const head = pendingHeadEvent(resolutions);
+    if (head !== undefined)
+      return { kind: "EVENT_CHAINED_TAIL", eventId: head };
+  }
+  return { kind: "DEFERRED_CLIFF" };
+};
+
+/**
+ * The event a chained tail is waiting on: a THEN tail whose start went UNRESOLVED
+ * because its chain head is a pending event. We walk back from each such tail to the
+ * nearest non-chained head and read what it waits on — the named event for a bare
+ * `FROM EVENT x`, or the anchor's DSL definition for a combinator/gated/offset head
+ * (no synthetic id exists yet on this path; the definition is the same dedup key
+ * `buildTemplate` would mint one from). Undefined when no chained tail is pending
+ * on a head we can name.
+ */
+const pendingHeadEvent = (
+  resolutions: StmtResolution[],
+): string | undefined => {
+  for (let i = 0; i < resolutions.length; i++) {
+    const r = resolutions[i];
+    if (!r.chained || r.start.state !== "UNRESOLVED") continue;
+    for (let j = i - 1; j >= 0; j--) {
+      const head = resolutions[j];
+      if (head.chained) continue; // skip earlier tails of the same chain
+      if (head.start.state === "PENDING_EVENT") return head.start.eventId;
+      if (head.start.state === "SYNTHETIC_EVENT")
+        return stringifyVestingNodeExpr(head.start.expr);
+      break; // the head resolved to something datable — not this cause
+    }
+  }
+  return undefined;
+};
 
 /**
  * Translate a template-build outcome into the storable-floor verdict.
@@ -72,22 +135,16 @@ const mapTemplateBuild = (
           };
     case "impossible":
       return { status: "impossible", blockers: v.blockers };
-    case "unresolved": {
-      // Nothing storable to hand over — but say why off the cliff records, not
-      // off how the build routed. Firing-blind, an event-anchored cliff is
-      // always unfired and so always lands in this arm; the precise reason (the
-      // schema has no home for an event cliff at all) would be lost if we only
-      // reported the generic deferred-cliff one.
-      const eventCliff = build.resolutions
-        .map((r) => r.cliff)
-        .find((c) => c.state === "EVENT");
-      return eventCliff?.state === "EVENT"
-        ? {
-            status: "unrepresentable",
-            reason: { kind: "EVENT_CLIFF", eventId: eventCliff.eventId },
-          }
-        : { status: "unrepresentable", reason: { kind: "DEFERRED_CLIFF" } };
-    }
+    case "unresolved":
+      // Nothing storable to hand over — but say *why* off the per-statement
+      // records, not off how the build routed. Several distinct facts route here
+      // firing-blind (an event cliff always reads unfired, a chained tail behind a
+      // pending event has no dates yet), and collapsing them all to the generic
+      // deferred-cliff reason would mislabel a build with no cliff at all.
+      return {
+        status: "unrepresentable",
+        reason: unresolvedReason(build.resolutions),
+      };
   }
 };
 

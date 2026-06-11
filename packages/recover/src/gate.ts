@@ -1,9 +1,5 @@
-import type { ResolveResult } from "@vestlang/evaluator";
-import type { NonTemplateReason, Program } from "@vestlang/types";
+import type { Installment, NonTemplateReason, Program } from "@vestlang/types";
 import { referencesEvent } from "@vestlang/walk";
-
-// The events arm of the classifier's verdict — the only shape recovery acts on.
-type EventsResult = Extract<ResolveResult, { kind: "events" }>;
 
 // Whether an events-only verdict is safe to attempt template recovery on.
 //
@@ -14,18 +10,24 @@ type EventsResult = Extract<ResolveResult, { kind: "events" }>;
 // vary. Anything event-anchored is firing-dependent — a template inferred from
 // one firing bakes that firing in — so it's rejected here, before we ever infer.
 //
-// The caller has already established `result.kind === "events"` (the cheap path
-// short-circuits everything else), so this only weighs the remaining conditions.
-export function admitsRecovery(result: EventsResult, stmts: Program): boolean {
+// Both inputs come straight off the published events-only schedule: its
+// structured `reason` and its installments. The caller has already established
+// the schedule is events-only (the cheap path short-circuits everything else), so
+// this only weighs the remaining conditions.
+export function admitsRecovery(
+  reason: NonTemplateReason,
+  installments: Installment[],
+  stmts: Program,
+): boolean {
   // Must be the overlapping-grids reason, not an event-anchored cliff. This
-  // gates on the structured `kind`, never the prose `detail`.
-  if (!isOverlappingAbsoluteStarts(result.reason)) return false;
+  // gates on the structured `kind`, never the prose detail.
+  if (!isOverlappingAbsoluteStarts(reason)) return false;
 
   // A non-empty projection to feed the inferrer. The events arm can carry
   // symbolic installments for a sibling portion still waiting on an event, but
   // any such program references an event and the anchor check below turns it
   // away — what survives the gate is fully dated.
-  if (result.installments.length === 0) return false;
+  if (installments.length === 0) return false;
 
   // The load-bearing check. OVERLAPPING_ABSOLUTE_STARTS is raised by two
   // structurally different collisions: a pure two-DATE-grid overlap, and an

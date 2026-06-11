@@ -23,12 +23,40 @@ import type {
   Finding,
   Installment,
   InterchangeVerdict,
+  NonTemplateReason,
   SourceMap,
 } from "@vestlang/types";
 import { presentSchedule } from "./present.js";
-import { reasonToString } from "./resolve/assemble.js";
 import { formatFinding } from "./findings.js";
 import { formatAbsenceAssumption } from "./absence.js";
+
+/** Turn a structured "couldn't be one template" reason into a sentence for display.
+ *  Both verdicts keep the reason structured all the way out to here; prose is
+ *  rendered only at this boundary, so a consumer can still gate on the kind. Also
+ *  used by the pipeline to render a rescued program's captured reason. */
+export const reasonToString = (r: NonTemplateReason): string => {
+  switch (r.kind) {
+    case "OVERLAPPING_ABSOLUTE_STARTS":
+      return (
+        r.detail ?? "Two independent absolute-date vesting grids on one grant."
+      );
+    case "EVENT_CLIFF":
+      return (
+        r.detail ??
+        `Event-anchored cliff on "${r.eventId}" has no template form.`
+      );
+    case "EVENT_CHAINED_TAIL":
+      return (
+        r.detail ??
+        `A THEN segment chained behind a start waiting on event "${r.eventId}" can't be dated until that event fires.`
+      );
+    case "DEFERRED_CLIFF":
+      return (
+        r.detail ??
+        "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."
+      );
+  }
+};
 
 // The here-and-now verdict, against the events we currently know. `reason` rides
 // along only on the events-only arm — it's what explains the fall back to bare
@@ -70,7 +98,7 @@ const resolutionView = (r: EvaluatedScheduleVerdict): ResolutionView => {
     case "template":
       return { status: r.status, sourceMap: r.sourceMap };
     case "events-only":
-      return { status: r.status, reason: r.reason };
+      return { status: r.status, reason: reasonToString(r.reason) };
     case "unresolved":
     case "impossible":
       return { status: r.status };

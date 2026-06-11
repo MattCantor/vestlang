@@ -12,6 +12,7 @@ import type {
   Finding,
   Installment,
   InterchangeVerdict,
+  NonTemplateReason,
   SourceMap,
   Status,
 } from "@vestlang/types";
@@ -27,7 +28,7 @@ const stub = (fields: {
   blockers?: Blocker[];
   installments?: Installment[];
   findings?: Finding[];
-  reason?: string;
+  reason?: NonTemplateReason;
   sourceMap?: SourceMap;
   interchange?: InterchangeVerdict;
   absenceAssumptions?: AbsenceAssumption[];
@@ -66,14 +67,21 @@ const overAllocated: Finding[] = [
 ];
 
 describe("toScheduleView", () => {
-  it("carries the resolution reason on the events-only arm", () => {
+  it("renders the structured resolution reason to prose on the events-only arm", () => {
+    // The resolution arm carries the reason structured now; the view is where it
+    // becomes a sentence, so a consumer upstream can still gate on the kind.
     const view = toScheduleView(
-      stub({ status: "events-only", reason: "overlapping starts" }),
+      stub({
+        status: "events-only",
+        reason: { kind: "OVERLAPPING_ABSOLUTE_STARTS" },
+      }),
     );
     expect(view.resolution.status).toBe("events-only");
     // narrow before reading reason — it only exists on this arm
     if (view.resolution.status === "events-only") {
-      expect(view.resolution.reason).toBe("overlapping starts");
+      expect(view.resolution.reason).toBe(
+        "Two independent absolute-date vesting grids on one grant.",
+      );
     }
   });
 
@@ -90,7 +98,7 @@ describe("toScheduleView", () => {
     const view = toScheduleView(
       stub({
         status: "events-only",
-        reason: "event-anchored cliff",
+        reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
         interchange: {
           status: "unrepresentable",
           reason: { kind: "EVENT_CLIFF", eventId: "ipo" },

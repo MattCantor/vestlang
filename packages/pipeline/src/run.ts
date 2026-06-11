@@ -11,6 +11,7 @@ import {
   evaluateProgramAsOf,
   evaluateClauseGroups,
   toScheduleView,
+  reasonToString,
   type ScheduleView,
 } from "@vestlang/evaluator";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
@@ -105,7 +106,8 @@ export function runEvaluate(
     const recovered = outcome.rescued
       ? {
           from: outcome.recovered.from,
-          reason: outcome.recovered.reason,
+          // The captured reason is structured now; render it for the view.
+          reason: reasonToString(outcome.recovered.reason),
           dsl: outcome.recovered.dsl,
           vestingDayOfMonth: outcome.recovered.vestingDayOfMonth,
           residualError: outcome.recovered.residualError,

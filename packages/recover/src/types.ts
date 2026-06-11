@@ -1,6 +1,7 @@
 import type {
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
+  NonTemplateReason,
   VestingDayOfMonth,
   VestingRuntime,
   VestingScheduleTemplate,
@@ -29,10 +30,10 @@ export type RecoveryOutcome =
 export interface RecoveredTemplate {
   /** What the program was rescued from — always "events-only" today. */
   from: "events-only";
-  /** The original events-only reason, captured before the verdict was replaced
-   *  with the template. Without this the provenance is lost: the published
-   *  schedule is now a template and carries no reason of its own. */
-  reason: string;
+  /** The original events-only reason (structured), captured before the verdict
+   *  was replaced with the template. Without this the provenance is lost: the
+   *  published schedule is now a template and carries no reason of its own. */
+  reason: NonTemplateReason;
 
   // The template itself comes from the re-classify step (resolveToCore on the
   // inferred program), not from the inferrer — the inferrer only hands back DSL.

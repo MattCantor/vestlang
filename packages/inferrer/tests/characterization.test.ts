@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
-import { evaluateProgram } from "@vestlang/evaluator";
+import { evaluateProgram, reasonToString } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type { EvaluationContextInput, OCTDate } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
@@ -89,8 +89,10 @@ function characterize(c: CorpusCase): CaseSnapshot {
   return {
     dsl: inferred.dsl,
     status: schedule.resolution.status,
-    ...("reason" in schedule.resolution && schedule.resolution.reason
-      ? { reason: schedule.resolution.reason }
+    // The resolution reason is structured; render it so the snapshot stays the
+    // legible sentence it has always pinned.
+    ...(schedule.resolution.status === "events-only"
+      ? { reason: reasonToString(schedule.resolution.reason) }
       : {}),
     residual: inferred.diagnostics.residualError,
     decomposition: {
