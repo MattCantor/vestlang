@@ -2,7 +2,7 @@ import { stringify } from "@vestlang/render";
 import type {
   OCTDate,
   Program,
-  Status,
+  ResolutionStatus,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { asChainedTail, buildStatement } from "./atoms.js";
@@ -93,7 +93,7 @@ interface Attempt {
    * already comes from a collapse, which hands the verdict back at the same time).
    * Absent for the parallel cover, whose verdict is computed lazily during
    * selection. */
-  status?: Status;
+  status?: ResolutionStatus;
 }
 
 function runOne(

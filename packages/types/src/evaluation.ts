@@ -169,16 +169,6 @@ export type SourceMap = Record<string, SourceMapEntry>;
  * ------------------------ */
 
 /**
- * The verdict discriminant — spans both *resolvability* and *fidelity*:
- *   - "template"    — resolvable AND fits canonical's one-template shape (spec held).
- *   - "events-only" — resolvable to dated amounts but doesn't fit one template
- *                     (carries `reason`); facts preserved, intent lost.
- *   - "unresolved"  — pending: can't be materialized yet (e.g. unfired event).
- *   - "impossible"  — terminal/unsatisfiable: no witness assignment can resolve it.
- */
-export type Status = "template" | "events-only" | "unresolved" | "impossible";
-
-/**
  * A bare bag of installments + blockers, with no verdict. The internal
  * installment-builder helpers (makeTranches/unresolved) produce these; the
  * public evaluate path then wraps them into a tagged `EvaluatedSchedule` arm.
@@ -229,6 +219,20 @@ export type EvaluatedScheduleVerdict =
       installments: ImpossibleInstallment[];
       blockers: ImpossibleBlocker[];
     };
+
+/**
+ * The resolution discriminant, read straight off the verdict arms so it can't
+ * drift from them — spans both *resolvability* and *fidelity*:
+ *   - "template"    — resolvable AND fits canonical's one-template shape (spec held).
+ *   - "events-only" — resolvable to dated amounts but doesn't fit one template
+ *                     (carries `reason`); facts preserved, intent lost.
+ *   - "unresolved"  — pending: can't be materialized yet (e.g. unfired event).
+ *   - "impossible"  — terminal/unsatisfiable: no witness assignment can resolve it.
+ *
+ * Named for the resolution (closed-world, firing-aware) verdict specifically;
+ * the interchange verdict below keeps its own, distinct status vocabulary.
+ */
+export type ResolutionStatus = EvaluatedScheduleVerdict["status"];
 
 /* ------------------------
  * Interchange verdict
