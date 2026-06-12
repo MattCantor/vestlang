@@ -7,6 +7,7 @@ import {
 } from "@vestlang/evaluator";
 import type { EvaluationContextInput } from "@vestlang/types";
 import { computeSummary, filterByWindow } from "../src/summary";
+import { runAsOf, runEvaluate } from "../src/run";
 
 // computeSummary / filterByWindow run over a real as-of evaluation, so these
 // drive a DSL string through the engine and check the roll-up the consumers
@@ -276,5 +277,40 @@ describe("filterByWindow", () => {
     );
     expect(installments).toHaveLength(1);
     expect(total).toBe(25000);
+  });
+});
+
+// R2-B1: the template arm now carries UNRESOLVED installments for pending
+// EVENT-based portions, so summary totals and breakdown both account for them.
+describe("summary — pending template portions (R2-B1)", () => {
+  const dsl =
+    "0.75 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS " +
+    "0.25 VEST FROM EVENT ipo OVER 2 months EVERY 1 month";
+  const grant = {
+    grant_date: "2024-01-01",
+    grant_quantity: 4800,
+    events: {},
+  } as const;
+
+  it("runAsOf: total_vested 3600, total_unvested 1200, fully_vested_date null", () => {
+    const r = runAsOf(dsl, grant, "2026-01-01");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.total_vested).toBe(3600);
+    expect(r.summary.total_unvested).toBe(1200);
+    expect(r.summary.fully_vested_date).toBeNull();
+  });
+
+  it("runEvaluate: breakdown pending clause carries symbolic installments (1200)", () => {
+    const r = runEvaluate(dsl, grant);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Two clauses: DATE-anchored (index 0) and EVENT-anchored (index 1).
+    expect(r.breakdown).toHaveLength(2);
+    const pendingClause = r.breakdown[1];
+    const unresolvedAmount = pendingClause.installments
+      .filter((i) => i.state === "UNRESOLVED")
+      .reduce((a, i) => a + i.amount, 0);
+    expect(unresolvedAmount).toBe(1200);
   });
 });

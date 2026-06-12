@@ -18,6 +18,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { evaluateStatement, evaluateProgram } from "../src/evaluate/index";
+import { evaluateProgramAsOf } from "../src/asof";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -204,7 +205,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
   // An unfired *atomic* EVENT start is a valid canonical template (an EVENT
   // statement with no firing), not `unresolved`: pending is the absence of a
   // witness, carried in `blockers`, not a property of the spec's representability.
-  it("atomic unfired EVENT start → template (empty projection + blocker)", () => {
+  it("atomic unfired EVENT start → template (symbolic UNRESOLVED installment + blocker)", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -212,10 +213,13 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         occurrences: 1,
       }),
     ];
-    const out = evalStmt(program[0], ctxInput()); // ipo not fired
+    const out = evalStmt(program[0], ctxInput({ grantQuantity: 4800 })); // ipo not fired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.installments).toEqual([]); // no firing → nothing projected yet
+    // No firing → one UNRESOLVED installment carrying the full portion's shares.
+    expect(out.installments).toHaveLength(1);
+    expect(out.installments[0].state).toBe("UNRESOLVED");
+    expect(out.installments[0].amount).toBe(4800);
     expect(
       out.blockers.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
@@ -253,8 +257,11 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
     const [out] = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
-    expect(sum(out.installments)).toBe(3600); // the 75% time-based portion, dated
+    // Dated tranches (3600) + one UNRESOLVED installment for the pending 25%.
+    const resolved = out.installments.filter((i) => i.state === "RESOLVED");
+    const unresolved = out.installments.filter((i) => i.state === "UNRESOLVED");
+    expect(sum(resolved)).toBe(3600);
+    expect(sum(unresolved)).toBe(1200);
     expect(
       out.blockers.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
@@ -320,9 +327,11 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(Object.keys(out.sourceMap)).toEqual([eventId]);
     expect(out.sourceMap[eventId].definition).toMatch(/LATER OF/);
     expect(out.sourceMap[eventId].definition).toMatch(/ipo/);
-    // Pending-ness rides `blockers`; projection empty (event not fired).
+    // Pending-ness rides `blockers`; UNRESOLVED installments carry the share claim.
+    // LATER OF with one settled arm → partial=true, so 48 symbolic start+N tranches.
     expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
-    expect(out.installments).toEqual([]);
+    expect(out.installments.every((i) => i.state === "UNRESOLVED")).toBe(true);
+    expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(100000);
   });
 
   it("EARLIER OF(DATE future, EVENT ipo) before the cap → template + synthetic event", () => {
@@ -383,7 +392,10 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(s.period_type).toBe("MONTHS");
     expect(Object.keys(out.sourceMap)).toHaveLength(1);
     expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
-    expect(out.installments).toEqual([]); // no firing → nothing projected yet
+    // No firing → UNRESOLVED installments carrying the share claim.
+    // LATER OF with one settled arm → partial=true, 48 symbolic start+N tranches.
+    expect(out.installments.every((i) => i.state === "UNRESOLVED")).toBe(true);
+    expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(4800);
   });
 
   it("pure-date combinator earns NO synthetic event (resolves to a DATE template)", () => {
@@ -479,9 +491,11 @@ describe("assemble — gated atomic start → synthetic event", () => {
     expect(out.sourceMap[eventId].definition).toMatch(/BEFORE/);
     expect(out.sourceMap[eventId].definition).toMatch(/2030-01-01/);
     expect(out.sourceMap[eventId].definition).toMatch(/\ba\b/);
-    // No firing yet; pending-ness rides blockers, projection empty.
+    // No firing yet; pending-ness rides blockers, share claim in UNRESOLVED installment.
     expect(out.runtime.eventFirings ?? []).toEqual([]);
-    expect(out.installments).toEqual([]);
+    expect(out.installments).toHaveLength(1);
+    expect(out.installments[0].state).toBe("UNRESOLVED");
+    expect(out.installments[0].amount).toBe(100000);
   });
 
   it("DATE (future) BEFORE EVENT e → the mirror order externalizes the same way", () => {
@@ -497,7 +511,9 @@ describe("assemble — gated atomic start → synthetic event", () => {
     const [id] = Object.keys(out.sourceMap);
     expect(out.sourceMap[id].definition).toMatch(/BEFORE/);
     expect(out.sourceMap[id].definition).toMatch(/\be\b/);
-    expect(out.installments).toEqual([]);
+    expect(out.installments).toHaveLength(1);
+    expect(out.installments[0].state).toBe("UNRESOLVED");
+    expect(out.installments[0].amount).toBe(100000);
   });
 
   it("a bare ungated EVENT start stays a plain floating event (no synthetic id)", () => {
@@ -551,7 +567,8 @@ describe("assemble — future-dated pure-date schedules resolve", () => {
     // Anchored on the later (2030) arm, with concrete RESOLVED installments.
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
-    expect(out.installments[0].date >= "2030-01-01").toBe(true);
+    const first = out.installments[0];
+    expect(first.state === "RESOLVED" && first.date >= "2030-01-01").toBe(true);
   });
 });
 
@@ -629,5 +646,95 @@ describe("assemble — impossible status", () => {
       50000,
     );
     expect(out.installments.some((i) => i.state === "IMPOSSIBLE")).toBe(true);
+  });
+});
+
+// R2-B1: pending portions on the template arm keep their share claims as UNRESOLVED
+// installments, so as-of tallies and summaries account for them rather than
+// silently dropping them.
+describe("template arm — pending channel (R2-B1)", () => {
+  // Statement A: 3/4 from DATE 2024-01-01, 2 monthly occurrences → 3600 shares
+  // Statement B: 1/4 from EVENT ipo, 2 monthly occurrences → 1200 shares pending
+  const mixedProgram = (): Program => [
+    stmt(portion(3, 4), makeSingletonNode(makeVestingBaseDate("2024-01-01")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+    }),
+    stmt(portion(1, 4), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+    }),
+  ];
+
+  it("mixed DATE + pending EVENT → template with dated + UNRESOLVED installments", () => {
+    const [out] = evalProgram(
+      mixedProgram(),
+      ctxInput({ grantDate: "2024-01-01", grantQuantity: 4800 }),
+    );
+    expect(out.status).toBe("template");
+    if (out.status !== "template") return;
+
+    const resolved = out.installments.filter((i) => i.state === "RESOLVED");
+    const unresolved = out.installments.filter((i) => i.state === "UNRESOLVED");
+    expect(sum(resolved)).toBe(3600); // dated portion
+    expect(sum(unresolved)).toBe(1200); // pending EVENT portion
+
+    // Blocker for ipo appears exactly once — not duplicated by the new channel.
+    const ipoBlockers = out.blockers.filter(
+      (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+    );
+    expect(ipoBlockers).toHaveLength(1);
+  });
+
+  it("evaluateProgramAsOf: unresolved === 1200, vested === 3600, no dated unvested", () => {
+    const result = evaluateProgramAsOf(mixedProgram(), {
+      grantDate: "2024-01-01",
+      grantQuantity: 4800,
+      events: {},
+      asOf: "2026-01-01",
+    });
+    expect(result.unresolved).toBe(1200);
+    expect(sum(result.vested)).toBe(3600);
+    expect(result.unvested).toHaveLength(0);
+  });
+
+  it("pure pending program: evaluateProgramAsOf reports unresolved === grantQuantity", () => {
+    const pureEventProgram: Program = [
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 2,
+      }),
+    ];
+    const result = evaluateProgramAsOf(pureEventProgram, {
+      grantDate: "2024-01-01",
+      grantQuantity: 4800,
+      events: {},
+      asOf: "2026-01-01",
+    });
+    // The share claim rides through the UNRESOLVED installment,
+    // not the empty-stream fallback — same number, explicit path.
+    expect(result.unresolved).toBe(4800);
+    expect(sum(result.vested)).toBe(0);
+  });
+
+  it("regression guard: plain dated template installments are all RESOLVED", () => {
+    const dateProg: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2024-01-01")),
+        { type: "MONTHS", length: 1, occurrences: 4 },
+      ),
+    ];
+    const [out] = evalProgram(
+      dateProg,
+      ctxInput({ grantDate: "2024-01-01", grantQuantity: 4800 }),
+    );
+    expect(out.status).toBe("template");
+    if (out.status !== "template") return;
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
+    expect(sum(out.installments)).toBe(4800);
   });
 });

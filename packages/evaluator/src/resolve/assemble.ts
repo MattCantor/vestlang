@@ -75,9 +75,13 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
         template: result.template,
         runtime: result.runtime,
         sourceMap: result.sourceMap, // synthetic-event definitions (may be {})
-        installments: compiled.map((c) =>
-          makeResolvedInstallment(c.date, c.amount),
-        ),
+        // Dated tranches first, then symbolic UNRESOLVED ones for any pending
+        // EVENT-based statements (unfired atomic events / unsettled combinators).
+        // The pending installments are empty when every statement has a known start.
+        installments: [
+          ...compiled.map((c) => makeResolvedInstallment(c.date, c.amount)),
+          ...result.pendingInstallments,
+        ],
         // Pending witnesses (unfired atomic EVENT starts). A `template` can be
         // representable yet carry blockers + an empty/partial projection.
         blockers: result.blockers,

@@ -9,6 +9,7 @@ import type {
   Finding,
   OCTDate,
   Program,
+  UnresolvedInstallment,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import {
@@ -23,6 +24,7 @@ import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
+import { unresolvedInstallments } from "./unresolved.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
 /** Bound the installments a program will materialize, before any resolution or
@@ -58,6 +60,36 @@ export const resolveToCore = (
   let verdict: ResolveVerdict;
   if (build.ok) {
     assertValidVestingScheduleTemplate(build.template);
+
+    // Collect symbolic installments for statements whose start is still pending
+    // (unfired atomic event or unsettled synthetic combinator). core.compile skips
+    // these — no firing means no dated tranches — so their share claims would
+    // otherwise vanish from the stream.
+    //
+    // Notes on what we discard from the producer:
+    //  - Blockers: buildTemplate already gathered each pending start's blockers
+    //    onto build.blockers, and under a template-ok build every cliff is NONE
+    //    or RESOLVED, so the producer would return the same r.start.blockers
+    //    again — pushing them would duplicate every pending blocker.
+    //  - The inst.state check is type narrowing, not filtering: a non-RESOLVED
+    //    start produces only UNRESOLVED installments (one whole-portion lump, or
+    //    start+N steps for a partially-settled combinator).
+    //  - PENDING_EVENT / SYNTHETIC_EVENT starts are never chained tails (a THEN
+    //    tail's injected start is RESOLVED or UNRESOLVED), so the chained-tail
+    //    throw inside unresolvedInstallments is unreachable here.
+    const pendingInstallments: UnresolvedInstallment[] = [];
+    program.forEach((stmt, i) => {
+      const r = resolutions[i];
+      if (
+        r.start.state === "PENDING_EVENT" ||
+        r.start.state === "SYNTHETIC_EVENT"
+      ) {
+        for (const inst of unresolvedInstallments(r, stmt, ctx).installments) {
+          if (inst.state === "UNRESOLVED") pendingInstallments.push(inst);
+        }
+      }
+    });
+
     verdict = {
       kind: "template",
       template: build.template,
@@ -65,6 +97,7 @@ export const resolveToCore = (
       totalShares: build.totalShares,
       sourceMap: build.sourceMap,
       blockers: build.blockers,
+      pendingInstallments,
     };
   } else {
     // Resolves but doesn't fit one template (events) or can't materialize (unresolved).
