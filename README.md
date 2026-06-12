@@ -64,7 +64,7 @@ The codebase splits along one precise line:
   or an "unresolved" state. This is the canonical interchange: exact-rational math, a
   time-based cliff, structural validation.
 - **The front-end (`@vestlang/evaluator`, the "extended" layer) *resolves*.** Combinators
-  let runtime *select the structure itself* — `LATER OF(12mo, EVENT "ipo")` becomes a
+  let runtime *select the structure itself* — `LATER OF (12mo, EVENT "ipo")` becomes a
   different schedule depending on which date wins. The resolver evaluates that against
   runtime and then **classifies** the result into two verdicts side by side — what's
   storable (firing-invariant) and what it resolves to given the events known.
@@ -212,7 +212,7 @@ All grants below use a grant date of **2025-01-01**. Outputs are produced by the
 
 ### Event-gated cliff → resolves to `template` when fired, `unresolved` when not
 
-`VEST OVER 4 years EVERY 1 month CLIFF LATER OF(+12 months, EVENT ipo)` over 4,800 shares.
+`VEST OVER 4 years EVERY 1 month CLIFF LATER OF (+12 months, EVENT ipo)` over 4,800 shares.
 The cliff is the *later* of 12 months and the IPO. (Storable verdict: `unrepresentable` —
 an event-anchored cliff has no fixed-duration template form, so it can't be stored as one.)
 

@@ -290,7 +290,7 @@ During normalization, nested same-op selectors are flattened in place and struct
 ##### DSL
 
 ```vest
-VEST FROM EARLIER OF( DATE 2025-01-01, EVENT milestone )
+VEST FROM EARLIER OF (DATE 2025-01-01, EVENT milestone)
 ```
 
 ##### AST
@@ -336,7 +336,7 @@ A schedule-level selector picks the whole winning schedule by its resolved vesti
 ##### DSL
 
 ```vest
-VEST EARLIER START OF(
+VEST EARLIER START OF (
   FROM DATE 2025-01-01
     OVER 12 months EVERY 1 months,
   FROM DATE 2026-01-01
@@ -394,7 +394,7 @@ VEST EARLIER START OF(
 ```vest
 VEST
   OVER 48 months EVERY 1 months
-  CLIFF EARLIER OF(
+  CLIFF EARLIER OF (
     +12 months,
     EVENT ipo
   )
@@ -621,9 +621,9 @@ This is expressed in vestlang DSL as follows. Note that the `12 months` duration
 ```vest
 VEST
   OVER 48 months EVERY 1 months
-  CLIFF LATER OF(
+  CLIFF LATER OF (
     +12 months,
-    EARLIER OF(
+    EARLIER OF (
       EVENT ipo
         BEFORE EVENT grantDate +84 months,
       EVENT cic

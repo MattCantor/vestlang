@@ -134,7 +134,7 @@ A statement (or `THEN` chain) that resolves to a single canonical schedule. `100
 | 25     | 2028-01-01 | RESOLVED |
 | 25     | 2029-01-01 | RESOLVED |
 
-Both verdicts `template`. `sourceMap` (carried on a `template`) records the DSL behind any synthetic event the lowering had to mint — e.g. when a gated or `EARLIER OF(…)` start is externalized as a single event; it's `{}` for plain schedules.
+Both verdicts `template`. `sourceMap` (carried on a `template`) records the DSL behind any synthetic event the lowering had to mint — e.g. when a gated or `EARLIER OF (…)` start is externalized as a single event; it's `{}` for plain schedules.
 
 ### `events-only`
 
@@ -150,7 +150,7 @@ Both verdicts `events-only` — _reason: "Two independent absolute-date vesting 
 
 ### `unresolved` / `unrepresentable`
 
-A cliff gated on an event can't be placed until the event fires, and has no fixed-duration template form. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF( +12 months, EVENT milestone )`, grant 2025-01-01 over 100 shares, `milestone` unfired:
+A cliff gated on an event can't be placed until the event fires, and has no fixed-duration template form. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF (+12 months, EVENT milestone)`, grant 2025-01-01 over 100 shares, `milestone` unfired:
 
 - **resolution: `unresolved`** — the cliff can't be materialized yet.
 - **interchange: `unrepresentable`** — _reason: "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."_
@@ -260,7 +260,7 @@ When a `LATER OF` selector has some but not all items resolved, the resolved ite
 ```vest
 100 VEST
   OVER 48 months EVERY 3 months
-  CLIFF LATER OF( +12 months, EVENT milestone )
+  CLIFF LATER OF (+12 months, EVENT milestone)
 ```
 
 With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so we already know nothing vests before that floor. The schedule is `unresolved` (and `unrepresentable` to store), yet every installment carries the 12-month cliff:
