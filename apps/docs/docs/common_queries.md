@@ -45,7 +45,7 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 
 ## Summary fields on `vestlang_evaluate_as_of`
 
-`vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments — then derives the summary from those buckets. (The library's `EvaluatedSchedule` carries the two verdicts, `absenceAssumptions`, the flat `installments`, and `blockers`; the as-of partitioning and `summary` are what the MCP layer adds on top.)
+`vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments. Most summary fields derive from those buckets; `cliff_date` is the exception, read off the schedule itself rather than the partition. (The library's `EvaluatedSchedule` carries the two verdicts, `absenceAssumptions`, the flat `installments`, and `blockers`; the as-of partitioning and `summary` are what the MCP layer adds on top.)
 
 The response includes a `summary` object:
 
@@ -58,7 +58,7 @@ The response includes a `summary` object:
 | `next_vest_date` | ISO date \| null | Earliest upcoming RESOLVED installment date in `unvested`. Null if no upcoming RESOLVED tranche. |
 | `next_vest_amount` | number \| null | Amount of that upcoming tranche. |
 | `fully_vested_date` | ISO date \| null | Latest installment date, but only if the schedule is fully determinate (`unresolved === 0`, no impossible, all unvested RESOLVED). Null when the endpoint is unknowable (e.g. gated on an event with no occurrence date). |
-| `cliff_date` | ISO date \| null | Earliest date in `vested`. Null if nothing has vested yet. |
+| `cliff_date` | ISO date \| null | The schedule's cliff date — the statement's start plus the cliff duration (engine date arithmetic, including month-end clamping), or a fired event cliff's effective date; with several cliffed statements, the earliest placeable one. Independent of `as_of`. Null when there is no cliff, or its anchor/event is still pending. |
 
 ### Example
 

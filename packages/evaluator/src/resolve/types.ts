@@ -17,6 +17,7 @@ import type {
   ImpossibleInstallment,
   Installment,
   NonTemplateReason,
+  OCTDate,
   SourceMap,
 } from "@vestlang/types";
 
@@ -58,8 +59,13 @@ export type ResolveVerdict =
       blockers: ImpossibleBlocker[];
     };
 
-// The verdict plus any findings the resolver accumulated (over-allocation, for
-// now). Carried on the wrapper rather than duplicated into each arm — findings
-// are about the resolution attempt as a whole, not about which verdict it
-// reached — and threaded onward onto EvaluatedSchedule the same way.
-export type ResolveResult = ResolveVerdict & { findings: Finding[] };
+// The verdict plus what the resolver learned about the schedule as a whole,
+// independent of which arm it landed in:
+//   - `findings`  — allocation problems (over-/under-allocation).
+//   - `cliffDate` — the schedule's earliest placeable cliff date, or null.
+// Both sit on the wrapper, not in each arm, because they describe the schedule as
+// written, and both ride onward onto EvaluatedSchedule the same way.
+export type ResolveResult = ResolveVerdict & {
+  findings: Finding[];
+  cliffDate: OCTDate | null;
+};

@@ -8,10 +8,13 @@ import type {
   ChainedSchedule,
   EvaluationContextInput,
   Finding,
+  OCTDate,
   Program,
   ScheduleExpr,
+  VestingDayOfMonth,
 } from "@vestlang/types";
 import {
+  addPeriod,
   assertValidVestingScheduleTemplate,
   MAX_INSTALLMENTS,
 } from "@vestlang/core";
@@ -90,7 +93,54 @@ export const resolveToCore = (
   return {
     ...verdict,
     findings: allocationFindings(resolutions, totalShares),
+    // The cliff date is a property of the schedule, not of when we look at it.
+    // We place it with the engine's own addPeriod so it lands exactly where the
+    // projection drops the cliff lump.
+    cliffDate: earliestCliffDate(resolutions, ctx.vesting_day_of_month),
   };
+};
+
+// Where a single statement's cliff lump lands, or undefined when the cliff can't
+// be placed yet (or there is none).
+//
+// A duration cliff measures from the statement's start: lowerCliff already
+// derived `length`/`period_type` by round-tripping that exact date back through
+// addPeriod, so applying the same arithmetic here reproduces it. For a THEN tail,
+// `start.date` is the handoff date — which is the very anchor lowerCliff measured
+// against — so heads, tails, independent grids, and fired EVENT starts (whose
+// `start.date` already folds in the firing and any offsets) all go through this
+// one expression. A fired event cliff carries its landing spot directly as
+// `effectiveAt`; an unfired one leaves it undefined.
+const statementCliffDate = (
+  r: StmtResolution,
+  dom: VestingDayOfMonth,
+): OCTDate | undefined => {
+  if (r.cliff.state === "EVENT") return r.cliff.effectiveAt;
+  if (r.cliff.state === "RESOLVED" && r.start.state === "RESOLVED")
+    return addPeriod(
+      r.start.date,
+      r.cliff.cliff.length,
+      r.cliff.cliff.period_type,
+      dom,
+    );
+  // No cliff, or a cliff whose anchor (a pending start) isn't placeable yet.
+  return undefined;
+};
+
+// Across the program's statements, the earliest cliff date we can actually place.
+// Statements whose cliff exists but can't be placed yet (pending anchor, unfired
+// event cliff) contribute nothing — their pending-ness is already surfaced via
+// blockers. Null when no statement carries a placeable cliff.
+const earliestCliffDate = (
+  resolutions: StmtResolution[],
+  dom: VestingDayOfMonth,
+): OCTDate | null => {
+  let earliest: OCTDate | null = null;
+  for (const r of resolutions) {
+    const d = statementCliffDate(r, dom);
+    if (d !== undefined && (earliest === null || d < earliest)) earliest = d;
+  }
+  return earliest;
 };
 
 // Check how much of the grant the schedule allocates. We look here, before the
