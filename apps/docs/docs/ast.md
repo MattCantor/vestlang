@@ -282,7 +282,7 @@ Given the temporal aspect of vesting schedules, a selector can be thought of as 
 Note that in this way `EARLIER OF` acts as an OR logical operator and `LATER OF` acts as an AND logical operator. However, we have purposefully limited ourselves to the `EARLIER OF` and `LATER OF` nomenclature in order to distinguish selectors from conditions, described below.
 
 :::note
-During normalization, selector items are flattened, sorted, and deduped for determinism. Their order in the compiled AST is canonical and carries no meaning — it may differ from the source order (you'll see this in the examples below).
+During normalization, nested same-op selectors are flattened in place and structural duplicates are dropped (first occurrence wins, surfaced as the `no-duplicate-selector-items` warning when linting source). The **authored operand order is preserved** — in the compiled AST and in `stringify` output — so the examples below show items in source order.
 :::
 
 #### Example: Vesting Start With Selector
@@ -356,22 +356,6 @@ VEST EARLIER START OF(
           "type": "NODE",
           "base": {
             "type": "DATE",
-            "value": "2026-01-01"
-          },
-          "offsets": []
-        },
-        "periodicity": {
-          "type": "DAYS",
-          "length": 0,
-          "occurrences": 1
-        }
-      },
-      {
-        "type": "SCHEDULE",
-        "vesting_start": {
-          "type": "NODE",
-          "base": {
-            "type": "DATE",
             "value": "2025-01-01"
           },
           "offsets": []
@@ -380,6 +364,22 @@ VEST EARLIER START OF(
           "type": "MONTHS",
           "length": 1,
           "occurrences": 12
+        }
+      },
+      {
+        "type": "SCHEDULE",
+        "vesting_start": {
+          "type": "NODE",
+          "base": {
+            "type": "DATE",
+            "value": "2026-01-01"
+          },
+          "offsets": []
+        },
+        "periodicity": {
+          "type": "DAYS",
+          "length": 0,
+          "occurrences": 1
         }
       }
     ]
@@ -423,14 +423,6 @@ VEST
           {
             "type": "NODE",
             "base": {
-              "type": "EVENT",
-              "value": "ipo"
-            },
-            "offsets": []
-          },
-          {
-            "type": "NODE",
-            "base": {
               "type": "VESTING_START"
             },
             "offsets": [
@@ -441,6 +433,14 @@ VEST
                 "sign": "PLUS"
               }
             ]
+          },
+          {
+            "type": "NODE",
+            "base": {
+              "type": "EVENT",
+              "value": "ipo"
+            },
+            "offsets": []
           }
         ]
       }
@@ -673,7 +673,7 @@ VEST
                 "type": "NODE",
                 "base": {
                   "type": "EVENT",
-                  "value": "cic"
+                  "value": "ipo"
                 },
                 "offsets": [],
                 "condition": {
@@ -702,7 +702,7 @@ VEST
                 "type": "NODE",
                 "base": {
                   "type": "EVENT",
-                  "value": "ipo"
+                  "value": "cic"
                 },
                 "offsets": [],
                 "condition": {

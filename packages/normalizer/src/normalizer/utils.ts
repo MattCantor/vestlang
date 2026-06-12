@@ -44,27 +44,33 @@ export type NormalizationFinding =
 export type FindingSink = (finding: NormalizationFinding) => void;
 
 /**
- * Normalize an expression
+ * Normalize a selector / boolean expression, preserving authored order.
  * - Recursively normalizes items
- * - Flattens nested same-op selectors
- * - Sorts and dedupes same-op selectors
+ * - Flattens nested same-op groups in place (left-to-right order survives)
+ * - Drops structural duplicates, keeping the first occurrence
+ * - Collapses a singleton group to its lone item
+ *
+ * The operand order the author wrote is preserved end to end — nothing
+ * downstream depends on a canonical order (min/max and AND/OR are
+ * order-invariant), and preserving it is what makes compile → stringify → parse
+ * round-trip faithfully.
  */
-export function NormalizeAndSort<
+export function normalizeAndDedupe<
   T extends RawScheduleExpr,
   E extends { type: string; items: T[] },
   N extends ScheduleExpr,
 >(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
-export function NormalizeAndSort<
+export function normalizeAndDedupe<
   T extends VestingNodeExpr,
   E extends { type: string; items: T[] },
   N extends VestingNodeExpr,
 >(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
-export function NormalizeAndSort<
+export function normalizeAndDedupe<
   T extends Condition,
   E extends { type: string; items: T[] },
   N extends Condition,
 >(expression: E, normalizeFN: (x: T) => N, report?: FindingSink): N;
-export function NormalizeAndSort<
+export function normalizeAndDedupe<
   T extends Schedule | VestingNode | Condition,
   E extends { type: string; items: T[] },
   N extends Schedule | VestingNode | Condition,
@@ -72,15 +78,15 @@ export function NormalizeAndSort<
   // Normalize children (nested selectors or vesting nodes or schedules
   let items = expression.items.map(normalizeFN);
 
-  // Flatten same-op: EARLIER OF ( EARLIER OF (...), x ) -> EARLIER OF (...)
+  // Flatten same-op: EARLIER OF ( EARLIER OF (...), x ) -> EARLIER OF (...).
+  // flatMap splices the nested arms in place, so authored order is preserved.
   items = items.flatMap((item) =>
     item.type === expression.type
       ? (item as unknown as { items: N[] }).items
       : [item],
   );
 
-  // Sort & dedupe
-  items.sort((a, b) => stableKey(a).localeCompare(stableKey(b)));
+  // Drop structural duplicates, keeping the first occurrence in place.
   const beforeDedupe = items.length;
   items = dedupe(items);
   if (report && items.length < beforeDedupe)

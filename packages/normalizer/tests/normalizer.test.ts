@@ -115,6 +115,33 @@ describe("selectors: flatten, dedupe, collapse", () => {
   });
 });
 
+/** Read the base name (event/date value) of each selector item, for order checks. */
+function itemBaseValues(p: Program): (string | undefined)[] {
+  return getVestingStartItems(p).map((item) => {
+    if (item.type !== "NODE") return undefined;
+    return "value" in item.base ? item.base.value : item.base.type;
+  });
+}
+
+describe("selectors: authored order preserved", () => {
+  it("does not sort operands", () => {
+    const out = norm(
+      "VEST FROM EARLIER OF (EVENT zebra, EVENT apple, DATE 2025-06-01, EVENT mango) OVER 12 months EVERY 1 month",
+    );
+    expect(itemBaseValues(out)).toEqual([
+      "zebra",
+      "apple",
+      "2025-06-01",
+      "mango",
+    ]);
+  });
+
+  it("dedupe keeps the first occurrence in place", () => {
+    const out = norm("VEST FROM LATER OF (EVENT b, EVENT a, EVENT b)");
+    expect(itemBaseValues(out)).toEqual(["b", "a"]);
+  });
+});
+
 /* ------------------------
  * Constraints
  * ------------------------ */

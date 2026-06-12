@@ -66,6 +66,12 @@ The later of two conditions — both must occur, and vesting starts at the secon
 VEST FROM LATER OF (EVENT board, DATE 2025-01-01) OVER 48 months EVERY 1 month
 ```
 
+Whichever whole schedule starts first wins — operands are bare schedules, no `VEST` inside the parentheses:
+
+```vest
+VEST EARLIER START OF (FROM EVENT ipo OVER 12 months EVERY 1 month, FROM DATE 2027-01-01 OVER 12 months EVERY 1 month)
+```
+
 A milestone honored only inside a window (a proviso on the start, not a date cap):
 
 ```vest

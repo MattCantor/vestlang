@@ -100,9 +100,9 @@ describe("canonical two-shape layout", () => {
       "VEST FROM EARLIER OF(EVENT ipo, DATE 2026-01-01) OVER 48 months EVERY 1 month";
     expect(await fmt(src, 30)).toMatchInlineSnapshot(`
       "VEST
-        FROM EARLIER OF(
-          DATE 2026-01-01,
-          EVENT ipo
+        FROM EARLIER OF (
+          EVENT ipo,
+          DATE 2026-01-01
         )
         OVER 48 months EVERY 1 month
       "
