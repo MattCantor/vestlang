@@ -49,6 +49,7 @@ const stub = (fields: {
     },
     absenceAssumptions: fields.absenceAssumptions ?? [],
     findings: fields.findings ?? [],
+    cliffDate: null,
   }) as unknown as EvaluatedSchedule;
 
 const dated: Installment[] = [

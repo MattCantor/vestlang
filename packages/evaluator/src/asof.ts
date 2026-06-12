@@ -14,6 +14,9 @@ export interface VestedResult {
   unvested: Installment[];
   impossible: Installment[];
   unresolved: number; // quantity not yet schedulable
+  // The schedule's cliff date, carried alongside the partition so the summary
+  // can read it without re-evaluating. A property of the schedule, not the as-of.
+  cliffDate: OCTDate | null;
 }
 
 /**
@@ -26,7 +29,7 @@ function partitionAsOf(
   installments: Installment[],
   asOf: OCTDate,
   fallbackQuantity: number,
-): VestedResult {
+): Omit<VestedResult, "cliffDate"> {
   const vested: Installment[] = [];
   const unvested: Installment[] = [];
   const impossible: Installment[] = [];
@@ -62,9 +65,15 @@ export function evaluateStatementAsOf(
   ctx_input: EvaluationContextInput,
 ): VestedResult {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
-  const installments = evaluateStatement(stmt, ctx_input).resolution
-    .installments;
-  return partitionAsOf(installments, ctx.asOf, statementQuantity);
+  const schedule = evaluateStatement(stmt, ctx_input);
+  return {
+    ...partitionAsOf(
+      schedule.resolution.installments,
+      ctx.asOf,
+      statementQuantity,
+    ),
+    cliffDate: schedule.cliffDate,
+  };
 }
 
 /**
@@ -80,13 +89,19 @@ export function evaluateProgramAsOf(
 ): VestedResult {
   assertProgramInstallmentCap(program);
   const ctx = createEvaluationContext(ctx_input);
-  const installments = evaluateProgram(program, ctx_input)[0].resolution
-    .installments;
+  const [schedule] = evaluateProgram(program, ctx_input);
   // If nothing got scheduled, every share the program allocates is still
   // unresolved — sum each statement's claim on the grant.
   const programQuantity = program.reduce(
     (n, s) => n + amountToQuantify(s.amount, ctx.grantQuantity),
     0,
   );
-  return partitionAsOf(installments, ctx.asOf, programQuantity);
+  return {
+    ...partitionAsOf(
+      schedule.resolution.installments,
+      ctx.asOf,
+      programQuantity,
+    ),
+    cliffDate: schedule.cliffDate,
+  };
 }

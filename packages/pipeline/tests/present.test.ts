@@ -52,6 +52,7 @@ const stub = (
     resolution: { status, blockers, installments },
     absenceAssumptions: [],
     findings,
+    cliffDate: null,
   }) as unknown as EvaluatedSchedule;
 
 const overAllocated: Finding[] = [

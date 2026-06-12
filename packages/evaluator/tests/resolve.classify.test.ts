@@ -240,6 +240,8 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
     expect(result.blockers.length).toBeGreaterThan(0);
+    // A LATER_OF cliff over unfired events has no placeable date.
+    expect(result.cliffDate).toBeNull();
   });
 });
 
@@ -300,6 +302,8 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     ];
     const result = resolveToCore(program, ctxInput()); // ipo, c unfired
     expect(result.kind).toBe("unresolved");
+    // Neither the start nor the event cliff has fired → no cliff date.
+    expect(result.cliffDate).toBeNull();
   });
 
   it("[void, pending] → unresolved (the pending half can still vest)", () => {
@@ -471,6 +475,8 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
       period_type: "MONTHS",
       percentage: { numerator: 1, denominator: 4 },
     });
+    // Start event unfired → the cliff has a duration but no anchor to land on.
+    expect(result.cliffDate).toBeNull();
     expect(result.runtime.eventFirings ?? []).toEqual([]);
     expect(
       result.blockers.some(
@@ -489,6 +495,9 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     ];
     const result = resolveToCore(program, ctx21({ ipo: "2025-06-01" }));
     if (result.kind !== "template") throw new Error("expected template");
+    // The cliff date is the resolved start (the firing) plus the 12-month cliff,
+    // matching where compile lands the lump below.
+    expect(result.cliffDate).toBe("2026-06-01");
     const events = compile(result.template, result.totalShares, result.runtime);
     // 1-year cliff lump on start + 1yr, then 36 monthly installments.
     expect(events).toHaveLength(37);
@@ -585,6 +594,8 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
+    // The cliff's own event hasn't fired → no effective date.
+    expect(result.cliffDate).toBeNull();
   });
 
   it("fired → events with the proportional holdback lump (regression guard)", () => {
@@ -596,6 +607,8 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     if (result.kind !== "events") return;
     expect(result.reason.kind).toBe("EVENT_CLIFF");
     expect(result.blockers).toEqual([]);
+    // A fired event cliff reports its effective date (the firing itself).
+    expect(result.cliffDate).toBe("2026-06-01");
     // 17 monthly tranches fall at or before the firing → one 1,700-share lump
     // on the firing date, then 100/month.
     expect(result.installments[0]).toEqual({
