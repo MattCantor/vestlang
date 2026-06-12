@@ -14,8 +14,14 @@ import { isValidCalendarDate } from "@vestlang/utils";
 // across its statements. Vesting that expands past this is almost always a
 // fat-fingered cadence (`OVER 1000000 months EVERY 1 month`); without the bound,
 // building the array is a denial-of-service (stack overflow / OOM). The
-// evaluator enforces the same limit before it expands; see resolveToCore.
+// evaluator enforces the same limit before it expands (see resolveToCore), and
+// the linter flags it at authoring time — so the message lives in one place.
 export const MAX_INSTALLMENTS = 10_000;
+
+/** The one spelling of the over-cap error, shared by the template validator,
+ *  the evaluator's pre-expansion guard, and the linter's installment-cap rule. */
+export const installmentCapMessage = (total: number): string =>
+  `schedule expands to ${total} installments, exceeds the limit of ${MAX_INSTALLMENTS}`;
 
 export interface ValidationError {
   path: string;
@@ -190,7 +196,7 @@ export const validateVestingScheduleTemplate = (
     if (totalOccurrences > MAX_INSTALLMENTS) {
       errors.push({
         path: "statements",
-        message: `schedule expands to ${totalOccurrences} installments, exceeds the limit of ${MAX_INSTALLMENTS}`,
+        message: installmentCapMessage(totalOccurrences),
       });
     }
 

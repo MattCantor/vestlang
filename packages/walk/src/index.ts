@@ -20,6 +20,7 @@ import type {
   Condition,
   Constraint,
   Duration,
+  Program,
   ScheduleExpr,
   Statement,
   SystemAnchorTag,
@@ -188,3 +189,25 @@ export function systemAnchorOffset(
   const off = expr.offsets[0];
   return off.sign === "PLUS" ? off : undefined;
 }
+
+// How many installments a schedule expression materializes, read structurally:
+// the occurrences straight off a schedule's periodicity; a selector contributes
+// its largest arm. No resolution involved, so it's safe to ask before any dates
+// exist — which is exactly why the evaluator's cap check and the linter's
+// installment-cap rule both read it from here.
+const scheduleExprOccurrences = (e: ScheduleExpr | ChainedSchedule): number => {
+  switch (e.type) {
+    case "SCHEDULE":
+      return e.periodicity.occurrences;
+    case "SCHEDULE_EARLIER_OF":
+    case "SCHEDULE_LATER_OF":
+      return Math.max(0, ...e.items.map(scheduleExprOccurrences));
+    default:
+      return assertNever(e);
+  }
+};
+
+// Total installments a whole program materializes — the cap both the evaluator
+// (before it expands) and the linter (at authoring time) measure against.
+export const programInstallmentTotal = (program: Program): number =>
+  program.reduce((sum, s) => sum + scheduleExprOccurrences(s.expr), 0);

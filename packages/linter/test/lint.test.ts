@@ -267,6 +267,180 @@ describe("@vestlang/linter", () => {
     });
   });
 
+  describe("unsatisfiable-date-window", () => {
+    const flaggedOf = (src: string) =>
+      diagnosticsOf(src).filter(
+        (d) => d.ruleId === "unsatisfiable-date-window",
+      );
+
+    it("errors on an empty AFTER/BEFORE window (issue #141 repro)", () => {
+      const flagged = flaggedOf(`
+        VEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 48 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0]).toEqual({
+        ruleId: "unsatisfiable-date-window",
+        message:
+          "this gate's date window is empty: no date is on or after 2026-01-01 and on or before 2025-01-01",
+        severity: "error",
+        path: ["Program", 0, "expr", "vesting_start", "condition"],
+      });
+    });
+
+    it("is clean on a satisfiable window", () => {
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT board AFTER DATE 2025-01-01 AND BEFORE DATE 2025-12-31 OVER 48 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("treats equal non-strict bounds as a one-day window (clean)", () => {
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x AFTER DATE 2025-01-01 AND BEFORE DATE 2025-01-01 OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("errors when equal bounds have a strict side", () => {
+      const flagged = flaggedOf(`
+        VEST FROM EVENT x STRICTLY AFTER DATE 2025-01-01 AND BEFORE DATE 2025-01-01 OVER 4 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("error");
+    });
+
+    it("errors on adjacent days with both sides strict", () => {
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x STRICTLY AFTER DATE 2025-01-01 AND STRICTLY BEFORE DATE 2025-01-02 OVER 4 months EVERY 1 month
+        `),
+      ).toHaveLength(1);
+      // Drop one STRICTLY and the one-day window opens up.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x STRICTLY AFTER DATE 2025-01-01 AND BEFORE DATE 2025-01-02 OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("stays silent when any OR alternative is live", () => {
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x OR(AND(AFTER DATE 2026-01-01, BEFORE DATE 2025-01-01), AFTER DATE 2027-01-01) OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("errors when every OR alternative is empty", () => {
+      const flagged = flaggedOf(`
+        VEST FROM EVENT x OR(AND(AFTER DATE 2026-01-01, BEFORE DATE 2025-01-01), AND(AFTER DATE 2028-01-01, BEFORE DATE 2027-01-01)) OVER 4 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].message).toMatch(/every OR alternative/);
+    });
+
+    it("skips atoms it cannot statically date", () => {
+      // A symbolic (event) anchor on one side leaves the window open.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x AFTER EVENT y AND BEFORE DATE 2025-01-01 OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+      // A DATE carrying an offset isn't statically datable either.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x AFTER DATE 2026-01-01 + 1 month AND BEFORE DATE 2025-01-01 OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("errors when a fixed anchor date falls outside its window", () => {
+      const flagged = flaggedOf(`
+        VEST FROM DATE 2024-06-01 AFTER DATE 2026-01-01 OVER 4 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].path).toEqual(["Program", 0, "expr", "vesting_start"]);
+      expect(flagged[0].message).toBe(
+        "anchor date 2024-06-01 falls outside this gate's date window; the gate can never be satisfied",
+      );
+      // An anchor inside its own window is fine.
+      expect(
+        flaggedOf(`
+          VEST FROM DATE 2026-06-01 AFTER DATE 2026-01-01 OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("checks gated cliffs too", () => {
+      const flagged = flaggedOf(`
+        VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month CLIFF EVENT fda AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].path).toEqual([
+        "Program",
+        0,
+        "expr",
+        "cliff",
+        "condition",
+      ]);
+    });
+
+    it("surfaces through lintText", () => {
+      const flagged = lintText(
+        `VEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 48 months EVERY 1 month`,
+      ).diagnostics.filter((d) => d.ruleId === "unsatisfiable-date-window");
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].message).toBe(
+        "this gate's date window is empty: no date is on or after 2026-01-01 and on or before 2025-01-01",
+      );
+    });
+  });
+
+  describe("installment-cap", () => {
+    const flaggedOf = (src: string) =>
+      diagnosticsOf(src).filter((d) => d.ruleId === "installment-cap");
+
+    it("errors on an over-cap schedule (issue #141 repro)", () => {
+      const flagged = flaggedOf(`
+        VEST OVER 999999999 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0]).toEqual({
+        ruleId: "installment-cap",
+        message:
+          "schedule expands to 999999999 installments, exceeds the limit of 10000",
+        severity: "error",
+        path: ["Program"],
+      });
+    });
+
+    it("sums across PLUS statements", () => {
+      // Each leg is under the cap; together they clear it.
+      const flagged = flaggedOf(`
+        VEST OVER 6000 days EVERY 1 day PLUS VEST OVER 6000 days EVERY 1 day
+      `);
+      expect(flagged).toHaveLength(1);
+    });
+
+    it("a schedule selector contributes its largest arm, not the sum", () => {
+      expect(
+        flaggedOf(`
+          VEST EARLIER START OF (FROM DATE 2025-01-01 OVER 6000 days EVERY 1 day, FROM DATE 2025-06-01 OVER 6000 days EVERY 1 day)
+        `),
+      ).toEqual([]);
+    });
+
+    it("is clean exactly at the cap", () => {
+      expect(
+        flaggedOf(`
+          VEST OVER 10000 days EVERY 1 day
+        `),
+      ).toEqual([]);
+    });
+  });
+
   // A duplicate selector arm can't reach `lintProgram` — the normalizer dedupes
   // it during canonicalization, before the linter runs. So the warning is raised
   // by the normalizer itself and surfaced through `lintText`, which threads a
