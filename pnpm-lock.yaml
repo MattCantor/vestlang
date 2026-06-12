@@ -306,6 +306,9 @@ importers:
 
   packages/linter:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../core
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl

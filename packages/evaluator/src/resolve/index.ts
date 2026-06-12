@@ -5,59 +5,40 @@
 // evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
 
 import type {
-  ChainedSchedule,
   EvaluationContextInput,
   Finding,
   OCTDate,
   Program,
-  ScheduleExpr,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import {
   addPeriod,
   assertValidVestingScheduleTemplate,
+  installmentCapMessage,
   MAX_INSTALLMENTS,
 } from "@vestlang/core";
-import { assertNever, classifyAllocation, fracSum } from "@vestlang/utils";
+import { programInstallmentTotal } from "@vestlang/walk";
+import { classifyAllocation, fracSum } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
-// How many installments a statement will materialize is structural — it's the
-// `occurrences` read straight off the periodicity, no resolution required (a
-// schedule-level selector contributes its largest arm). Reading it this way
-// matters: resolution steps the chain cursor, which for an over-cap schedule
-// runs the date past year 9999 and throws a date-range error first — so the cap
-// has to be checked *before* any resolution, or the wrong error wins.
-const scheduleExprOccurrences = (e: ScheduleExpr | ChainedSchedule): number => {
-  switch (e.type) {
-    case "SCHEDULE":
-      return e.periodicity.occurrences;
-    case "SCHEDULE_EARLIER_OF":
-    case "SCHEDULE_LATER_OF":
-      return Math.max(0, ...e.items.map(scheduleExprOccurrences));
-    default:
-      return assertNever(e);
-  }
-};
-
 /** Bound the installments a program will materialize, before any resolution or
- *  per-occurrence build. The same structural measure is used by `resolveToCore`
- *  and by the per-statement MCP tools (`vestlang_evaluate` family, which map
- *  over statements separately and so wouldn't otherwise see a program that is
- *  individually-small but collectively huge), so all the evaluate tools agree on
- *  what they reject. */
+ *  per-occurrence build. The count is structural (`programInstallmentTotal` from
+ *  @vestlang/walk — occurrences off the periodicity, a selector's largest arm),
+ *  which is why it's safe to ask here: resolution steps the chain cursor, and for
+ *  an over-cap schedule that runs the date past year 9999 and throws a date-range
+ *  error first — so the cap has to be checked *before* any resolution, or the
+ *  wrong error wins. The same measure backs `resolveToCore` and the per-statement
+ *  MCP tools (`vestlang_evaluate` family, which map over statements separately and
+ *  so wouldn't otherwise see a program that is individually-small but collectively
+ *  huge), so all the evaluate tools agree on what they reject. */
 export const assertProgramInstallmentCap = (program: Program): void => {
-  const total = program.reduce(
-    (sum, s) => sum + scheduleExprOccurrences(s.expr),
-    0,
-  );
+  const total = programInstallmentTotal(program);
   if (total > MAX_INSTALLMENTS) {
-    throw new Error(
-      `schedule expands to ${total} installments, exceeds the limit of ${MAX_INSTALLMENTS}`,
-    );
+    throw new Error(installmentCapMessage(total));
   }
 };
 

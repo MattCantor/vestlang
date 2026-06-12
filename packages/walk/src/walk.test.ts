@@ -1,7 +1,14 @@
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { describe, expect, it } from "vitest";
-import { forEachChild, some, walk, type AstNode, type Path } from "./index.js";
+import {
+  forEachChild,
+  programInstallmentTotal,
+  some,
+  walk,
+  type AstNode,
+  type Path,
+} from "./index.js";
 
 // Parse a snippet and run it through the normalizer — forEachChild only knows
 // the normalized shape, which is what every real consumer feeds it.
@@ -150,5 +157,43 @@ describe("some", () => {
       "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month",
     )[0];
     expect(some(stmt, (n) => n.type === "EVENT")).toBe(false);
+  });
+});
+
+describe("programInstallmentTotal", () => {
+  it("reads occurrences off a plain schedule", () => {
+    expect(
+      programInstallmentTotal(prog("VEST OVER 48 months EVERY 1 month")),
+    ).toBe(48);
+  });
+
+  it("sums across PLUS statements", () => {
+    expect(
+      programInstallmentTotal(
+        prog(
+          "VEST OVER 48 months EVERY 1 month PLUS VEST OVER 12 months EVERY 1 month",
+        ),
+      ),
+    ).toBe(60);
+  });
+
+  it("sums a THEN chain's tail into the total", () => {
+    expect(
+      programInstallmentTotal(
+        prog(
+          "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month THEN VEST OVER 12 months EVERY 1 month",
+        ),
+      ),
+    ).toBe(60);
+  });
+
+  it("takes a schedule selector's largest arm, not the sum", () => {
+    expect(
+      programInstallmentTotal(
+        prog(
+          "VEST EARLIER START OF (FROM DATE 2025-01-01 OVER 48 months EVERY 1 month, FROM DATE 2025-06-01 OVER 12 months EVERY 1 month)",
+        ),
+      ),
+    ).toBe(48);
   });
 });
