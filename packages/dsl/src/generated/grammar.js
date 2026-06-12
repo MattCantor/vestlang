@@ -462,7 +462,7 @@ function peg$parse(input, options) {
     };
   }
   function peg$f48() {
-    error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF(...)` / `LATER START OF(...)`.")
+    error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF (...)` / `LATER START OF (...)`.")
   }
   let peg$currPos = options.peg$currPos | 0;
   let peg$savedPos = peg$currPos;

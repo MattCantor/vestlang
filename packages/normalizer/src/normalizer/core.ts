@@ -1,4 +1,4 @@
-import { NormalizeAndSort, type FindingSink } from "./utils.js";
+import { normalizeAndDedupe, type FindingSink } from "./utils.js";
 import { AtomCondition, Condition, VestingNode } from "@vestlang/types";
 
 /* ------------------------
@@ -29,8 +29,8 @@ export function normalizeVestingNode(
 /**
  * Normalize any condition node:
  * - Normalize children
- * - Flatten same-op boolean groups
- * - Sort & dedupe items for determinism
+ * - Flatten same-op boolean groups in place (authored order preserved)
+ * - Dedupe items, keeping the first occurrence
  * - Collapse singletons: AND(x) -> x, OR(x) -> x
  */
 function normalizeCondition(node: Condition, report?: FindingSink): Condition {
@@ -41,11 +41,11 @@ function normalizeCondition(node: Condition, report?: FindingSink): Condition {
     case "OR": {
       // A bare `a OR b AND c` the parser flagged as mixed-infix: report how the
       // precedence grouped it, then drop the transient markers (`grouped`,
-      // `mixedInfix`) so the canonical output is clean — NormalizeAndSort spreads
+      // `mixedInfix`) so the canonical output is clean — normalizeAndDedupe spreads
       // the node, so they'd otherwise leak onto the normalized tree.
       const { mixedInfix, grouped: _grouped, ...rest } = node;
       if (mixedInfix) report?.({ kind: "mixed-boolean", loc: mixedInfix });
-      return NormalizeAndSort(rest, (c) => normalizeCondition(c, report));
+      return normalizeAndDedupe(rest, (c) => normalizeCondition(c, report));
     }
     default:
       throw new Error(

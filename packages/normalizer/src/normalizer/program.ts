@@ -1,5 +1,5 @@
 import { normalizeVestingNode } from "./core.js";
-import { NormalizeAndSort, type FindingSink } from "./utils.js";
+import { normalizeAndDedupe, type FindingSink } from "./utils.js";
 import {
   ChainedSchedule,
   Duration,
@@ -77,7 +77,7 @@ function normalizeScheduleExpr(
       return normalizeSchedule(e, report);
     case "SCHEDULE_EARLIER_OF":
     case "SCHEDULE_LATER_OF":
-      return NormalizeAndSort(
+      return normalizeAndDedupe(
         e,
         (x) => normalizeScheduleExpr(x, report),
         report,
@@ -128,12 +128,12 @@ function normalizeNode(
     case "NODE_EARLIER_OF": {
       // Each arm normalizes under the same anchor as the selector. The wrappers
       // return slot-narrowed exprs; widen back to VestingNodeExpr here so the two
-      // branches share one return type (NormalizeAndSort infers a single arm type).
+      // branches share one return type (normalizeAndDedupe infers a single arm type).
       const normalizeArm = (x: VestingNodeExpr): VestingNodeExpr =>
         anchor === "GRANT_DATE"
           ? normalizeVestingStart(x, report)
           : normalizeCliff(x, report);
-      return NormalizeAndSort(c, normalizeArm, report);
+      return normalizeAndDedupe(c, normalizeArm, report);
     }
     case "NODE":
       return normalizeVestingNodeExpr(c, report);
@@ -189,7 +189,7 @@ function normalizeVestingNodeExpr(
       return normalizeVestingNode(e, report);
     case "NODE_EARLIER_OF":
     case "NODE_LATER_OF":
-      return NormalizeAndSort(
+      return normalizeAndDedupe(
         e,
         (x) => normalizeVestingNodeExpr(x, report),
         report,

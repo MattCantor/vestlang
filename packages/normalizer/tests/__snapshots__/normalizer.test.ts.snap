@@ -19,14 +19,6 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
         "items": [
           {
             "base": {
-              "type": "DATE",
-              "value": "2025-01-01",
-            },
-            "offsets": [],
-            "type": "NODE",
-          },
-          {
-            "base": {
               "type": "EVENT",
               "value": "x",
             },
@@ -38,6 +30,14 @@ exports[`normalize is idempotent > normalize(normalize(parse(src))) === normaliz
                 "value": 1,
               },
             ],
+            "type": "NODE",
+          },
+          {
+            "base": {
+              "type": "DATE",
+              "value": "2025-01-01",
+            },
+            "offsets": [],
             "type": "NODE",
           },
         ],

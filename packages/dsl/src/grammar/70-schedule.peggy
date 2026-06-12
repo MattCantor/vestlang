@@ -61,5 +61,5 @@ ScheduleSelector
 // keyword instead of failing with a bare "unexpected token".
 ScheduleSelectorHint
   = ("EARLIER"i / "LATER"i) _ "OF"i _ "(" {
-      error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF(...)` / `LATER START OF(...)`.")
+      error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF (...)` / `LATER START OF (...)`.")
     }

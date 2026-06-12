@@ -71,10 +71,12 @@ function cleanLoc(loc: SourceLocation): SourceLocation {
  * Normalize a parsed program for deterministic shape and CNF-friendly structure.
  *
  * ## Post-conditions / Invariants
- * - **Selectors (EARLIER_OF/LATER_OF)**: flattened, sorted, deduped.
+ * - **Selectors (EARLIER_OF/LATER_OF)**: flattened and deduped (first
+ *   occurrence wins); authored operand order preserved.
  * - **Conditions**:
  *   - Only `ATOM`, `AND`, `OR` forms.
- *   - Boolean nodes flattened, singleton-collapsed, sorted, deduped.
+ *   - Boolean nodes flattened, singleton-collapsed, deduped (first occurrence
+ *     wins); authored order preserved.
  *
  * Idempotent: running `normalizeProgram` multiple times yields the same AST.
  *
@@ -82,7 +84,7 @@ function cleanLoc(loc: SourceLocation): SourceLocation {
  * traversal, for two reasons. It runs on the *raw* AST — vesting starts may be
  * null, a cliff may be a bare `Duration` — and `walk` only understands the
  * normalized shape this function produces. And it doesn't merely observe the
- * tree, it rewrites it (resolving starts, flattening/sorting/deduping selectors
+ * tree, it rewrites it (resolving starts, flattening/deduping selectors
  * and bools), which a read-only walk can't express. `walk` is for the consumers
  * downstream of here.
  *

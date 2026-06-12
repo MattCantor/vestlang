@@ -99,7 +99,7 @@ function toDocScheduleExpr(e: ScheduleExpr): Doc {
     case "SCHEDULE_LATER_OF":
     case "SCHEDULE_EARLIER_OF":
       return parenGroup(
-        kw(selectorKeyword(e.type)),
+        [kw(selectorKeyword(e.type)), " "],
         e.items.map(toDocScheduleExpr),
       );
   }
@@ -164,7 +164,7 @@ export function toDocVestingNodeExpr(node: VestingNodeExpr): Doc {
     case "NODE_EARLIER_OF":
     case "NODE_LATER_OF":
       return parenGroup(
-        kw(selectorKeyword(node.type)),
+        [kw(selectorKeyword(node.type)), " "],
         node.items.map(toDocVestingNodeExpr),
       );
     default:
@@ -275,6 +275,10 @@ function unitFor(count: number, type: "MONTHS" | "DAYS"): string {
 /**
  * `KW(a, b)` when it fits; open paren, one item per indented line, close paren
  * when it doesn't. Its own group, so it breaks independently of its context.
+ *
+ * The `keyword` carries its own trailing space (or lack of one): selectors pass
+ * `EARLIER OF ` / `LATER OF ` with a space, the canonical `EARLIER OF (` form,
+ * while the condition function form (`AND(`, `OR(`) stays tight.
  */
 function parenGroup(keyword: Doc, items: Doc[]): Doc {
   return group([

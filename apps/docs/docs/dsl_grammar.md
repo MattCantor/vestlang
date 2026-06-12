@@ -36,20 +36,20 @@ A whole program collapses to a single evaluated schedule — see [Evaluation](./
 ## Statements
 
 ```
-[ <amount> ] VEST <schedule-expr>
+<statement>      =  [ <amount> ] VEST <schedule-expr>
+<schedule-expr>  =  <singleton> | <selector>
 ```
 
-A `<schedule-expr>` is either a **singleton** or a **selector** over schedule-exprs.
+`VEST` belongs to the statement, not to the schedule expression: it appears exactly once, before the `<schedule-expr>`, and never inside one. In particular, selector operands are bare singletons that do **not** repeat `VEST`.
 
 ### Singleton
 
 A singleton encodes the ingredients of a vesting schedule: where it starts, how many installments, their cadence, and an optional cliff.
 
 ```
-VEST
-    [ FROM  <anchor> ]
-    [ OVER  <duration> EVERY <duration> ]
-    [ CLIFF <anchor> ]
+<singleton>  =  [ FROM  <anchor> ]
+                [ OVER  <duration> EVERY <duration> ]
+                [ CLIFF <anchor> ]
 ```
 
 - **`FROM`** sets the vesting start. Omitted → the grant date. (A `THEN` segment takes no `FROM`.)
@@ -59,14 +59,19 @@ VEST
 ### Selector
 
 ```
-( EARLIER START OF | LATER START OF ) (
-    <schedule-expr>,
-    <schedule-expr>
-    [, <schedule-expr> … ]
-)
+<selector>  =  ( EARLIER START OF | LATER START OF ) ( <schedule-expr>, <schedule-expr> [, <schedule-expr> … ] )
 ```
 
 The selector compares the operand schedules by their **vesting start** and keeps the whole winning schedule — `EARLIER START OF` the one that starts first, `LATER START OF` the one that starts last; the losing schedule (its cadence, cliff, and amount) is dropped. `START` names that comparison key, distinguishing this schedule-level selector from the anchor-level `EARLIER OF` / `LATER OF` ([below](#selectors-over-anchors)) that chooses between bare anchors inside `FROM` / `CLIFF`.
+
+Operands are bare schedule expressions — `FROM …`, never `VEST FROM …`:
+
+```vest
+VEST EARLIER START OF (
+  FROM EVENT ipo OVER 12 months EVERY 1 month,
+  FROM DATE 2027-01-01 OVER 12 months EVERY 1 month
+)
+```
 
 ## Anchors
 

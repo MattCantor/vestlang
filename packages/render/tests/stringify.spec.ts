@@ -205,14 +205,14 @@ describe("constraints", () => {
 describe("selectors", () => {
   it("stringifies LATER OF for vesting start", () => {
     const result = roundTrip("VEST FROM LATER OF(EVENT a, EVENT b)");
-    expect(result).toBe("VEST FROM LATER OF(EVENT a, EVENT b)");
+    expect(result).toBe("VEST FROM LATER OF (EVENT a, EVENT b)");
   });
 
   it("stringifies EARLIER OF for vesting start", () => {
     const result = roundTrip(
       "VEST FROM EARLIER OF(DATE 2025-01-01, EVENT start)",
     );
-    expect(result).toBe("VEST FROM EARLIER OF(DATE 2025-01-01, EVENT start)");
+    expect(result).toBe("VEST FROM EARLIER OF (DATE 2025-01-01, EVENT start)");
   });
 
   it("stringifies nested selectors (flattened after normalization)", () => {
@@ -223,13 +223,39 @@ describe("selectors", () => {
       )
     `);
     // After normalization, nested LATER OF is flattened
-    expect(result).toBe("VEST FROM LATER OF(EVENT a, EVENT b, EVENT c)");
+    expect(result).toBe("VEST FROM LATER OF (EVENT a, EVENT b, EVENT c)");
   });
 
   it("collapses duplicate selector items", () => {
     const result = roundTrip("VEST FROM LATER OF(EVENT a, EVENT a)");
     // After normalization, duplicates are removed, collapsing to singleton
     expect(result).toBe("VEST FROM EVENT a");
+  });
+});
+
+/* ------------------------
+ * Round-trip fidelity (#142)
+ * ------------------------ */
+
+describe("round-trip fidelity (#142)", () => {
+  it("compile → stringify → parse preserves authored selector operand order byte-for-byte", () => {
+    const src =
+      "VEST FROM EARLIER OF (EVENT zebra, EVENT apple, DATE 2025-06-01, EVENT mango) OVER 12 months EVERY 1 month";
+    // The compiled form no longer reshuffles operands, so the stringified
+    // output is byte-identical to the source.
+    expect(roundTrip(src)).toBe(src);
+    // And re-normalizing that output reproduces the same AST.
+    expect(norm(roundTrip(src))).toEqual(norm(src));
+  });
+
+  it("flattens nested same-op operands in place without sorting", () => {
+    const result = roundTrip(
+      "VEST FROM EARLIER OF (EVENT e2, EARLIER OF (EVENT e10, EVENT e1), EVENT e11)",
+    );
+    // The nested arm splices in where it sat; nothing gets string-sorted.
+    expect(result).toBe(
+      "VEST FROM EARLIER OF (EVENT e2, EVENT e10, EVENT e1, EVENT e11)",
+    );
   });
 });
 
@@ -246,7 +272,7 @@ describe("schedule selectors", () => {
       )
     `);
     expect(result).toBe(
-      "VEST LATER START OF(FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
+      "VEST LATER START OF (FROM EVENT a OVER 12 months EVERY 1 month, FROM EVENT b OVER 24 months EVERY 1 month)",
     );
   });
 });
