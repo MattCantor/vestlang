@@ -448,6 +448,123 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
   });
 });
 
+describe("interchange — a pending-head THEN tail's cliff decides the reason (R2-B3)", () => {
+  const monthly12: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 12,
+  };
+  // A THEN tail has no start of its own; the chaining walk injects it.
+  const tail = (periodicity: VestingPeriod): Statement => ({
+    type: "STATEMENT",
+    chained: true,
+    amount: portion(1, 2),
+    expr: { type: "SCHEDULE", vesting_start: null, periodicity },
+  });
+  const chain = (tailPeriodicity: VestingPeriod): Program => [
+    stmt(
+      portion(1, 2),
+      makeSingletonNode(makeVestingBaseEvent("ipo")),
+      monthly12,
+    ),
+    tail(tailPeriodicity),
+  ];
+
+  // The headline: the tail's event cliff is a permanent unstorability (no schema
+  // home), which must win over the temporary "tail can't be dated yet".
+  it("a bare event cliff on the tail reports EVENT_CLIFF, not EVENT_CHAINED_TAIL", () => {
+    const [out] = evaluateProgram(
+      chain({
+        ...monthly12,
+        cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
+      }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "fda",
+    });
+  });
+
+  it("the tail event-cliff verdict is firing-invariant", () => {
+    const program = chain({
+      ...monthly12,
+      cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
+    });
+    const unfired = evaluateProgram(program, ctxInput())[0].interchange;
+    const fired = evaluateProgram(
+      program,
+      ctxInput({ events: { ipo: "2026-06-01" } }),
+    )[0].interchange;
+    expect(fired).toEqual(unfired);
+  });
+
+  // A grid-unit duration cliff lowers anchor-free to a storable time-based
+  // cliff (6/12 regardless of when ipo fires), so the undated tail stays the
+  // obstacle.
+  it("a grid-unit duration cliff on the tail keeps EVENT_CHAINED_TAIL", () => {
+    const [out] = evaluateProgram(
+      chain({
+        ...monthly12,
+        cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(6, "MONTHS", "PLUS"),
+        ]),
+      }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CHAINED_TAIL",
+      eventId: "ipo",
+    });
+  });
+
+  // A months cliff over a days grid can't be placed until the firing is known —
+  // the cliff cause wins over the tail one, same as the non-chained analog above.
+  it("a cross-unit duration cliff on the tail reports DEFERRED_CLIFF", () => {
+    const [out] = evaluateProgram(
+      chain({
+        type: "DAYS",
+        length: 30,
+        occurrences: 12,
+        cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+      }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
+
+  // A gated duration cliff routes through the gate's verdict (UNRESOLVED), so
+  // the storable reason is DEFERRED_CLIFF. (A gated *event* cliff lands here too
+  // and loses its EVENT identity — that's #219, chained and non-chained alike;
+  // deliberately not pinned here.)
+  it("a gated duration cliff on the tail reports DEFERRED_CLIFF", () => {
+    const gatedCliff = makeGatedNode(
+      makeVestingBaseVestingStart(),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(6, "MONTHS", "PLUS"),
+      ]),
+      false,
+      [makeDuration(6, "MONTHS", "PLUS")],
+    );
+    const [out] = evaluateProgram(
+      chain({ ...monthly12, cliff: gatedCliff }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
+});
+
 describe("interchange — allocation is its own axis", () => {
   // Over-allocation and impossibility are two separate authoring mistakes; one
   // shouldn't hide the other. A program that is both over-allocated and impossible

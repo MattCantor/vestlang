@@ -58,10 +58,10 @@ export const unresolvedInstallments = (
   // scoped to the cliff's own contribution, though — the head is a statement
   // in the same program and reports its start blockers itself, so restating
   // them on every tail would duplicate each pending-head blocker in the
-  // published list. (Today the walk hands a pending tail no cliff record, so
-  // the cliff contribution is empty; it's read off the record anyway, so a
-  // tail that later carries a real lowered cliff discloses it with no change
-  // here.)
+  // published list. (The walk lowers a pending tail's authored cliff on the
+  // deferred path, so a pending or dead gate's blockers arrive here through
+  // `cliffBlockers`; a bare event cliff carries no blockers of its own — its
+  // identity rides on the record for the storable-reason scan instead.)
   if (stmt.chained && r.start.state === "UNRESOLVED") {
     const { installments } = makeUnresolvedVestingStartSchedule(
       [statementQuantity],
