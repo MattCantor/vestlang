@@ -314,3 +314,23 @@ describe("summary — pending template portions (R2-B1)", () => {
     expect(unresolvedAmount).toBe(1200);
   });
 });
+
+// R2-B2: a THEN tail behind a pending head must carry its share claim as a
+// symbolic installment — before the fix, only the head's half was counted.
+describe("summary — pending THEN tail share claim (R2-B2)", () => {
+  it("a THEN tail behind an unfired head keeps its claim in total_unvested", () => {
+    // The #217 repro: 2,400 granted, both halves waiting on ipo; before the fix
+    // only the head's 1,200 was counted anywhere.
+    const result = runProgram(
+      "1/2 VEST FROM EVENT ipo OVER 12 months EVERY 1 month " +
+        "THEN 1/2 VEST OVER 12 months EVERY 1 month",
+      ctx({ grantQuantity: 2400, asOf: "2026-01-01" }),
+    );
+    expect(result.unresolved).toBe(2400);
+    const s = computeSummary(result, 2400);
+    expect(s.total_vested).toBe(0);
+    expect(s.total_unvested).toBe(2400);
+    expect(s.percent_vested).toBe(0);
+    expect(s.fully_vested_date).toBeNull();
+  });
+});

@@ -29,22 +29,15 @@ const EMPTY: InstallmentSet = { installments: [], blockers: [] };
  * Symbolic installments + blockers for one statement, read off its resolution
  * record. A fully-resolved statement yields no installments (EMPTY); it isn't
  * part of the unresolved verdict — its dated tranches come from core.compile.
+ * A THEN tail with a concrete handoff date reads like any self-anchored
+ * statement (its own cliff can still gate it); still pending, it renders as
+ * the scoped lump below.
  */
 export const unresolvedInstallments = (
   r: StmtResolution,
   stmt: Statement,
   ctx: EvaluationContext,
 ): InstallmentSet => {
-  // A chained THEN tail is welcome once the chaining walk has handed it a
-  // concrete start — from there it reads like any self-anchored statement (its
-  // own cliff can still gate it). A tail still waiting on its head has nothing
-  // to render and is the caller's job to report; reaching here means the
-  // routing broke.
-  if (stmt.chained && r.start.state !== "RESOLVED") {
-    throw new Error(
-      "unresolvedInstallments received a chained THEN tail with no handoff date; a pending tail is reported from its resolution, not rendered here.",
-    );
-  }
   const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
 
   // A contradictory start kills the whole portion.
@@ -57,6 +50,25 @@ export const unresolvedInstallments = (
     r.cliff.state === "UNRESOLVED" || r.cliff.state === "IMPOSSIBLE"
       ? r.cliff.blockers
       : [];
+
+  // A THEN tail behind a pending head. The chaining walk injected this start
+  // (state UNRESOLVED, carrying the head's own blockers), so the tail's share
+  // claim renders like any pending start: one undated lump whose `unresolved`
+  // string names what the chain is waiting on. The returned blocker list is
+  // scoped to the cliff's own contribution, though — the head is a statement
+  // in the same program and reports its start blockers itself, so restating
+  // them on every tail would duplicate each pending-head blocker in the
+  // published list. (Today the walk hands a pending tail no cliff record, so
+  // the cliff contribution is empty; it's read off the record anyway, so a
+  // tail that later carries a real lowered cliff discloses it with no change
+  // here.)
+  if (stmt.chained && r.start.state === "UNRESOLVED") {
+    const { installments } = makeUnresolvedVestingStartSchedule(
+      [statementQuantity],
+      [...r.start.blockers, ...cliffBlockers],
+    );
+    return { installments, blockers: cliffBlockers };
+  }
 
   // A start with no date yet. A combinator that partially settled (a LATER OF
   // whose later arm we know) keeps its cadence, so its tranches lay out as

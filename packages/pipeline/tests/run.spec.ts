@@ -153,3 +153,20 @@ describe("runVestedBetween", () => {
     }
   });
 });
+
+// R2-B2: a pending-head THEN chain's breakdown must carry the whole chain's
+// claim, not just the head's share.
+describe("runEvaluate — pending THEN chain breakdown (R2-B2)", () => {
+  it("a pending-head THEN chain's breakdown entry carries the whole chain's claim", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM EVENT ipo OVER 12 months EVERY 1 month " +
+        "THEN 1/2 VEST OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 2400 },
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.breakdown).toHaveLength(1);
+      expect(sumInstallments(r.breakdown[0].installments)).toBe(2400);
+    }
+  });
+});
