@@ -76,10 +76,16 @@ export function evaluateProgramWithRecovery(
   // This is what licenses flipping the verdict events-only → template: not just
   // "the inferred DSL fits the stream" but "the rescued template reproduces the
   // original projection exactly." Anything but a clean zero and we don't rescue.
-  const residualError = projectionResidual(
-    dated,
-    published.resolution.installments,
+  //
+  // The rescued template's installments may now carry UNRESOLVED entries (the
+  // pending-installments channel). Behaviorally a no-op here — the recovery gate
+  // only admits firing-invariant programs, so no pending portions can appear — but
+  // the type no longer guarantees it, so we filter to RESOLVED to keep the call
+  // well-typed.
+  const rescuedDated = published.resolution.installments.filter(
+    (i): i is ResolvedInstallment => i.state === "RESOLVED",
   );
+  const residualError = projectionResidual(dated, rescuedDated);
   if (residualError !== 0) return noRescue;
 
   return {

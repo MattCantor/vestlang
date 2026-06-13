@@ -19,6 +19,7 @@ import type {
   NonTemplateReason,
   OCTDate,
   SourceMap,
+  UnresolvedInstallment,
 } from "@vestlang/types";
 
 export type ResolveVerdict =
@@ -34,6 +35,11 @@ export type ResolveVerdict =
       // combinators). Advisory under a `template` verdict; the program is a valid
       // template regardless.
       blockers: Blocker[];
+      // Symbolic UNRESOLVED installments for the pending EVENT-based statements
+      // (PENDING_EVENT / SYNTHETIC_EVENT starts) — the share claims core.compile
+      // will skip because there's no firing yet. Parallels the events arm's
+      // symbolic ride-along; empty when every statement is dated.
+      pendingInstallments: UnresolvedInstallment[];
     }
   | {
       kind: "events";

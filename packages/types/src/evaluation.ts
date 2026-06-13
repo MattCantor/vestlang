@@ -166,7 +166,12 @@ export type EvaluatedScheduleVerdict =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       sourceMap: SourceMap;
-      installments: ResolvedInstallment[];
+      // Mostly dated (compiled) tranches, but a pending EVENT-based statement
+      // (unfired atomic event, or an unsettled synthetic combinator) keeps its
+      // share claim here as symbolic UNRESOLVED installments — the same
+      // mixed-stream rule as the events-only arm. All RESOLVED when every
+      // statement has a known start.
+      installments: (ResolvedInstallment | UnresolvedInstallment)[];
       blockers: Blocker[];
     }
   | {
