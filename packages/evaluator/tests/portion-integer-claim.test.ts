@@ -55,9 +55,10 @@ describe("non-divisible PORTION in the symbolic arm", () => {
     }
   });
 
-  // floor(100 × 1/3) = 33, matching what the template arm would tally for the
-  // same statement — the two arms agree on a statement's integer claim.
-  it("tallies an integer as-of unresolved total (3 × floor(100/3) = 99)", () => {
+  // The per-statement floor (33 × 3 = 99) is superseded by the program-wide
+  // cumulative claim (R2-B20) — the tally now matches what the allocator
+  // delivers once a/b/c fire.
+  it("tallies the telescoped as-of unresolved total (100, not 3 × floor = 99)", () => {
     const program = normalizeProgram(
       parse(
         "1/3 VEST FROM EVENT a OVER 12 months EVERY 1 month " +
@@ -74,6 +75,6 @@ describe("non-divisible PORTION in the symbolic arm", () => {
     });
 
     expect(isInt(result.unresolved)).toBe(true);
-    expect(result.unresolved).toBe(99);
+    expect(result.unresolved).toBe(100);
   });
 });

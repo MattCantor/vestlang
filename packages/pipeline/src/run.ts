@@ -56,7 +56,12 @@ export type WindowView = {
 // chain, whose segments evaluate together (a tail has no start without its head)
 // and so report as one entry. No verdict — a clause has no storable schedule of
 // its own (the grant stores one template). This is for attribution: which clause
-// produced what, and which is still waiting on something.
+// produced what, and which is still waiting on something. Each clause is its own
+// evaluation against the whole grant, so floor rounding telescopes only within a
+// clause — on non-divisible portions the breakdown's amounts can differ from the
+// collapsed schedule's by a share (1/3 PLUS 2/3 of 100 reads 33 + 66 against a
+// collapsed 100). The collapsed schedule is the authority; the breakdown explains,
+// it doesn't reconcile.
 export type ClauseBreakdown = Pick<ScheduleView, "installments" | "blockers">;
 
 // Attribute the program to its clause-groups. A second resolution pass, separate

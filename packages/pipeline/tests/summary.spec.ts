@@ -335,6 +335,58 @@ describe("summary — pending THEN tail share claim (R2-B2)", () => {
   });
 });
 
+// R2-B20: symbolic claims draw from one program-wide cumulative, so the as-of
+// roll-up telescopes to what the allocator will deliver — not a sum of
+// independent per-statement floors.
+describe("summary — symbolic claims telescope program-wide (R2-B20)", () => {
+  const thirds =
+    "1/3 VEST FROM EVENT a OVER 1 month EVERY 1 month " +
+    "PLUS 1/3 VEST FROM EVENT b OVER 1 month EVERY 1 month " +
+    "PLUS 1/3 VEST FROM EVENT c OVER 1 month EVERY 1 month";
+
+  it("three pending thirds of 100 tally 100 unresolved, not 99", () => {
+    const r = runAsOf(
+      thirds,
+      { grant_date: "2024-01-01", grant_quantity: 100, events: {} },
+      "2026-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.unresolved).toBe(100);
+    expect(r.summary.total_unvested).toBe(100);
+    expect(r.summary.total_vested).toBe(0);
+  });
+
+  it("the pending-side total is the delivered total once the events fire", () => {
+    const r = runAsOf(
+      thirds,
+      {
+        grant_date: "2024-01-01",
+        grant_quantity: 100,
+        events: { a: "2024-03-10", b: "2024-03-10", c: "2024-03-10" },
+      },
+      "2026-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.total_vested).toBe(100);
+    expect(r.unresolved).toBe(0);
+  });
+
+  it("mixed dated + pending conserves: 66 vested + 34 pending of 100", () => {
+    const r = runAsOf(
+      "1/3 VEST FROM EVENT a OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 2 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 100, events: {} },
+      "2026-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.total_vested).toBe(66);
+    expect(r.unresolved).toBe(34);
+    expect(r.summary.total_vested + r.summary.total_unvested).toBe(100);
+  });
+});
+
 // R2-B7: QUANTITY claims on the symbolic side cap at the grant, so the as-of
 // roll-up can no longer report more unvested shares than the grant has — or
 // any at all on a zero-share grant.

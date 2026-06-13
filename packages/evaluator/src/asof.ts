@@ -7,7 +7,8 @@ import {
 } from "@vestlang/types";
 import { evaluateProgram, evaluateStatement } from "./evaluate/index.js";
 import { assertProgramInstallmentCap } from "./resolve/index.js";
-import { amountToQuantify, createEvaluationContext, prepare } from "./utils.js";
+import { createEvaluationContext, prepare } from "./utils.js";
+import { amountToFraction, claimAllocator } from "./claims.js";
 
 export interface VestedResult {
   vested: Installment[];
@@ -91,9 +92,12 @@ export function evaluateProgramAsOf(
   const ctx = createEvaluationContext(ctx_input);
   const [schedule] = evaluateProgram(program, ctx_input);
   // If nothing got scheduled, every share the program allocates is still
-  // unresolved — sum each statement's claim on the grant.
+  // unresolved. One cursor across the whole program — the same telescoping the
+  // symbolic lumps use — so this is min(floor(grant × Σ fractions), grant),
+  // never a sum of independent per-statement floors.
+  const draw = claimAllocator(ctx.grantQuantity);
   const programQuantity = program.reduce(
-    (n, s) => n + amountToQuantify(s.amount, ctx.grantQuantity),
+    (n, s) => n + draw(amountToFraction(s.amount, ctx.grantQuantity)),
     0,
   );
   return {
