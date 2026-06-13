@@ -233,8 +233,9 @@ export const lowerCliff = (
 };
 
 /**
- * Lower a cliff for a *deferred* start — a pending atomic event or a synthetic
- * combinator event — where there is no concrete anchor date to resolve against.
+ * Lower a cliff for a *deferred* start — a pending atomic event, a synthetic
+ * combinator event, or a THEN tail whose chain head is still pending — where
+ * there is no concrete anchor date to resolve against.
  *
  * Only a `vestingStart`-relative duration cliff in the grid's own unit is
  * derivable anchor-free: `length`/`period_type` are the offset itself, and the

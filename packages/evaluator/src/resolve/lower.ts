@@ -411,12 +411,22 @@ export const resolveStatements = (
       if (anchor.kind === "PENDING") {
         // The head's event hasn't fired, so there's no handoff date. The tail is
         // unresolved on that event; later tails in the same chain stay pending
-        // too, so we leave the anchor untouched.
+        // too, so we leave the anchor untouched. The tail's authored cliff still
+        // lowers — on the deferred path, since there's no anchor to measure from —
+        // exactly as a non-chained pending start's does: an event cliff keeps its
+        // EVENT identity for the storable-reason scan, and a gated cliff keeps its
+        // gate's blockers on the record for disclosure.
         out.push({
           percentage,
           periodicity,
           start: { state: "UNRESOLVED", blockers: anchor.blockers },
-          cliff: { state: "NONE" },
+          cliff: lowerDeferredCliff(
+            p.cliff,
+            p.type,
+            p.length,
+            p.occurrences,
+            ctx,
+          ),
           chained: true,
         });
         continue;

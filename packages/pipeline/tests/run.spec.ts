@@ -154,6 +154,25 @@ describe("runVestedBetween", () => {
   });
 });
 
+// R2-B3: a pending-head chain with a tail event cliff must report the cliff
+// (permanent — no schema home), not the chain (temporary — undated until firing).
+describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3)", () => {
+  it("names the cliff's event in the storable reason", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM EVENT ipo OVER 12 months EVERY 1 month " +
+        "THEN 1/2 VEST OVER 12 months EVERY 1 month CLIFF EVENT fda",
+      { grant_date: "2025-01-01", grant_quantity: 2400 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.interchange.status).toBe("unrepresentable");
+    if (r.view.interchange.status !== "unrepresentable") return;
+    expect(r.view.interchange.reason).toBe(
+      'Event-anchored cliff on "fda" has no template form.',
+    );
+  });
+});
+
 // R2-B2: a pending-head THEN chain's breakdown must carry the whole chain's
 // claim, not just the head's share.
 describe("runEvaluate — pending THEN chain breakdown (R2-B2)", () => {

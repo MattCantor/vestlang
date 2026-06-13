@@ -35,14 +35,16 @@ import { classify } from "./classify.js";
  *                        for it at all (kept firing-invariant: blind to firings an
  *                        event cliff always reads unfired, so it always lands here).
  *                        Reported the same whether the start resolved or is itself
- *                        pending: a pending start lowers its bare event cliff to the
- *                        EVENT record too, so this scan sees it either way.
+ *                        pending: a pending start — and a THEN tail behind a pending
+ *                        head — lowers its bare event cliff to the EVENT record too,
+ *                        so this scan sees it any of those ways.
  *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
  *                        with no cliff anywhere — the tail just can't be dated yet.
  *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
  *
  * The cliff causes win over the tail one: a chained tail behind a pending head can
- * coexist with a cliff elsewhere, and the cliff is the harder constraint to act on.
+ * coexist with a cliff elsewhere — or carry one itself — and the cliff is the harder
+ * constraint to act on.
  * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
  */
 const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {

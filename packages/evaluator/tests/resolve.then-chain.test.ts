@@ -27,6 +27,8 @@ import {
   makeVestingBaseEvent,
   makeDuration,
   makeVestingBaseVestingStart,
+  makeGatedNode,
+  makeVestingBaseGrantDate,
 } from "./helpers";
 
 const ctxInput = (
@@ -597,6 +599,115 @@ describe("resolveToCore — multi-tail chain behind an unfired head", () => {
     ]);
     expect(total(result.installments)).toBe(100000);
     expect(result.blockers).toHaveLength(1);
+  });
+});
+
+describe("resolveToCore — pending-head chain, tail with an event cliff (R2-B3)", () => {
+  const monthly12 = { type: "MONTHS", length: 1, occurrences: 12 } as const;
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", monthly12),
+    then(portion(1, 2), {
+      ...monthly12,
+      cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
+    }),
+  ];
+
+  it("keeps both claims and the head's blocker once; the cliff adds no blocker", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(total(result.installments)).toBe(100000);
+    // Parity with a non-chained pending start carrying the same cliff: the start
+    // gates everything before the cliff can matter, so blockers stay the head's
+    // alone — the cliff's identity surfaces in the storable reason instead.
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+  });
+});
+
+describe("resolveToCore — pending-head chain, tail cliff gate is disclosed (R2-B3)", () => {
+  const monthly12 = { type: "MONTHS", length: 1, occurrences: 12 } as const;
+  // `vestingStart + 6 months AFTER grantDate + 6 months`: a real condition the
+  // grant depends on, reportable even though the tail has no start date yet.
+  const gatedCliff = makeGatedNode(
+    makeVestingBaseVestingStart(),
+    "AFTER",
+    makeSingletonNode(makeVestingBaseGrantDate(), [
+      makeDuration(6, "MONTHS", "PLUS"),
+    ]),
+    false,
+    [makeDuration(6, "MONTHS", "PLUS")],
+  );
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", monthly12),
+    then(portion(1, 2), { ...monthly12, cliff: gatedCliff }),
+  ];
+
+  it("surfaces the gate blocker alongside the head's, each once", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // Before the fix the gate vanished with the zeroed cliff record.
+    expect(
+      result.blockers.filter((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
+    ).toEqual([{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }]);
+    expect(result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(
+      true,
+    );
+    // The tail's lump names the chain's wait; amounts are untouched.
+    const tailLump = result.installments[1];
+    expect(tailLump.state === "UNRESOLVED" && tailLump.unresolved).toContain(
+      "ipo",
+    );
+    expect(total(result.installments)).toBe(100000);
+  });
+});
+
+describe("resolveToCore — pending-head chain, tail duration cliff (R2-B3)", () => {
+  const monthly12 = { type: "MONTHS", length: 1, occurrences: 12 } as const;
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", monthly12),
+    then(portion(1, 2), {
+      ...monthly12,
+      cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
+        makeDuration(6, "MONTHS", "PLUS"),
+      ]),
+    }),
+  ];
+
+  it("pending: lowers clean — no extra blockers, both claims intact", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+  });
+
+  it("fired: the authored cliff takes effect on the events arm", () => {
+    // Once ipo fires the chain re-resolves through the live branch (anchored
+    // lowerCliff), so the deferred record never outlives the firing. Head: 12
+    // months from the firing. Tail: handoff 2027-06-01, 6-month cliff lumps
+    // Jul–Dec onto 2027-12-01, then monthly through 2028-06-01.
+    const result = resolveToCore(
+      program,
+      ctxInput({ events: { ipo: "2026-06-01" } }),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(installmentDates(result.installments)).toEqual([
+      ...Array.from({ length: 12 }, (_, i) =>
+        addPeriod("2026-06-01", i + 1, "MONTHS"),
+      ),
+      "2027-12-01",
+      ...Array.from({ length: 6 }, (_, i) =>
+        addPeriod("2027-12-01", i + 1, "MONTHS"),
+      ),
+    ]);
+    expect(total(result.installments)).toBe(100000);
   });
 });
 
