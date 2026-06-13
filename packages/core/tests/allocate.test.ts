@@ -18,8 +18,11 @@ describe("allocateVector — cumulative round-down", () => {
 
   // Exact-rational beyond float's safe range: where legacy float
   // Math.floor((i+1)/n*q) would drift, the BigInt path stays exact.
-  it("stays exact and telescopes at large magnitude", () => {
-    const q = 9_007_199_254_740_992; // 2^53, > Number.MAX_SAFE_INTEGER (2^53 - 1)
+  // 2^53 itself is no longer legal input now that floorSharesAt enforces its
+  // safe-integer precondition (R2-B23); the intermediate products q·k still
+  // run far past 2^53 and the BigInt path handles them exactly.
+  it("stays exact and telescopes at the largest safe magnitude", () => {
+    const q = Number.MAX_SAFE_INTEGER; // 2^53 - 1, the largest legal totalShares
     const n = 7;
     const v = allocateVector(q, n);
     // telescopes exactly
@@ -54,5 +57,41 @@ describe("allocateExact + floorSharesAt", () => {
     expect(() => floorSharesAt(5, { numerator: 1, denominator: 0 })).toThrow(
       /denominator must be >= 1/,
     );
+  });
+});
+
+// R2-B23: the cast preconditions the doc comment used to assume are enforced.
+// The bound sits on the quotient, not the cumulative — an over-allocating
+// template compiles under an error finding, so cumulative > 1 is legal input
+// and only a quotient Number() would round gets refused.
+describe("floorSharesAt — enforced cast bounds (R2-B23)", () => {
+  it("accepts an over-1 cumulative while the quotient fits", () => {
+    expect(floorSharesAt(100, { numerator: 3, denominator: 2 })).toBe(150);
+  });
+
+  it("rejects an unsafe-integer totalShares (2^53 passes Number.isInteger)", () => {
+    expect(() =>
+      floorSharesAt(2 ** 53, { numerator: 1, denominator: 1 }),
+    ).toThrow(/totalShares must be a safe integer/);
+  });
+
+  it("rejects a fractional totalShares with a named error, not a BigInt RangeError", () => {
+    expect(() => floorSharesAt(1.5, { numerator: 1, denominator: 1 })).toThrow(
+      /totalShares must be a safe integer/,
+    );
+  });
+
+  it("refuses a quotient past MAX_SAFE_INTEGER instead of letting Number() round", () => {
+    // The finding's example: floor(9007199254740990 × 3/2) = 13510798882111485,
+    // odd and above 2^53 — Number() would round it to an even neighbor.
+    expect(() =>
+      floorSharesAt(9_007_199_254_740_990, { numerator: 3, denominator: 2 }),
+    ).toThrow(/exceeds Number.MAX_SAFE_INTEGER/);
+  });
+
+  it("passes the largest legal quotient through exactly", () => {
+    expect(
+      floorSharesAt(Number.MAX_SAFE_INTEGER, { numerator: 1, denominator: 1 }),
+    ).toBe(Number.MAX_SAFE_INTEGER);
   });
 });

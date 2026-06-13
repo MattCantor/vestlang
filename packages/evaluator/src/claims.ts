@@ -22,9 +22,9 @@ export const amountToFraction = (a: Amount, totalShares: number): Fraction =>
 // floor(grant × cumulative), capped at the grant. The cap carries #220's rule —
 // claims feed surfaces with no findings channel, so an over-allocating author
 // must not read back more shares than the grant holds; the over-allocation
-// finding owns the excess. Comparing against ONE first also keeps an over-1
-// cumulative out of floorSharesAt, whose safe-cast bound assumes ≤ 1 (#222's
-// seam — don't widen it here).
+// finding owns the excess. Comparing against ONE first is the cap itself, not a
+// workaround — floorSharesAt accepts an over-1 cumulative (it enforces its cast
+// bound on the quotient), but a claim never wants the over-grant number anyway.
 const sharesThrough = (grantQuantity: number, cumulative: Fraction): number =>
   fracCmp(cumulative, ONE) > 0
     ? grantQuantity

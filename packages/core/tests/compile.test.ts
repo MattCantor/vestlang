@@ -306,7 +306,7 @@ describe("compile — additional DATE-anchored cases", () => {
     ]);
   });
 
-  it("throws when totalShares is not a non-negative integer", () => {
+  it("throws when totalShares is not a non-negative safe integer", () => {
     const template: VestingScheduleTemplate = {
       id: "t1",
       statements: [
@@ -320,8 +320,48 @@ describe("compile — additional DATE-anchored cases", () => {
         },
       ],
     };
-    expect(() => compile(template, -1, startJan2025)).toThrow();
-    expect(() => compile(template, 1.5, startJan2025)).toThrow();
+    expect(() => compile(template, -1, startJan2025)).toThrow(
+      /non-negative safe integer/,
+    );
+    expect(() => compile(template, 1.5, startJan2025)).toThrow(
+      /non-negative safe integer/,
+    );
+    // Number.isInteger(2 ** 53 + 2) is true — the exact hole the safe check closes.
+    expect(() => compile(template, 2 ** 53 + 2, startJan2025)).toThrow(
+      /non-negative safe integer/,
+    );
+  });
+});
+
+// R2-B23: an over-1 statement percentage is deliberately valid template input
+// (over-allocation is a finding's job, not the validator's). Output stays
+// uncapped at sane sizes; where the quotient would no longer cast exactly, the
+// kernel refuses loudly instead of rounding per-installment amounts.
+describe("compile — over-allocated template hits the kernel's cast bound (R2-B23)", () => {
+  const template: VestingScheduleTemplate = {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: DATE_BASE,
+        occurrences: 1,
+        period: 12,
+        period_type: "MONTHS",
+        percentage: { numerator: 3, denominator: 2 },
+      },
+    ],
+  };
+
+  it("still compiles uncapped at a sane grant size", () => {
+    expect(compile(template, 100, startJan2025)).toEqual([
+      { date: "2026-01-01", amount: "150" },
+    ]);
+  });
+
+  it("refuses loudly when the over-1 quotient exceeds MAX_SAFE_INTEGER", () => {
+    expect(() =>
+      compile(template, 9_007_199_254_740_990, startJan2025),
+    ).toThrow(/exceeds Number.MAX_SAFE_INTEGER/);
   });
 });
 

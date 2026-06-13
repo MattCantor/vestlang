@@ -12,12 +12,12 @@ import type { Result } from "./parse.js";
 // rides the plain-message arm of PipelineError.
 export function parseQuantity(raw: string): Result<{ quantity: number }> {
   const quantity = Number(raw);
-  if (!Number.isInteger(quantity) || quantity < 0) {
+  if (!Number.isSafeInteger(quantity) || quantity < 0) {
     return {
       ok: false,
       error: {
         ruleId: "evaluation-error",
-        message: "Quantity must be a non-negative whole number.",
+        message: `Quantity must be a non-negative whole number (at most ${Number.MAX_SAFE_INTEGER}).`,
       },
     };
   }

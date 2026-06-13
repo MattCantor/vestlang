@@ -14,6 +14,15 @@ export function prepare(stmt: Statement, ctx_input: EvaluationContextInput) {
 export function createEvaluationContext(
   input: EvaluationContextInput,
 ): EvaluationContext {
+  // Every evaluator entry funnels through here, so this is where the grant's
+  // share count gets policed — the same safe-integer rule core's compile
+  // applies to totalShares. Without it a bad grantQuantity travels all the way
+  // to the allocation kernel and dies there with a kernel-flavored error.
+  if (!Number.isSafeInteger(input.grantQuantity) || input.grantQuantity < 0) {
+    throw new Error(
+      `grantQuantity must be a non-negative safe integer (got ${input.grantQuantity})`,
+    );
+  }
   return {
     ...input,
     vesting_day_of_month:
