@@ -334,3 +334,34 @@ describe("summary — pending THEN tail share claim (R2-B2)", () => {
     expect(s.fully_vested_date).toBeNull();
   });
 });
+
+// R2-B7: QUANTITY claims on the symbolic side cap at the grant, so the as-of
+// roll-up can no longer report more unvested shares than the grant has — or
+// any at all on a zero-share grant.
+describe("summary — QUANTITY claims cap at the grant (R2-B7)", () => {
+  it("150 VEST on a 100-share grant tallies 100 unresolved, not 150", () => {
+    const r = runAsOf(
+      "150 VEST FROM EVENT a OVER 2 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 100, events: {} },
+      "2026-06-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.unresolved).toBe(100);
+    expect(r.summary.total_unvested).toBe(100);
+    expect(r.summary.total_vested).toBe(0);
+  });
+
+  it("100 VEST on a zero-share grant tallies nothing", () => {
+    const r = runAsOf(
+      "100 VEST OVER 2 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 0, events: {} },
+      "2026-06-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.unresolved).toBe(0);
+    expect(r.summary.total_unvested).toBe(0);
+    expect(r.summary.percent_vested).toBe(0);
+  });
+});
