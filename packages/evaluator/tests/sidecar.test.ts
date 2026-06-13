@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import type {
   Amount,
   EvaluationContextInput,
+  Program,
   Statement,
 } from "@vestlang/types";
 import {
@@ -23,6 +24,7 @@ import {
   fromSidecar,
   toPersisted,
   rehydratePersisted,
+  resolveToCore,
   type PersistedArtifact,
 } from "../src/resolve/index";
 import {
@@ -200,5 +202,103 @@ describe("sidecar — a template with no synthetic events emits no sidecar", () 
     expect(toSidecar(resolution.sourceMap)).toBeUndefined();
     const persisted = toPersisted(resolution);
     expect("sidecar" in persisted).toBe(false);
+  });
+});
+
+// A grant whose program mixes a stand-in event (the `LATER OF(a, b)` half, which
+// the lowering can't store directly and so externalizes) with a user event the
+// author named `evt_1`. The stand-in's id lives in the `evt:<n>` namespace, which
+// no DSL identifier can spell, so the two never share a string and the persisted
+// artifact keeps them distinct.
+describe("sidecar — a stand-in event and a user `evt_1` stay distinct through persistence", () => {
+  // `1/2 FROM LATER OF(EVENT a, EVENT b) ... PLUS 1/2 FROM EVENT evt_1 ...`.
+  const collisionProgram = (): Program => [
+    {
+      type: "STATEMENT",
+      amount: portion(1, 2),
+      expr: {
+        type: "SCHEDULE",
+        vesting_start: {
+          type: "NODE_LATER_OF",
+          items: [
+            makeSingletonNode(makeVestingBaseEvent("a")),
+            makeSingletonNode(makeVestingBaseEvent("b")),
+          ],
+        },
+        periodicity: { type: "MONTHS", length: 4, occurrences: 4 },
+      },
+    },
+    {
+      type: "STATEMENT",
+      amount: portion(1, 2),
+      expr: {
+        type: "SCHEDULE",
+        vesting_start: makeSingletonNode(makeVestingBaseEvent("evt_1")),
+        periodicity: { type: "MONTHS", length: 4, occurrences: 4 },
+      },
+    },
+  ];
+
+  // Resolve with a, b unfired (the user's evt_1 firing is irrelevant to lowering;
+  // a bare EVENT base stores its own id and waits for a runtime firing).
+  const resolveStored = () => {
+    const result = resolveToCore(
+      collisionProgram(),
+      ctxInput({ grantDate: "2026-01-01", grantQuantity: 1000 }),
+    );
+    if (result.kind !== "template")
+      throw new Error(`expected template, got ${result.kind}`);
+    return result;
+  };
+
+  it("persists the stand-in as `evt:1` and keeps the user's `evt_1` statement untouched", () => {
+    const stored = resolveStored();
+
+    // The two statements carry distinct ids: the stand-in's reserved-namespace id
+    // and the user's own name.
+    expect(stored.template.statements.map((s) => s.vesting_base)).toEqual([
+      { type: "EVENT", event_id: "evt:1" },
+      { type: "EVENT", event_id: "evt_1" },
+    ]);
+
+    // Only the stand-in earns a source-map entry; the user event is a plain
+    // milestone with nothing to look up.
+    const persisted = toPersisted(stored);
+    expect(Object.keys(fromSidecar(persisted.sidecar))).toEqual(["evt:1"]);
+  });
+
+  it("reloading does not let the user's `evt_1` firing shadow the pending stand-in", () => {
+    const stored = resolveStored();
+    const persisted: PersistedArtifact = JSON.parse(
+      JSON.stringify(toPersisted(stored)),
+    );
+
+    // Re-resolve with a, b still unfired. (A genuine `evt_1` firing reaches the
+    // record keeper on the runtime channel, not through `events` — rehydration
+    // reads `events` only to settle synthetic definitions — so passing it here
+    // would do nothing; we leave it out to keep the test honest.)
+    const result = rehydratePersisted(
+      persisted,
+      ctxInput({ grantDate: "2026-01-01", grantQuantity: 1000 }),
+    );
+
+    // The stand-in stays pending: no witness, and its anchors still block —
+    // the LATER OF's two unfired events, reported under the selector.
+    expect(result.runtime.eventFirings ?? []).toEqual([]);
+    expect(result.blockers).toContainEqual({
+      type: "UNRESOLVED_SELECTOR",
+      selector: "LATER_OF",
+      blockers: [
+        { type: "EVENT_NOT_YET_OCCURRED", event: "a" },
+        { type: "EVENT_NOT_YET_OCCURRED", event: "b" },
+      ],
+    });
+
+    // The user's `evt_1` statement is untouched — still a bare milestone in the
+    // frozen template, never collapsed into the stand-in.
+    expect(persisted.template.statements.map((s) => s.vesting_base)).toEqual([
+      { type: "EVENT", event_id: "evt:1" },
+      { type: "EVENT", event_id: "evt_1" },
+    ]);
   });
 });

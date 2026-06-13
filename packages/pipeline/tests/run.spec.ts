@@ -208,3 +208,53 @@ describe("runEvaluate — pending THEN chain breakdown (R2-B2)", () => {
     }
   });
 });
+
+// A grant can carry both a stand-in event (the engine invents one when a start
+// is too complex to store — here the `LATER OF(a, b)` half) and a user event
+// the cap-table author happened to name `evt_1`. The two used to collide: the
+// stand-in was also named `evt_1`, so firing the user's event vested the
+// contingent half that was still meant to be waiting — over-vesting the grant.
+// Moving stand-ins into the `evt:<n>` namespace (a name no DSL identifier can
+// spell) makes the collision impossible.
+describe("runEvaluate — a user event named evt_1 no longer shadows a stand-in", () => {
+  it("vests only the settled half; the contingent half stays unresolved", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM LATER OF(EVENT a, EVENT b) OVER 4 months EVERY 1 month " +
+        "PLUS 1/2 VEST FROM EVENT evt_1 OVER 4 months EVERY 1 month",
+      {
+        grant_date: "2026-01-01",
+        grant_quantity: 1000,
+        // The user's own event fires; the LATER OF anchors (a, b) do not.
+        events: { evt_1: "2026-06-01" },
+      },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const byState = (state: string) =>
+      r.view.installments
+        .filter((i) => i.state === state)
+        .reduce((a, i) => a + i.amount, 0);
+
+    const resolved = byState("RESOLVED");
+    const unresolved = byState("UNRESOLVED");
+
+    // Half vests (the user's evt_1 half); the contingent LATER OF half waits.
+    expect(resolved).toBe(500);
+    expect(unresolved).toBe(500);
+    // No part of the grant is double-counted or lost.
+    expect(resolved + unresolved).toBe(1000);
+
+    // The hold-up is the LATER OF's unfired anchors, not the user's evt_1.
+    expect(r.view.blockers).toEqual([
+      {
+        type: "UNRESOLVED_SELECTOR",
+        selector: "LATER_OF",
+        blockers: [
+          { type: "EVENT_NOT_YET_OCCURRED", event: "a" },
+          { type: "EVENT_NOT_YET_OCCURRED", event: "b" },
+        ],
+      },
+    ]);
+  });
+});

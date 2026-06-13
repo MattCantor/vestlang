@@ -280,6 +280,17 @@ describe("System event protections", () => {
   it("errors if EVENT vestingStart appears as user-provided Ident", () => {
     expect(() => parse(`VEST FROM EVENT vestingStart`)).toThrowError();
   });
+
+  // The colon is reserved for the engine's stand-in event ids (`evt:<n>`), and an
+  // identifier can't contain one. So `EVENT evt:1` can never name a single event
+  // `evt:1`: the parser reads `evt` as the name, then chokes on the `:` it has no
+  // rule for. This is the tripwire if the identifier alphabet is ever widened —
+  // a user name must stay unable to spell a stand-in id.
+  it("does not let EVENT evt:1 parse as a single event named `evt:1`", () => {
+    expect(() =>
+      parse(`VEST FROM EVENT evt:1 OVER 4 months EVERY 1 month`),
+    ).toThrowError(/":"/);
+  });
 });
 
 describe("Over/Every validations", () => {

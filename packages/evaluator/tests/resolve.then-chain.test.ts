@@ -789,16 +789,16 @@ describe("resolveToCore — two independent portions, ipo and ipo + 12mo", () =>
     if (result.kind !== "template") return;
     expect(result.template.statements.map((s) => s.vesting_base)).toEqual([
       { type: "EVENT", event_id: "ipo" },
-      { type: "EVENT", event_id: "evt_1" },
+      { type: "EVENT", event_id: "evt:1" },
     ]);
     // No firing claims ipo happened on the offset date; the synthetic event's
     // date is the offset date by its own definition.
     expect(result.runtime.eventFirings).toEqual([
       { event_id: "ipo", date: "2026-06-01" },
-      { event_id: "evt_1", date: "2027-06-01" },
+      { event_id: "evt:1", date: "2027-06-01" },
     ]);
-    expect(result.sourceMap["evt_1"].definition).toMatch(/ipo/);
-    expect(result.sourceMap["evt_1"].definition).toMatch(/12 months/);
+    expect(result.sourceMap["evt:1"].definition).toMatch(/ipo/);
+    expect(result.sourceMap["evt:1"].definition).toMatch(/12 months/);
   });
 
   it("round-trips through core.compile to the dates the DSL means", () => {

@@ -1,5 +1,10 @@
 /* --- Lexical Helpers --- */
 
+// The colon is reserved: the evaluator mints synthetic stand-in event ids (the
+// `evt:<n>` it invents when a start is too complex to store directly) into that
+// namespace, and relies on no user-authored name ever colliding with one. Because
+// this alphabet has no colon, the two strings can never be equal. Never add a
+// colon to the identifier alphabet — doing so reopens that collision.
 Ident = $([A-Za-z_][A-Za-z0-9_]*)
 Strict = "STRICTLY"i { return true; }
 

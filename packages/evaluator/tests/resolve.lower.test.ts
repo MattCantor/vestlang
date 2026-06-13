@@ -182,10 +182,10 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
       type: "EVENT",
-      event_id: "evt_1",
+      event_id: "evt:1",
     });
-    expect(result.sourceMap["evt_1"].definition).toMatch(/ipo/);
-    expect(result.sourceMap["evt_1"].definition).toMatch(/\+1 month/);
+    expect(result.sourceMap["evt:1"].definition).toMatch(/ipo/);
+    expect(result.sourceMap["evt:1"].definition).toMatch(/\+1 month/);
     expect(result.runtime.eventFirings).toBeUndefined();
     expect(result.blockers).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
@@ -211,7 +211,7 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
       },
     );
     expect(runtime.eventFirings).toEqual([
-      { event_id: "evt_1", date: "2024-04-01" },
+      { event_id: "evt:1", date: "2024-04-01" },
     ]);
     const events = compile(stored.template, stored.totalShares, runtime);
     expect(events.map((e) => e.date)).toEqual(["2024-05-01", "2024-06-01"]);
@@ -226,12 +226,12 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
       type: "EVENT",
-      event_id: "evt_1",
+      event_id: "evt:1",
     });
     // The one record is the synthetic event at its derived date — resolving its
     // definition against the true firing. Nothing asserts ipo fired 2024-04-01.
     expect(result.runtime.eventFirings).toEqual([
-      { event_id: "evt_1", date: "2024-04-01" },
+      { event_id: "evt:1", date: "2024-04-01" },
     ]);
   });
 
