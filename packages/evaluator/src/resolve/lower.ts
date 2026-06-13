@@ -10,7 +10,6 @@
 // reported for the classifier to route to the `events` or `unresolved` arm.
 
 import type {
-  Amount,
   Blocker,
   EvaluationContext,
   ImpossibleBlocker,
@@ -33,26 +32,13 @@ import type {
 } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
-import { fracReduce, ZERO } from "@vestlang/utils";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
+import { amountToFraction } from "../claims.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import type { NonTemplateReason } from "@vestlang/types";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
-
-/** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`.
- *  A zero-share grant has nothing for a QUANTITY to claim, so it lowers to 0
- *  (vests nothing) rather than the degenerate `v/0`. That fraction is invalid
- *  (validate rejects denominator < 1) and would otherwise crash downstream — the
- *  template validator or `floorSharesAt`. PORTION amounts carry their own
- *  denominator and never touch the grant count, so they're left alone. */
-const amountToFraction = (a: Amount, totalShares: number): Fraction =>
-  a.type === "QUANTITY"
-    ? totalShares === 0
-      ? ZERO
-      : fracReduce({ numerator: a.value, denominator: totalShares })
-    : fracReduce({ numerator: a.numerator, denominator: a.denominator });
 
 /** First single schedule of an expression (descend combinators' items[0]). */
 const firstSchedule = (expr: ScheduleExpr): Schedule => {

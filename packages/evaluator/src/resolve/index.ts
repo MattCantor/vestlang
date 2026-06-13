@@ -24,7 +24,7 @@ import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
-import { unresolvedInstallments } from "./unresolved.js";
+import { unresolvedInstallments, symbolicClaims } from "./unresolved.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
 /** Bound the installments a program will materialize, before any resolution or
@@ -66,6 +66,9 @@ export const resolveToCore = (
     // these — no firing means no dated tranches — so their share claims would
     // otherwise vanish from the stream.
     //
+    // Lump amounts come from the program-wide claim cursor, so pending claims +
+    // compiled tranches telescope to the same total the allocator will deliver.
+    //
     // Notes on what we discard from the producer:
     //  - Blockers: buildTemplate already gathered each pending start's blockers
     //    onto build.blockers, and under a template-ok build every cliff is NONE
@@ -77,6 +80,7 @@ export const resolveToCore = (
     //  - PENDING_EVENT / SYNTHETIC_EVENT starts are never chained tails (a THEN
     //    tail's injected start is RESOLVED or UNRESOLVED), so no chained-tail
     //    rendering happens through this channel.
+    const claims = symbolicClaims(resolutions, totalShares);
     const pendingInstallments: UnresolvedInstallment[] = [];
     program.forEach((stmt, i) => {
       const r = resolutions[i];
@@ -84,7 +88,8 @@ export const resolveToCore = (
         r.start.state === "PENDING_EVENT" ||
         r.start.state === "SYNTHETIC_EVENT"
       ) {
-        for (const inst of unresolvedInstallments(r, stmt, ctx).installments) {
+        for (const inst of unresolvedInstallments(r, stmt, ctx, claims[i])
+          .installments) {
           if (inst.state === "UNRESOLVED") pendingInstallments.push(inst);
         }
       }

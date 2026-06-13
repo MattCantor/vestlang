@@ -27,7 +27,11 @@ import {
   type RawEvent,
 } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
-import { unresolvedInstallments } from "./unresolved.js";
+import {
+  unresolvedInstallments,
+  isVoid,
+  symbolicClaims,
+} from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { ResolveVerdict } from "./types.js";
 
@@ -127,6 +131,10 @@ const eventsArm = (
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   const dated: StmtResolution[] = [];
+  // RESOLVED starts in this arm always have a dated cliff — buildTemplate routes
+  // unfired event cliffs and dead cliffs to the unresolved arm first — so the
+  // dated set here and isDated's definition agree.
+  const claims = symbolicClaims(resolutions, totalShares);
   program.forEach((stmt, i) => {
     const r = resolutions[i];
     if (r.start.state === "RESOLVED") {
@@ -137,7 +145,7 @@ const eventsArm = (
     // unresolved arm, and a pending chain head keeps its tails out of the
     // events build too — so what lands here is a pending event or synthetic
     // combinator start on a statement of its own.
-    const ev = unresolvedInstallments(r, stmt, ctx);
+    const ev = unresolvedInstallments(r, stmt, ctx, claims[i]);
     for (const inst of ev.installments) {
       if (inst.state !== "RESOLVED") symbolic.push(inst);
     }
@@ -154,13 +162,6 @@ const eventsArm = (
   };
 };
 
-// A portion is "void" when nothing can ever vest from it: a contradictory start,
-// or a resolved start whose cliff is contradictory. A pending start is never void
-// even with a dead cliff — it waits on the start before the cliff matters.
-const isVoid = (r: StmtResolution): boolean =>
-  r.start.state === "IMPOSSIBLE" ||
-  (r.start.state === "RESOLVED" && r.cliff.state === "IMPOSSIBLE");
-
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
   program: Program,
@@ -175,9 +176,12 @@ const unresolvedArm = (
   // date, or UNRESOLVED with the head's blockers while the head is pending).
   // A pending tail comes back as a symbolic lump with its returned blockers
   // scoped so the head's aren't restated per tail.
+  // Dated statements get a 0 claim they never use — their paths return EMPTY
+  // before any amount matters.
+  const claims = symbolicClaims(resolutions, totalShares);
   program.forEach((stmt, i) => {
     const r = resolutions[i];
-    const ev = unresolvedInstallments(r, stmt, ctx);
+    const ev = unresolvedInstallments(r, stmt, ctx, claims[i]);
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
     // are dropped there; collect the resolution so the resolved producer can
     // materialize them. (A vacuous 0-occurrence statement is also empty — treating

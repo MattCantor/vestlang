@@ -12,8 +12,8 @@ import type {
   Statement,
 } from "@vestlang/types";
 import { allocateVector, foldToGrantDate, gridDate } from "@vestlang/core";
-import { assertNever } from "@vestlang/utils";
-import { amountToQuantify } from "../utils.js";
+import { assertNever, fracSum } from "@vestlang/utils";
+import { claimAllocator } from "../claims.js";
 import {
   makeImpossibleSchedule,
   makeStartPlusSchedule,
@@ -25,6 +25,46 @@ import type { StmtResolution } from "./lower.js";
 
 const EMPTY: InstallmentSet = { installments: [], blockers: [] };
 
+// A portion is "void" when nothing can ever vest from it: a contradictory start,
+// or a resolved start whose cliff is contradictory. A pending start is never void
+// even with a dead cliff — it waits on the start before the cliff matters.
+export const isVoid = (r: StmtResolution): boolean =>
+  r.start.state === "IMPOSSIBLE" ||
+  (r.start.state === "RESOLVED" && r.cliff.state === "IMPOSSIBLE");
+
+// A statement whose tranches the dated allocator materializes — core.compile in
+// the template arm, resolvedInstallments in the events/unresolved arms. These
+// never render symbolically; their fractions seed the claim basis below.
+const isDated = (r: StmtResolution): boolean =>
+  r.start.state === "RESOLVED" &&
+  (r.cliff.state === "NONE" ||
+    r.cliff.state === "RESOLVED" ||
+    (r.cliff.state === "EVENT" && r.cliff.effectiveAt !== undefined));
+
+// One claim per statement, drawn from a single program-wide cumulative so the
+// symbolic side telescopes the way the allocator does. Dated statements seed
+// the basis (the allocator already telescoped their tranches to
+// floor(grant × their summed fraction), wherever they sit in program order)
+// and get a 0 they never spend. Live pending statements draw next, in program
+// order; void portions draw last, so a dead clause can't deflate a live one's
+// claim. Per-statement splits are provisional — the eventual split depends on
+// firing dates — but the totals are exact.
+export const symbolicClaims = (
+  resolutions: readonly StmtResolution[],
+  grantQuantity: number,
+): number[] => {
+  const basis = fracSum(resolutions.filter(isDated).map((r) => r.percentage));
+  const draw = claimAllocator(grantQuantity, basis);
+  const claims = new Array<number>(resolutions.length).fill(0);
+  resolutions.forEach((r, i) => {
+    if (!isDated(r) && !isVoid(r)) claims[i] = draw(r.percentage);
+  });
+  resolutions.forEach((r, i) => {
+    if (isVoid(r)) claims[i] = draw(r.percentage);
+  });
+  return claims;
+};
+
 /**
  * Symbolic installments + blockers for one statement, read off its resolution
  * record. A fully-resolved statement yields no installments (EMPTY); it isn't
@@ -32,13 +72,17 @@ const EMPTY: InstallmentSet = { installments: [], blockers: [] };
  * A THEN tail with a concrete handoff date reads like any self-anchored
  * statement (its own cliff can still gate it); still pending, it renders as
  * the scoped lump below.
+ *
+ * The claim is handed in by the caller because it's drawn from a program-wide
+ * cumulative — one statement can't size itself anymore.
  */
 export const unresolvedInstallments = (
   r: StmtResolution,
   stmt: Statement,
   ctx: EvaluationContext,
+  claim: number,
 ): InstallmentSet => {
-  const statementQuantity = amountToQuantify(stmt.amount, ctx.grantQuantity);
+  const statementQuantity = claim;
 
   // A contradictory start kills the whole portion.
   if (r.start.state === "IMPOSSIBLE")
