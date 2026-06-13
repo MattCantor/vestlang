@@ -145,9 +145,11 @@ const compileRaw = (
   totalShares: number,
   runtime: VestingRuntime,
 ): CompiledInstallment[] => {
-  if (!Number.isInteger(totalShares) || totalShares < 0) {
+  // Safe-integer, not merely integer: Number.isInteger(2 ** 53 + 2) is true,
+  // but the allocator's Number cast needs MAX_SAFE (see floorSharesAt).
+  if (!Number.isSafeInteger(totalShares) || totalShares < 0) {
     throw new Error(
-      `totalShares must be a non-negative integer (got ${totalShares})`,
+      `totalShares must be a non-negative safe integer (got ${totalShares})`,
     );
   }
   assertValidVestingScheduleTemplate(template);

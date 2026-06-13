@@ -101,6 +101,7 @@ const EVAL_CONTEXT_FIELDS = {
     .number()
     .int("grant_quantity must be a whole number")
     .min(0, "grant_quantity must be non-negative")
+    .safe("grant_quantity must be within the safe integer range")
     .describe("Total shares granted"),
   events: z
     .record(z.string().min(1), ISO_DATE)
@@ -500,6 +501,7 @@ export function createServer(): McpServer {
             .number()
             .int("grant_quantity must be a whole number")
             .min(0, "grant_quantity must be non-negative")
+            .safe("grant_quantity must be within the safe integer range")
             .describe("Total shares granted, used to size the projection"),
           events: z
             .record(z.string().min(1), ISO_DATE)
