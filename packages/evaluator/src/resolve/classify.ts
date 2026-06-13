@@ -170,19 +170,13 @@ const unresolvedArm = (
   const blockers: Blocker[] = [];
   // The fully-resolved siblings, kept to materialize their dated tranches below.
   const resolvedResolutions: StmtResolution[] = [];
+  // Every statement renders off its resolution record, THEN tails included:
+  // the chaining walk already injected a tail's start (a concrete handoff
+  // date, or UNRESOLVED with the head's blockers while the head is pending).
+  // A pending tail comes back as a symbolic lump with its returned blockers
+  // scoped so the head's aren't restated per tail.
   program.forEach((stmt, i) => {
     const r = resolutions[i];
-    // A THEN tail has no start of its own; the cursor pre-pass already handed it
-    // one, so we work from that resolution rather than rendering it from scratch.
-    // A tail whose chain head hasn't fired can't vest yet — it contributes no
-    // tranches, only the blocker for what it's waiting on. A tail with a concrete
-    // handoff date falls through to the shared rendering below: its own cliff can
-    // still gate it (an unfired event cliff, a pending gate), the same as a
-    // statement that anchors itself.
-    if (stmt.chained && r.start.state !== "RESOLVED") {
-      if (r.start.state === "UNRESOLVED") blockers.push(...r.start.blockers);
-      return;
-    }
     const ev = unresolvedInstallments(r, stmt, ctx);
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
     // are dropped there; collect the resolution so the resolved producer can

@@ -75,8 +75,8 @@ export const resolveToCore = (
     //    start produces only UNRESOLVED installments (one whole-portion lump, or
     //    start+N steps for a partially-settled combinator).
     //  - PENDING_EVENT / SYNTHETIC_EVENT starts are never chained tails (a THEN
-    //    tail's injected start is RESOLVED or UNRESOLVED), so the chained-tail
-    //    throw inside unresolvedInstallments is unreachable here.
+    //    tail's injected start is RESOLVED or UNRESOLVED), so no chained-tail
+    //    rendering happens through this channel.
     const pendingInstallments: UnresolvedInstallment[] = [];
     program.forEach((stmt, i) => {
       const r = resolutions[i];

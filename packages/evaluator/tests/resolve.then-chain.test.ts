@@ -16,7 +16,7 @@ import type {
   Statement,
   VestingPeriod,
 } from "@vestlang/types";
-import { evaluateProgram } from "../src/index";
+import { evaluateProgram, evaluateProgramAsOf } from "../src/index";
 import { resolveToCore } from "../src/resolve/index";
 import { resolveStatements } from "../src/resolve/lower";
 import { createEvaluationContext } from "../src/utils";
@@ -550,6 +550,75 @@ describe("resolveToCore — event-origin THEN chain, event unfired", () => {
       type: "EVENT_NOT_YET_OCCURRED",
       event: "ipo",
     });
+  });
+
+  it("carries BOTH segments' share claims as symbolic installments", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // Head lump then tail lump, in program order; nothing is dated yet.
+    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(
+      result.installments.every(
+        (i) =>
+          i.state === "UNRESOLVED" &&
+          i.symbolicDate.type === "UNRESOLVED_VESTING_START",
+      ),
+    ).toBe(true);
+    // Conservation: the whole grant is accounted for.
+    expect(total(result.installments)).toBe(100000);
+    // The tail's lump says what the chain waits on.
+    const tail = result.installments[1];
+    expect(tail.state === "UNRESOLVED" && tail.unresolved).toContain("ipo");
+  });
+
+  it("reports the head's blocker exactly once — tails don't restate it", () => {
+    const result = resolveToCore(program, ctxInput());
+    if (result.kind !== "unresolved") throw new Error("expected unresolved");
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
+    ]);
+  });
+});
+
+describe("resolveToCore — multi-tail chain behind an unfired head", () => {
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", oneYear),
+    then(portion(1, 4), oneYear),
+    then(portion(1, 4), oneYear),
+  ];
+
+  it("each tail's claim survives; the blocker still appears once", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments.map((i) => i.amount)).toEqual([
+      50000, 25000, 25000,
+    ]);
+    expect(total(result.installments)).toBe(100000);
+    expect(result.blockers).toHaveLength(1);
+  });
+});
+
+describe("evaluateProgramAsOf — pending chain alongside a dated sibling", () => {
+  // 1/4 dated (vests 2026-01-01); a chain: 1/4 on unfired ipo THEN 1/2.
+  // By the as-of the dated tranche has vested; the chain waits on ipo.
+  const program: Program = [
+    head(portion(1, 4), "2025-01-01", oneYear),
+    eventHead(portion(1, 4), "ipo", oneYear),
+    then(portion(1, 2), oneYear),
+  ];
+
+  it("tallies the whole pending chain — head AND tail — as unresolved", () => {
+    const result = evaluateProgramAsOf(
+      program,
+      ctxInput({ asOf: "2026-06-01" }),
+    );
+    expect(total(result.vested)).toBe(25000); // the dated 2026-01-01 tranche
+    expect(result.unvested).toEqual([]);
+    expect(result.impossible).toEqual([]);
+    expect(result.unresolved).toBe(75000); // 25000 head + 50000 tail
+    expect(total(result.vested) + result.unresolved).toBe(100000);
   });
 });
 
