@@ -193,7 +193,9 @@ describe("interchange — where the two verdicts diverge", () => {
   // on it the way they should. Closed-world, the firing violates the gate so the
   // cliff can never validly land (impossible); firing-blind, the gate is merely
   // pending, so the cliff just can't be placed yet (unrepresentable, not a
-  // contradiction).
+  // contradiction). Firing-blind the gate is merely pending, so the storable
+  // reason names the structural fact (the event cliff), while the closed-world
+  // verdict carries the violation.
   it("a gated event cliff is impossible to resolve when the firing violates the gate, unrepresentable to store", () => {
     // CLIFF EVENT acquisition AFTER grantDate + 1 year, acquisition firing before
     // grantDate + 1 year → the cliff gate is violated.
@@ -220,6 +222,11 @@ describe("interchange — where the two verdicts diverge", () => {
 
     expect(out.resolution.status).toBe("impossible");
     expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "acquisition",
+    });
   });
 
   // Two independent date grids: nothing event-dependent, so both verdicts agree
@@ -419,12 +426,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     expect(out.resolution.installments[0].state).toBe("UNRESOLVED");
   });
 
-  // A gated event cliff behind a pending start: the gate's verdict is the sharper
-  // answer and still wins. `CLIFF EVENT acquisition AFTER grantDate + 1 year` with
-  // acquisition unfired reads as a pending gate, so the cliff stays UNRESOLVED and
-  // the storable reason is DEFERRED_CLIFF — the event-anchoredness is deliberately
-  // not surfaced when there's a live gate to report.
-  it("a gated event cliff behind a pending start keeps the gate's verdict (DEFERRED_CLIFF)", () => {
+  // A gated event cliff behind a pending start. The gate decides whether the cliff
+  // *stands* (a violated gate kills it), but a pending gate doesn't change what
+  // the cliff is anchored to — an event cliff has no schema home whether gated or
+  // not, so the storable reason names the permanent cause, not the temporary one.
+  it("a gated event cliff behind a pending start is EVENT_CLIFF — the gate doesn't erase the event identity", () => {
     const gatedCliff = makeGatedNode(
       makeVestingBaseEvent("acquisition"),
       "AFTER",
@@ -444,7 +450,122 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
 
     expect(out.interchange.status).toBe("unrepresentable");
     if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "acquisition",
+    });
+  });
+
+  // A gate can't change what the schema can hold: `CLIFF EVENT ipo AFTER DATE
+  // 2026-01-01` has exactly as little a home as bare `CLIFF EVENT ipo`. Before
+  // the fix the gated form read DEFERRED_CLIFF ("can't be stored ahead of
+  // time") — implying the firing would make it storable, which it never does.
+  it("a gated event cliff reports the same EVENT_CLIFF as the bare one", () => {
+    const periodicityWith = (
+      cliff: VestingNodeExpr<"VESTING_START">,
+    ): VestingPeriod => ({
+      type: "MONTHS",
+      length: 1,
+      occurrences: 48,
+      cliff,
+    });
+    const gated = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        periodicityWith(
+          makeGatedNode(
+            makeVestingBaseEvent("ipo"),
+            "AFTER",
+            makeSingletonNode(makeVestingBaseDate("2026-01-01")),
+          ),
+        ),
+      ),
+      ctxInput(),
+    ).interchange;
+    const bare = evaluateStatement(
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        periodicityWith(makeSingletonNode(makeVestingBaseEvent("ipo"))),
+      ),
+      ctxInput(),
+    ).interchange;
+
+    expect(gated).toEqual({
+      status: "unrepresentable",
+      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+    });
+    expect(gated).toEqual(bare);
+  });
+
+  // Same property as the bare event cliff above: the gated one's storable
+  // verdict must not move when the event fires and the gate clears.
+  it("the gated-event-cliff interchange verdict is firing-invariant", () => {
+    const s = stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+      {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: makeGatedNode(
+          makeVestingBaseEvent("ipo"),
+          "AFTER",
+          makeSingletonNode(makeVestingBaseDate("2026-01-01")),
+        ),
+      },
+    );
+    const unfired = evaluateStatement(s, ctxInput()).interchange;
+    const fired = evaluateStatement(
+      s,
+      ctxInput({ events: { ipo: "2026-06-01" } }), // fires after the gate date — gate satisfied
+    ).interchange;
+
+    expect(fired).toEqual(unfired);
+    expect(unfired).toEqual({
+      status: "unrepresentable",
+      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+    });
+  });
+
+  // The fix is reason-only: the resolution surface for a pending start with a
+  // gated event cliff keeps its one lump and its disclosed gate, exactly as
+  // before. (Contrast the bare event cliff above, which contributes no blocker
+  // of its own — a *gated* cliff's pending verdict rides through cliffBlockers
+  // by the pinned gate-disclosure convention.)
+  it("a pending start with a gated event cliff resolves unchanged — one lump, start blocker plus the gate's", () => {
+    const gatedCliff = makeGatedNode(
+      makeVestingBaseEvent("acquisition"),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(12, "MONTHS", "PLUS"),
+      ]),
+    );
+    const out = evaluateStatement(
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff: gatedCliff,
+      }),
+      ctxInput(),
+    );
+
+    expect(out.resolution.status).toBe("unresolved");
+    if (out.resolution.status !== "unresolved") return;
+    expect(out.resolution.installments).toHaveLength(1);
+    expect(out.resolution.installments[0].amount).toBe(100000);
+    expect(out.resolution.blockers.map((b) => b.type)).toEqual([
+      "EVENT_NOT_YET_OCCURRED", // ipo (the start)
+      "EVENT_NOT_YET_OCCURRED", // acquisition (the gated cliff's base)
+      "UNRESOLVED_CONDITION", // the gate itself
+    ]);
+    expect(
+      out.resolution.blockers.flatMap((b) =>
+        b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
+      ),
+    ).toEqual(["ipo", "acquisition"]);
   });
 });
 
@@ -542,9 +663,8 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   });
 
   // A gated duration cliff routes through the gate's verdict (UNRESOLVED), so
-  // the storable reason is DEFERRED_CLIFF. (A gated *event* cliff lands here too
-  // and loses its EVENT identity — that's #219, chained and non-chained alike;
-  // deliberately not pinned here.)
+  // the storable reason is DEFERRED_CLIFF. A gated *event* cliff keeps EVENT_CLIFF
+  // instead (next test) — only an event-free gate is a deferred cliff.
   it("a gated duration cliff on the tail reports DEFERRED_CLIFF", () => {
     const gatedCliff = makeGatedNode(
       makeVestingBaseVestingStart(),
@@ -562,6 +682,30 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     expect(out.interchange.status).toBe("unrepresentable");
     if (out.interchange.status !== "unrepresentable") return;
     expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
+
+  // R2-B14: the gate routes the tail's event cliff to an UNRESOLVED record, but
+  // the event identity rides along — the permanent cause (no schema home) still
+  // beats both the gate's "can't be placed yet" and the tail's "can't be dated
+  // yet".
+  it("a gated event cliff on the tail reports EVENT_CLIFF (R2-B14)", () => {
+    const gatedEventCliff = makeGatedNode(
+      makeVestingBaseEvent("fda"),
+      "AFTER",
+      makeSingletonNode(makeVestingBaseGrantDate(), [
+        makeDuration(6, "MONTHS", "PLUS"),
+      ]),
+    );
+    const [out] = evaluateProgram(
+      chain({ ...monthly12, cliff: gatedEventCliff }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CLIFF",
+      eventId: "fda",
+    });
   });
 });
 

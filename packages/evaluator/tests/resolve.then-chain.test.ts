@@ -903,3 +903,42 @@ describe("resolveToCore — a date chain superimposed with an independent grid",
     expect(result.template.statements).toHaveLength(3);
   });
 });
+
+describe("resolveToCore — pending-head chain, tail gated event cliff (R2-B14)", () => {
+  const monthly12 = { type: "MONTHS", length: 1, occurrences: 12 } as const;
+  const gatedEventCliff = makeGatedNode(
+    makeVestingBaseEvent("fda"),
+    "AFTER",
+    makeSingletonNode(makeVestingBaseGrantDate(), [
+      makeDuration(6, "MONTHS", "PLUS"),
+    ]),
+  );
+  const program: Program = [
+    eventHead(portion(1, 2), "ipo", monthly12),
+    then(portion(1, 2), { ...monthly12, cliff: gatedEventCliff }),
+  ];
+
+  // The R2-B14 fix is interchange-reason-only; this pins that the resolution
+  // surface didn't move: both claims, the head's blocker once, and the gate's
+  // own blockers disclosed through cliffBlockers (per the R2-B3 convention).
+  it("amounts and blockers are unchanged by the reason fix", () => {
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(total(result.installments)).toBe(100000);
+    expect(
+      result.blockers.filter(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toHaveLength(1);
+    expect(
+      result.blockers.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "fda",
+      ),
+    ).toBe(true);
+    expect(result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(
+      true,
+    );
+  });
+});

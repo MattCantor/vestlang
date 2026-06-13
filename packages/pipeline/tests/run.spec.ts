@@ -173,6 +173,25 @@ describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3)", (
   });
 });
 
+// R2-B14: a gated event cliff is as unstorable as a bare one — the reason must
+// name the event (permanent, no schema home), not claim the schedule merely
+// "can't be stored ahead of time".
+describe("runEvaluate — gated event cliff keeps its EVENT identity (R2-B14)", () => {
+  it("names the cliff's event in the storable reason", () => {
+    const r = runEvaluate(
+      "VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo AFTER DATE 2025-01-01",
+      { grant_date: "2024-01-01", grant_quantity: 48 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.interchange.status).toBe("unrepresentable");
+    if (r.view.interchange.status !== "unrepresentable") return;
+    expect(r.view.interchange.reason).toBe(
+      'Event-anchored cliff on "ipo" has no template form.',
+    );
+  });
+});
+
 // R2-B2: a pending-head THEN chain's breakdown must carry the whole chain's
 // claim, not just the head's share.
 describe("runEvaluate — pending THEN chain breakdown (R2-B2)", () => {

@@ -32,12 +32,13 @@ import { classify } from "./classify.js";
  * Three distinct causes, in precedence order:
  *
  *   - EVENT_CLIFF        a cliff hangs off a named event — the schema has no home
- *                        for it at all (kept firing-invariant: blind to firings an
- *                        event cliff always reads unfired, so it always lands here).
- *                        Reported the same whether the start resolved or is itself
- *                        pending: a pending start — and a THEN tail behind a pending
- *                        head — lowers its bare event cliff to the EVENT record too,
- *                        so this scan sees it any of those ways.
+ *                        for it at all, gated or not (kept firing-invariant:
+ *                        blind to firings an event cliff always reads unfired,
+ *                        landing here as the EVENT record when bare, or as an
+ *                        UNRESOLVED record carrying the event id when a pending
+ *                        gate did the routing). Reported the same whether the
+ *                        start resolved, is itself pending, or is a THEN tail
+ *                        behind a pending head.
  *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
  *                        with no cliff anywhere — the tail just can't be dated yet.
  *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
@@ -48,11 +49,18 @@ import { classify } from "./classify.js";
  * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
  */
 const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
-  const eventCliff = resolutions
-    .map((r) => r.cliff)
-    .find((c) => c.state === "EVENT");
-  if (eventCliff?.state === "EVENT")
-    return { kind: "EVENT_CLIFF", eventId: eventCliff.eventId };
+  // First statement (program order) whose cliff is event-anchored — the EVENT
+  // record state, or an UNRESOLVED record whose gate routing kept the event id.
+  for (const r of resolutions) {
+    const c = r.cliff;
+    const eventId =
+      c.state === "EVENT"
+        ? c.eventId
+        : c.state === "UNRESOLVED"
+          ? c.eventId
+          : undefined;
+    if (eventId !== undefined) return { kind: "EVENT_CLIFF", eventId };
+  }
 
   const hasDeferredCliff = resolutions.some(
     (r) => r.cliff.state === "UNRESOLVED",
