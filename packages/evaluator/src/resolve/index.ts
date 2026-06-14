@@ -197,8 +197,16 @@ const allocationFindings = (
   return [];
 };
 
-export { rehydrate, reparseDefinition } from "./rehydrate.js";
-export type { RehydrateResult } from "./rehydrate.js";
+export {
+  rehydrate,
+  reparseDefinition,
+  RehydrateDefinitionError,
+  isRehydrateDefinitionError,
+} from "./rehydrate.js";
+export type {
+  RehydrateResult,
+  RehydrateDefinitionSource,
+} from "./rehydrate.js";
 export {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,

@@ -17,7 +17,12 @@ import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram, evaluateStatement } from "../src/evaluate/index";
-import { rehydrate, reparseDefinition } from "../src/resolve/index";
+import {
+  rehydrate,
+  reparseDefinition,
+  isRehydrateDefinitionError,
+} from "../src/resolve/index";
+import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
 import {
   makeSingletonNode,
   makeVestingBaseEvent,
@@ -173,6 +178,125 @@ describe("rehydrate — parse ∘ stringify fixpoint", () => {
       );
     }
   });
+});
+
+// ---- Issue #231: a corrupt stored definition fails cleanly, not with a raw throw.
+//
+// A persisted artifact lives in external storage and may be hand-edited, so a
+// stored definition can arrive corrupt. Rehydration must surface that as the tagged
+// RehydrateDefinitionError naming the offending event_id — for ANY failure mode, and
+// identifiable by the literal tag (not instanceof, which a dual ESM/CJS build can
+// miss across module realms). The MCP boundary keys on that tag to refuse cleanly.
+
+// A minimal stored artifact: one EVENT-anchored template statement on `eventId`,
+// plus a sidecar entry under the same key carrying `definition`. The event_id MUST
+// match the sidecar key, or the rehydrate loop's templateEventIds guard skips the
+// entry and nothing reparses (a false green).
+const corruptSidecarArtifact = (
+  eventId: string,
+  definition: string,
+): {
+  template: VestingScheduleTemplate;
+  sourceMap: SourceMap;
+  runtime: { grantDate: string };
+} => ({
+  template: {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "EVENT", event_id: eventId },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  },
+  sourceMap: { [eventId]: { definition } },
+  runtime: { grantDate: "2025-01-01" },
+});
+
+describe("rehydrate — corrupt sidecar definition (issue #231)", () => {
+  // Each is a distinct failure mode that previously propagated raw: a lexical
+  // parse error, a grammar semantic-action throw (single-arm combinator), and a
+  // multi-statement definition that today truncates silently to the first.
+  const failureModes: [name: string, definition: string][] = [
+    ["lexically malformed", "TOTALLY NOT DSL (("],
+    ["single-arm combinator (semantic-action throw)", "EARLIER OF (EVENT ipo)"],
+    [
+      "multi-statement (previously truncated)",
+      "DATE 2025-01-01 PLUS VEST FROM DATE 2026-01-01",
+    ],
+  ];
+
+  it.each(failureModes)(
+    "throws the tagged error naming the event_id for a %s definition",
+    (_name, definition) => {
+      const { template, sourceMap, runtime } = corruptSidecarArtifact(
+        "evt_1",
+        definition,
+      );
+      let thrown: unknown;
+      try {
+        rehydrate(
+          template,
+          sourceMap,
+          runtime,
+          ctxInput({ grantQuantity: 400 }),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      // Identified by the literal discriminant, not `instanceof`.
+      expect(isRehydrateDefinitionError(thrown)).toBe(true);
+      if (isRehydrateDefinitionError(thrown)) {
+        expect(thrown.event_id).toBe("evt_1");
+        expect(thrown.source).toBe("definition");
+      }
+    },
+  );
+});
+
+describe("rehydrate — twin path: an illegal bare template event name (issue #231)", () => {
+  // No sidecar entry, so the bare-event loop synthesizes `EVENT <id>` and reparses
+  // it. An id that isn't a legal bare name (embedded space, leading digit) trips the
+  // parser; the throw must come back tagged, naming that id, with source
+  // "template-event-name".
+  const illegalNames: [name: string, eventId: string][] = [
+    ["embedded space", "my event"],
+    ["leading digit", "1ipo"],
+  ];
+
+  it.each(illegalNames)(
+    "throws the tagged error naming the event_id (%s)",
+    (_name, eventId) => {
+      const template: VestingScheduleTemplate = {
+        id: "t1",
+        statements: [
+          {
+            order: 1,
+            vesting_base: { type: "EVENT", event_id: eventId },
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 1 },
+          },
+        ],
+      };
+      let thrown: unknown;
+      try {
+        rehydrate(template, {}, { grantDate: "2025-01-01" }, ctxInput());
+      } catch (e) {
+        thrown = e;
+      }
+      expect(isRehydrateDefinitionError(thrown)).toBe(true);
+      if (isRehydrateDefinitionError(thrown)) {
+        expect(thrown.event_id).toBe(eventId);
+        expect(thrown.source).toBe("template-event-name");
+      }
+    },
+  );
 });
 
 // The grant's frozen conventions — day-of-month and grant date — must come from

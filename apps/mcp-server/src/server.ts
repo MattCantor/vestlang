@@ -3,7 +3,6 @@ import { z } from "zod";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
-import { isValidCalendarDate } from "@vestlang/utils";
 import {
   parseRaw,
   parseToProgram,
@@ -25,6 +24,7 @@ import {
   resolveVestingDay,
 } from "./date-math.js";
 import { PERSISTED_ARTIFACT, runPersist, runRehydrate } from "./persist.js";
+import { ISO_DATE } from "./iso-date.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
 exposes the full vestlang pipeline (parse, compile, evaluate, lint, stringify)
@@ -89,11 +89,6 @@ during evaluation (e.g. a schedule too large to materialize). Check for an
 /* ------------------------
  * Shared Zod schemas
  * ------------------------ */
-
-const ISO_DATE = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD")
-  .refine(isValidCalendarDate, "must be a real calendar date (YYYY-MM-DD)");
 
 // Consumes the canonical value array from @vestlang/types rather than re-spelling
 // the 32 codes here — a dropped or renamed entry fails typecheck at the source.
