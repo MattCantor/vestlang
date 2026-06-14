@@ -203,4 +203,53 @@ describe("mcp-server / persistence tool pair", () => {
     const text = res.content?.[0]?.text ?? "";
     expect(text).toContain("template");
   });
+
+  it("refuses an over-allocating single template, naming the over-allocation", async () => {
+    const client = await connectClient();
+    // 6000 shares vest on a 4800-share grant — 125%. The resolution is a clean single
+    // template, so the old shape gate alone would have let it through; the validity
+    // gate is what now catches it. Without the fix this persists ok: true and the
+    // rehydrated projection over-vests the grant.
+    const res = await persist(client, {
+      dsl: "6000 VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    expect(res.isError).toBe(true);
+    const text = res.content?.[0]?.text ?? "";
+    expect(text).toMatch(/over-allocat/);
+  });
+
+  it("still persists an under-allocating program", async () => {
+    const client = await connectClient();
+    // Below 100% (here 50%) is legal — leaving shares unvested is allowed. It carries
+    // a warning-severity under-allocation finding, so it exercises the severity gate:
+    // warnings pass where errors don't, which an exactly-100% program wouldn't prove.
+    const res = await persist(client, {
+      dsl: "1/2 VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+
+    expect(res.isError).toBeFalsy();
+    const out = res.structuredContent as unknown as PersistOutput;
+    expect(out.artifact.template.statements.length).toBeGreaterThan(0);
+  });
+
+  it("reports a PLUS over-allocation as the over-allocation, not the shape", async () => {
+    const client = await connectClient();
+    // 1/2 PLUS 3/4 sums to 5/4 — over-allocation — and also resolves events-only, so
+    // it would have tripped the shape gate incidentally. Validity is checked first, so
+    // the refusal now names the real defect rather than the status.
+    const res = await persist(client, {
+      dsl: "1/2 VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS PLUS 3/4 VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+
+    expect(res.isError).toBe(true);
+    const text = res.content?.[0]?.text ?? "";
+    expect(text).toMatch(/over-allocat/);
+  });
 });

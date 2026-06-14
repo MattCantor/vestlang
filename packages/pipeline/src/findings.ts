@@ -11,6 +11,14 @@ import { formatPct } from "@vestlang/utils";
 // "3/2"
 const fmt = (f: Fraction): string => `${f.numerator}/${f.denominator}`;
 
+// The findings that make a schedule invalid — today only over-allocation, which is
+// error severity. We key on severity rather than kind, so any future error-level
+// finding blocks a schedule without this needing to enumerate it. (A warning, like
+// under-allocation, stays out of the result: leaving shares unvested is legal.)
+// Returns the findings themselves, not a flag, so a caller can name what tripped it.
+export const errorFindings = (findings: Finding[]): Finding[] =>
+  findings.filter((f) => f.severity === "error");
+
 export const formatFinding = (f: Finding): string => {
   switch (f.kind) {
     case "over-allocation":
