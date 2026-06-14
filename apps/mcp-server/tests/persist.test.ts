@@ -252,4 +252,38 @@ describe("mcp-server / persistence tool pair", () => {
     const text = res.content?.[0]?.text ?? "";
     expect(text).toMatch(/over-allocat/);
   });
+
+  it("refuses a statically-dead date window the linter calls an error", async () => {
+    const client = await connectClient();
+    // The gate "after 2026-01-01 AND before 2025-01-01" is an empty window: no
+    // firing can satisfy both. The linter flags it (unsatisfiable-date-window,
+    // error), but the gated event lowers to a synthetic that resolves to a
+    // template when no events are read — so without the lint gate this persists
+    // ok: true, minting a statically-dead artifact. The gate must turn it away.
+    const res = await persist(client, {
+      dsl: "VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    expect(res.isError).toBe(true);
+    const text = res.content?.[0]?.text ?? "";
+    expect(text).toMatch(/unsatisfiable-date-window/);
+  });
+
+  it("persists a warning-only program (a warning does not block storage)", async () => {
+    const client = await connectClient();
+    // CLIFF 2 YEARS over a 1-year grid trips cliff-exceeds-span — a *warning*,
+    // advisory only — yet still resolves to a single storable template. The gate
+    // keys on error severity, so a warned-but-legal schedule stays storable.
+    const res = await persist(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS CLIFF 2 YEARS",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    expect(res.isError).toBeFalsy();
+    const out = res.structuredContent as unknown as PersistOutput;
+    expect(out.artifact.template.statements.length).toBeGreaterThan(0);
+  });
 });

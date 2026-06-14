@@ -56,11 +56,14 @@ Typical workflows:
   returned DSL.
 - Persistence lifecycle: vestlang_persist compiles a DSL program ONCE into a
   storable artifact (canonical template + runtime + an out-of-band sidecar that
-  maps each synthetic event to its definition). Only a valid program that resolves
-  to a single \`template\` is storable; anything else returns a clear error — an
-  invalid program that over-allocates the grant is refused, as is one whose shape
-  isn't a single template. As the
-  real-world events the schedule gates on actually fire, call vestlang_rehydrate
+  maps each synthetic event to its definition). A program is storable only when it
+  is lint-clean of error-severity diagnostics, valid, and resolves to a single
+  \`template\`; anything else returns a clear error — a program the linter flags with
+  an error (e.g. an unsatisfiable date window) is refused naming the diagnostic, an
+  invalid program that over-allocates the grant is refused naming the
+  over-allocation, and one whose shape isn't a single template is refused naming the
+  status. A warning does not block storage. As the real-world events the schedule
+  gates on actually fire, call vestlang_rehydrate
   with the stored artifact and the world's named-event firings — it returns the
   DELTA of synthetic events to now fire in the system of record (each with the
   date and the definition it resolved against), what's still pending, and the
@@ -456,7 +459,7 @@ export function createServer(): McpServer {
     {
       title: "Persist a vesting schedule to a storable artifact",
       description:
-        "Compile a vestlang program ONCE into a persisted artifact: the canonical template + runtime, plus an out-of-band `sidecar` mapping each synthetic event (minted when a combinator/gated/offset start is lowered into a template) to its definition. Storing requires the program be both VALID and a single `template`. An invalid program — one that over-allocates the grant (more than 100%) — is refused with an error naming the over-allocation, since persisting it would mint an artifact that over-vests on rehydrate. A program whose `resolution` shape isn't a single `template` (events-only, unresolved, impossible) is likewise refused, naming the status. Also returns the template arm's `blockers`: advisory pending witnesses still floating at store time (e.g. a gate whose event hasn't fired), which vestlang_rehydrate later resolves. Mirrors vestlang_evaluate's input conventions.",
+        "Compile a vestlang program ONCE into a persisted artifact: the canonical template + runtime, plus an out-of-band `sidecar` mapping each synthetic event (minted when a combinator/gated/offset start is lowered into a template) to its definition. Storing requires the program be lint-clean of error-severity diagnostics, VALID, and a single `template`. A program the linter flags with an error (e.g. an unsatisfiable date window) is refused with a message naming the diagnostic. An invalid program — one that over-allocates the grant (more than 100%) — is refused naming the over-allocation, since persisting it would mint an artifact that over-vests on rehydrate. A program whose `resolution` shape isn't a single `template` (events-only, unresolved, impossible) is likewise refused, naming the status. (A warning is advisory and does NOT block storage.) Also returns the template arm's `blockers`: advisory pending witnesses still floating at store time (e.g. a gate whose event hasn't fired), which vestlang_rehydrate later resolves. Mirrors vestlang_evaluate's input conventions.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,
