@@ -189,6 +189,130 @@ describe("mcp-server / persistence tool pair", () => {
     expect(total).toBe(1200);
   });
 
+  // A bare named EVENT start (`VEST FROM EVENT ipo …`) lowers to a plain EVENT
+  // statement — the template names `ipo` in `vesting_base`, with no sidecar. The
+  // event is the schedule's whole dependency; rehydrate must read it off the
+  // template, not the (absent) sidecar.
+  const BARE_EVENT_DSL =
+    "VEST FROM EVENT ipo OVER 4 months EVERY 1 month CLIFF +2 months";
+
+  it("rehydrating a bare EVENT before it fires discloses it as pending", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+    // The bare event lives in the template, not a sidecar.
+    expect(persisted.artifact.sidecar).toBeUndefined();
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+
+    // ipo hasn't fired, so nothing projects — but it must be disclosed as pending
+    // (the disclosure-symptom regression: pre-fix `pending` was []).
+    expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.projection).toHaveLength(0);
+    expect(out.pending.length).toBeGreaterThan(0);
+    const pending = out.pending as { type: string; event?: string }[];
+    expect(
+      pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+
+  it("rehydrating a bare EVENT after it fires yields its witness and projection", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
+    // 400 shares: ½ at the 2-month cliff, the rest monthly.
+    expect(out.projection).toEqual([
+      { date: "2025-03-31", amount: 200 },
+      { date: "2025-04-30", amount: 100 },
+      { date: "2025-05-31", amount: 100 },
+    ]);
+    expect(out.pending).toHaveLength(0);
+    // The firing is a genuine delta against the empty stored runtime, reported with
+    // `definition: null` — it's the caller's own named event, not a minted gate.
+    expect(out.firings_to_apply).toEqual([
+      { event_id: "ipo", date: "2025-01-31", definition: null },
+    ]);
+  });
+
+  it("rehydrating an already-fired bare EVENT without re-supplying it keeps the stored firing", async () => {
+    const client = await connectClient();
+    // Persist WITH the firing, so the stored runtime already carries it.
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+    expect(persisted.artifact.runtime.eventFirings).toEqual([
+      { event_id: "ipo", date: "2025-01-31" },
+    ]);
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      // events omitted — the firing was recorded at persist.
+    });
+
+    // The stored firing stands: full projection, nothing pending (the !firings.has
+    // guard — without it the bare loop would spuriously report ipo pending while it
+    // still vests), and no delta since the firing is unchanged.
+    expect(out.projection).toEqual([
+      { date: "2025-03-31", amount: 200 },
+      { date: "2025-04-30", amount: 100 },
+      { date: "2025-05-31", amount: 100 },
+    ]);
+    expect(out.pending).toHaveLength(0);
+    expect(out.firings_to_apply).toHaveLength(0);
+  });
+
+  it("a corrected firing on rehydrate overrides the stored bare EVENT date", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      events: { ipo: "2025-02-28" },
+    });
+
+    // The supplied firing overrides the seed, so the schedule shifts a month.
+    expect(out.projection).toEqual([
+      { date: "2025-04-28", amount: 200 },
+      { date: "2025-05-28", amount: 100 },
+      { date: "2025-06-28", amount: 100 },
+    ]);
+    expect(out.firings_to_apply).toEqual([
+      { event_id: "ipo", date: "2025-02-28", definition: null },
+    ]);
+  });
+
   it("returns a clear error when the program is not a single template", async () => {
     const client = await connectClient();
     // An event-anchored cliff can't be expressed as one canonical template — the
