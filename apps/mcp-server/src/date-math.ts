@@ -12,6 +12,7 @@ import type {
   OCTDate,
   VestingDayOfMonth,
 } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";
 
@@ -136,7 +137,7 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
     grantQuantity: 1,
     asOf: "9999-12-31",
     vesting_day_of_month:
-      input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
   };
 
   const { installments, blockers } = evaluateStatement(

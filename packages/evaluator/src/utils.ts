@@ -1,4 +1,5 @@
 import {
+  DEFAULT_VESTING_DAY_OF_MONTH,
   EvaluationContext,
   EvaluationContextInput,
   Statement,
@@ -26,6 +27,6 @@ export function createEvaluationContext(
   return {
     ...input,
     vesting_day_of_month:
-      input.vesting_day_of_month ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
   };
 }

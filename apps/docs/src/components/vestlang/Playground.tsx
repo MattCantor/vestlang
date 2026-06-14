@@ -67,7 +67,6 @@ export default function Playground(): ReactNode {
       events: Object.fromEntries(
         Object.entries(namedEvents).filter(([, v]) => v !== undefined),
       ) as Record<string, OCTDate>,
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     };
 
     const evaluated = runEvaluate(dsl, grant);

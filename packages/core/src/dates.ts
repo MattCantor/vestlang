@@ -12,9 +12,7 @@
 // so day arithmetic never drifts across DST transitions.
 
 import type { OCTDate, PeriodType, VestingDayOfMonth } from "@vestlang/types";
-
-const DEFAULT_DAY_OF_MONTH: VestingDayOfMonth =
-  "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 
 // ISO-string ↔ Date (UTC midnight).
 //
@@ -78,7 +76,7 @@ export const toISO = (d: Date): OCTDate => {
 export function addMonthsRule(
   iso: OCTDate,
   months: number,
-  dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
+  dayOfMonth: VestingDayOfMonth = DEFAULT_VESTING_DAY_OF_MONTH,
   origin: OCTDate = iso,
 ): OCTDate {
   const d = toDate(iso);
@@ -137,7 +135,7 @@ export const addPeriod = (
   start: OCTDate,
   units: number,
   periodType: PeriodType,
-  dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
+  dayOfMonth: VestingDayOfMonth = DEFAULT_VESTING_DAY_OF_MONTH,
   origin: OCTDate = start,
 ): OCTDate => {
   switch (periodType) {
@@ -165,7 +163,7 @@ export const advanceCursor = (
   occurrences: number,
   period: number,
   periodType: PeriodType,
-  dayOfMonth: VestingDayOfMonth = DEFAULT_DAY_OF_MONTH,
+  dayOfMonth: VestingDayOfMonth = DEFAULT_VESTING_DAY_OF_MONTH,
   origin: OCTDate = anchor,
 ): OCTDate =>
   addPeriod(anchor, occurrences * period, periodType, dayOfMonth, origin);

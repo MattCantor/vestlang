@@ -30,6 +30,7 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/core";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
@@ -38,8 +39,6 @@ import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import { syntheticEventId } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";
-
-const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
 
 /** First single schedule of an expression (descend combinators' items[0]). */
 const firstSchedule = (expr: ScheduleExpr): Schedule => {
@@ -695,7 +694,7 @@ export const buildTemplate = (
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
     // onto grantDate. Core's compile applies this when runtime.grantDate is set.
     ...(ctx.grantDate ? { grantDate: ctx.grantDate } : {}),
-    ...(ctx.vesting_day_of_month !== DEFAULT_DAY_OF_MONTH
+    ...(ctx.vesting_day_of_month !== DEFAULT_VESTING_DAY_OF_MONTH
       ? { vestingDayOfMonth: ctx.vesting_day_of_month }
       : {}),
   };

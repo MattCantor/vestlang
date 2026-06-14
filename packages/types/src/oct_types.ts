@@ -38,3 +38,13 @@ export const VESTING_DAY_OF_MONTH_VALUES = [
 ] as const;
 
 export type VestingDayOfMonth = (typeof VESTING_DAY_OF_MONTH_VALUES)[number];
+
+/**
+ * The canonical day-of-month convention applied when a runtime carries no
+ * vestingDayOfMonth. Single-sourced here because the same default is both
+ * *omitted* from stored runtimes (evaluator) and *re-applied* on read-back
+ * (core); the persistence round-trip is sound only while every consumer agrees
+ * on this value, so they must all reference this one declaration.
+ */
+export const DEFAULT_VESTING_DAY_OF_MONTH: VestingDayOfMonth =
+  "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
