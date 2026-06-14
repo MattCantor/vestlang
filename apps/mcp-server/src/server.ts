@@ -498,13 +498,10 @@ export function createServer(): McpServer {
     {
       title: "Rehydrate a persisted artifact against fired events",
       description:
-        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns THREE things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — synthetic events whose definitions still don't resolve (their gating events haven't fired); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). Pass the same grant_date the artifact was built with; supply newly-fired events in the events map.",
+        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns THREE things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — synthetic events whose definitions still don't resolve (their gating events haven't fired); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it (the grant date also defaults `as_of`); you supply only the newly-fired events and grant_quantity.",
       inputSchema: z
         .object({
           artifact: PERSISTED_ARTIFACT,
-          grant_date: ISO_DATE.describe(
-            "Grant date the artifact was built with (YYYY-MM-DD)",
-          ),
           grant_quantity: z
             .number()
             .int("grant_quantity must be a whole number")
@@ -518,10 +515,7 @@ export function createServer(): McpServer {
               `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
             ),
           as_of: ISO_DATE.optional().describe(
-            "As-of date (YYYY-MM-DD). Defaults to grant_date.",
-          ),
-          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-            `OCT VestingDayOfMonth. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
+            "As-of date (YYYY-MM-DD). Defaults to the artifact's stored grant date.",
           ),
         })
         .strict().shape,
@@ -535,13 +529,13 @@ export function createServer(): McpServer {
     async (params) => {
       const result = runRehydrate({
         artifact: params.artifact,
-        grant_date: params.grant_date,
         grant_quantity: params.grant_quantity,
         events: params.events,
         as_of: params.as_of,
-        vesting_day_of_month: params.vesting_day_of_month,
       });
-      return jsonResult(result);
+      if (!result.ok) return toolError(result.error);
+      const { ok: _ok, ...output } = result;
+      return jsonResult(output);
     },
   );
 

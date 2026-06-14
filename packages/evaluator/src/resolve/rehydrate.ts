@@ -94,7 +94,23 @@ export const rehydrate = (
   runtime: VestingRuntime,
   ctxInput: EvaluationContextInput,
 ): RehydrateResult => {
-  const ctx = createEvaluationContext(ctxInput);
+  // The grant's frozen conventions come from the stored runtime, not the caller.
+  // Grant date and day-of-month were fixed at issuance, so the witnesses we
+  // re-resolve here must read the same values the projection compiles under —
+  // otherwise an offset synthetic (e.g. `EVENT ipo + 1 month`) could land a day
+  // off the projection grid. The caller still owns world/observer state (events,
+  // asOf) and grantQuantity; the matching ctxInput grant-date / day-of-month
+  // fields are deliberately ignored. The grant-date fallback only matters for a
+  // hand-built artifact that omits runtime.grantDate — a persisted one always
+  // carries it. day-of-month is set unconditionally: when the grant used the
+  // default rule lower.ts doesn't store it, so this is undefined and
+  // createEvaluationContext re-applies the same canonical default the projection
+  // uses.
+  const ctx = createEvaluationContext({
+    ...ctxInput,
+    grantDate: runtime.grantDate ?? ctxInput.grantDate,
+    vesting_day_of_month: runtime.vestingDayOfMonth,
+  });
 
   // Only resolve ids that are genuinely EVENT statements in the frozen spec —
   // never fabricate a firing for an id the template doesn't reference.

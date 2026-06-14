@@ -65,14 +65,23 @@ async function persistOk(
   return res.structuredContent as unknown as PersistOutput;
 }
 
+// Raw rehydrate call — does NOT assert success, so error and schema-rejection
+// cases (a missing stored grant date, a now-removed param) can inspect isError.
+async function rehydrateRaw(
+  client: Client,
+  args: Record<string, unknown>,
+): Promise<CallResult> {
+  return (await client.callTool({
+    name: "vestlang_rehydrate",
+    arguments: args,
+  })) as CallResult;
+}
+
 async function rehydrate(
   client: Client,
   args: Record<string, unknown>,
 ): Promise<RehydrateOutput> {
-  const res = (await client.callTool({
-    name: "vestlang_rehydrate",
-    arguments: args,
-  })) as CallResult;
+  const res = await rehydrateRaw(client, args);
   expect(res.isError).toBeFalsy();
   return res.structuredContent as RehydrateOutput;
 }
@@ -116,7 +125,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 1000,
       as_of: "2026-01-01",
     });
@@ -137,7 +145,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 1000,
       events: { ipo: "2026-06-01" },
       as_of: "2026-07-01",
@@ -176,7 +183,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 1200,
       as_of: "2026-01-01",
     });
@@ -208,7 +214,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 400,
     });
 
@@ -235,7 +240,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 400,
       events: { ipo: "2025-01-31" },
     });
@@ -269,7 +273,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 400,
       // events omitted — the firing was recorded at persist.
     });
@@ -297,7 +300,6 @@ describe("mcp-server / persistence tool pair", () => {
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
-      grant_date: "2025-01-01",
       grant_quantity: 400,
       events: { ipo: "2025-02-28" },
     });
@@ -409,5 +411,174 @@ describe("mcp-server / persistence tool pair", () => {
     expect(res.isError).toBeFalsy();
     const out = res.structuredContent as unknown as PersistOutput;
     expect(out.artifact.template.statements.length).toBeGreaterThan(0);
+  });
+
+  // ---- Issue #229: the grant's frozen conventions come from the artifact ----
+  //
+  // An offset synthetic gated on `ipo`. Persisted under a fixed-day rule, its
+  // witness on rehydrate must follow that stored rule (not the caller's / default),
+  // so the firing date and the projection grid agree.
+  const OFFSET_SYNTHETIC_DSL =
+    "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
+
+  it("witness date and projection agree under the stored day-of-month rule", async () => {
+    const client = await connectClient();
+    // Persist under rule "15" — non-default, so the rule is frozen into the runtime.
+    const persisted = await persistOk(client, {
+      dsl: OFFSET_SYNTHETIC_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      vesting_day_of_month: "15",
+    });
+
+    // Rehydrate with no day-of-month arg (it no longer exists) — ipo on a month-end.
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
+    // +1 month under rule "15" lands on the 15th, NOT the month-end the default
+    // would give. The witness and the projection grid share that date.
+    expect(out.firings_to_apply).toHaveLength(1);
+    expect(out.firings_to_apply[0].date).toBe("2025-02-15");
+    expect(out.projection[0].date).toBe("2025-03-15");
+    expect(out.projection).toEqual([
+      { date: "2025-03-15", amount: 100 },
+      { date: "2025-04-15", amount: 100 },
+      { date: "2025-05-15", amount: 100 },
+      { date: "2025-06-15", amount: 100 },
+    ]);
+  });
+
+  it("default-rule agreement: witness and projection share the firing-date origin", async () => {
+    const client = await connectClient();
+    // No vesting_day_of_month — the default rule, so runtime.vestingDayOfMonth is
+    // absent and rehydrate re-applies the same default the projection compiles under.
+    const persisted = await persistOk(client, {
+      dsl: OFFSET_SYNTHETIC_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+    expect(
+      (persisted.artifact.runtime as { vestingDayOfMonth?: string })
+        .vestingDayOfMonth,
+    ).toBeUndefined();
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
+    // +1 month off a month-end, under the default rule, lands on the month-end.
+    // The witness origin (2025-02-28) is what the projection grid is anchored on.
+    expect(out.firings_to_apply[0].date).toBe("2025-02-28");
+    expect(out.projection[0].date).toBe("2025-03-28");
+    expect(out.projection).toEqual([
+      { date: "2025-03-28", amount: 100 },
+      { date: "2025-04-28", amount: 100 },
+      { date: "2025-05-28", amount: 100 },
+      { date: "2025-06-28", amount: 100 },
+    ]);
+  });
+
+  it("no longer accepts grant_date or vesting_day_of_month (schema + description)", async () => {
+    const client = await connectClient();
+
+    // The registered tool drops both params from its strict input schema and its
+    // description no longer mentions either.
+    const { tools } = await client.listTools();
+    const rehydrateTool = tools.find((t) => t.name === "vestlang_rehydrate");
+    expect(rehydrateTool).toBeDefined();
+    const props = (
+      rehydrateTool!.inputSchema as { properties?: Record<string, unknown> }
+    ).properties;
+    expect(props).toBeDefined();
+    expect(props).not.toHaveProperty("grant_date");
+    expect(props).not.toHaveProperty("vesting_day_of_month");
+    expect(rehydrateTool!.description ?? "").not.toMatch(/grant_date/);
+    expect(rehydrateTool!.description ?? "").not.toMatch(
+      /vesting_day_of_month/,
+    );
+
+    // A call supplying only the surviving params succeeds.
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+      as_of: "2025-06-01",
+    });
+    expect(out.projection.length).toBeGreaterThan(0);
+  });
+
+  it("grant_quantity is still required and still sizes the projection", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 4 months EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+
+    // Omitting grant_quantity is rejected by the strict schema.
+    const missing = await rehydrateRaw(client, {
+      artifact: persisted.artifact,
+    });
+    expect(missing.isError).toBe(true);
+
+    // Supplied, it sizes the projection to that total.
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 800,
+    });
+    const total = out.projection.reduce((s, i) => s + i.amount, 0);
+    expect(total).toBe(800);
+
+    // A different quantity resizes it — proof it's the caller's input, not stored.
+    const out2 = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 1200,
+    });
+    expect(out2.projection.reduce((s, i) => s + i.amount, 0)).toBe(1200);
+  });
+
+  it("errors clearly when the artifact has no stored grant date", async () => {
+    const client = await connectClient();
+    // A hand-built artifact whose runtime omits grantDate — can't come from persist,
+    // which always stores it. Without the guard, the missing date would silently
+    // re-resolve everything against undefined.
+    const artifact = {
+      template: {
+        id: "t1",
+        statements: [
+          {
+            order: 0,
+            vesting_base: { type: "DATE" },
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 1 },
+          },
+        ],
+      },
+      runtime: {
+        startDate: "2025-01-01",
+        // grantDate deliberately absent
+      },
+    };
+
+    const res = await rehydrateRaw(client, {
+      artifact,
+      grant_quantity: 400,
+    });
+
+    expect(res.isError).toBe(true);
+    const text = res.content?.[0]?.text ?? "";
+    expect(text).toMatch(/grant date/i);
   });
 });
