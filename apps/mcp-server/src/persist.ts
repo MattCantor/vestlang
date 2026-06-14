@@ -16,6 +16,7 @@ import {
   errorFindings,
   formatFinding,
 } from "@vestlang/pipeline";
+import { lintText } from "@vestlang/linter";
 import {
   evaluateProgram,
   toPersisted,
@@ -147,19 +148,39 @@ export type PersistResult =
   | { ok: true; artifact: PersistedArtifact; blockers: unknown[] }
   | { ok: false; error: string };
 
-// Compile a program down to a storable artifact. Two gates stand in the way. First
-// validity: a program the evaluator flags as invalid — one that allocates more than
-// the whole grant — is refused outright, naming the over-allocation, since storing it
-// would mint a durable artifact that over-vests on rehydrate. Then storability: only a
-// `template` resolution fits a single canonical artifact, so any other shape comes back
-// as a clear error naming the status that blocked it. The returned blockers are the
-// template arm's advisory pending witnesses — what's still floating at store time
-// (e.g. a combinator start whose event hasn't fired), surfaced so the caller knows
-// the artifact isn't yet fully resolved.
+// Compile a program down to a storable artifact. Three gates stand in the way, in
+// order. First, lint: a program the linter flags with an error-severity diagnostic
+// — e.g. a start gate whose date window is empty — is refused before we evaluate,
+// naming the diagnostic. Then validity: a program the evaluator flags as invalid —
+// one that allocates more than the whole grant — is refused, naming the
+// over-allocation, since storing it would mint a durable artifact that over-vests on
+// rehydrate. Finally storability: only a `template` resolution fits a single
+// canonical artifact, so any other shape comes back as a clear error naming the
+// status that blocked it. The returned blockers are the template arm's advisory
+// pending witnesses — what's still floating at store time (e.g. a combinator start
+// whose event hasn't fired), surfaced so the caller knows the artifact isn't yet
+// fully resolved.
 export function runPersist(input: PersistInput): PersistResult {
   const parsed = parseToProgram(input.dsl);
   if (!parsed.ok) {
     return { ok: false, error: parsed.error.message };
+  }
+
+  // A program the linter rejects as an error must not become a durable artifact.
+  // Key on error severity, not "any diagnostic": a warning (e.g. cliff-exceeds-span)
+  // is advisory and leaves the schedule storable. lintText is the same entry the
+  // vestlang_lint tool uses, so persist and lint share one analysis path. Static
+  // and cheap, so it runs before the heavier evaluate.
+  const lintErrors = lintText(input.dsl).diagnostics.filter(
+    (d) => d.severity === "error",
+  );
+  if (lintErrors.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot persist: ${lintErrors
+        .map((d) => `${d.ruleId}: ${d.message}`)
+        .join("; ")}.`,
+    };
   }
 
   const ctxInput: EvaluationContextInput = {
