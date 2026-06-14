@@ -36,9 +36,10 @@ export interface RehydrateResult {
   // The stored runtime with newly-resolved synthetic witnesses merged into
   // `eventFirings` (a re-resolution overrides a prior firing for the same id).
   runtime: VestingRuntime;
-  // Synthetic events still pending — their definitions didn't resolve against the
-  // current world (e.g. the named event hasn't fired). Advisory, like the
-  // `template`-arm blockers at emit time.
+  // Gates whose definitions didn't resolve against the current world. A flat list
+  // carrying both kinds: still-waiting (the named event hasn't fired) and dead (it
+  // fired outside its window); the MCP boundary splits them by verdict. Advisory,
+  // like the `template`-arm blockers at emit time.
   blockers: Blocker[];
 }
 

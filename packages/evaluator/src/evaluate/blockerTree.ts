@@ -1,4 +1,23 @@
-import type { Blocker } from "@vestlang/types";
+import type { Blocker, ImpossibleBlocker } from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
+
+// Which blockers are contradictions (vs. things still merely pending). Driven off
+// the discriminant rather than the `IMPOSSIBLE_` name prefix, so adding a blocker
+// variant fails the build here until it's classified — a mislabelled tag can't
+// silently fall through to "unresolved".
+export const isImpossibleBlocker = (b: Blocker): b is ImpossibleBlocker => {
+  switch (b.type) {
+    case "IMPOSSIBLE_SELECTOR":
+    case "IMPOSSIBLE_CONDITION":
+      return true;
+    case "EVENT_NOT_YET_OCCURRED":
+    case "UNRESOLVED_SELECTOR":
+    case "UNRESOLVED_CONDITION":
+      return false;
+    default:
+      return assertNever(b);
+  }
+};
 
 // The single source of truth for the blocker tree's edges: a blocker's children
 // are the arms of a selector, and nothing else. Add a recursive variant and this

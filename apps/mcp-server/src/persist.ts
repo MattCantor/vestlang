@@ -22,6 +22,7 @@ import {
   toPersisted,
   rehydratePersisted,
   fromSidecar,
+  isImpossibleBlocker,
   VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
@@ -29,7 +30,9 @@ import { compileToInstallments } from "@vestlang/core";
 import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
 import type {
   EvaluationContextInput,
+  ImpossibleBlocker,
   OCTDate,
+  UnresolvedBlocker,
   VestingRuntime,
 } from "@vestlang/types";
 
@@ -230,7 +233,7 @@ export function runPersist(input: PersistInput): PersistResult {
 }
 
 /* ------------------------
- * rehydrate: artifact + world's firings → action list + pending + projection
+ * rehydrate: artifact + world's firings → action list + pending + dead + projection
  * ------------------------ */
 
 // One entry in the action list: a synthetic witness that the rehydration newly
@@ -249,10 +252,14 @@ export interface RehydrateInput {
   as_of?: OCTDate;
 }
 
-// The success payload, also the shape the server returns once it strips `ok`.
+// The success payload, also the shape the server returns once it strips `ok`. The
+// evaluator hands back one flat blocker list; we split it into the two operator
+// readings: `pending` is still-waiting (the gating event hasn't fired), `dead` can
+// never resolve given the firings we now know (the event fired outside its window).
 interface RehydrateOutput {
   firings_to_apply: FiringToApply[];
-  pending: unknown[];
+  pending: UnresolvedBlocker[];
+  dead: ImpossibleBlocker[];
   projection: ReturnType<typeof compileToInstallments>;
 }
 
@@ -330,10 +337,20 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     result.runtime,
   );
 
+  // Partition the flat blocker list by each blocker's own verdict. Contradictions
+  // (the gate's event fired outside its window) go to `dead` — stop waiting; the
+  // rest are genuinely still-waiting and stay in `pending`. Both are always present
+  // ([] when empty) so the caller never has to probe for the field.
+  const dead = result.blockers.filter(isImpossibleBlocker);
+  const pending = result.blockers.filter(
+    (b): b is UnresolvedBlocker => !isImpossibleBlocker(b),
+  );
+
   return {
     ok: true,
     firings_to_apply,
-    pending: result.blockers,
+    pending,
+    dead,
     projection,
   };
 }
