@@ -23,11 +23,13 @@ import {
   rehydratePersisted,
   fromSidecar,
   isImpossibleBlocker,
+  isRehydrateDefinitionError,
   VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
 import { compileToInstallments } from "@vestlang/core";
 import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
+import { ISO_DATE } from "./iso-date.js";
 import type {
   EvaluationContextInput,
   ImpossibleBlocker,
@@ -43,10 +45,6 @@ type EventFiring = NonNullable<VestingRuntime["eventFirings"]>[number];
 /* ------------------------
  * Zod schemas for the artifact (the rehydrate tool's input)
  * ------------------------ */
-
-const ISO_DATE = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Dates must be YYYY-MM-DD");
 
 const FRACTION = z
   .object({
@@ -314,7 +312,26 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     asOf: input.as_of ?? grantDate,
   };
 
-  const result = rehydratePersisted(input.artifact, ctxInput);
+  // A persisted artifact can be edited in external storage, so a stored event
+  // definition may arrive corrupt — unparseable, or smuggling in a second statement
+  // that would otherwise be silently dropped. The evaluator throws a tagged
+  // RehydrateDefinitionError on that path; we turn it into the same structured
+  // refusal as the missing-grant-date case, naming the offending event but NOT
+  // echoing the raw parser text (that stays on the error's `cause`, for logs). Any
+  // other throw is unexpected — re-throw it, matching runPersist's split (it catches
+  // only evaluateProgram and lets the rest propagate).
+  let result;
+  try {
+    result = rehydratePersisted(input.artifact, ctxInput);
+  } catch (err) {
+    if (isRehydrateDefinitionError(err)) {
+      return {
+        ok: false,
+        error: `Cannot rehydrate: the stored definition for event "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+      };
+    }
+    throw err;
+  }
 
   // Look the definition up from the sidecar's source map, so the operator sees the
   // gate behind each newly-resolved synthetic id rather than a bare `evt:n`.

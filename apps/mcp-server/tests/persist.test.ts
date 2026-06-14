@@ -724,4 +724,92 @@ describe("mcp-server / persistence tool pair", () => {
     expect(description).toMatch(/`pending`[\s\S]*\bdead\b/i);
     expect(description).toMatch(/separately/i);
   });
+
+  // ---- Issue #231: corrupt sidecar refused cleanly; stored dates calendar-checked
+  //
+  // The persisted artifact is untrusted input — it may live in external storage and
+  // be hand-edited. Two boundary failures must be handled here rather than crashing
+  // deep in core: a corrupt event definition, and an impossible calendar date.
+
+  // A stored artifact whose sidecar `definition` is corrupt. The event_id matches the
+  // sidecar key AND a real EVENT-anchored template statement, so rehydrate actually
+  // reparses it (the templateEventIds guard wouldn't otherwise reach it). Every field
+  // is calendar-valid so the schema admits it and the failure surfaces at reparse.
+  const corruptArtifact = (eventId: string, definition: string) => ({
+    template: {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: { type: "EVENT", event_id: eventId },
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    },
+    runtime: { grantDate: "2025-01-01" },
+    sidecar: { vestlang: { [eventId]: { definition } } },
+  });
+
+  it("refuses a corrupt sidecar definition, naming the event_id and not leaking the parser dump", async () => {
+    const client = await connectClient();
+
+    const res = await rehydrateRaw(client, {
+      artifact: corruptArtifact("evt_1", "TOTALLY NOT DSL (("),
+      grant_quantity: 400,
+    });
+
+    expect(res.isError).toBe(true);
+    const text = res.content?.[0]?.text ?? "";
+    // Names the offending event and reads as an intentional corruption refusal.
+    expect(text).toContain("evt_1");
+    expect(text).toMatch(/corrupt|unparseable/i);
+    // The raw peggy dump stays on the error's `cause`, never in the operator message.
+    expect(text).not.toContain('Expected "DATE"');
+  });
+
+  // The artifact schema's date fields must get the same real-calendar check the live
+  // tool inputs already enforce — single-sourced from one ISO_DATE. Pin all THREE
+  // stored date sites so a partial swap can't pass: a regex-only schema would accept
+  // these lexically-shaped impossibles and only die deep inside core.
+  it("rejects an impossible runtime.grantDate at the schema boundary", async () => {
+    const client = await connectClient();
+    const res = await rehydrateRaw(client, {
+      artifact: {
+        template: { id: "t1", statements: [] },
+        runtime: { grantDate: "2025-02-31" },
+      },
+      grant_quantity: 400,
+    });
+    expect(res.isError).toBe(true);
+  });
+
+  it("rejects an impossible runtime.startDate at the schema boundary", async () => {
+    const client = await connectClient();
+    const res = await rehydrateRaw(client, {
+      artifact: {
+        template: { id: "t1", statements: [] },
+        runtime: { grantDate: "2025-01-01", startDate: "2025-13-01" },
+      },
+      grant_quantity: 400,
+    });
+    expect(res.isError).toBe(true);
+  });
+
+  it("rejects an impossible eventFirings[].date at the schema boundary", async () => {
+    const client = await connectClient();
+    const res = await rehydrateRaw(client, {
+      artifact: {
+        template: { id: "t1", statements: [] },
+        runtime: {
+          grantDate: "2025-01-01",
+          eventFirings: [{ event_id: "ipo", date: "2025-02-31" }],
+        },
+      },
+      grant_quantity: 400,
+    });
+    expect(res.isError).toBe(true);
+  });
 });
