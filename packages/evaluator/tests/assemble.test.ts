@@ -83,7 +83,8 @@ describe("assemble — template status", () => {
   it("monthly-48 + 12mo cliff → RESOLVED installments tagged template", () => {
     const out = evalStmt(monthly48WithCliff, ctxInput());
     expect(out.status).toBe("template");
-    expect(out.blockers).toEqual([]);
+    expect(out.pending).toEqual([]);
+    expect(out.dead).toEqual([]);
     expect(out.installments).toHaveLength(37); // cliff lump + 36 monthly
     expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(out.installments[0]).toMatchObject({
@@ -221,7 +222,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
     expect(out.installments[0].state).toBe("UNRESOLVED");
     expect(out.installments[0].amount).toBe(4800);
     expect(
-      out.blockers.some(
+      out.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -263,7 +264,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
     expect(sum(resolved)).toBe(3600);
     expect(sum(unresolved)).toBe(1200);
     expect(
-      out.blockers.some(
+      out.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -329,7 +330,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(out.sourceMap[eventId].definition).toMatch(/ipo/);
     // Pending-ness rides `blockers`; UNRESOLVED installments carry the share claim.
     // LATER OF with one settled arm → partial=true, so 48 symbolic start+N tranches.
-    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+    expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
     expect(out.installments.every((i) => i.state === "UNRESOLVED")).toBe(true);
     expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(100000);
   });
@@ -358,7 +359,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     const base = out.template.statements[0].vesting_base;
     expect(base.type).toBe("EVENT");
     expect(Object.keys(out.sourceMap)).toHaveLength(1);
-    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+    expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
   });
 
   it("two portions on the same anchor share one event_id + one source-map entry", () => {
@@ -391,7 +392,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(s.period).toBe(1);
     expect(s.period_type).toBe("MONTHS");
     expect(Object.keys(out.sourceMap)).toHaveLength(1);
-    expect(findsEventNotOccurred(out.blockers, "ipo")).toBe(true);
+    expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
     // No firing → UNRESOLVED installments carrying the share claim.
     // LATER OF with one settled arm → partial=true, 48 symbolic start+N tranches.
     expect(out.installments.every((i) => i.state === "UNRESOLVED")).toBe(true);
@@ -606,9 +607,10 @@ describe("assemble — impossible status", () => {
     if (out.status !== "impossible") return;
     expect(out.installments.length).toBeGreaterThan(0);
     expect(out.installments.every((i) => i.state === "IMPOSSIBLE")).toBe(true);
-    expect(out.blockers.every((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(
-      true,
-    );
+    // A terminal program is all-dead: the contradictions land in `dead`, nothing
+    // is pending.
+    expect(out.pending).toHaveLength(0);
+    expect(out.dead.every((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(true);
   });
 
   it("whole-program collapse: all-void program → impossible", () => {
@@ -682,7 +684,7 @@ describe("template arm — pending channel (R2-B1)", () => {
     expect(sum(unresolved)).toBe(1200); // pending EVENT portion
 
     // Blocker for ipo appears exactly once — not duplicated by the new channel.
-    const ipoBlockers = out.blockers.filter(
+    const ipoBlockers = out.pending.filter(
       (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
     );
     expect(ipoBlockers).toHaveLength(1);

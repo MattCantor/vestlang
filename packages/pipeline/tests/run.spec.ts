@@ -245,8 +245,9 @@ describe("runEvaluate — a user event named evt_1 no longer shadows a stand-in"
     // No part of the grant is double-counted or lost.
     expect(resolved + unresolved).toBe(1000);
 
-    // The hold-up is the LATER OF's unfired anchors, not the user's evt_1.
-    expect(r.view.blockers).toEqual([
+    // The hold-up is the LATER OF's unfired anchors, not the user's evt_1 — all
+    // pending, nothing dead.
+    expect(r.view.pendingBlockers).toEqual([
       {
         type: "UNRESOLVED_SELECTOR",
         selector: "LATER_OF",
@@ -256,5 +257,6 @@ describe("runEvaluate — a user event named evt_1 no longer shadows a stand-in"
         ],
       },
     ]);
+    expect(r.view.deadBlockers).toEqual([]);
   });
 });

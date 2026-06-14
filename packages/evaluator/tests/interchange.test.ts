@@ -419,9 +419,10 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
 
     expect(out.resolution.status).toBe("unresolved");
     if (out.resolution.status !== "unresolved") return;
-    expect(out.resolution.blockers).toEqual([
+    expect(out.resolution.pending).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
+    expect(out.resolution.dead).toHaveLength(0);
     expect(out.resolution.installments).toHaveLength(1);
     expect(out.resolution.installments[0].state).toBe("UNRESOLVED");
   });
@@ -556,13 +557,15 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     if (out.resolution.status !== "unresolved") return;
     expect(out.resolution.installments).toHaveLength(1);
     expect(out.resolution.installments[0].amount).toBe(100000);
-    expect(out.resolution.blockers.map((b) => b.type)).toEqual([
+    // All three are pending — nothing dead.
+    expect(out.resolution.dead).toHaveLength(0);
+    expect(out.resolution.pending.map((b) => b.type)).toEqual([
       "EVENT_NOT_YET_OCCURRED", // ipo (the start)
       "EVENT_NOT_YET_OCCURRED", // acquisition (the gated cliff's base)
       "UNRESOLVED_CONDITION", // the gate itself
     ]);
     expect(
-      out.resolution.blockers.flatMap((b) =>
+      out.resolution.pending.flatMap((b) =>
         b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
       ),
     ).toEqual(["ipo", "acquisition"]);

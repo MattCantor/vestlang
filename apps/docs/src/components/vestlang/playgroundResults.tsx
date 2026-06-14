@@ -8,21 +8,34 @@ import type {
 import { InstallmentsTable } from "./installmentsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
-const blockersBlock = (blockers: ScheduleView["blockers"]) =>
+// One labeled block of blockers. The resolution surface splits them into pending
+// (still waiting) and dead (contradicted given the firings), so we render each list
+// under its own heading.
+const blockersBlock = (
+  label: string,
+  blockers:
+    | ScheduleView["pendingBlockers"]
+    | ScheduleView["deadBlockers"],
+): ReactNode =>
   blockers.length > 0 ? (
-    <pre
-      style={{
-        fontSize: "0.75rem",
-        lineHeight: 1.6,
-        overflow: "auto",
-        maxHeight: "60vh",
-        borderRadius: "var(--ifm-code-border-radius)",
-        padding: "0.75rem",
-        background: "var(--ifm-code-background)",
-      }}
-    >
-      {JSON.stringify(blockers, null, 2)}
-    </pre>
+    <>
+      <p style={{ fontSize: "0.8125rem", margin: "0.5rem 0 0.25rem" }}>
+        <strong>{label}</strong>
+      </p>
+      <pre
+        style={{
+          fontSize: "0.75rem",
+          lineHeight: 1.6,
+          overflow: "auto",
+          maxHeight: "60vh",
+          borderRadius: "var(--ifm-code-border-radius)",
+          padding: "0.75rem",
+          background: "var(--ifm-code-background)",
+        }}
+      >
+        {JSON.stringify(blockers, null, 2)}
+      </pre>
+    </>
   ) : null;
 
 export default function PlaygroundResults({
@@ -98,7 +111,8 @@ export default function PlaygroundResults({
               </p>
             ) : null}
             <InstallmentsTable installments={view.installments} />
-            {blockersBlock(view.blockers)}
+            {blockersBlock("Pending blockers", view.pendingBlockers)}
+            {blockersBlock("Dead blockers", view.deadBlockers)}
             {/* Per-clause attribution — which clause produced which tranches.
                 Only worth showing when there's more than one clause (a single
                 clause just is the program). No verdict here: a clause has no
@@ -115,7 +129,8 @@ export default function PlaygroundResults({
                     </summary>
                     <div style={{ marginTop: "0.5rem" }}>
                       <InstallmentsTable installments={clause.installments} />
-                      {blockersBlock(clause.blockers)}
+                      {blockersBlock("Pending blockers", clause.pendingBlockers)}
+                      {blockersBlock("Dead blockers", clause.deadBlockers)}
                     </div>
                   </details>
                 ))}

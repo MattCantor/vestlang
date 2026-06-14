@@ -39,7 +39,7 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
     ).toBe(true);
     expect(resolution.installments.every((i) => i.amount === 100)).toBe(true);
     expect(
-      resolution.blockers.some(
+      resolution.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);

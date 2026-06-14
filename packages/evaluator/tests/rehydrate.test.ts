@@ -131,7 +131,8 @@ describe("rehydrate — Stage C: IPO fires → witness → full projection", () 
     expect(result.runtime.eventFirings).toEqual([
       { event_id: syntheticId, date: "2027-03-01" },
     ]);
-    expect(result.blockers).toEqual([]);
+    expect(result.pending).toEqual([]);
+    expect(result.dead).toEqual([]);
 
     // The FROZEN template + witnessed runtime compiles to the full schedule.
     const installments = compileToInstallments(template, 4800, result.runtime);
@@ -159,7 +160,7 @@ describe("rehydrate — Stage D: IPO still unfired → no witness", () => {
     );
 
     expect(result.runtime.eventFirings ?? []).toEqual([]); // LATER_OF: open upper bound
-    expect(findsEventNotOccurred(result.blockers, "ipo")).toBe(true);
+    expect(findsEventNotOccurred(result.pending, "ipo")).toBe(true);
   });
 });
 

@@ -116,7 +116,7 @@ describe("absenceAssumptions", () => {
     // isn't a dated assumption — it surfaces as a blocker instead.
     expect(out.absenceAssumptions).toEqual([]);
     expect(
-      out.resolution.blockers.some(
+      out.resolution.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);

@@ -80,6 +80,8 @@ export {
   UnresolvedBlocker,
   ImpossibleBlocker,
   Blocker,
+  DeadBlocker,
+  StaticImpossibleBlocker,
   ResolvedNode,
   UnresolvedNode,
   ImpossibleNode,

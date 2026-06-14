@@ -20,8 +20,10 @@
 
 import type {
   Blocker,
+  DeadBlocker,
   EvaluationContextInput,
   SourceMap,
+  UnresolvedBlocker,
   VestingNodeExpr,
 } from "@vestlang/types";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
@@ -29,6 +31,7 @@ import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
+import { partitionResolutionBlockers } from "../evaluate/blockerTree.js";
 import { isPickedResolved, type PickReturn } from "../evaluate/utils.js";
 import { isSyntheticEventId } from "./synthetic.js";
 
@@ -36,11 +39,13 @@ export interface RehydrateResult {
   // The stored runtime with newly-resolved synthetic witnesses merged into
   // `eventFirings` (a re-resolution overrides a prior firing for the same id).
   runtime: VestingRuntime;
-  // Gates whose definitions didn't resolve against the current world. A flat list
-  // carrying both kinds: still-waiting (the named event hasn't fired) and dead (it
-  // fired outside its window); the MCP boundary splits them by verdict. Advisory,
-  // like the `template`-arm blockers at emit time.
-  blockers: Blocker[];
+  // Gates whose definitions didn't resolve against the current world, split by the
+  // closed-world reading: `pending` is still-waiting (the named event hasn't
+  // fired), `dead` can never resolve given the firings we now know (it fired
+  // outside its window). Both always present, disjoint. Advisory, like the
+  // `template`-arm blockers at emit time.
+  pending: UnresolvedBlocker[];
+  dead: DeadBlocker[];
 }
 
 /**
@@ -171,11 +176,14 @@ export const rehydrate = (
   }
 
   const eventFirings = [...firings.values()];
+  // Split the gathered blockers by their closed-world reading once, at the boundary.
+  const { pending, dead } = partitionResolutionBlockers(blockers);
   return {
     runtime: {
       ...runtime,
       ...(eventFirings.length > 0 ? { eventFirings } : {}),
     },
-    blockers,
+    pending,
+    dead,
   };
 };

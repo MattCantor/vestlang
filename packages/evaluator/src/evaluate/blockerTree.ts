@@ -1,4 +1,10 @@
-import type { Blocker, ImpossibleBlocker } from "@vestlang/types";
+import type {
+  Blocker,
+  DeadBlocker,
+  ImpossibleBlocker,
+  StaticImpossibleBlocker,
+  UnresolvedBlocker,
+} from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 
 // Which blockers are contradictions (vs. things still merely pending). Driven off
@@ -39,3 +45,41 @@ export function foldBlocker<T>(
     blockerChildren(b).map((c) => foldBlocker(c, combine)),
   );
 }
+
+/* ------------------------
+ * The per-space brand boundary
+ * ------------------------ */
+//
+// These two functions are the ONLY place in the codebase that mints a per-space
+// blocker brand (an eslint rule forbids the casts anywhere else). Everything
+// upstream works in the unbranded `Blocker` union; the brand is applied as the
+// blockers cross into a verdict.
+
+// Split a resolution-space blocker list into what's still pending and what's dead.
+// Routing is top-level, by whether each blocker's whole subtree is impossible —
+// `isImpossibleBlocker` (an `IMPOSSIBLE_SELECTOR` carries only `ImpossibleBlocker`
+// children, so it's dead all the way down; an `UNRESOLVED_SELECTOR` may hold a mixed
+// list, so at least one arm is still live). NOT a recursive flatten: that would
+// promote a dead arm an `EARLIER_OF` has already routed around to schedule-level
+// `dead`.
+export function partitionResolutionBlockers(blockers: Blocker[]): {
+  pending: UnresolvedBlocker[];
+  dead: DeadBlocker[];
+} {
+  const pending: UnresolvedBlocker[] = [];
+  const dead: DeadBlocker[] = [];
+  for (const b of blockers) {
+    if (isImpossibleBlocker(b)) {
+      dead.push(b as DeadBlocker);
+    } else {
+      pending.push(b);
+    }
+  }
+  return { pending, dead };
+}
+
+// Brand the interchange `impossible` arm. The verdict is firing-blind, so its
+// blockers are static contradictions by construction — the cast just records that.
+export const brandStatic = (
+  bs: ImpossibleBlocker[],
+): StaticImpossibleBlocker[] => bs as StaticImpossibleBlocker[];

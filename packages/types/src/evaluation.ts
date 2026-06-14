@@ -67,6 +67,29 @@ export type ImpossibleBlocker =
 export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
 
 /* ------------------------
+ * Per-space blocker brands
+ * ------------------------ */
+
+// The engine reports two verdicts, and an `IMPOSSIBLE_*` blocker reads differently
+// in each. Firing-blind (interchange) it's a *static* contradiction — true no
+// matter what fires. Closed-world (resolution) the same object reads as *dead given
+// the firings we know*: the broader reading, since a static contradiction is dead
+// under any firing too. These two brands tag which reading a blocker carries, so the
+// type system keeps the spaces from leaking into each other. Same structure, distinct
+// nominal identity; they're mutually exclusive, so neither arm is assignable to the
+// other (a one-sided brand wouldn't stop interchange = resolution.dead, since a
+// branded subtype stays assignable to the unbranded base — both sides must carry one).
+//
+// The internal pipeline stays on the plain `ImpossibleBlocker`; the brand is minted
+// only at the two verdict boundaries, in blockerTree.ts. Nothing else casts to these.
+export type DeadBlocker = ImpossibleBlocker & {
+  readonly __space: "resolution";
+};
+export type StaticImpossibleBlocker = ImpossibleBlocker & {
+  readonly __space: "interchange";
+};
+
+/* ------------------------
  * Node Meta
  * ------------------------ */
 
@@ -160,6 +183,12 @@ export interface InstallmentSet {
  * `status` (always present), where the presence of the canonical artifact is
  * implied by the arm.
  */
+// Every arm carries the same two blocker lists, so a consumer never switches on
+// `status` to read them: `pending` is what's still merely waiting on a witness,
+// `dead` is what can never resolve given the firings we know (read as dead, not
+// static — this is the closed-world space). Both are `[]` on arms that can't carry
+// the relevant kind. The split is done once, in assemble.ts, off the flat blocker
+// list the resolver leaves behind.
 export type EvaluatedScheduleVerdict =
   | {
       status: "template";
@@ -172,7 +201,10 @@ export type EvaluatedScheduleVerdict =
       // mixed-stream rule as the events-only arm. All RESOLVED when every
       // statement has a known start.
       installments: (ResolvedInstallment | UnresolvedInstallment)[];
-      blockers: Blocker[];
+      // Pending witnesses (unfired atomic EVENT starts). A `template` can be
+      // representable yet carry blockers + an empty/partial projection.
+      pending: UnresolvedBlocker[];
+      dead: DeadBlocker[];
     }
   | {
       status: "events-only";
@@ -186,19 +218,23 @@ export type EvaluatedScheduleVerdict =
       // view boundary, so a consumer can still gate on the kind.
       reason: NonTemplateReason;
       // The pending portions' missing witnesses. Empty when everything dated.
-      blockers: Blocker[];
+      pending: UnresolvedBlocker[];
+      dead: DeadBlocker[];
     }
   | {
       status: "unresolved";
       // Symbolic (UNRESOLVED/IMPOSSIBLE) installments, plus any RESOLVED tranches
       // from fully-resolved sibling statements in a mixed program.
       installments: Installment[];
-      blockers: Blocker[];
+      pending: UnresolvedBlocker[];
+      dead: DeadBlocker[];
     }
   | {
       status: "impossible";
       installments: ImpossibleInstallment[];
-      blockers: ImpossibleBlocker[];
+      // A terminal program is all-dead, so `pending` is `[]` here.
+      pending: UnresolvedBlocker[];
+      dead: DeadBlocker[];
     };
 
 /**
@@ -290,7 +326,9 @@ export type InterchangeVerdict =
       // reshaping this arm, so we don't pre-commit a shape now.
     }
   | { status: "unrepresentable"; reason: NonTemplateReason }
-  | { status: "impossible"; blockers: ImpossibleBlocker[] };
+  // Firing-blind, so every blocker here is a *static* contradiction — branded as
+  // such (in interchange.ts) to keep it distinct from a resolution-space `dead`.
+  | { status: "impossible"; blockers: StaticImpossibleBlocker[] };
 
 /**
  * One non-occurrence the current resolution is leaning on. Reading a schedule as,

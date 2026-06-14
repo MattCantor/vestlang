@@ -141,7 +141,8 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
     expect(result.runtime.eventFirings).toEqual([
       { event_id: id, date: "2027-03-01" },
     ]);
-    expect(result.blockers).toEqual([]);
+    expect(result.pending).toEqual([]);
+    expect(result.dead).toEqual([]);
 
     // The frozen template + witnessed runtime compiles to the full schedule.
     const installments = compileToInstallments(
@@ -285,7 +286,7 @@ describe("sidecar — a stand-in event and a user `evt_1` stay distinct through 
     // The stand-in stays pending: no witness, and its anchors still block —
     // the LATER OF's two unfired events, reported under the selector.
     expect(result.runtime.eventFirings ?? []).toEqual([]);
-    expect(result.blockers).toContainEqual({
+    expect(result.pending).toContainEqual({
       type: "UNRESOLVED_SELECTOR",
       selector: "LATER_OF",
       blockers: [

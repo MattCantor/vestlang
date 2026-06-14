@@ -7,7 +7,6 @@
 import { describe, it, expect } from "vitest";
 import type {
   AbsenceAssumption,
-  Blocker,
   EvaluatedSchedule,
   Finding,
   Installment,
@@ -18,14 +17,16 @@ import type {
 } from "@vestlang/types";
 import { toScheduleView } from "../src/view";
 
-// The view carries both verdicts. We stub the resolution side (status, blockers,
-// installments, the events-only reason, the template-arm source map) and let the
-// interchange side default to a plain template; a test that cares about the
-// storable verdict passes its own. Everything is cast through `unknown`, so the
-// stub only has to carry the fields toScheduleView actually reads.
+// The view carries both verdicts. We stub the resolution side (status, the two
+// blocker lists, installments, the events-only reason, the template-arm source map)
+// and let the interchange side default to a plain template; a test that cares about
+// the storable verdict passes its own. The whole object is cast through `unknown`,
+// so the stub carries plain blocker shapes — no need to brand them here (and the
+// brand cast is confined to the evaluator anyway).
 const stub = (fields: {
   status: ResolutionStatus;
-  blockers?: Blocker[];
+  pending?: unknown[];
+  dead?: unknown[];
   installments?: Installment[];
   findings?: Finding[];
   reason?: NonTemplateReason;
@@ -40,7 +41,8 @@ const stub = (fields: {
     },
     resolution: {
       status: fields.status,
-      blockers: fields.blockers ?? [],
+      pending: fields.pending ?? [],
+      dead: fields.dead ?? [],
       installments: fields.installments ?? [],
       ...(fields.reason !== undefined ? { reason: fields.reason } : {}),
       ...(fields.status === "template"
@@ -55,9 +57,10 @@ const stub = (fields: {
 const dated: Installment[] = [
   { state: "RESOLVED", amount: 100, date: "2025-02-01" },
 ];
-const eventBlocker: Blocker[] = [
-  { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
-];
+const eventBlocker = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];
+// A contradiction — read by the view as a resolution-space dead blocker. Carried as
+// a plain shape; the stub coerces the whole schedule through `unknown`.
+const deadBlocker = [{ type: "IMPOSSIBLE_CONDITION", node: {} }];
 const overAllocated: Finding[] = [
   {
     kind: "over-allocation",
@@ -173,12 +176,32 @@ describe("toScheduleView", () => {
     expect("projected" in view).toBe(false);
   });
 
-  it("passes installments and blockers through unchanged", () => {
+  it("passes installments and the two blocker lists through unchanged", () => {
     const view = toScheduleView(
-      stub({ status: "template", installments: dated, blockers: eventBlocker }),
+      stub({
+        status: "template",
+        installments: dated,
+        pending: eventBlocker,
+      }),
     );
     expect(view.installments).toEqual(dated);
-    expect(view.blockers).toEqual(eventBlocker);
+    expect(view.pendingBlockers).toEqual(eventBlocker);
+    expect(view.deadBlockers).toEqual([]);
+    expect(view.pending).toBe(true);
+    expect(view.dead).toBe(false);
+  });
+
+  it("surfaces dead blockers under deadBlockers, flips the dead flag", () => {
+    // A schedule whose resolution carries a contradiction (one statement dead given
+    // the firings) — the view exposes it under deadBlockers, not pendingBlockers,
+    // and the dead read-flag reflects it.
+    const view = toScheduleView(
+      stub({ status: "unresolved", dead: deadBlocker }),
+    );
+    expect(view.deadBlockers).toEqual(deadBlocker);
+    expect(view.pendingBlockers).toEqual([]);
+    expect(view.dead).toBe(true);
+    expect(view.pending).toBe(false);
   });
 
   it("folds a rendered message into each absence assumption, keeping its fields", () => {

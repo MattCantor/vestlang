@@ -21,7 +21,10 @@ import type {
 } from "@vestlang/types";
 import { compileToInstallments, gt } from "@vestlang/core";
 import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
-import { foldBlocker } from "../evaluate/blockerTree.js";
+import {
+  foldBlocker,
+  partitionResolutionBlockers,
+} from "../evaluate/blockerTree.js";
 import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
 import type { ResolveResult } from "./types.js";
 
@@ -61,7 +64,10 @@ const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
     );
 };
 
-/** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet). */
+/** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet).
+ *  The resolver hands back a flat blocker list per arm; the partition into
+ *  `pending` (still waiting) and `dead` (contradicted given the firings) happens
+ *  here, once, at the closed-world boundary. */
 const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
   switch (result.kind) {
     case "template": {
@@ -70,6 +76,9 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
         result.totalShares,
         result.runtime,
       );
+      // Pending witnesses (unfired atomic EVENT starts). A `template` can be
+      // representable yet carry blockers + an empty/partial projection.
+      const { pending, dead } = partitionResolutionBlockers(result.blockers);
       return {
         status: "template",
         template: result.template,
@@ -82,32 +91,42 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
           ...compiled.map((c) => makeResolvedInstallment(c.date, c.amount)),
           ...result.pendingInstallments,
         ],
-        // Pending witnesses (unfired atomic EVENT starts). A `template` can be
-        // representable yet carry blockers + an empty/partial projection.
-        blockers: result.blockers,
+        pending,
+        dead,
       };
     }
-    case "events":
+    case "events": {
+      // Pending siblings' witnesses; empty when every portion resolved to a date.
+      const { pending, dead } = partitionResolutionBlockers(result.blockers);
       return {
         status: "events-only",
         installments: result.installments,
         // Structured reason, rendered to prose only at the view boundary.
         reason: result.reason,
-        // Pending siblings' witnesses; empty when every portion resolved to a date.
-        blockers: result.blockers,
+        pending,
+        dead,
       };
-    case "unresolved":
+    }
+    case "unresolved": {
+      const { pending, dead } = partitionResolutionBlockers(result.blockers);
       return {
         status: "unresolved",
         installments: result.installments,
-        blockers: result.blockers,
+        pending,
+        dead,
       };
-    case "impossible":
+    }
+    case "impossible": {
+      // The resolver's blockers here are all `ImpossibleBlocker`, so they land
+      // wholly in `dead`; `pending` is `[]`.
+      const { pending, dead } = partitionResolutionBlockers(result.blockers);
       return {
         status: "impossible",
         installments: result.installments,
-        blockers: result.blockers,
+        pending,
+        dead,
       };
+    }
   }
 };
 

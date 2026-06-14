@@ -140,7 +140,7 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
       input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
   };
 
-  const { installments, blockers } = evaluateStatement(
+  const { installments, pending, dead } = evaluateStatement(
     program[0],
     ctx,
   ).resolution;
@@ -150,8 +150,12 @@ export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
     return { ok: true, date: first.date };
   }
 
+  // A date-math expression is one statement, so its hold-up is whatever's still
+  // pending or already dead — summarize across both for the error message.
   const unresolvedReason =
-    first?.unresolved ?? blockerSummary(blockers) ?? "missing anchor";
+    first?.unresolved ??
+    blockerSummary([...pending, ...dead]) ??
+    "missing anchor";
   return {
     ok: false,
     error: `Expression is unresolved: ${unresolvedReason}`,
