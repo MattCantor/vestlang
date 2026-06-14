@@ -39,9 +39,11 @@ type FiringToApply = {
   date: string;
   definition: string | null;
 };
+type Blocker = { type: string; event?: string };
 type RehydrateOutput = {
   firings_to_apply: FiringToApply[];
-  pending: unknown[];
+  pending: Blocker[];
+  dead: Blocker[];
   projection: { date: string; amount: number }[];
 };
 
@@ -160,8 +162,10 @@ describe("mcp-server / persistence tool pair", () => {
     expect(firing.event_id).toBe(
       Object.keys(persisted.artifact.sidecar!.vestlang)[0],
     );
-    // Nothing left pending, and the projection is dated off the resolved witness.
+    // Nothing left pending or dead once the gate resolves, and the projection is
+    // dated off the resolved witness.
     expect(out.pending).toHaveLength(0);
+    expect(out.dead).toHaveLength(0);
     expect(out.projection.length).toBe(48);
     expect(out.projection[0].date).toBe("2026-07-01");
     const total = out.projection.reduce((s, i) => s + i.amount, 0);
@@ -222,9 +226,8 @@ describe("mcp-server / persistence tool pair", () => {
     expect(out.firings_to_apply).toHaveLength(0);
     expect(out.projection).toHaveLength(0);
     expect(out.pending.length).toBeGreaterThan(0);
-    const pending = out.pending as { type: string; event?: string }[];
     expect(
-      pending.some(
+      out.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -580,5 +583,145 @@ describe("mcp-server / persistence tool pair", () => {
     expect(res.isError).toBe(true);
     const text = res.content?.[0]?.text ?? "";
     expect(text).toMatch(/grant date/i);
+  });
+
+  // ---- Issue #230: dead blockers split out of `pending` ----
+  //
+  // A windowed gate: ipo must fire strictly inside (2026-01-01, 2026-06-01). It's a
+  // satisfiable window — lint lets it persist — so the artifact stores a synthetic
+  // gate. The bug class shows up at rehydrate time: fire ipo OUTSIDE the window and
+  // the gate is contradicted (dead), but the evaluator returns it in the same flat
+  // list as genuinely-waiting gates.
+  const WINDOWED_GATE_DSL =
+    "VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2026-06-01 OVER 1 YEAR EVERY 3 MONTHS";
+
+  const isImpossible = (b: Blocker): boolean =>
+    b.type.startsWith("IMPOSSIBLE_");
+
+  it("files a dead gate under `dead`, not `pending`, when its event fires outside the window", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: WINDOWED_GATE_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    // ipo fires in 2027 — past the BEFORE 2026-06-01 bound — so the gate can never
+    // resolve. Pre-fix this rode in `pending`, telling an operator to keep waiting.
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { ipo: "2027-01-01" },
+      as_of: "2027-06-01",
+    });
+
+    expect(out.dead.length).toBeGreaterThan(0);
+    expect(out.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(true);
+    expect(out.pending).toHaveLength(0);
+  });
+
+  it("keeps a genuinely-waiting bare EVENT gate in `pending`, with `dead` empty", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+
+    // ipo hasn't fired at all, so the gate is still waiting — not dead.
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+    });
+
+    expect(out.pending.length).toBeGreaterThan(0);
+    expect(out.pending.every((b) => !isImpossible(b))).toBe(true);
+    expect(
+      out.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+    expect(out.dead).toHaveLength(0);
+  });
+
+  it("keeps a genuinely-waiting combinator gate in `pending`, with `dead` empty", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+
+    // ipo hasn't fired; the EARLIER OF can't settle yet — still waiting, not dead.
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 1000,
+      as_of: "2026-01-01",
+    });
+
+    expect(out.pending.length).toBeGreaterThan(0);
+    // For the combinator we assert only that nothing is dead — the selector's exact
+    // blocker shape is the evaluator's concern, out of scope here.
+    expect(out.pending.every((b) => !isImpossible(b))).toBe(true);
+    expect(out.dead).toHaveLength(0);
+  });
+
+  it("always includes `dead` ([] for a clean time-based template)", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 1200,
+    });
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 1200,
+      as_of: "2026-01-01",
+    });
+
+    // No gate at all, so nothing pending and nothing dead — but `dead` is present.
+    expect(out).toHaveProperty("dead");
+    expect(out.dead).toEqual([]);
+    expect(out.pending).toEqual([]);
+  });
+
+  it("never lists the same blocker in both `pending` and `dead`", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: WINDOWED_GATE_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { ipo: "2027-01-01" },
+      as_of: "2027-06-01",
+    });
+
+    // The partition is disjoint: every dead blocker is impossible, every pending one
+    // isn't, so no object can appear on both sides.
+    expect(out.dead.every(isImpossible)).toBe(true);
+    expect(out.pending.every((b) => !isImpossible(b))).toBe(true);
+    const overlap = out.pending.filter((p) =>
+      out.dead.some((d) => JSON.stringify(d) === JSON.stringify(p)),
+    );
+    expect(overlap).toHaveLength(0);
+  });
+
+  it("documents `dead` and points `pending` at the separate reporting", async () => {
+    const client = await connectClient();
+    const { tools } = await client.listTools();
+    const rehydrateTool = tools.find((t) => t.name === "vestlang_rehydrate");
+    expect(rehydrateTool).toBeDefined();
+    const description = rehydrateTool!.description ?? "";
+
+    // A documented `dead` clause, and a `pending` clause that names where dead arms
+    // are reported instead.
+    expect(description).toMatch(/dead/);
+    expect(description).toMatch(/`pending`[\s\S]*\bdead\b/i);
+    expect(description).toMatch(/separately/i);
   });
 });

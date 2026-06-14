@@ -6,31 +6,13 @@ import type {
   NodeMeta,
   VestingNode,
 } from "@vestlang/types";
-import { assertNever } from "@vestlang/utils";
+import { isImpossibleBlocker } from "../blockerTree.js";
 import { evaluateVestingBase } from "./vestingBase.js";
 import { evaluateConstrainedVestingNode } from "./constrainedVestingNode.js";
 
 /* ------------------------
  * Helpers
  * ------------------------ */
-
-// Which blockers are contradictions (vs. things still merely pending). Driven off
-// the discriminant rather than the `IMPOSSIBLE_` name prefix, so adding a blocker
-// variant fails the build here until it's classified — a mislabelled tag can't
-// silently fall through to "unresolved".
-const isImpossibleBlocker = (b: Blocker): b is ImpossibleBlocker => {
-  switch (b.type) {
-    case "IMPOSSIBLE_SELECTOR":
-    case "IMPOSSIBLE_CONDITION":
-      return true;
-    case "EVENT_NOT_YET_OCCURRED":
-    case "UNRESOLVED_SELECTOR":
-    case "UNRESOLVED_CONDITION":
-      return false;
-    default:
-      return assertNever(b);
-  }
-};
 
 // A node is impossible only when every blocker is a contradiction; one merely
 // pending blocker leaves the whole node unresolved.
