@@ -57,12 +57,14 @@ function printSchedule(view: ScheduleView): void {
   // Two verdicts, printed side by side: what the record keeper could store
   // ("storable", the firing-invariant verdict), and what the schedule resolves to
   // given the events we know ("resolves to"). The read-flags hang off them:
-  // "representable" tracks the storable verdict, "pending" comes from the blockers
-  // (not from a "resolves to: unresolved"), and "valid" is its own question —
-  // false when the schedule over-allocates the grant.
+  // "representable" tracks the storable verdict, "pending" comes from the pending
+  // blockers (not from a "resolves to: unresolved"), "dead" flags anything
+  // contradicted by the firings, and "valid" is its own question — false when the
+  // schedule over-allocates the grant.
   const tags = [
     view.representable ? "representable" : null,
     view.pending ? "pending" : null,
+    view.dead ? "dead" : null,
     view.valid ? null : "invalid",
   ]
     .filter(Boolean)
@@ -102,12 +104,21 @@ function printSchedule(view: ScheduleView): void {
     view.absenceAssumptions.forEach((a) => console.log(`  ${a.message}`));
     console.log();
   }
-  if (view.blockers.length > 0) {
+  // Two blocker lists, labeled by reading. Pending ones are still awaiting their
+  // witnesses; dead ones can never resolve given the firings, so an operator should
+  // stop waiting on them.
+  if (view.pendingBlockers.length > 0) {
     console.log();
-    console.log(
-      view.pending ? "Blockers (pending — awaiting witnesses)" : "Blockers",
+    console.log("Blockers (pending — awaiting witnesses)");
+    view.pendingBlockers.forEach((b) =>
+      console.log(JSON.stringify(b, null, 2)),
     );
-    view.blockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
+    console.log();
+  }
+  if (view.deadBlockers.length > 0) {
+    console.log();
+    console.log("Blockers (dead — can never resolve given the firings)");
+    view.deadBlockers.forEach((b) => console.log(JSON.stringify(b, null, 2)));
     console.log();
   }
 }

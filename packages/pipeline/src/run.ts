@@ -52,17 +52,21 @@ export type WindowView = {
 };
 
 // One clause-group's contribution to the program: its own tranches and the
-// blockers holding it back. A group is a single statement, except for a THEN
-// chain, whose segments evaluate together (a tail has no start without its head)
-// and so report as one entry. No verdict — a clause has no storable schedule of
-// its own (the grant stores one template). This is for attribution: which clause
-// produced what, and which is still waiting on something. Each clause is its own
-// evaluation against the whole grant, so floor rounding telescopes only within a
-// clause — on non-divisible portions the breakdown's amounts can differ from the
-// collapsed schedule's by a share (1/3 PLUS 2/3 of 100 reads 33 + 66 against a
-// collapsed 100). The collapsed schedule is the authority; the breakdown explains,
-// it doesn't reconcile.
-export type ClauseBreakdown = Pick<ScheduleView, "installments" | "blockers">;
+// blockers holding it back, split into pending (still waiting) and dead
+// (contradicted given the firings) to match the schedule level. A group is a
+// single statement, except for a THEN chain, whose segments evaluate together (a
+// tail has no start without its head) and so report as one entry. No verdict — a
+// clause has no storable schedule of its own (the grant stores one template). This
+// is for attribution: which clause produced what, and which is still waiting on
+// something. Each clause is its own evaluation against the whole grant, so floor
+// rounding telescopes only within a clause — on non-divisible portions the
+// breakdown's amounts can differ from the collapsed schedule's by a share (1/3 PLUS
+// 2/3 of 100 reads 33 + 66 against a collapsed 100). The collapsed schedule is the
+// authority; the breakdown explains, it doesn't reconcile.
+export type ClauseBreakdown = Pick<
+  ScheduleView,
+  "installments" | "pendingBlockers" | "deadBlockers"
+>;
 
 // Attribute the program to its clause-groups. A second resolution pass, separate
 // from the collapse — the only way to keep each clause's tranches apart once the
@@ -75,7 +79,11 @@ function clauseBreakdown(
   try {
     return evaluateClauseGroups(program, ctx)
       .map(toScheduleView)
-      .map(({ installments, blockers }) => ({ installments, blockers }));
+      .map(({ installments, pendingBlockers, deadBlockers }) => ({
+        installments,
+        pendingBlockers,
+        deadBlockers,
+      }));
   } catch {
     return [];
   }

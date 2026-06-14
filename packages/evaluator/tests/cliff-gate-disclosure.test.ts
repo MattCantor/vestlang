@@ -10,7 +10,7 @@
 // cliff lands and the gate is enforced as before.
 
 import { describe, it, expect } from "vitest";
-import type { Blocker, EvaluatedSchedule } from "@vestlang/types";
+import type { EvaluatedSchedule, UnresolvedBlocker } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "../src/evaluate/index";
@@ -36,7 +36,7 @@ const run = (events: Record<string, string> = {}): EvaluatedSchedule => {
   return schedule;
 };
 
-const hasUnresolvedCondition = (blockers: Blocker[]): boolean =>
+const hasUnresolvedCondition = (blockers: UnresolvedBlocker[]): boolean =>
   blockers.some((b) => b.type === "UNRESOLVED_CONDITION");
 
 describe("cliff-gate disclosure on an unfired-event start", () => {
@@ -45,14 +45,16 @@ describe("cliff-gate disclosure on an unfired-event start", () => {
     expect(resolution.status).toBe("unresolved");
     if (resolution.status !== "unresolved") return;
 
-    // The pending start is reported...
+    // The pending start is reported... (both the start wait and the gate are
+    // pending blockers — nothing is dead here)
     expect(
-      resolution.blockers.some(
+      resolution.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "hire",
       ),
     ).toBe(true);
     // ...and so is the cliff's `grantDate + 6 months` gate.
-    expect(hasUnresolvedCondition(resolution.blockers)).toBe(true);
+    expect(hasUnresolvedCondition(resolution.pending)).toBe(true);
+    expect(resolution.dead).toHaveLength(0);
   });
 
   it("fired start enforces the gate and lands the cliff lump (unchanged)", () => {

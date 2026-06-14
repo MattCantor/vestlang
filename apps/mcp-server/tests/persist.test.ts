@@ -32,7 +32,11 @@ type PersistedArtifact = {
   sidecar?: { vestlang: Record<string, { definition: string }> };
 };
 
-type PersistOutput = { artifact: PersistedArtifact; blockers: unknown[] };
+type PersistOutput = {
+  artifact: PersistedArtifact;
+  pending: Blocker[];
+  dead: Blocker[];
+};
 
 type FiringToApply = {
   event_id: string;
@@ -111,10 +115,40 @@ describe("mcp-server / persistence tool pair", () => {
     const ids = Object.keys(sourceMap);
     expect(ids).toHaveLength(1);
     expect(sourceMap[ids[0]].definition).toContain("ipo");
-    // The gate hasn't fired, so the store-time blockers advise it's still pending.
-    expect(out.blockers.length).toBeGreaterThan(0);
+    // The gate hasn't fired, so the store-time blockers advise it's still pending —
+    // surfaced under `pending`; a storable template never carries a dead blocker.
+    expect(out.pending.length).toBeGreaterThan(0);
+    expect(out.dead).toEqual([]);
     // No synthetic witness yet — nothing has resolved.
     expect(out.artifact.runtime.eventFirings ?? []).toHaveLength(0);
+  });
+
+  // AC#8 — vestlang_persist's output is reshaped to pending/dead (no flat
+  // `blockers`). For a persistable (template) schedule `dead` is always [], and a
+  // pending template surfaces its waiting witnesses in `pending`.
+  it("AC#8: persist returns pending/dead (no flat blockers); dead is [] for a template", async () => {
+    const client = await connectClient();
+
+    // A pending template (combinator gate unfired): witnesses ride in `pending`.
+    const pendingOut = await persistOk(client, {
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(pendingOut).toHaveProperty("pending");
+    expect(pendingOut).toHaveProperty("dead");
+    expect(pendingOut).not.toHaveProperty("blockers");
+    expect(pendingOut.pending.length).toBeGreaterThan(0);
+    expect(pendingOut.dead).toEqual([]);
+
+    // A fully-dated template: nothing pending and nothing dead.
+    const cleanOut = await persistOk(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 1200,
+    });
+    expect(cleanOut.pending).toEqual([]);
+    expect(cleanOut.dead).toEqual([]);
   });
 
   it("rehydrating before the event fires yields no firings and pending blockers", async () => {
@@ -183,7 +217,8 @@ describe("mcp-server / persistence tool pair", () => {
     const persisted = res.structuredContent as unknown as PersistOutput;
     // No synthetic events, so nothing to carry out-of-band.
     expect(persisted.artifact.sidecar).toBeUndefined();
-    expect(persisted.blockers).toHaveLength(0);
+    expect(persisted.pending).toHaveLength(0);
+    expect(persisted.dead).toEqual([]);
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
@@ -592,6 +627,11 @@ describe("mcp-server / persistence tool pair", () => {
   // gate. The bug class shows up at rehydrate time: fire ipo OUTSIDE the window and
   // the gate is contradicted (dead), but the evaluator returns it in the same flat
   // list as genuinely-waiting gates.
+  //
+  // After #291 these cases also serve as the AC#7 regression guard: the pending/dead
+  // split now originates in the evaluator (`partitionResolutionBlockers`) and rehydrate
+  // consumes the typed `pending`/`dead` directly — no `filter(isImpossibleBlocker)` at
+  // the MCP boundary — so these still passing proves the re-expressed partition holds.
   const WINDOWED_GATE_DSL =
     "VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2026-06-01 OVER 1 YEAR EVERY 3 MONTHS";
 

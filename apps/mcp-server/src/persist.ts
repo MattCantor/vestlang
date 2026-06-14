@@ -22,7 +22,6 @@ import {
   toPersisted,
   rehydratePersisted,
   fromSidecar,
-  isImpossibleBlocker,
   isRehydrateDefinitionError,
   VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
@@ -31,8 +30,8 @@ import { compileToInstallments } from "@vestlang/core";
 import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
 import { ISO_DATE } from "./iso-date.js";
 import type {
+  DeadBlocker,
   EvaluationContextInput,
-  ImpossibleBlocker,
   OCTDate,
   UnresolvedBlocker,
   VestingRuntime,
@@ -146,7 +145,16 @@ export interface PersistInput {
 }
 
 export type PersistResult =
-  | { ok: true; artifact: PersistedArtifact; blockers: unknown[] }
+  | {
+      ok: true;
+      artifact: PersistedArtifact;
+      // The template arm's blockers, split to match the evaluate/rehydrate shape.
+      // A persistable (template) schedule never pairs with a dead blocker, so
+      // `dead` is always `[]`; a pending template surfaces its waiting witnesses
+      // in `pending`.
+      pending: UnresolvedBlocker[];
+      dead: DeadBlocker[];
+    }
   | { ok: false; error: string };
 
 // Compile a program down to a storable artifact. Three gates stand in the way, in
@@ -157,10 +165,11 @@ export type PersistResult =
 // over-allocation, since storing it would mint a durable artifact that over-vests on
 // rehydrate. Finally storability: only a `template` resolution fits a single
 // canonical artifact, so any other shape comes back as a clear error naming the
-// status that blocked it. The returned blockers are the template arm's advisory
-// pending witnesses — what's still floating at store time (e.g. a combinator start
-// whose event hasn't fired), surfaced so the caller knows the artifact isn't yet
-// fully resolved.
+// status that blocked it. The returned `pending` blockers are the template arm's
+// advisory pending witnesses — what's still floating at store time (e.g. a
+// combinator start whose event hasn't fired), surfaced so the caller knows the
+// artifact isn't yet fully resolved. `dead` is always `[]` here: the classifier
+// never pairs a template resolution with a contradiction.
 export function runPersist(input: PersistInput): PersistResult {
   const parsed = parseToProgram(input.dsl);
   if (!parsed.ok) {
@@ -227,7 +236,14 @@ export function runPersist(input: PersistInput): PersistResult {
     runtime: resolution.runtime,
     sourceMap: resolution.sourceMap,
   });
-  return { ok: true, artifact, blockers: resolution.blockers };
+  // The template arm's blockers are already partitioned by the evaluator; a
+  // template resolution carries only pending witnesses, so `dead` is `[]`.
+  return {
+    ok: true,
+    artifact,
+    pending: resolution.pending,
+    dead: resolution.dead,
+  };
 }
 
 /* ------------------------
@@ -251,13 +267,13 @@ export interface RehydrateInput {
 }
 
 // The success payload, also the shape the server returns once it strips `ok`. The
-// evaluator hands back one flat blocker list; we split it into the two operator
-// readings: `pending` is still-waiting (the gating event hasn't fired), `dead` can
-// never resolve given the firings we now know (the event fired outside its window).
+// evaluator already partitions its blockers into the two operator readings:
+// `pending` is still-waiting (the gating event hasn't fired), `dead` can never
+// resolve given the firings we now know (the event fired outside its window).
 interface RehydrateOutput {
   firings_to_apply: FiringToApply[];
   pending: UnresolvedBlocker[];
-  dead: ImpossibleBlocker[];
+  dead: DeadBlocker[];
   projection: ReturnType<typeof compileToInstallments>;
 }
 
@@ -354,20 +370,15 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     result.runtime,
   );
 
-  // Partition the flat blocker list by each blocker's own verdict. Contradictions
-  // (the gate's event fired outside its window) go to `dead` — stop waiting; the
-  // rest are genuinely still-waiting and stay in `pending`. Both are always present
-  // ([] when empty) so the caller never has to probe for the field.
-  const dead = result.blockers.filter(isImpossibleBlocker);
-  const pending = result.blockers.filter(
-    (b): b is UnresolvedBlocker => !isImpossibleBlocker(b),
-  );
-
+  // The evaluator already split its blockers by verdict: contradictions (the gate's
+  // event fired outside its window) in `dead` — stop waiting; the genuinely
+  // still-waiting ones in `pending`. Both are always present ([] when empty), so the
+  // caller never has to probe for the field.
   return {
     ok: true,
     firings_to_apply,
-    pending,
-    dead,
+    pending: result.pending,
+    dead: result.dead,
     projection,
   };
 }

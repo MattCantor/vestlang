@@ -1,13 +1,14 @@
-// The consumer rule, made explicit. `presentSchedule` derives four orthogonal
-// reads — representable (status), pending (blockers, NOT status === "unresolved"),
-// projected (installments), valid (findings). The load-bearing case is a
-// pending-template: status "template" AND blockers present must read
-// representable-but-pending, not complete.
+// The consumer rule, made explicit. `presentSchedule` derives five orthogonal
+// reads — representable (status), pending (the pending blocker list, NOT
+// status === "unresolved"), dead (the dead blocker list), projected
+// (installments), valid (findings). The load-bearing cases are a pending-template
+// (status "template" AND pending blockers must read representable-but-pending, not
+// complete) and a dead-arm-beside-a-live-one (status "unresolved" with only dead
+// blockers must read dead, not pending).
 
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
-  Blocker,
   EvaluatedSchedule,
   EvaluationContextInput,
   Finding,
@@ -29,12 +30,12 @@ import {
 } from "./helpers";
 
 // presentSchedule reads the interchange status (representable), the resolution
-// status/blockers/installments (pending, projected), and findings (valid), so
-// stub exactly those. The interchange status defaults to the firing-invariant
-// counterpart of the resolution status — the same except that a closed-world
-// "unresolved" has no interchange equivalent and reads as "unrepresentable" — but
-// a test can pass its own to exercise the two verdicts diverging. Findings default
-// to none (a well-formed schedule).
+// status/pending/dead/installments (pending, dead, projected), and findings
+// (valid), so stub exactly those. The interchange status defaults to the
+// firing-invariant counterpart of the resolution status — the same except that a
+// closed-world "unresolved" has no interchange equivalent and reads as
+// "unrepresentable" — but a test can pass its own to exercise the two verdicts
+// diverging. Findings default to none (a well-formed schedule).
 const interchangeFor = (
   status: ResolutionStatus,
 ): InterchangeVerdict["status"] =>
@@ -42,14 +43,19 @@ const interchangeFor = (
 
 const stub = (
   status: ResolutionStatus,
-  blockers: Blocker[],
+  blockers: { pending?: unknown[]; dead?: unknown[] },
   installments: Installment[],
   findings: Finding[] = [],
   interchangeStatus: InterchangeVerdict["status"] = interchangeFor(status),
 ): EvaluatedSchedule =>
   ({
     interchange: { status: interchangeStatus },
-    resolution: { status, blockers, installments },
+    resolution: {
+      status,
+      pending: blockers.pending ?? [],
+      dead: blockers.dead ?? [],
+      installments,
+    },
     absenceAssumptions: [],
     findings,
     cliffDate: null,
@@ -83,40 +89,44 @@ const symbolic: Installment[] = [
     unresolved: "ipo",
   },
 ];
-const eventBlocker: Blocker[] = [
-  { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
-];
-const impossibleBlocker: Blocker[] = [
+const eventBlocker = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];
+// A contradiction — present.ts reads it as a resolution-space dead blocker. Carried
+// as a plain shape; the stub coerces the whole schedule through `unknown`.
+const impossibleBlocker = [
   { type: "IMPOSSIBLE_SELECTOR", selector: "EARLIER_OF", blockers: [] },
 ];
 
 describe("presentSchedule — the orthogonal reads", () => {
-  it("template + blockers (pending-template) → representable AND pending", () => {
-    expect(presentSchedule(stub("template", eventBlocker, dated))).toEqual({
+  it("template + pending blockers (pending-template) → representable AND pending", () => {
+    expect(
+      presentSchedule(stub("template", { pending: eventBlocker }, dated)),
+    ).toEqual({
       representable: true,
       pending: true,
+      dead: false,
       projected: true,
       valid: true,
     });
   });
 
   it("template, no blockers, dated → representable, not pending, projected", () => {
-    expect(presentSchedule(stub("template", [], dated))).toEqual({
+    expect(presentSchedule(stub("template", {}, dated))).toEqual({
       representable: true,
       pending: false,
+      dead: false,
       projected: true,
       valid: true,
     });
   });
 
   it("an error finding makes the schedule read invalid (separate from representable)", () => {
-    const p = presentSchedule(stub("template", [], dated, overAllocated));
+    const p = presentSchedule(stub("template", {}, dated, overAllocated));
     expect(p.valid).toBe(false);
     expect(p.representable).toBe(true); // the interchange still holds it
   });
 
   it("a warning finding (under-allocation) leaves the schedule valid", () => {
-    const p = presentSchedule(stub("template", [], dated, underAllocated));
+    const p = presentSchedule(stub("template", {}, dated, underAllocated));
     expect(p.valid).toBe(true); // only error-severity findings flip valid
   });
 
@@ -124,33 +134,40 @@ describe("presentSchedule — the orthogonal reads", () => {
     // representable + pending + projected, but invalid — the legal partial
     // projection is still surfaced; it just isn't certified valid.
     const p = presentSchedule(
-      stub("template", eventBlocker, dated, overAllocated),
+      stub("template", { pending: eventBlocker }, dated, overAllocated),
     );
     expect(p).toEqual({
       representable: true,
       pending: true,
+      dead: false,
       projected: true,
       valid: false,
     });
   });
 
   it("events-only → representable, not pending", () => {
-    const p = presentSchedule(stub("events-only", [], dated));
+    const p = presentSchedule(stub("events-only", {}, dated));
     expect(p.representable).toBe(true);
     expect(p.pending).toBe(false);
   });
 
-  it("unresolved → pending, not representable (pending read off blockers, not status)", () => {
-    const p = presentSchedule(stub("unresolved", eventBlocker, symbolic));
+  it("unresolved → pending, not representable (pending read off the pending list, not status)", () => {
+    const p = presentSchedule(
+      stub("unresolved", { pending: eventBlocker }, symbolic),
+    );
     expect(p.representable).toBe(false);
     expect(p.pending).toBe(true);
+    expect(p.dead).toBe(false);
     expect(p.projected).toBe(false);
   });
 
-  it("impossible (has blockers) → neither representable nor pending (terminal)", () => {
-    const p = presentSchedule(stub("impossible", impossibleBlocker, []));
+  it("impossible (all dead) → neither representable nor pending; dead is true (terminal)", () => {
+    const p = presentSchedule(
+      stub("impossible", { dead: impossibleBlocker }, []),
+    );
     expect(p.representable).toBe(false);
     expect(p.pending).toBe(false);
+    expect(p.dead).toBe(true);
   });
 });
 
@@ -200,6 +217,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true,
+      dead: false,
       projected: true,
       valid: true,
     });
@@ -250,9 +268,14 @@ describe("presentSchedule — end-to-end hybrid", () => {
     // different firing of `a` would resolve it.
     expect(out.resolution.status).toBe("unresolved");
     expect(out.interchange.status).toBe("template");
+    // The void half carries an IMPOSSIBLE_CONDITION blocker — dead, not pending.
+    // This is the present.ts fix (AC#3): a dead arm beside a live one reads
+    // `dead: true`, `pending: false`, not the reverse. Pre-fix this said
+    // `pending: true`.
     expect(presentSchedule(out)).toEqual({
       representable: true, // storable as a template, independent of a's firing
-      pending: true, // the void half carries IMPOSSIBLE_CONDITION blockers
+      pending: false, // nothing is merely waiting — the void half is dead
+      dead: true, // the void half's IMPOSSIBLE_CONDITION surfaces here
       projected: true, // the resolved half's dated tranches are now surfaced
       valid: true,
     });
@@ -289,6 +312,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true, // the event portion's blocker survives the events arm
+      dead: false,
       projected: true,
       valid: true,
     });

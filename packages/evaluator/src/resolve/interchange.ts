@@ -26,6 +26,7 @@ import {
   type TemplateBuild,
 } from "./lower.js";
 import { classify } from "./classify.js";
+import { brandStatic } from "../evaluate/blockerTree.js";
 
 /**
  * Why an unresolved build can't be stored, read off the per-statement records.
@@ -147,7 +148,9 @@ const mapTemplateBuild = (
             reason: v.reason,
           };
     case "impossible":
-      return { status: "impossible", blockers: v.blockers };
+      // Firing-blind, so these are static contradictions — brand them so the type
+      // can't be confused with a resolution-space `dead` blocker.
+      return { status: "impossible", blockers: brandStatic(v.blockers) };
     case "unresolved":
       // Nothing storable to hand over — but say *why* off the per-statement
       // records, not off how the build routed. Several distinct facts route here

@@ -1,10 +1,11 @@
 // A "schedule view" is the trimmed, serializable shape of an evaluated schedule
 // — the version a consumer (the CLI's tables, the MCP server's JSON) actually
 // shows a user. It carries both verdicts side by side (what's storable, and what
-// it resolves to today), the installments, the blockers, the findings (each with
-// a human-readable message), the absence assumptions the resolution leaned on (also
-// with a message), and the four orthogonal read-flags. It drops the engine's working
-// state: the compiled template and the runtime inputs stay server-side.
+// it resolves to today), the installments, the two blocker lists (pending and dead),
+// the findings (each with a human-readable message), the absence assumptions the
+// resolution leaned on (also with a message), and the orthogonal read-flags. It
+// drops the engine's working state: the compiled template and the runtime inputs
+// stay server-side.
 //
 // The one piece of template-arm working state that does survive is the `sourceMap`
 // — the DSL behind any synthetic event the lowering had to mint when externalizing
@@ -17,7 +18,7 @@
 
 import type {
   AbsenceAssumption,
-  Blocker,
+  DeadBlocker,
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
   Finding,
@@ -25,6 +26,7 @@ import type {
   InterchangeVerdict,
   NonTemplateReason,
   SourceMap,
+  UnresolvedBlocker,
 } from "@vestlang/types";
 import { presentSchedule } from "./present.js";
 import { formatFinding } from "./findings.js";
@@ -78,6 +80,9 @@ type InterchangeView =
 export type ScheduleView = {
   representable: boolean;
   pending: boolean;
+  // True when something is dead — contradicted given the firings. Distinct from a
+  // terminal `impossible` status (a live statement can sit beside a dead one).
+  dead: boolean;
   valid: boolean;
   resolution: ResolutionView;
   interchange: InterchangeView;
@@ -90,7 +95,11 @@ export type ScheduleView = {
   // Installment union: the serialized view doesn't care which arm (resolved /
   // unresolved / impossible) produced each one.
   installments: Installment[];
-  blockers: Blocker[];
+  // The resolution's blockers, split by reading: `pendingBlockers` are still
+  // waiting on a witness; `deadBlockers` can never resolve given the firings.
+  // Disjoint, both always present (`[]` when empty).
+  pendingBlockers: UnresolvedBlocker[];
+  deadBlockers: DeadBlocker[];
 };
 
 const resolutionView = (r: EvaluatedScheduleVerdict): ResolutionView => {
@@ -118,10 +127,11 @@ const interchangeView = (i: InterchangeVerdict): InterchangeView => {
 };
 
 export function toScheduleView(s: EvaluatedSchedule): ScheduleView {
-  const { representable, pending, valid } = presentSchedule(s);
+  const { representable, pending, dead, valid } = presentSchedule(s);
   return {
     representable,
     pending,
+    dead,
     valid,
     resolution: resolutionView(s.resolution),
     interchange: interchangeView(s.interchange),
@@ -131,6 +141,7 @@ export function toScheduleView(s: EvaluatedSchedule): ScheduleView {
       message: formatAbsenceAssumption(a),
     })),
     installments: s.resolution.installments,
-    blockers: s.resolution.blockers,
+    pendingBlockers: s.resolution.pending,
+    deadBlockers: s.resolution.dead,
   };
 }
