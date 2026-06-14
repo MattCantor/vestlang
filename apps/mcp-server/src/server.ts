@@ -13,7 +13,10 @@ import {
   type GrantInput,
 } from "@vestlang/pipeline";
 import type { OCTDate, Program, Statement } from "@vestlang/types";
-import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
+import {
+  DEFAULT_VESTING_DAY_OF_MONTH,
+  VESTING_DAY_OF_MONTH_VALUES,
+} from "@vestlang/types";
 import { registerResources } from "./resources.js";
 import {
   addPeriod,
@@ -115,7 +118,7 @@ const EVAL_CONTEXT_FIELDS = {
       `Named events referenced by the DSL, e.g. {"ipo": "2027-06-01"}. grantDate is set automatically.`,
     ),
   vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-    "OCT VestingDayOfMonth. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+    `OCT VestingDayOfMonth. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
   ),
 };
 
@@ -518,7 +521,7 @@ export function createServer(): McpServer {
             "As-of date (YYYY-MM-DD). Defaults to grant_date.",
           ),
           vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-            "OCT VestingDayOfMonth. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+            `OCT VestingDayOfMonth. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
           ),
         })
         .strict().shape,
@@ -560,7 +563,7 @@ export function createServer(): McpServer {
           length: z.number().int("length must be a whole number"),
           unit: PERIOD_UNIT,
           vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-            "Only applies to months/years. Defaults to VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.",
+            `Only applies to months/years. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
           ),
         })
         .strict().shape,
@@ -576,7 +579,7 @@ export function createServer(): McpServer {
         date,
         length,
         unit,
-        rule ?? "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        rule ?? DEFAULT_VESTING_DAY_OF_MONTH,
       );
       return jsonResult({ date: result });
     },

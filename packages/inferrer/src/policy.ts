@@ -1,4 +1,5 @@
 import type { VestingDayOfMonth } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 
 function numericDays(): VestingDayOfMonth[] {
   const out: VestingDayOfMonth[] = [];
@@ -9,7 +10,7 @@ function numericDays(): VestingDayOfMonth[] {
 }
 
 export const POLICY_CANDIDATES: readonly VestingDayOfMonth[] = [
-  "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  DEFAULT_VESTING_DAY_OF_MONTH,
   "29_OR_LAST_DAY_OF_MONTH",
   "30_OR_LAST_DAY_OF_MONTH",
   "31_OR_LAST_DAY_OF_MONTH",

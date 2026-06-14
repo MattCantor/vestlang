@@ -5,6 +5,7 @@ import type {
   ResolutionStatus,
   VestingDayOfMonth,
 } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { asChainedTail, buildStatement } from "./atoms.js";
 import { walk } from "./cadence.js";
 import { foldCliffs } from "./cliffFold.js";
@@ -367,7 +368,7 @@ export function inferSchedule(input: InferInput): InferResult {
   if (best.residual >= EPSILON) {
     const fallbackComponents = explicitListFallback(sorted);
     const fallbackProgram: Program = fallbackComponents.map((c) =>
-      buildStatement(c, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
+      buildStatement(c, DEFAULT_VESTING_DAY_OF_MONTH),
     );
     const { residual: fallbackResidual } = collapseAgainstInput(
       fallbackProgram,
@@ -376,7 +377,7 @@ export function inferSchedule(input: InferInput): InferResult {
         grantDate,
         totalQuantity,
         lastDate,
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        DEFAULT_VESTING_DAY_OF_MONTH,
       ),
     );
     if (fallbackResidual < best.residual) {
@@ -391,7 +392,7 @@ export function inferSchedule(input: InferInput): InferResult {
         preGrantFolds: 0,
         preGrantStarts: [],
         residual: fallbackResidual,
-        policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        policy: DEFAULT_VESTING_DAY_OF_MONTH,
         cadencesTried: best.cadencesTried,
       };
     }
