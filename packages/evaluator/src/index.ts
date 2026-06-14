@@ -19,7 +19,10 @@ export { isImpossibleBlocker } from "./evaluate/blockerTree.js";
 export {
   rehydrate,
   reparseDefinition,
+  RehydrateDefinitionError,
+  isRehydrateDefinitionError,
   type RehydrateResult,
+  type RehydrateDefinitionSource,
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,
   fromSidecar,

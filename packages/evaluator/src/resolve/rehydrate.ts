@@ -43,6 +43,56 @@ export interface RehydrateResult {
   blockers: Blocker[];
 }
 
+// Where a corrupt definition was read from. A `definition` is a sidecar source-map
+// entry (a synthetic gate's externalized DSL); a `template-event-name` is the
+// `event_id` of a bare `EVENT` statement, reparsed via the trivial `EVENT <id>`.
+export type RehydrateDefinitionSource = "definition" | "template-event-name";
+
+// Thrown when a stored artifact carries an event definition that no longer
+// reparses to a single clean anchor — a corrupt/edited sidecar or a template event
+// id that isn't a legal bare name. The artifact is untrusted input (it lives in
+// external storage and may be hand-edited), so this is the engine's signal that it
+// is genuinely damaged, not a transient pending state.
+//
+// Boundaries discriminate this by the literal `name` tag, NOT `instanceof`: the
+// evaluator can be loaded across module realms (a CJS consumer alongside this ESM
+// build), where `instanceof` against a duplicated class silently misses. Use
+// `isRehydrateDefinitionError` and key on the tag.
+//
+// The underlying parser/grammar throw is carried on `cause` for logging only — it
+// is the raw `Expected "DATE", …` text and must not be surfaced to an operator.
+export class RehydrateDefinitionError extends Error {
+  readonly name = "RehydrateDefinitionError";
+  // The event whose definition failed to reparse, so the refusal can name it.
+  readonly event_id: string;
+  readonly source: RehydrateDefinitionSource;
+  // The exact string that failed to reparse (for diagnostics; for a bare event
+  // name this is the synthesized `EVENT <id>`, not just the id).
+  readonly definition: string;
+  // The original throw (peggy SyntaxError, a shape guard, a semantic-action error).
+  readonly cause: unknown;
+
+  constructor(args: {
+    event_id: string;
+    source: RehydrateDefinitionSource;
+    definition: string;
+    cause: unknown;
+  }) {
+    super(
+      `Could not reparse the stored definition for event "${args.event_id}".`,
+    );
+    this.event_id = args.event_id;
+    this.source = args.source;
+    this.definition = args.definition;
+    this.cause = args.cause;
+  }
+}
+
+export const isRehydrateDefinitionError = (
+  e: unknown,
+): e is RehydrateDefinitionError =>
+  e instanceof Error && e.name === "RehydrateDefinitionError";
+
 /**
  * Re-parse a stored source-map definition back into a `VestingNodeExpr`, through
  * the same production pipeline that produced it (`parse` → `normalizeProgram`),
@@ -52,9 +102,22 @@ export interface RehydrateResult {
  * The definition is a bare anchor expression, so it is wrapped as the `FROM`
  * anchor of a throwaway statement (`OverEveryOpt` has an empty-string fallback,
  * so no `OVER/EVERY` is needed) and its `vesting_start` extracted.
+ *
+ * Any throw here (a peggy parse error, a grammar semantic-action error, or one of
+ * the shape guards below) is intentional — the call sites wrap it into a
+ * `RehydrateDefinitionError` naming the offending event.
  */
 export const reparseDefinition = (definition: string): VestingNodeExpr => {
   const program = normalizeProgram(parse(`VEST FROM ${definition}`));
+  // The wrapper is one bare `VEST FROM <anchor>` statement, so a valid definition
+  // always yields exactly one. A longer program means the definition smuggled in a
+  // statement connector (`PLUS`, a `THEN` tail), so `program[0]` would silently
+  // drop the rest — refuse it as corruption rather than truncate.
+  if (program.length !== 1) {
+    throw new Error(
+      `reparseDefinition: expected a single statement, got ${program.length}`,
+    );
+  }
   const stmt = program[0];
   // The wrapper is a single ordinary `VEST FROM …` statement, so it is never a
   // chained tail; the guard is what lets us read its start as non-null.
@@ -67,6 +130,26 @@ export const reparseDefinition = (definition: string): VestingNodeExpr => {
     );
   }
   return stmt.expr.vesting_start;
+};
+
+// Reparse, converting any failure into the tagged error naming the event. `label`
+// is the string actually fed to `reparseDefinition` (a sidecar definition, or the
+// synthesized `EVENT <id>`), kept distinct from `event_id` for diagnostics.
+const reparseForEvent = (
+  eventId: string,
+  source: RehydrateDefinitionSource,
+  label: string,
+): VestingNodeExpr => {
+  try {
+    return reparseDefinition(label);
+  } catch (cause) {
+    throw new RehydrateDefinitionError({
+      event_id: eventId,
+      source,
+      definition: label,
+      cause,
+    });
+  }
 };
 
 /** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements. */
@@ -132,7 +215,7 @@ export const rehydrate = (
   for (const [eventId, entry] of Object.entries(sourceMap)) {
     if (!templateEventIds.has(eventId)) continue;
     const res = evaluateVestingNodeExpr(
-      reparseDefinition(entry.definition),
+      reparseForEvent(eventId, "definition", entry.definition),
       ctx,
     );
     if (isPickedResolved(res)) {
@@ -154,7 +237,7 @@ export const rehydrate = (
     // as `EVENT <id>` — its colon isn't a legal bare name and the parser would throw.
     if (isSyntheticEventId(eventId)) continue;
     const res = evaluateVestingNodeExpr(
-      reparseDefinition(`EVENT ${eventId}`),
+      reparseForEvent(eventId, "template-event-name", `EVENT ${eventId}`),
       ctx,
     );
     if (isPickedResolved(res)) {
