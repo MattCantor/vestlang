@@ -36,6 +36,7 @@ import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { amountToFraction } from "../claims.js";
 import { isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
+import { syntheticEventId } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";
 
 const DEFAULT_DAY_OF_MONTH = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
@@ -584,7 +585,7 @@ export const buildTemplate = (
     const definition = stringifyVestingNodeExpr(expr);
     let eventId = synthByDef.get(definition);
     if (eventId === undefined) {
-      eventId = `evt_${++synthOrdinal}`;
+      eventId = syntheticEventId(++synthOrdinal);
       synthByDef.set(definition, eventId);
       sourceMap[eventId] = { definition };
     }

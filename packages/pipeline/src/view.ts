@@ -9,7 +9,7 @@
 // The one piece of template-arm working state that does survive is the `sourceMap`
 // — the DSL behind any synthetic event the lowering had to mint when externalizing
 // a gated or combinator-over-anchors start. Without it a consumer sees a template
-// gated on an opaque `evt_<n>` with no way to read what it stands for, so it rides
+// gated on an opaque `evt:<n>` with no way to read what it stands for, so it rides
 // along on the template arm of each verdict (and is `{}` for a plain schedule).
 //
 // Both consumers used to build this object by hand, and drifted. This is the one

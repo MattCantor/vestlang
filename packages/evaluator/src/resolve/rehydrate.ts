@@ -3,7 +3,7 @@
 //
 // Lowering a start a bare EVENT base can't hold (a combinator over anchors, a
 // gate, an offset anchor) into a `template` externalizes it as a grant-scoped
-// synthetic event (`evt_<n>`) with no firing and a source-map definition (its
+// synthetic event (`evt:<n>`) with no firing and a source-map definition (its
 // DSL). Rehydration is the inverse half: once the world's named events fire
 // (the IPO happens, attested by the caller in
 // `ctx.events`, the same channel `evaluateVestingBase` already reads), each

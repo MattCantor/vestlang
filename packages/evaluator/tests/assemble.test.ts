@@ -320,7 +320,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     const base = out.template.statements[0].vesting_base;
     expect(base.type).toBe("EVENT");
     const eventId = base.type === "EVENT" ? base.event_id : "";
-    expect(eventId).toMatch(/^evt_/);
+    expect(eventId).toMatch(/^evt:/);
     // No witness — the synthetic event hasn't fired.
     expect(out.runtime.eventFirings ?? []).toEqual([]);
     // The gate's meaning lives in the source map, keyed by the same id.
@@ -485,7 +485,7 @@ describe("assemble — gated atomic start → synthetic event", () => {
     const base = out.template.statements[0].vesting_base;
     expect(base.type).toBe("EVENT");
     const eventId = base.type === "EVENT" ? base.event_id : "";
-    expect(eventId).toMatch(/^evt_/);
+    expect(eventId).toMatch(/^evt:/);
     // The guard must survive into the stored definition, not be dropped.
     expect(Object.keys(out.sourceMap)).toEqual([eventId]);
     expect(out.sourceMap[eventId].definition).toMatch(/BEFORE/);

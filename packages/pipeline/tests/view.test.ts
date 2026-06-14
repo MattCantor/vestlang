@@ -118,7 +118,7 @@ describe("toScheduleView", () => {
     // map records the DSL that event stands in for, so a consumer can read it
     // back. It rides on the template arm of each verdict.
     const sourceMap = {
-      evt_1: { definition: "DATE 2025-01-01 BEFORE EVENT ipo" },
+      "evt:1": { definition: "DATE 2025-01-01 BEFORE EVENT ipo" },
     };
     const view = toScheduleView(stub({ status: "template", sourceMap }));
     if (view.resolution.status === "template") {

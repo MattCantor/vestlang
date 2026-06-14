@@ -257,7 +257,7 @@ export function runRehydrate(input: RehydrateInput): RehydrateOutput {
   const result = rehydratePersisted(input.artifact, ctxInput);
 
   // Look the definition up from the sidecar's source map, so the operator sees the
-  // gate behind each newly-resolved synthetic id rather than a bare `evt_n`.
+  // gate behind each newly-resolved synthetic id rather than a bare `evt:n`.
   const sourceMap = fromSidecar(input.artifact.sidecar);
   const definitionFor = (eventId: string): string | null =>
     sourceMap[eventId]?.definition ?? null;
