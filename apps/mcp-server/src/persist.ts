@@ -244,18 +244,23 @@ interface FiringToApply {
 
 export interface RehydrateInput {
   artifact: PersistedArtifact;
-  grant_date: OCTDate;
   grant_quantity: number;
   events?: Record<string, OCTDate>;
   as_of?: OCTDate;
-  vesting_day_of_month?: VestingRuntime["vestingDayOfMonth"];
 }
 
-export interface RehydrateOutput {
+// The success payload, also the shape the server returns once it strips `ok`.
+interface RehydrateOutput {
   firings_to_apply: FiringToApply[];
   pending: unknown[];
   projection: ReturnType<typeof compileToInstallments>;
 }
+
+// Mirrors PersistResult: a clean success or a refusal carrying a clear message.
+// The only refusal today is a hand-built artifact with no stored grant date.
+export type RehydrateResult =
+  | ({ ok: true } & RehydrateOutput)
+  | { ok: false; error: string };
 
 // The delta: synthetic witnesses present in the rehydrated runtime's eventFirings
 // but absent — or sitting on a different date — versus the input artifact's stored
@@ -281,15 +286,25 @@ function computeDelta(
   return delta;
 }
 
-export function runRehydrate(input: RehydrateInput): RehydrateOutput {
+export function runRehydrate(input: RehydrateInput): RehydrateResult {
+  // The grant date is the artifact's, not the caller's — it now feeds both the
+  // witness re-resolution and the as_of default, so a missing one would silently
+  // resolve everything against undefined. Persist always stores it; only a
+  // hand-built artifact can omit it, and we turn that away up front.
+  const grantDate = input.artifact.runtime.grantDate;
+  if (grantDate === undefined) {
+    return {
+      ok: false,
+      error:
+        "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
+    };
+  }
+
   const ctxInput: EvaluationContextInput = {
-    grantDate: input.grant_date,
+    grantDate,
     events: { ...(input.events ?? {}) },
     grantQuantity: input.grant_quantity,
-    asOf: input.as_of ?? input.grant_date,
-    ...(input.vesting_day_of_month
-      ? { vesting_day_of_month: input.vesting_day_of_month }
-      : {}),
+    asOf: input.as_of ?? grantDate,
   };
 
   const result = rehydratePersisted(input.artifact, ctxInput);
@@ -316,6 +331,7 @@ export function runRehydrate(input: RehydrateInput): RehydrateOutput {
   );
 
   return {
+    ok: true,
     firings_to_apply,
     pending: result.blockers,
     projection,

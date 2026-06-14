@@ -11,9 +11,12 @@ import type {
   EvaluationContextInput,
   Statement,
 } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
-import { evaluateStatement } from "../src/evaluate/index";
+import { parse } from "@vestlang/dsl";
+import { normalizeProgram } from "@vestlang/normalizer";
+import { evaluateProgram, evaluateStatement } from "../src/evaluate/index";
 import { rehydrate, reparseDefinition } from "../src/resolve/index";
 import {
   makeSingletonNode,
@@ -21,6 +24,24 @@ import {
   makeDuration,
   makeVestingBaseGrantDate,
 } from "./helpers";
+
+// Build a stored `template` artifact straight from DSL, the way persist does:
+// parse → normalize → evaluate, taking the resolution's frozen template, source
+// map, and runtime. Used by the convention-source tests, which need the runtime
+// lower.ts actually produces (e.g. vestingDayOfMonth stored only when non-default)
+// rather than a hand-assembled one.
+const storedFromDsl = (dsl: string, ctx: EvaluationContextInput) => {
+  const program = normalizeProgram(parse(dsl));
+  const [schedule] = evaluateProgram(program, ctx);
+  const { resolution } = schedule;
+  if (resolution.status !== "template")
+    throw new Error(`expected template, got ${resolution.status}`);
+  return {
+    template: resolution.template,
+    sourceMap: resolution.sourceMap,
+    runtime: resolution.runtime,
+  };
+};
 
 const ctxInput = (
   overrides: Partial<EvaluationContextInput> = {},
@@ -150,5 +171,80 @@ describe("rehydrate — parse ∘ stringify fixpoint", () => {
         definition,
       );
     }
+  });
+});
+
+// The grant's frozen conventions — day-of-month and grant date — must come from
+// the stored runtime, never the caller. The witness is re-resolved under the
+// stored rule so it lands on the same grid the projection compiles under (the
+// projection always reads runtime). A conflicting caller value must NOT leak in.
+
+describe("rehydrate — day-of-month sourced from the artifact, not the caller", () => {
+  // `EVENT ipo + 1 month` carries a month offset, so day-of-month bites and
+  // lower.ts externalizes it as a synthetic. Stored under rule "15", ipo firing on
+  // a month-end: +1 month lands on the 15th of the next month, not its last day.
+  const DSL = "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
+
+  it("re-resolves the witness under the stored rule (2025-02-15), ignoring ctxInput", () => {
+    const { template, sourceMap, runtime } = storedFromDsl(
+      DSL,
+      ctxInput({ grantQuantity: 400, vesting_day_of_month: "15" }),
+    );
+    // The rule is genuinely frozen into the artifact (it's non-default, so
+    // lower.ts stores it).
+    expect(runtime.vestingDayOfMonth).toBe("15");
+
+    const result = rehydrate(
+      template,
+      sourceMap,
+      runtime,
+      // A conflicting day-of-month — the canonical default — which would emit
+      // 2025-02-28 if the caller's value were consulted.
+      ctxInput({
+        events: { ipo: "2025-01-31" },
+        grantQuantity: 400,
+        vesting_day_of_month: DEFAULT_VESTING_DAY_OF_MONTH,
+      }),
+    );
+
+    const [syntheticId] = Object.keys(sourceMap);
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: syntheticId, date: "2025-02-15" },
+    ]);
+  });
+});
+
+describe("rehydrate — grant date sourced from the artifact, not the caller", () => {
+  // `EARLIER OF (EVENT ipo, +12 months)`: the `+12 months` bound desugars to
+  // grantDate + 12mo. Stored grant date 2025-01-01 puts that bound at 2026-01-01.
+  const DSL =
+    "VEST FROM EARLIER OF (EVENT ipo, +12 months) OVER 4 MONTHS EVERY 1 MONTH";
+
+  it("settles the grant-anchored bound under the stored grant date (2026-01-01)", () => {
+    const { template, sourceMap, runtime } = storedFromDsl(
+      DSL,
+      ctxInput({ grantQuantity: 400 }),
+    );
+    expect(runtime.grantDate).toBe("2025-01-01");
+
+    const result = rehydrate(
+      template,
+      sourceMap,
+      runtime,
+      // A conflicting grant date (2030-01-01) and a late ipo (2027-01-01). If the
+      // caller's grant date were used, the +12mo bound would be 2031-01-01 and the
+      // EARLIER OF would pick ipo at 2027-01-01. The stored grant date keeps the
+      // bound at 2026-01-01, which wins.
+      ctxInput({
+        grantDate: "2030-01-01",
+        events: { ipo: "2027-01-01" },
+        grantQuantity: 400,
+      }),
+    );
+
+    const [syntheticId] = Object.keys(sourceMap);
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: syntheticId, date: "2026-01-01" },
+    ]);
   });
 });
