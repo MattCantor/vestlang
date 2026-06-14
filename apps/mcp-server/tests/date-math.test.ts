@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  addPeriod,
-  dateDiff,
-  resolveOffset,
-  resolveVestingDay,
-} from "../src/date-math.js";
+import { addPeriod, dateDiff, resolveVestingDay } from "../src/date-math.js";
 
 describe("addPeriod", () => {
   it("adds months with day clamping (leap year)", () => {
@@ -168,61 +163,6 @@ describe("dateDiff", () => {
         }
       }
     });
-  });
-});
-
-describe("resolveOffset", () => {
-  it("resolves a simple DATE + months expression", () => {
-    const r = resolveOffset({
-      expr: "DATE 2025-01-01 + 6 months",
-      grant_date: "2025-01-01",
-    });
-    expect(r).toEqual({ ok: true, date: "2025-07-01" });
-  });
-
-  it("resolves an EVENT + months expression with events map", () => {
-    const r = resolveOffset({
-      expr: "EVENT ipo + 6 months",
-      grant_date: "2025-01-01",
-      events: { ipo: "2027-06-01" },
-    });
-    expect(r).toEqual({ ok: true, date: "2027-12-01" });
-  });
-
-  it("returns unresolved when the event is missing from events map", () => {
-    const r = resolveOffset({
-      expr: "EVENT ipo + 6 months",
-      grant_date: "2025-01-01",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/unresolved/i);
-  });
-
-  it("resolves a pure offset (+N months) relative to grant_date", () => {
-    const r = resolveOffset({
-      expr: "+3 months",
-      grant_date: "2025-01-01",
-    });
-    expect(r).toEqual({ ok: true, date: "2025-04-01" });
-  });
-
-  it("surfaces parse errors", () => {
-    const r = resolveOffset({
-      expr: "this is not vestlang",
-      grant_date: "2025-01-01",
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/parse/i);
-  });
-
-  // A day offset large enough to overflow used to leak an internal runtime
-  // validation message (the overflowed date got fed to the runtime constructor).
-  // With the range guard running before formatting, it surfaces as the same
-  // clean out-of-range error the date arithmetic raises everywhere else.
-  it("raises a clean range error on an overflowing day offset", () => {
-    expect(() =>
-      resolveOffset({ expr: "+ 100000000 days", grant_date: "2025-01-01" }),
-    ).toThrow(/range/);
   });
 });
 

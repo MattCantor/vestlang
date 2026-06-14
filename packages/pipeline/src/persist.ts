@@ -1,136 +1,46 @@
-// The persistence lifecycle, exposed as a tool pair. The shapes here mirror the
-// canonical interchange (`@vestlang/types`) and the evaluator's sidecar family;
-// this module owns the zod schemas for the persisted artifact and the delta
-// computation that turns a rehydration into an action list against the system of
-// record.
+// The persistence lifecycle's orchestration: persist a DSL program down to a
+// storable artifact, and rehydrate that artifact against the world's firings. Both
+// route context construction through the pipeline's internal `buildContext`, with
+// an explicit `asOf` (Decision 7) — persist evaluates as of the grant date, and
+// rehydrate as of the caller's date (falling back to the stored grant date), never
+// the wall-clock `todayISO()` default.
 //
 // Lifecycle, per the demo story: author DSL → compile once → store the canonical
 // template + runtime + sidecar (the out-of-band source map of synthetic-event
 // definitions) → as real-world events fire, rehydrate to learn WHICH synthetic
 // events to now fire in the system of record (Carta) and WHAT projection they'll
 // produce once fired.
+//
+// The zod schemas that validate wire input into a `PersistedArtifact` stay in the
+// MCP app; only the orchestration moved here. The bespoke
+// `{ ok: true, ... } | { ok: false, error }` result shapes are preserved as-is —
+// unifying onto the pipeline's structured `Result<PipelineError>` is tracked
+// separately (#296).
 
-import { z } from "zod";
-import {
-  parseToProgram,
-  errorFindings,
-  formatFinding,
-} from "@vestlang/pipeline";
-import { lintText } from "@vestlang/linter";
 import {
   evaluateProgram,
   toPersisted,
   rehydratePersisted,
   fromSidecar,
   isRehydrateDefinitionError,
-  VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
+import { lintText } from "@vestlang/linter";
 import { compileToInstallments } from "@vestlang/core";
-import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
-import { ISO_DATE } from "./iso-date.js";
 import type {
   DeadBlocker,
-  EvaluationContextInput,
   OCTDate,
   UnresolvedBlocker,
   VestingRuntime,
 } from "@vestlang/types";
+import { parseToProgram } from "./parse.js";
+import { buildContext } from "./context.js";
+import { errorFindings, formatFinding } from "./findings.js";
 
 // A firing entry as it lives in VestingRuntime.eventFirings. Re-stated locally so
-// the zod schema and the delta logic share one shape.
+// the delta logic has one shape. Module-private — it never appears in a public
+// signature.
 type EventFiring = NonNullable<VestingRuntime["eventFirings"]>[number];
-
-/* ------------------------
- * Zod schemas for the artifact (the rehydrate tool's input)
- * ------------------------ */
-
-const FRACTION = z
-  .object({
-    numerator: z.number().int(),
-    denominator: z.number().int().min(1),
-  })
-  .strict();
-
-const PERIOD_TYPE = z.enum(["DAYS", "MONTHS", "YEARS"]);
-
-// The OCT VestingDayOfMonth enum, as it rides in a stored runtime — derived from
-// the canonical value array so a dropped value fails typecheck here too.
-const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
-
-const CLIFF = z
-  .object({
-    length: z.number().int().min(0),
-    period_type: PERIOD_TYPE,
-    percentage: FRACTION,
-  })
-  .strict();
-
-const TEMPLATE_VESTING_BASE = z.union([
-  z.object({ type: z.literal("DATE") }).strict(),
-  z.object({ type: z.literal("EVENT"), event_id: z.string().min(1) }).strict(),
-]);
-
-const VESTING_STATEMENT = z
-  .object({
-    order: z.number().int(),
-    vesting_base: TEMPLATE_VESTING_BASE,
-    occurrences: z.number().int().min(1),
-    period: z.number().int().min(0),
-    period_type: PERIOD_TYPE,
-    cliff: CLIFF.optional(),
-    percentage: FRACTION,
-  })
-  .strict();
-
-const TEMPLATE = z
-  .object({
-    id: z.string(),
-    statements: z.array(VESTING_STATEMENT),
-  })
-  .strict();
-
-const EVENT_FIRING = z
-  .object({
-    event_id: z.string().min(1),
-    date: ISO_DATE,
-    realized_fraction: FRACTION.optional(),
-  })
-  .strict();
-
-const RUNTIME = z
-  .object({
-    startDate: ISO_DATE.optional(),
-    eventFirings: z.array(EVENT_FIRING).optional(),
-    grantDate: ISO_DATE.optional(),
-    vestingDayOfMonth: VESTING_DAY_OF_MONTH.optional(),
-  })
-  .strict();
-
-const SOURCE_MAP_ENTRY = z
-  .object({
-    definition: z.string(),
-    label: z.string().optional(),
-  })
-  .strict();
-
-// The sidecar is the namespaced bag whose `vestlang` key holds the source map.
-const SIDECAR = z
-  .object({
-    [VESTLANG_SIDECAR_NAMESPACE]: z.record(z.string(), SOURCE_MAP_ENTRY),
-  })
-  .strict();
-
-export const PERSISTED_ARTIFACT = z
-  .object({
-    template: TEMPLATE,
-    runtime: RUNTIME,
-    sidecar: SIDECAR.optional(),
-  })
-  .strict()
-  .describe(
-    "A PersistedArtifact: the canonical template + runtime, plus the optional out-of-band sidecar (the source map of synthetic-event definitions). Typically the output of vestlang_persist.",
-  );
 
 /* ------------------------
  * persist: DSL + grant context → a storable artifact
@@ -170,6 +80,9 @@ export type PersistResult =
 // combinator start whose event hasn't fired), surfaced so the caller knows the
 // artifact isn't yet fully resolved. `dead` is always `[]` here: the classifier
 // never pairs a template resolution with a contradiction.
+//
+// The schedule is evaluated as of the grant date (Decision 7): persist asks "what
+// does this resolve to at grant time?", never against the wall-clock today.
 export function runPersist(input: PersistInput): PersistResult {
   const parsed = parseToProgram(input.dsl);
   if (!parsed.ok) {
@@ -193,19 +106,17 @@ export function runPersist(input: PersistInput): PersistResult {
     };
   }
 
-  const ctxInput: EvaluationContextInput = {
-    grantDate: input.grant_date,
-    events: { ...(input.events ?? {}) },
-    grantQuantity: input.grant_quantity,
-    asOf: input.grant_date,
-    ...(input.vesting_day_of_month
-      ? { vesting_day_of_month: input.vesting_day_of_month }
-      : {}),
-  };
+  const ctx = buildContext({
+    grant_date: input.grant_date,
+    events: input.events,
+    grant_quantity: input.grant_quantity,
+    as_of: input.grant_date,
+    vesting_day_of_month: input.vesting_day_of_month,
+  });
 
   let schedule;
   try {
-    [schedule] = evaluateProgram(parsed.program, ctxInput);
+    [schedule] = evaluateProgram(parsed.program, ctx);
   } catch (err) {
     return {
       ok: false,
@@ -253,7 +164,7 @@ export function runPersist(input: PersistInput): PersistResult {
 // One entry in the action list: a synthetic witness that the rehydration newly
 // resolved (or moved). `definition` is looked up from the sidecar so a human sees
 // WHY the synthetic event resolved to this date.
-interface FiringToApply {
+export interface FiringToApply {
   event_id: string;
   date: OCTDate;
   definition: string | null;
@@ -270,7 +181,7 @@ export interface RehydrateInput {
 // evaluator already partitions its blockers into the two operator readings:
 // `pending` is still-waiting (the gating event hasn't fired), `dead` can never
 // resolve given the firings we now know (the event fired outside its window).
-interface RehydrateOutput {
+export interface RehydrateOutput {
   firings_to_apply: FiringToApply[];
   pending: UnresolvedBlocker[];
   dead: DeadBlocker[];
@@ -321,12 +232,12 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     };
   }
 
-  const ctxInput: EvaluationContextInput = {
-    grantDate,
-    events: { ...(input.events ?? {}) },
-    grantQuantity: input.grant_quantity,
-    asOf: input.as_of ?? grantDate,
-  };
+  const ctx = buildContext({
+    grant_date: grantDate,
+    events: input.events,
+    grant_quantity: input.grant_quantity,
+    as_of: input.as_of ?? grantDate,
+  });
 
   // A persisted artifact can be edited in external storage, so a stored event
   // definition may arrive corrupt — unparseable, or smuggling in a second statement
@@ -338,7 +249,7 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
   // only evaluateProgram and lets the rest propagate).
   let result;
   try {
-    result = rehydratePersisted(input.artifact, ctxInput);
+    result = rehydratePersisted(input.artifact, ctx);
   } catch (err) {
     if (isRehydrateDefinitionError(err)) {
       return {

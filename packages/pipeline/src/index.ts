@@ -25,8 +25,22 @@ export type { SchedulePresentation } from "./present.js";
 export type { ScheduleView } from "./view.js";
 export type { Summary } from "./summary.js";
 
-// Finding semantics, surfaced so consumers gate and word allocation findings the
-// same way the display path does: `errorFindings` is the shared validity rule (an
-// error-severity finding makes a schedule invalid), `formatFinding` its one-canonical
-// wording. persist reads both to refuse — and name — an over-allocating program.
-export { errorFindings, formatFinding } from "./findings.js";
+// The persistence lifecycle orchestrators: persist a program to a storable
+// artifact, rehydrate it against the world's firings, and resolve an offset
+// expression to a date. All three route context construction through the internal
+// `buildContext` (kept unexported, Option B), so the app can't hand-build a context
+// and forget a piece.
+export { runPersist, runRehydrate } from "./persist.js";
+export type {
+  PersistInput,
+  PersistResult,
+  RehydrateInput,
+  RehydrateResult,
+  RehydrateOutput,
+  FiringToApply,
+} from "./persist.js";
+export { runResolveOffset } from "./resolve-offset.js";
+export type {
+  ResolveOffsetInput,
+  ResolveOffsetResult,
+} from "./resolve-offset.js";

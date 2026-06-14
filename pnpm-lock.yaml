@@ -359,12 +359,18 @@ importers:
 
   packages/pipeline:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../core
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../evaluator
+      '@vestlang/linter':
+        specifier: workspace:*
+        version: link:../linter
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer

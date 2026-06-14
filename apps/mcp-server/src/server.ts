@@ -9,6 +9,9 @@ import {
   runEvaluate,
   runAsOf,
   runVestedBetween,
+  runPersist,
+  runRehydrate,
+  runResolveOffset,
   type GrantInput,
 } from "@vestlang/pipeline";
 import type { OCTDate, Program, Statement } from "@vestlang/types";
@@ -17,13 +20,8 @@ import {
   VESTING_DAY_OF_MONTH_VALUES,
 } from "@vestlang/types";
 import { registerResources } from "./resources.js";
-import {
-  addPeriod,
-  dateDiff,
-  resolveOffset,
-  resolveVestingDay,
-} from "./date-math.js";
-import { PERSISTED_ARTIFACT, runPersist, runRehydrate } from "./persist.js";
+import { addPeriod, dateDiff, resolveVestingDay } from "./date-math.js";
+import { PERSISTED_ARTIFACT } from "./artifact-schema.js";
 import { ISO_DATE } from "./iso-date.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
@@ -633,7 +631,7 @@ export function createServer(): McpServer {
       for (const [k, v] of Object.entries(events ?? {})) {
         events_oct[k] = v;
       }
-      const result = resolveOffset({
+      const result = runResolveOffset({
         expr,
         grant_date: grant_date,
         events: events_oct,
