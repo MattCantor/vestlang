@@ -24,3 +24,9 @@ export { presentSchedule } from "./present.js";
 export type { SchedulePresentation } from "./present.js";
 export type { ScheduleView } from "./view.js";
 export type { Summary } from "./summary.js";
+
+// Finding semantics, surfaced so consumers gate and word allocation findings the
+// same way the display path does: `errorFindings` is the shared validity rule (an
+// error-severity finding makes a schedule invalid), `formatFinding` its one-canonical
+// wording. persist reads both to refuse — and name — an over-allocating program.
+export { errorFindings, formatFinding } from "./findings.js";

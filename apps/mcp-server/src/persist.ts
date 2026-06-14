@@ -11,7 +11,11 @@
 // produce once fired.
 
 import { z } from "zod";
-import { parseToProgram } from "@vestlang/pipeline";
+import {
+  parseToProgram,
+  errorFindings,
+  formatFinding,
+} from "@vestlang/pipeline";
 import {
   evaluateProgram,
   toPersisted,
@@ -143,9 +147,12 @@ export type PersistResult =
   | { ok: true; artifact: PersistedArtifact; blockers: unknown[] }
   | { ok: false; error: string };
 
-// Compile a program down to a storable artifact. Only a `template` resolution is
-// storable as a single canonical artifact, so anything else comes back as a clear
-// error naming the status that blocked it. The returned blockers are the
+// Compile a program down to a storable artifact. Two gates stand in the way. First
+// validity: a program the evaluator flags as invalid — one that allocates more than
+// the whole grant — is refused outright, naming the over-allocation, since storing it
+// would mint a durable artifact that over-vests on rehydrate. Then storability: only a
+// `template` resolution fits a single canonical artifact, so any other shape comes back
+// as a clear error naming the status that blocked it. The returned blockers are the
 // template arm's advisory pending witnesses — what's still floating at store time
 // (e.g. a combinator start whose event hasn't fired), surfaced so the caller knows
 // the artifact isn't yet fully resolved.
@@ -172,6 +179,16 @@ export function runPersist(input: PersistInput): PersistResult {
     return {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // Validity comes before shape: when a schedule is both invalid and non-template,
+  // refuse it for the real defect (over-allocation) rather than the incidental shape.
+  const errors = errorFindings(schedule.findings);
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot persist: ${errors.map(formatFinding).join("; ")}.`,
     };
   }
 

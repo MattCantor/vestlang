@@ -1,4 +1,5 @@
 import type { EvaluatedSchedule } from "@vestlang/types";
+import { errorFindings } from "./findings.js";
 
 /**
  * The consumer rule, made explicit. There are four orthogonal reads of an
@@ -52,6 +53,6 @@ export function presentSchedule(s: EvaluatedSchedule): SchedulePresentation {
     pending:
       resolution.status !== "impossible" && resolution.blockers.length > 0,
     projected: resolution.installments.some((i) => i.state === "RESOLVED"),
-    valid: s.findings.every((f) => f.severity !== "error"),
+    valid: errorFindings(s.findings).length === 0,
   };
 }
