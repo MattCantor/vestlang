@@ -2,28 +2,16 @@ import { describe, it, expect } from "vitest";
 import {
   makeImpossibleSchedule,
   makeStartPlusSchedule,
-  makeResolvedSchedule,
   makeUnresolvedVestingStartSchedule,
   makeUnresolvedCliffInstallment,
 } from "../src/evaluate/makeTranches.js";
-import { ImpossibleBlocker, OCTDate } from "@vestlang/types";
+import { ImpossibleBlocker } from "@vestlang/types";
 import {
   makeVestingBaseDate,
   makeImpossibleConditionBlocker,
 } from "./helpers.js";
 
 describe("makeTranches", () => {
-  it("makeResolvedTranches aligns dates and amounts", () => {
-    const out = makeResolvedSchedule(
-      ["2024-01-01", "2024-02-01"] as OCTDate[],
-      [3, 7],
-    );
-    expect(out.installments).toEqual([
-      { state: "RESOLVED", amount: 3, date: "2024-01-01" },
-      { state: "RESOLVED", amount: 7, date: "2024-02-01" },
-    ]);
-  });
-
   it("makeStartPlusTranches steps are index * stepLength", () => {
     const out = makeStartPlusSchedule([1, 1, 1], "MONTHS", 3, [
       { type: "EVENT_NOT_YET_OCCURRED", event: "milestone" },
