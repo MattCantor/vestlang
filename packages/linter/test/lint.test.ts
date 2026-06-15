@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { lintProgram, lintText } from "../src/index.js";
+import {
+  errorDiagnostics,
+  lintMarkdown,
+  lintProgram,
+  lintText,
+} from "../src/index.js";
+import type { Diagnostic, MarkdownDiagnostic } from "../src/index.js";
 
 function diagnosticsOf(src: string) {
   const raw = parse(src);
@@ -676,6 +682,60 @@ describe("@vestlang/linter", () => {
       expect(typeof d.loc?.start.line).toBe("number");
       expect(d.codeFrame).toBeDefined();
       expect(d.codeFrame?.length).toBeGreaterThan(0);
+    });
+  });
+
+  // The single error-gating predicate over lint diagnostics. The CLI exit code,
+  // pipeline persist, and the MCP lint tool all route through it, so "which
+  // diagnostics block" lives in one place.
+  describe("errorDiagnostics", () => {
+    // A mixed list of real Diagnostics: an `unsatisfiable-date-window` error and
+    // a `cliff-exceeds-span` warning, both from one statement.
+    const mixed: Diagnostic[] = lintText(
+      `VEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 12 months EVERY 3 months CLIFF 18 months`,
+    ).diagnostics;
+
+    it("keeps only the error-severity entries from a mixed list", () => {
+      // Sanity: the fixture really does carry both severities.
+      expect(mixed.some((d) => d.severity === "error")).toBe(true);
+      expect(mixed.some((d) => d.severity === "warning")).toBe(true);
+
+      const errors = errorDiagnostics(mixed);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].ruleId).toBe("unsatisfiable-date-window");
+      expect(errors.every((d) => d.severity === "error")).toBe(true);
+    });
+
+    it("returns [] for a warning-only list", () => {
+      const warningOnly = lintText(
+        "1/2 VEST OVER 12 months EVERY 1 month",
+      ).diagnostics;
+      expect(warningOnly.every((d) => d.severity === "warning")).toBe(true);
+      expect(errorDiagnostics(warningOnly)).toEqual([]);
+    });
+
+    it("returns [] for an empty list", () => {
+      expect(errorDiagnostics([])).toEqual([]);
+    });
+
+    // Pins the generic: no `Diagnostic[]` signature, no cast. The function
+    // accepts a `MarkdownDiagnostic[]` (no `path`/`loc`, has `line`/`column`)
+    // and a bare `{ severity }[]` literal, returning the same element type.
+    it("accepts MarkdownDiagnostic[] without a cast and returns markdown shape", () => {
+      const mdDiags: MarkdownDiagnostic[] = lintMarkdown(
+        "```vest\nVEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 48 months EVERY 1 month\n```\n",
+      );
+      const errors = errorDiagnostics(mdDiags);
+      expect(errors).toHaveLength(1);
+      // A markdown-only field survives — the return is MarkdownDiagnostic[].
+      expect(typeof errors[0].line).toBe("number");
+      expect(errors[0].ruleId).toBe("unsatisfiable-date-window");
+    });
+
+    it("accepts a bare { severity }[] literal without a cast", () => {
+      expect(
+        errorDiagnostics([{ severity: "warning" }, { severity: "error" }]),
+      ).toEqual([{ severity: "error" }]);
     });
   });
 });

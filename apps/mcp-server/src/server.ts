@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
-import { lintText } from "@vestlang/linter";
+import { errorDiagnostics, lintText } from "@vestlang/linter";
 import { stringify } from "@vestlang/render";
 import {
   parseRaw,
@@ -428,7 +428,7 @@ export function createServer(): McpServer {
     {
       title: "Lint vestlang",
       description:
-        "Run vestlang's syntax and semantic linter against DSL text. Returns a list of diagnostics, each with ruleId, severity, message, and (when available) source location. An empty diagnostics array means the program is valid.",
+        "Run vestlang's syntax and semantic linter against DSL text. Returns `ok` (true when there are no error-severity diagnostics — valid/storable, matching vestlang_persist), `clean` (true when there are no diagnostics at all), and the `diagnostics` list, each with ruleId, severity, message, and (when available) source location. Non-error diagnostics (warnings, info) are advisory: they appear in `diagnostics` and set `clean` false but do NOT flip `ok`.",
       inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
       annotations: {
         readOnlyHint: true,
@@ -440,7 +440,11 @@ export function createServer(): McpServer {
     async ({ dsl }) => {
       const { diagnostics } = lintText(dsl);
       return jsonResult({
-        ok: diagnostics.length === 0,
+        // `ok` ⇔ storable/valid: gates on error severity only, matching
+        // vestlang_persist. `clean` ⇔ spotless: no diagnostics of any severity.
+        // A warning leaves `ok: true`, `clean: false`.
+        ok: errorDiagnostics(diagnostics).length === 0,
+        clean: diagnostics.length === 0,
         diagnostics,
       });
     },

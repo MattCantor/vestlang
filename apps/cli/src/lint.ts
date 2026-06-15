@@ -1,4 +1,9 @@
-import { Diagnostic, lintText, lintMarkdown } from "@vestlang/linter";
+import {
+  Diagnostic,
+  errorDiagnostics,
+  lintText,
+  lintMarkdown,
+} from "@vestlang/linter";
 import type { MarkdownDiagnostic } from "@vestlang/linter";
 import { input } from "./utils.js";
 import { readFileSync } from "node:fs";
@@ -9,7 +14,7 @@ import { readFileSync } from "node:fs";
 export function exitCode(
   diagnostics: { severity: Diagnostic["severity"] }[],
 ): number {
-  return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+  return errorDiagnostics(diagnostics).length > 0 ? 1 : 0;
 }
 
 function prettyPrint(diagnostics: Diagnostic[]) {

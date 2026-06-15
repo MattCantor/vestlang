@@ -2,6 +2,7 @@ import { Program } from "@vestlang/types";
 import { walk, type AstNode } from "@vestlang/walk";
 import {
   Diagnostic,
+  DiagnosticSeverity,
   LintContext,
   LintResult,
   NodePath,
@@ -92,6 +93,18 @@ export function lintText(source: string): LintResult {
     };
     return { diagnostics: [diagnostic] };
   }
+}
+
+// The single definition of which lint diagnostics block. Only error severity
+// counts; warnings and info are advisory, so they fall away here. Generic over
+// any severity-bearing shape — a `Diagnostic`, a `MarkdownDiagnostic`, or a bare
+// `{ severity }` stub — and returns the same element type, so a caller keeps
+// whatever fields it had (persist still reads `.ruleId`/`.message` off the
+// result). Sibling of `errorFindings` over `Finding[]` in the pipeline.
+export function errorDiagnostics<T extends { severity: DiagnosticSeverity }>(
+  ds: T[],
+): T[] {
+  return ds.filter((d) => d.severity === "error");
 }
 
 export * from "./types.js";
