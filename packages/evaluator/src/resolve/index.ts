@@ -33,10 +33,10 @@ import type { ResolveResult, ResolveVerdict } from "./types.js";
  *  which is why it's safe to ask here: resolution steps the chain cursor, and for
  *  an over-cap schedule that runs the date past year 9999 and throws a date-range
  *  error first — so the cap has to be checked *before* any resolution, or the
- *  wrong error wins. The same measure backs `resolveToCore` and the per-statement
- *  MCP tools (`vestlang_evaluate` family, which map over statements separately and
- *  so wouldn't otherwise see a program that is individually-small but collectively
- *  huge), so all the evaluate tools agree on what they reject. */
+ *  wrong error wins. The same measure backs `resolveToCore` and
+ *  `evaluateClauseGroups`, which asserts it once over the whole program before
+ *  resolving each THEN chain separately — so a program that is small per chain
+ *  but collectively huge is still caught. */
 export const assertProgramInstallmentCap = (program: Program): void => {
   const total = programInstallmentTotal(program);
   if (total > MAX_INSTALLMENTS) {

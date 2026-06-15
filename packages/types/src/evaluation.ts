@@ -351,7 +351,7 @@ export type InterchangeVerdict =
  * that assumption so it can be disclosed and watched.
  *
  * `through` is inclusive: the claim is "`eventId` did not occur on or before this
- * date." (Populated in a later phase; emitted as an empty list for now.)
+ * date."
  */
 export interface AbsenceAssumption {
   eventId: string;
