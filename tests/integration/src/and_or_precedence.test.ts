@@ -3,7 +3,7 @@ import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   OCTDate,
   Installment,
 } from "@vestlang/types";
@@ -32,13 +32,12 @@ const eventFalse = (event: string) => ({
   [event]: yesterday,
 });
 
-const ctx_input: EvaluationContextInput = {
+const ctx_input: ResolutionContextInput = {
   grantDate: today,
   events: {
     X: today,
   },
   grantQuantity: 100,
-  asOf: today,
 };
 
 const evaluate = (stmt: string, events: Record<string, OCTDate>) => {

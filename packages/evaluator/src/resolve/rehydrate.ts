@@ -21,7 +21,7 @@
 import type {
   Blocker,
   DeadBlocker,
-  EvaluationContextInput,
+  ResolutionContextInput,
   SourceMap,
   UnresolvedBlocker,
   VestingNodeExpr,
@@ -175,21 +175,23 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
  * @param runtime   the stored runtime; its structural fields (startDate, grantDate,
  *                  …) and any existing firings carry through untouched.
  * @param ctxInput  the world: `events` (now including fired named events like
- *                  `ipo`), `asOf`, etc.; this is how vestlang learns an event fired.
+ *                  `ipo`); this is how vestlang learns an event fired. Re-resolving
+ *                  a witness reads structural installment state only, so no
+ *                  observation time enters here.
  */
 export const rehydrate = (
   template: VestingScheduleTemplate,
   sourceMap: SourceMap,
   runtime: VestingRuntime,
-  ctxInput: EvaluationContextInput,
+  ctxInput: ResolutionContextInput,
 ): RehydrateResult => {
   // The grant's frozen conventions come from the stored runtime, not the caller.
   // Grant date and day-of-month were fixed at issuance, so the witnesses we
   // re-resolve here must read the same values the projection compiles under —
   // otherwise an offset synthetic (e.g. `EVENT ipo + 1 month`) could land a day
-  // off the projection grid. The caller still owns world/observer state (events,
-  // asOf) and grantQuantity; the matching ctxInput grant-date / day-of-month
-  // fields are deliberately ignored. The grant-date fallback only matters for a
+  // off the projection grid. The caller still owns world state (events) and
+  // grantQuantity; the matching ctxInput grant-date / day-of-month fields are
+  // deliberately ignored. The grant-date fallback only matters for a
   // hand-built artifact that omits runtime.grantDate — a persisted one always
   // carries it. day-of-month is set unconditionally: when the grant used the
   // default rule lower.ts doesn't store it, so this is undefined and

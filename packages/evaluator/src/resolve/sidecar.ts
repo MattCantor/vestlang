@@ -19,7 +19,7 @@
 // The synthetic id is only ever carried through here, never recomputed (persisted
 // and read, never re-derived), so the round-trip is lossless.
 
-import type { EvaluationContextInput, SourceMap } from "@vestlang/types";
+import type { ResolutionContextInput, SourceMap } from "@vestlang/types";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 
@@ -96,7 +96,7 @@ export const toPersisted = (artifact: {
  */
 export const rehydratePersisted = (
   persisted: PersistedArtifact,
-  ctxInput: EvaluationContextInput,
+  ctxInput: ResolutionContextInput,
 ): RehydrateResult =>
   rehydrate(
     persisted.template,

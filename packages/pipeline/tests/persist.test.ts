@@ -8,10 +8,10 @@ import {
 
 // Direct function-level tests of the persist/rehydrate orchestration, now that it
 // lives in the pipeline. The MCP-boundary suite (apps/mcp-server) still exercises
-// zod validation and tool wiring; these pin the orchestration where it sits,
-// including the load-bearing `asOf` thread-through (AC#7) — persist evaluates as of
-// the grant date, rehydrate as of the supplied date (defaulting to the stored grant
-// date), never the wall-clock today.
+// zod validation and tool wiring; these pin the orchestration where it sits.
+// Neither operation reads an observation date — they resolve a schedule's
+// structural state (which template, which witnesses), the same whenever you ask —
+// so their output never moves with the wall clock.
 
 const COMBINATOR_DSL =
   "VEST FROM EARLIER OF (EVENT ipo, DATE 2027-01-01) OVER 48 months EVERY 1 month";
@@ -156,7 +156,6 @@ describe("runRehydrate (AC#5)", () => {
       artifact: persisted.artifact,
       grant_quantity: 1000,
       events: { ipo: "2026-06-01" },
-      as_of: "2026-07-01",
     });
     // The synthetic id resolves to ipo (before the 2027 date); the delta carries it
     // with the sidecar definition.
@@ -201,7 +200,6 @@ describe("runRehydrate (AC#5)", () => {
       artifact: persisted.artifact,
       grant_quantity: 4800,
       events: { ipo: "2027-01-01" },
-      as_of: "2027-06-01",
     });
     expect(out.dead.length).toBeGreaterThan(0);
     expect(out.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION")).toBe(true);
@@ -231,19 +229,12 @@ describe("runRehydrate (AC#5)", () => {
   });
 });
 
-describe("asOf determinism (AC#7)", () => {
-  // Each fixed-anchor entry threads its own asOf into buildContext (persist → grant
-  // date, rehydrate → supplied-or-grant), never buildContext's todayISO() default.
-  //
-  // Honest scope of these tests: persist/rehydrate OUTPUT is asOf-invariant — it is
-  // structural and firing-driven, so it does not move with the as-of (verified: a
-  // rehydrate is byte-identical across asOf 2025→2099). That means these cases cannot
-  // distinguish "uses the grant date" from "uses today" by output alone; they stand
-  // as fixed-output regression pins, not proofs of clock-independence. The genuine
-  // asOf guard lives in resolve-offset.test.ts — a date resolving past today only
-  // passes because the as-of is the far-future sentinel, so it fails if that explicit
-  // asOf is ever dropped. #298 tracks making asOf required at the type level, which
-  // would remove the forgot-to-thread-it footgun outright.
+describe("persist/rehydrate are clock-independent", () => {
+  // Both operations resolve a schedule's structural state — which canonical
+  // template, which witnesses the firings imply — and that answer is the same
+  // whenever you ask. No observation date enters either one (neither takes an
+  // `as_of`, and neither reads `todayISO()`), so output never moves with the wall
+  // clock. These pins lock that down as fixed-output regressions.
 
   it("persist yields a fixed result independent of today's date", () => {
     // Run twice; nothing reads the clock, so the two artifacts are byte-identical.
@@ -265,10 +256,10 @@ describe("asOf determinism (AC#7)", () => {
     expect(a.artifact.template.statements.length).toBeGreaterThan(0);
   });
 
-  it("rehydrate without as_of evaluates against the stored grant date, not today", () => {
+  it("rehydrate evaluates against the stored grant date, not today", () => {
     // The grant + firing are years in the past, but the witness/projection don't
-    // shift with the run date because as_of falls back to the stored grant date,
-    // never todayISO().
+    // shift with the run date: rehydration reads the artifact's frozen grant date
+    // and the supplied firings, never the clock.
     const persisted = persistOk({
       dsl: BARE_EVENT_DSL,
       grant_date: "2025-01-01",
@@ -278,7 +269,6 @@ describe("asOf determinism (AC#7)", () => {
       artifact: persisted.artifact,
       grant_quantity: 400,
       events: { ipo: "2025-01-31" },
-      // as_of omitted on purpose — must default to the stored grant date.
     });
     const out2 = rehydrateOk({
       artifact: persisted.artifact,

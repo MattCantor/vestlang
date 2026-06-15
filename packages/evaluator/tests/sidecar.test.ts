@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
-  EvaluationContextInput,
+  AsOfContextInput,
   Program,
   Statement,
 } from "@vestlang/types";
@@ -35,8 +35,8 @@ import {
 } from "./helpers";
 
 const ctxInput = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+  overrides: Partial<AsOfContextInput> = {},
+): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,

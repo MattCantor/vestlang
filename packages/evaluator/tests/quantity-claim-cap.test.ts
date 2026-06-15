@@ -21,7 +21,6 @@ describe("QUANTITY claim capped at the grant", () => {
       grantDate: "2024-01-01",
       events: {},
       grantQuantity: 100,
-      asOf: "2026-06-01",
     };
 
     const [schedule] = evaluateProgram(program, ctx);
@@ -42,7 +41,6 @@ describe("QUANTITY claim capped at the grant", () => {
       grantDate: "2024-01-01",
       events: {},
       grantQuantity: 100,
-      asOf: "2026-06-01",
     };
 
     const [schedule] = evaluateProgram(program, ctx);
@@ -147,7 +145,6 @@ describe("QUANTITY claim capped at the grant", () => {
       grantDate: "2024-01-01",
       events: {},
       grantQuantity: 100,
-      asOf: "2026-06-01",
     };
 
     const [schedule] = evaluateProgram(program, ctx);

@@ -3,11 +3,11 @@ import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { runResolveOffset } from "../src/resolve-offset.js";
 
 // runResolveOffset owns the `VEST FROM <expr>` resolution that the MCP
-// resolve_offset tool calls. It evaluates the zero-length schedule as of
-// MAX_REPRESENTABLE_DATE (the far-future sentinel), so the sole installment
-// resolves to a date rather than reading "not yet" — even for dates past today.
-// These cases moved from apps/mcp-server's date-math.test.ts and re-point at the
-// pipeline entry, plus the AC#6 after-today and day-of-month additions.
+// resolve_offset tool calls. It reads the zero-length schedule's structural
+// installment date, which is the same whenever you ask, so the sole installment
+// resolves to a concrete date with no observation time involved — even for dates
+// far past today. These cases moved from apps/mcp-server's date-math.test.ts and
+// re-point at the pipeline entry, plus the after-today and day-of-month additions.
 
 describe("runResolveOffset", () => {
   it("resolves a simple DATE + months expression", () => {
@@ -77,11 +77,11 @@ describe("runResolveOffset", () => {
     ).toThrow(/range/);
   });
 
-  // AC#6 — a date that resolves well PAST today. This only resolves because the
-  // as-of is MAX_REPRESENTABLE_DATE: under a today-relative as-of the zero-length
-  // schedule would read "not yet" for a far-future start. Pinned far enough out
-  // that no plausible wall-clock run date makes it "already past."
-  it("resolves a far-future expression (after today) — proves the far-future as-of", () => {
+  // A date that resolves well PAST today. Resolution reads the schedule's
+  // structural installment date, not the wall clock, so a far-future start is just
+  // a known date — it never reads "not yet." Pinned far enough out that no
+  // plausible wall-clock run date is even relevant.
+  it("resolves a far-future expression (after today) — date resolution ignores the clock", () => {
     const r = runResolveOffset({
       expr: "DATE 2099-01-01 + 6 months",
       grant_date: "2025-01-01",

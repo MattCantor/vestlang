@@ -5,7 +5,7 @@
 // evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
 
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   Finding,
   OCTDate,
   Program,
@@ -46,7 +46,7 @@ export const assertProgramInstallmentCap = (program: Program): void => {
 
 export const resolveToCore = (
   program: Program,
-  ctxInput: EvaluationContextInput,
+  ctxInput: ResolutionContextInput,
 ): ResolveResult => {
   // Reject an oversized program before resolving anything (see above).
   assertProgramInstallmentCap(program);

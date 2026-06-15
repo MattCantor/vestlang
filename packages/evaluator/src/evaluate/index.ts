@@ -1,5 +1,5 @@
 import {
-  EvaluationContextInput,
+  ResolutionContextInput,
   Program,
   Statement,
   EvaluatedSchedule,
@@ -19,7 +19,7 @@ import { assemble } from "../resolve/assemble.js";
  */
 export function evaluateStatement(
   stmt: Statement,
-  ctx_input: EvaluationContextInput,
+  ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule {
   return assemble(
     resolveToCore([stmt], ctx_input),
@@ -61,7 +61,7 @@ function chainGroups(program: Program): Statement[][] {
  */
 export function evaluateClauseGroups(
   program: Program,
-  ctx_input: EvaluationContextInput,
+  ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule[] {
   assertProgramInstallmentCap(program);
   return chainGroups(program).map((chain) =>
@@ -79,7 +79,7 @@ export function evaluateClauseGroups(
  */
 export function evaluateProgram(
   stmts: Program,
-  ctx_input: EvaluationContextInput,
+  ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule[] {
   return [
     assemble(

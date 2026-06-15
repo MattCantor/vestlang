@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { buildStatement } from "../src/atoms.js";
@@ -50,11 +50,10 @@ function footprint(
   components: Component[],
   policy: VestingDayOfMonth,
 ): Map<string, number> {
-  const ctx: EvaluationContextInput = {
+  const ctx: ResolutionContextInput = {
     grantDate: "1900-01-01",
     events: {},
     grantQuantity: 1_000_000,
-    asOf: "2999-12-31",
     vesting_day_of_month: policy,
   };
   const out = new Map<string, number>();

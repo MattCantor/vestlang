@@ -11,7 +11,7 @@
 
 import type {
   Blocker,
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleBlocker,
   Program,
   Schedule,
@@ -138,7 +138,7 @@ export interface StmtResolution {
  *  calls it for every statement that isn't a THEN tail. */
 const resolveNonChained = (
   stmt: Extract<Statement, { chained?: false }>,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   totalShares: number,
 ): StmtResolution => {
   const percentage = amountToFraction(stmt.amount, totalShares);
@@ -321,7 +321,7 @@ type ChainAnchor =
 /** The anchor a following THEN tail inherits from the statement just resolved. */
 const anchorAfter = (
   r: StmtResolution,
-  dom: EvaluationContext["vesting_day_of_month"],
+  dom: ResolutionContext["vesting_day_of_month"],
 ): ChainAnchor => {
   const { occurrences, length, type } = r.periodicity;
   if (r.start.state === "RESOLVED") {
@@ -370,7 +370,7 @@ const anchorAfter = (
  */
 export const resolveStatements = (
   program: Program,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   totalShares: number,
 ): StmtResolution[] => {
   const dom = ctx.vesting_day_of_month;
@@ -501,7 +501,7 @@ export type TemplateBuild =
       ok: false;
       why: "unresolved";
       resolutions: StmtResolution[];
-      ctx: EvaluationContext;
+      ctx: ResolutionContext;
       totalShares: number;
     }
   | {
@@ -509,7 +509,7 @@ export type TemplateBuild =
       why: "events";
       reason: NonTemplateReason;
       resolutions: StmtResolution[];
-      ctx: EvaluationContext;
+      ctx: ResolutionContext;
       totalShares: number;
     };
 
@@ -521,7 +521,7 @@ export type TemplateBuild =
  */
 export const buildTemplate = (
   resolutions: StmtResolution[],
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   totalShares: number,
 ): TemplateBuild => {
   const unresolved = (): TemplateBuild => ({

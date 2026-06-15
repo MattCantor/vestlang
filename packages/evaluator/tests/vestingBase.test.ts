@@ -10,7 +10,7 @@ import {
 
 describe("evaluateVestingBase", () => {
   it("DATE resolves to its literal value", () => {
-    const ctx = baseCtx({ asOf: "2024-02-01" });
+    const ctx = baseCtx();
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2024-02-01")),
       ctx,
@@ -19,7 +19,7 @@ describe("evaluateVestingBase", () => {
   });
 
   it("DATE in the future still resolves — asOf doesn't gate a known date", () => {
-    const ctx = baseCtx({ asOf: "2024-01-01" });
+    const ctx = baseCtx();
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2030-02-01")),
       ctx,

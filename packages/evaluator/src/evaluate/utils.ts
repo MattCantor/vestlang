@@ -1,5 +1,5 @@
 import type {
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleNode,
   LaterOfVestingNode,
   OCTDate,
@@ -31,7 +31,7 @@ export function isPickedResolved<T>(x: PickReturn<T>): x is PickedResolved<T> {
 /** Probe for the latest resolved date within a LATER OF (ignoring pending items). */
 export function probeLaterOf(
   expr: LaterOfVestingNode,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): OCTDate | undefined {
   const resolvedDates: OCTDate[] = [];
 

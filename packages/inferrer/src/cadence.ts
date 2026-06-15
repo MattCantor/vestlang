@@ -33,7 +33,7 @@ export function cadenceKey(c: Cadence): string {
 
 // Step `steps` cadences (forward or back) from `from`, applying the day-of-month
 // policy on the MONTHS path. core's addMonthsRule takes the policy directly, so
-// the inferrer no longer fabricates a dummy EvaluationContext just to carry it.
+// the inferrer no longer fabricates a dummy evaluator context just to carry it.
 export function walk(
   from: OCTDate,
   cadence: Cadence,

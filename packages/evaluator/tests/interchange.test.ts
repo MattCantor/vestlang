@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
-  EvaluationContextInput,
+  ResolutionContextInput,
   Program,
   Statement,
   VestingNode,
@@ -27,12 +27,11 @@ import {
 } from "./helpers";
 
 const ctxInput = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+  overrides: Partial<ResolutionContextInput> = {},
+): ResolutionContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,
-  asOf: "2026-06-01",
   ...overrides,
 });
 

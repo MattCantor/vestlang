@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { evaluateProgram } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { ResolutionContextInput } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import {
   collapseAgainstInput,
@@ -17,7 +17,7 @@ const DOM = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const;
  * walk — and sum RESOLVED installments by date. */
 function collapseEval(
   dsl: string,
-  ctx: EvaluationContextInput,
+  ctx: ResolutionContextInput,
 ): Map<string, number> {
   const program = normalizeProgram(parse(dsl));
   const [schedule] = evaluateProgram(program, ctx);
@@ -54,7 +54,6 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
       grantDate: "2025-02-01",
       events: {},
       grantQuantity: total,
-      asOf: "2030-01-01",
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
     });
 
@@ -68,7 +67,6 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
     const ctx: VerifyContext = {
       grantDate: "2025-02-01",
       totalQuantity: total,
-      asOf: "2030-01-01",
       vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
     };
     const program = normalizeProgram(parse(inferred.dsl));
@@ -99,7 +97,6 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
     const ctx: VerifyContext = {
       grantDate: "2024-01-01",
       totalQuantity: 300,
-      asOf: "2030-01-01",
       vestingDayOfMonth: DOM,
     };
 
@@ -132,7 +129,6 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
     const ctx: VerifyContext = {
       grantDate: "2024-02-01",
       totalQuantity: total,
-      asOf: "2030-01-01",
       vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
     };
     const { residual: collapseResidual } = collapseAgainstInput(

@@ -25,7 +25,6 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
       grantDate: "2025-01-01",
       events: {}, // ipo and board both unfired
       grantQuantity: 4800,
-      asOf: "2025-06-01",
     });
 
     expect(resolution.status).toBe("unresolved");

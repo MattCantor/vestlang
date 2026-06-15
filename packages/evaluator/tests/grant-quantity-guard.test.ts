@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { AsOfContextInput } from "@vestlang/types";
 import { evaluateProgram, evaluateProgramAsOf } from "../src/index.js";
 
 // R2-B23: grantQuantity is policed once, at context creation, with the same
@@ -11,7 +11,7 @@ import { evaluateProgram, evaluateProgramAsOf } from "../src/index.js";
 
 const prog = (dsl: string) => normalizeProgram(parse(dsl));
 
-const ctxWith = (grantQuantity: number): EvaluationContextInput => ({
+const ctxWith = (grantQuantity: number): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity,

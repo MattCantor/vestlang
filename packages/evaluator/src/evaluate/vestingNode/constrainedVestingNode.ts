@@ -3,7 +3,7 @@ import type {
   Blocker,
   Condition,
   ConstrainedVestingNode,
-  EvaluationContext,
+  ResolutionContext,
   ResolvedNode,
   UnresolvedNode,
   VestingNode,
@@ -16,7 +16,7 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
   node: ConstrainedVestingNode,
   resSubject: ResolvedNode | UnresolvedNode,
   condition: T,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): Blocker[] | undefined {
   switch (condition.type) {
     case "ATOM": {

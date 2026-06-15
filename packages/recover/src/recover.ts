@@ -5,7 +5,7 @@ import {
   type TrancheInput,
 } from "@vestlang/inferrer";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   Program,
   ResolvedInstallment,
 } from "@vestlang/types";
@@ -22,7 +22,7 @@ import type { RecoveryOutcome } from "./types.js";
 // re-classify, never a second rescue round.
 export function evaluateProgramWithRecovery(
   stmts: Program,
-  ctx: EvaluationContextInput,
+  ctx: ResolutionContextInput,
 ): RecoveryOutcome {
   // The collapse the public surface produces — one schedule carrying both the
   // closed-world resolution and the storable-floor interchange verdict. It's both

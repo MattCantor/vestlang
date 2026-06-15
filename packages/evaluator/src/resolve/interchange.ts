@@ -11,7 +11,7 @@
 // fires and you get the same verdict — which is what makes it safe to store.
 
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   InterchangeVerdict,
   NonTemplateReason,
   Program,
@@ -172,7 +172,7 @@ const mapTemplateBuild = (
  */
 export const resolveInterchange = (
   program: Program,
-  ctxInput: EvaluationContextInput,
+  ctxInput: ResolutionContextInput,
 ): InterchangeVerdict => {
   const ctx = createEvaluationContext(ctxInput);
   const totalShares = ctx.grantQuantity;

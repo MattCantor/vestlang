@@ -26,7 +26,6 @@ describe("non-divisible PORTION in the symbolic arm", () => {
         grantDate: "2025-01-01",
         events: {},
         grantQuantity: 100,
-        asOf: "2025-06-01",
       });
 
     expect(run).not.toThrow();
@@ -46,7 +45,6 @@ describe("non-divisible PORTION in the symbolic arm", () => {
       grantDate: "2025-01-01",
       events: {},
       grantQuantity: 100,
-      asOf: "2025-06-01",
     });
 
     expect(resolution.installments.length).toBeGreaterThan(0);

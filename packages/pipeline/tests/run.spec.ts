@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   runEvaluate,
   runAsOf,
@@ -124,6 +124,35 @@ describe("runAsOf", () => {
       expect(r.vested).toHaveLength(0);
       expect(r.unresolved).toBeGreaterThan(0);
     }
+  });
+
+  // Omitting the observation date means "as of today". The default is read once,
+  // at the query call site — nowhere on the structure path — so fixing the system
+  // clock pins both the reported `asOf` and where the tranches partition.
+  describe("omitted as_of defaults to today", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("reports today's date and partitions tranches at it", () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2025-09-15T12:00:00Z"));
+
+      const r = runAsOf("VEST OVER 12 months EVERY 1 month", grant);
+      expect(r.ok).toBe(true);
+      if (r.ok) {
+        expect(r.asOf).toBe("2025-09-15");
+        // The monthly grid runs 2025-02 … 2026-01. As of 2025-09-15, the tranches
+        // through 2025-09 have vested and the rest are still unvested — the split
+        // lands exactly on the defaulted date.
+        for (const t of r.vested) {
+          if (t.state === "RESOLVED") expect(t.date <= "2025-09-15").toBe(true);
+        }
+        for (const t of r.unvested) {
+          if (t.state === "RESOLVED") expect(t.date > "2025-09-15").toBe(true);
+        }
+        expect(r.vested.length).toBeGreaterThan(0);
+        expect(r.unvested.length).toBeGreaterThan(0);
+      }
+    });
   });
 });
 

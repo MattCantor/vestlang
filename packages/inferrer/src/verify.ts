@@ -12,7 +12,6 @@ import type { TrancheInput } from "./types.js";
 export interface VerifyContext {
   grantDate: OCTDate;
   totalQuantity: number;
-  asOf: OCTDate;
   vestingDayOfMonth: VestingDayOfMonth;
 }
 
@@ -20,10 +19,9 @@ export interface VerifyContext {
 export function makeVerifyContext(
   grantDate: OCTDate,
   totalQuantity: number,
-  asOf: OCTDate,
   policy: VestingDayOfMonth,
 ): VerifyContext {
-  return { grantDate, totalQuantity, asOf, vestingDayOfMonth: policy };
+  return { grantDate, totalQuantity, vestingDayOfMonth: policy };
 }
 
 /** Disagreement between the program's per-date output and the input stream.
@@ -51,7 +49,6 @@ export function residualAgainstInput(
       grantDate: ctx.grantDate,
       events: {},
       grantQuantity: ctx.totalQuantity,
-      asOf: ctx.asOf,
       vesting_day_of_month: ctx.vestingDayOfMonth,
     });
     for (const inst of result.resolution.installments) {
@@ -96,7 +93,6 @@ export function collapseAgainstInput(
     grantDate: ctx.grantDate,
     events: {},
     grantQuantity: ctx.totalQuantity,
-    asOf: ctx.asOf,
     vesting_day_of_month: ctx.vestingDayOfMonth,
   });
 
@@ -136,7 +132,6 @@ export function programStatus(
     grantDate: ctx.grantDate,
     events: {},
     grantQuantity: ctx.totalQuantity,
-    asOf: ctx.asOf,
     vesting_day_of_month: ctx.vestingDayOfMonth,
   });
   return schedule.resolution.status;

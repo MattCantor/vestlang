@@ -1,6 +1,6 @@
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { ResolutionContextInput } from "@vestlang/types";
 import { describe, expect, it } from "vitest";
 import { evaluateProgramWithRecovery } from "../src/recover.js";
 
@@ -9,12 +9,11 @@ const prog = (dsl: string) => normalizeProgram(parse(dsl));
 function makeCtx(opts: {
   grantQuantity: number;
   events?: Record<string, string>;
-}): EvaluationContextInput {
+}): ResolutionContextInput {
   return {
     grantDate: "2024-01-01",
     events: { ...(opts.events ?? {}) },
     grantQuantity: opts.grantQuantity,
-    asOf: "2025-01-01",
   };
 }
 

@@ -1,7 +1,7 @@
 import type {
   Blocker,
   ConstrainedVestingNode,
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleBlocker,
   NodeMeta,
   VestingNode,
@@ -25,7 +25,7 @@ const allImpossibleBlockers = (x: Blocker[]): x is ImpossibleBlocker[] =>
 
 export function evaluateVestingNode(
   node: VestingNode,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): NodeMeta {
   // Resolve the vesting node base
   const resBase = evaluateVestingBase(node, ctx);

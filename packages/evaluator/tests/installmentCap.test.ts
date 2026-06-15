@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { AsOfContextInput } from "@vestlang/types";
 import { evaluateClauseGroups, evaluateProgramAsOf } from "../src/index.js";
 
 // The per-clause program evaluators own the installment cap. Every per-clause
@@ -9,7 +9,7 @@ import { evaluateClauseGroups, evaluateProgramAsOf } from "../src/index.js";
 // can't be hand-rolled away — these tests pin that the cap lives here, spanning
 // the whole program rather than a single statement.
 
-const ctx: EvaluationContextInput = {
+const ctx: AsOfContextInput = {
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 1000,

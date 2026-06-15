@@ -54,7 +54,6 @@ function tranchesFromDsl(
   dsl: string,
   grantDate: OCTDate,
   grantQuantity: number,
-  asOf: OCTDate,
 ): { date: string; amount: number }[] {
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) throw new Error(`failed to parse fixture DSL: ${dsl}`);
@@ -62,7 +61,6 @@ function tranchesFromDsl(
     grantDate,
     events: {},
     grantQuantity,
-    asOf,
     vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
   }).resolution.installments;
   return installments
@@ -99,8 +97,8 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
 
   it("surfaces the diagnostics passthrough consumers must feed back", async () => {
     // Per the tool docs, vestingDayOfMonth is NOT encoded in the returned DSL;
-    // callers must pass it back as EvaluationContext. The tool layer must
-    // therefore expose it in the response.
+    // callers must pass it back as the vesting_day_of_month input. The tool layer
+    // must therefore expose it in the response.
     const client = await connectClient();
     const res = await callInfer(client, {
       tranches: [
@@ -126,7 +124,6 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
       "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month CLIFF 12 months",
       "2024-01-01",
       48000,
-      "2028-02-01",
     );
 
     const res = await callInfer(client, {

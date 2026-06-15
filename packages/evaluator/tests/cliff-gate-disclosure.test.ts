@@ -31,7 +31,6 @@ const run = (events: Record<string, string> = {}): EvaluatedSchedule => {
     grantDate: GRANT,
     events,
     grantQuantity: QTY,
-    asOf: "2025-06-01",
   });
   return schedule;
 };
