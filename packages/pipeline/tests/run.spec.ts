@@ -87,6 +87,25 @@ describe("runEvaluate", () => {
     }
   });
 
+  // #239: an over-allocating program (two 3/4 grids summing to 3/2) must keep its
+  // diagnosis. Template recovery used to "rescue" the over-grant projection into a
+  // clean template with a `recovered` block — contradictory, since the schedule is
+  // simultaneously valid:false. The over-allocation finding survives and the
+  // misleading rescue is gone.
+  it("does not rescue an over-allocating program into a recovered template", () => {
+    const r = runEvaluate(
+      "3/4 VEST OVER 2 months EVERY 1 month PLUS 3/4 VEST OVER 2 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.valid).toBe(false);
+    expect(r.view.findings.some((f) => f.kind === "over-allocation")).toBe(
+      true,
+    );
+    expect(r.recovered).toBeUndefined();
+  });
+
   it("surfaces an engine throw (the installment cap) as an evaluation error", () => {
     const r = runEvaluate("VEST OVER 1000000 months EVERY 1 month", grant);
     expect(r.ok).toBe(false);

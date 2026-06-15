@@ -129,4 +129,60 @@ describe("evaluateProgramWithRecovery", () => {
     expect(outcome.rescued).toBe(false);
     expect(outcome.schedule.resolution.status).toBe("template");
   });
+
+  // #239: two overlapping 3/4 grids sum to 3/2 of the grant — an over-allocating
+  // program. Its realized projection over-grants, so inferring a template from it
+  // would "rescue" the schedule into a clean template while the same schedule is
+  // flagged invalid. The error-finding guard declines instead: no rescue, and the
+  // over-allocation finding stands.
+  const REPRO =
+    "3/4 VEST OVER 2 months EVERY 1 month PLUS 3/4 VEST OVER 2 months EVERY 1 month";
+
+  it("does not rescue an over-allocating program (the #239 fix)", () => {
+    const outcome = evaluateProgramWithRecovery(
+      prog(REPRO),
+      makeCtx({ grantQuantity: 100 }),
+    );
+
+    expect(outcome.rescued).toBe(false);
+    if (outcome.rescued) return; // narrow: no `recovered` block on the no-rescue arm
+    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(
+      outcome.schedule.findings.some(
+        (f) => f.kind === "over-allocation" && f.severity === "error",
+      ),
+    ).toBe(true);
+  });
+
+  // Same program at a large-but-survivable grant, where the primary collapse does
+  // NOT throw and recovery would otherwise run. Pins that the error-finding guard
+  // short-circuits before any large-grant detour, not just at small grants.
+  it("does not rescue an over-allocating program at a large survivable grant", () => {
+    const outcome = evaluateProgramWithRecovery(
+      prog(REPRO),
+      makeCtx({ grantQuantity: 6004799503160660 }),
+    );
+
+    expect(outcome.rescued).toBe(false);
+    if (outcome.rescued) return;
+    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(
+      outcome.schedule.findings.some(
+        (f) => f.kind === "over-allocation" && f.severity === "error",
+      ),
+    ).toBe(true);
+  });
+
+  // The #276 contract is left intact: at MAX_SAFE the primary collapse itself
+  // refuses (floor(totalShares × cumulative) is unrepresentable). The primary
+  // sits outside the recovery try, so that refusal still surfaces as a throw —
+  // #239 deliberately does not soften it.
+  it("still throws the #276 floorSharesAt refusal at MAX_SAFE", () => {
+    expect(() =>
+      evaluateProgramWithRecovery(
+        prog(REPRO),
+        makeCtx({ grantQuantity: 9007199254740991 }),
+      ),
+    ).toThrow(/floorSharesAt/);
+  });
 });

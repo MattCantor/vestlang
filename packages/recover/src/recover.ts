@@ -32,71 +32,96 @@ export function evaluateProgramWithRecovery(
   const schedule = evaluateProgram(stmts, ctx);
   const noRescue: RecoveryOutcome = { rescued: false, schedule };
 
-  // Anything that already fits a template (or can't resolve yet) leaves here
-  // untouched — no inference cost on the common path. The guard also narrows the
-  // resolution union so the gate and the captured provenance read the structured
-  // reason straight off the type.
-  if (schedule.resolution.status !== "events-only") return noRescue;
-  const { reason, installments } = schedule.resolution;
+  // Everything below the primary collapse is the recovery detour. The primary
+  // stays outside the try so a genuine collapse failure — notably the #276
+  // floorSharesAt refusal on an unrepresentable quotient — still surfaces; only
+  // the detour degrades to noRescue. With the error-finding guard below in place,
+  // recovery only runs on valid events-only programs, whose inferred re-eval
+  // quantity is ≤ grant ≤ MAX_SAFE and so cannot overflow — so this catch has no
+  // reachable trigger through the DSL surface and isn't unit-tested. It's
+  // belt-and-suspenders against future inferrer edge cases or other unknown throw
+  // sources, kept for the same reason clauseBreakdown keeps its blanket catch
+  // (pipeline/run.ts): a recovery hiccup should degrade to "no rescue," never sink
+  // a primary collapse that already succeeded.
+  try {
+    // Anything that already fits a template (or can't resolve yet) leaves here
+    // untouched — no inference cost on the common path. The guard also narrows the
+    // resolution union so the gate and the captured provenance read the structured
+    // reason straight off the type.
+    if (schedule.resolution.status !== "events-only") return noRescue;
 
-  if (!admitsRecovery(reason, installments, stmts)) return noRescue;
+    // The #239 fix: don't recover an already-invalid program. Over-allocation is
+    // an error-severity finding (under-allocation is only a warning), so this
+    // gates exactly the invalid case. Inferring a template from an over-allocating
+    // projection produces an over-grant quantity (150 VEST at grant 100) and
+    // "rescues" the schedule into a clean template while the same schedule is
+    // flagged valid:false — meaningless, contradictory output. Decline instead and
+    // let the over-allocation finding stand.
+    if (schedule.findings.some((f) => f.severity === "error")) return noRescue;
 
-  // Project. The gate only admits firing-invariant programs (no event anchors),
-  // so the stream is fully dated; the filter narrows the type rather than
-  // dropping anything.
-  const dated = installments.filter(
-    (i): i is ResolvedInstallment => i.state === "RESOLVED",
-  );
-  const tranches: TrancheInput[] = dated.map((i) => ({
-    date: i.date,
-    amount: i.amount,
-  }));
-  const inferred = inferSchedule({
-    tranches,
-    grantDate: ctx.grantDate,
-  });
+    const { reason, installments } = schedule.resolution;
 
-  // Re-classify the inferred program. The day-of-month convention isn't in the
-  // DSL text, so it has to ride in as context for the projection to line up.
-  const reclassifiedCtx = {
-    ...ctx,
-    vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
-  };
-  const published = evaluateProgram(inferred.program, reclassifiedCtx);
-  // Recovery only runs on firing-invariant inputs, so the inferred template is
-  // itself storable; the guard narrows the published resolution to the template
-  // arm. Anything else and the inferred DSL didn't reclassify as one template.
-  if (published.resolution.status !== "template") return noRescue;
-  // Rebuild with the narrowed resolution so the value matches the rescued-arm
-  // type. Narrowing the nested `resolution` doesn't re-type the whole object, so
-  // we spread it back together explicitly.
-  const rescued = { ...published, resolution: published.resolution };
+    if (!admitsRecovery(reason, installments, stmts)) return noRescue;
 
-  // Re-assert exact reproduction independently of the inferrer's own fit check.
-  // This is what licenses flipping the verdict events-only → template: not just
-  // "the inferred DSL fits the stream" but "the rescued template reproduces the
-  // original projection exactly." Anything but a clean zero and we don't rescue.
-  //
-  // The rescued template's installments may now carry UNRESOLVED entries (the
-  // pending-installments channel). Behaviorally a no-op here — the recovery gate
-  // only admits firing-invariant programs, so no pending portions can appear — but
-  // the type no longer guarantees it, so we filter to RESOLVED to keep the call
-  // well-typed.
-  const rescuedDated = published.resolution.installments.filter(
-    (i): i is ResolvedInstallment => i.state === "RESOLVED",
-  );
-  const residualError = projectionResidual(dated, rescuedDated);
-  if (residualError !== 0) return noRescue;
+    // Project. The gate only admits firing-invariant programs (no event anchors),
+    // so the stream is fully dated; the filter narrows the type rather than
+    // dropping anything.
+    const dated = installments.filter(
+      (i): i is ResolvedInstallment => i.state === "RESOLVED",
+    );
+    const tranches: TrancheInput[] = dated.map((i) => ({
+      date: i.date,
+      amount: i.amount,
+    }));
+    const inferred = inferSchedule({
+      tranches,
+      grantDate: ctx.grantDate,
+    });
 
-  return {
-    rescued: true,
-    schedule: rescued,
-    recovered: {
-      from: "events-only",
-      reason,
-      dsl: inferred.dsl,
-      vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
-      residualError,
-    },
-  };
+    // Re-classify the inferred program. The day-of-month convention isn't in the
+    // DSL text, so it has to ride in as context for the projection to line up.
+    const reclassifiedCtx = {
+      ...ctx,
+      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+    };
+    const published = evaluateProgram(inferred.program, reclassifiedCtx);
+    // Recovery only runs on firing-invariant inputs, so the inferred template is
+    // itself storable; the guard narrows the published resolution to the template
+    // arm. Anything else and the inferred DSL didn't reclassify as one template.
+    if (published.resolution.status !== "template") return noRescue;
+    // Rebuild with the narrowed resolution so the value matches the rescued-arm
+    // type. Narrowing the nested `resolution` doesn't re-type the whole object, so
+    // we spread it back together explicitly.
+    const rescued = { ...published, resolution: published.resolution };
+
+    // Re-assert exact reproduction independently of the inferrer's own fit check.
+    // This is what licenses flipping the verdict events-only → template: not just
+    // "the inferred DSL fits the stream" but "the rescued template reproduces the
+    // original projection exactly." Anything but a clean zero and we don't rescue.
+    //
+    // The rescued template's installments may now carry UNRESOLVED entries (the
+    // pending-installments channel). Behaviorally a no-op here — the recovery gate
+    // only admits firing-invariant programs, so no pending portions can appear — but
+    // the type no longer guarantees it, so we filter to RESOLVED to keep the call
+    // well-typed.
+    const rescuedDated = published.resolution.installments.filter(
+      (i): i is ResolvedInstallment => i.state === "RESOLVED",
+    );
+    const residualError = projectionResidual(dated, rescuedDated);
+    if (residualError !== 0) return noRescue;
+
+    return {
+      rescued: true,
+      schedule: rescued,
+      recovered: {
+        from: "events-only",
+        reason,
+        dsl: inferred.dsl,
+        vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
+        residualError,
+      },
+    };
+  } catch {
+    return noRescue;
+  }
 }
