@@ -21,7 +21,7 @@ const DSL =
 describe("partially-resolved combinator start keeps its START_PLUS cadence", () => {
   it("projects one START_PLUS tranche per occurrence, not a single lump", () => {
     const program = normalizeProgram(parse(DSL));
-    const [{ resolution }] = evaluateProgram(program, {
+    const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // ipo and board both unfired
       grantQuantity: 4800,
@@ -58,7 +58,7 @@ describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () =>
 
   it("renders UNRESOLVED_CLIFF installments folded onto the 12-month floor", () => {
     const program = normalizeProgram(parse(DSL));
-    const [{ resolution }] = evaluateProgram(program, {
+    const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // ipo unfired → the cliff's later arm is pending
       grantQuantity: 4800,

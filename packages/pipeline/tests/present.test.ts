@@ -210,7 +210,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
         occurrences: 1,
       }),
     ];
-    const [out] = evaluateProgram(program, ctxInput()); // ipo unfired
+    const out = evaluateProgram(program, ctxInput()); // ipo unfired
     expect(out.resolution.status).toBe("template");
     expect(presentSchedule(out)).toEqual({
       representable: true,
@@ -252,7 +252,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       }),
     ];
     // a fires after the BEFORE deadline → void half; the DATE half resolves.
-    const [out] = evaluateProgram(program, {
+    const out = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: { a: "2025-06-01" },
       grantQuantity: 4800,
@@ -304,7 +304,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
         monthly2,
       ),
     ];
-    const [out] = evaluateProgram(program, ctxInput()); // ipo unfired
+    const out = evaluateProgram(program, ctxInput()); // ipo unfired
     expect(out.resolution.status).toBe("events-only");
     expect(presentSchedule(out)).toEqual({
       representable: true,
@@ -328,7 +328,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
         { type: "MONTHS", length: 12, occurrences: 1 },
       ),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     const p = presentSchedule(out);
     expect(p.valid).toBe(false);
     expect(p.projected).toBe(true); // the (over-allocating) projection is still shown

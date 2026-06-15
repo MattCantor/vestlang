@@ -27,7 +27,7 @@ const DSL =
 
 const run = (events: Record<string, string> = {}): EvaluatedSchedule => {
   const program = normalizeProgram(parse(DSL));
-  const [schedule] = evaluateProgram(program, {
+  const schedule = evaluateProgram(program, {
     grantDate: GRANT,
     events,
     grantQuantity: QTY,

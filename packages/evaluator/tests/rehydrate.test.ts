@@ -38,7 +38,7 @@ import {
 // rather than a hand-assembled one.
 const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));
-  const [schedule] = evaluateProgram(program, ctx);
+  const schedule = evaluateProgram(program, ctx);
   const { resolution } = schedule;
   if (resolution.status !== "template")
     throw new Error(`expected template, got ${resolution.status}`);

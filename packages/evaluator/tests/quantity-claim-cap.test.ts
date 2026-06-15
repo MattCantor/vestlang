@@ -23,7 +23,7 @@ describe("QUANTITY claim capped at the grant", () => {
       grantQuantity: 100,
     };
 
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.status).toBe("template");
     expect(schedule.resolution.installments).toHaveLength(1);
     const [lump] = schedule.resolution.installments;
@@ -43,7 +43,7 @@ describe("QUANTITY claim capped at the grant", () => {
       grantQuantity: 100,
     };
 
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.findings).toEqual([
       expect.objectContaining({
         kind: "over-allocation",
@@ -88,7 +88,7 @@ describe("QUANTITY claim capped at the grant", () => {
 
     // evaluateProgram: template verdict, empty installments, no findings
     // (allocationFindings is suppressed at totalShares 0)
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.status).toBe("template");
     expect(schedule.resolution.installments).toHaveLength(0);
     expect(schedule.findings).toHaveLength(0);
@@ -131,7 +131,7 @@ describe("QUANTITY claim capped at the grant", () => {
       grantQuantity: 100,
     };
 
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     // The compiled projection delivers 75 + 75 = 150 under an error finding.
     expect(schedule.resolution.installments).toEqual([
       { state: "RESOLVED", amount: 75, date: "2024-02-01" },

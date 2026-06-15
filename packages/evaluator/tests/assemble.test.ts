@@ -37,7 +37,7 @@ import {
 const evalStmt = (stmt: Statement, ctx: ResolutionContextInput) =>
   evaluateStatement(stmt, ctx).resolution;
 const evalProgram = (program: Program, ctx: ResolutionContextInput) =>
-  evaluateProgram(program, ctx).map((s) => s.resolution);
+  evaluateProgram(program, ctx).resolution;
 
 const ctxInput = (
   overrides: Partial<AsOfContextInput> = {},
@@ -112,10 +112,9 @@ describe("assemble — template status", () => {
       yearStmt(8, "2027-01-01"),
       yearStmt(8, "2028-01-01"),
     ];
-    const schedules = evalProgram(program, ctxInput());
-    expect(schedules).toHaveLength(1); // whole program → one template schedule
-    expect(schedules[0].status).toBe("template");
-    expect(sum(schedules[0].installments)).toBe(100000);
+    const schedule = evalProgram(program, ctxInput());
+    expect(schedule.status).toBe("template");
+    expect(sum(schedule.installments)).toBe(100000);
   });
 });
 
@@ -141,7 +140,7 @@ describe("assemble — events-only status", () => {
         },
       ),
     ];
-    const [out] = evalProgram(program, ctxInput());
+    const out = evalProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
     if (out.status !== "events-only") throw new Error("expected events-only");
     // The published resolution arm carries the reason structured (rendered to
@@ -176,7 +175,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
       fromGrant(80, 36),
     ];
     expect(() => evalProgram(program, ctxInput())).not.toThrow();
-    const [out] = evalProgram(program, ctxInput());
+    const out = evalProgram(program, ctxInput());
     expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
     expect(sum(out.installments)).toBe(100000); // telescopes exactly
   });
@@ -191,7 +190,7 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
         occurrences: 1,
       });
     const program: Program = [ipoPortion(1), ipoPortion(1)];
-    const [out] = evalProgram(
+    const out = evalProgram(
       program,
       ctxInput({
         grantDate: "2025-01-01",
@@ -256,7 +255,7 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         occurrences: 1,
       }),
     ];
-    const [out] = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
+    const out = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     // Dated tranches (3600) + one UNRESOLVED installment for the pending 25%.
@@ -368,7 +367,7 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
       combinatorStmt("NODE_LATER_OF", portion(3, 4)),
       combinatorStmt("NODE_LATER_OF", portion(1, 4)),
     ];
-    const [out] = evalProgram(program, ctxInput());
+    const out = evalProgram(program, ctxInput());
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     expect(out.template.statements).toHaveLength(2);
@@ -615,7 +614,7 @@ describe("assemble — impossible status", () => {
   });
 
   it("whole-program collapse: all-void program → impossible", () => {
-    const [out] = evalProgram(
+    const out = evalProgram(
       [voidStmt, voidStmt],
       ctxInput({
         grantDate: "2025-01-01",
@@ -636,7 +635,7 @@ describe("assemble — impossible status", () => {
       length: 12,
       occurrences: 2,
     });
-    const [out] = evalProgram(
+    const out = evalProgram(
       [resolving, half],
       ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );
@@ -672,7 +671,7 @@ describe("template arm — pending channel (R2-B1)", () => {
   ];
 
   it("mixed DATE + pending EVENT → template with dated + UNRESOLVED installments", () => {
-    const [out] = evalProgram(
+    const out = evalProgram(
       mixedProgram(),
       ctxInput({ grantDate: "2024-01-01", grantQuantity: 4800 }),
     );
@@ -731,7 +730,7 @@ describe("template arm — pending channel (R2-B1)", () => {
         { type: "MONTHS", length: 1, occurrences: 4 },
       ),
     ];
-    const [out] = evalProgram(
+    const out = evalProgram(
       dateProg,
       ctxInput({ grantDate: "2024-01-01", grantQuantity: 4800 }),
     );

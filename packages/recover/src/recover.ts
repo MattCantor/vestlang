@@ -29,7 +29,7 @@ export function evaluateProgramWithRecovery(
   // the value we return when there's no rescue, and the only place the original
   // events-only reason survives: once we publish a recovered template, that
   // schedule carries no reason of its own.
-  const [schedule] = evaluateProgram(stmts, ctx);
+  const schedule = evaluateProgram(stmts, ctx);
   const noRescue: RecoveryOutcome = { rescued: false, schedule };
 
   // Anything that already fits a template (or can't resolve yet) leaves here
@@ -62,7 +62,7 @@ export function evaluateProgramWithRecovery(
     ...ctx,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
-  const [published] = evaluateProgram(inferred.program, reclassifiedCtx);
+  const published = evaluateProgram(inferred.program, reclassifiedCtx);
   // Recovery only runs on firing-invariant inputs, so the inferred template is
   // itself storable; the guard narrows the published resolution to the template
   // arm. Anything else and the inferred DSL didn't reclassify as one template.

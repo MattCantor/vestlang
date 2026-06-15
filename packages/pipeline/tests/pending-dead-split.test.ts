@@ -22,7 +22,7 @@ const evalDsl = (dsl: string, events: Record<string, string> = {}) => {
     events,
     grantQuantity: 4800,
   };
-  return evaluateProgram(program, ctx)[0];
+  return evaluateProgram(program, ctx);
 };
 
 const yearly2 = "OVER 24 months EVERY 12 months";

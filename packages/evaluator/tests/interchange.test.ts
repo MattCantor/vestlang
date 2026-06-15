@@ -100,11 +100,11 @@ describe("interchange — firing-invariance", () => {
         monthly48,
       ),
     ];
-    const unfired = evaluateProgram(program, ctxInput()).at(0)!.interchange;
+    const unfired = evaluateProgram(program, ctxInput()).interchange;
     const fired = evaluateProgram(
       program,
       ctxInput({ events: { ipo: "2027-03-01" } }),
-    ).at(0)!.interchange;
+    ).interchange;
 
     expect(fired).toEqual(unfired);
     expect(unfired.status).toBe("template");
@@ -252,7 +252,7 @@ describe("interchange — where the two verdicts diverge", () => {
         },
       ),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     expect(out.resolution.status).toBe("events-only");
     expect(out.interchange.status).toBe("events-only");
   });
@@ -285,7 +285,7 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       },
     ];
 
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     expect(out.interchange.status).toBe("unrepresentable");
     if (out.interchange.status !== "unrepresentable") return;
     expect(out.interchange.reason).toEqual({
@@ -596,7 +596,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   // The headline: the tail's event cliff is a permanent unstorability (no schema
   // home), which must win over the temporary "tail can't be dated yet".
   it("a bare event cliff on the tail reports EVENT_CLIFF, not EVENT_CHAINED_TAIL", () => {
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       chain({
         ...monthly12,
         cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
@@ -616,11 +616,11 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       ...monthly12,
       cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
     });
-    const unfired = evaluateProgram(program, ctxInput())[0].interchange;
+    const unfired = evaluateProgram(program, ctxInput()).interchange;
     const fired = evaluateProgram(
       program,
       ctxInput({ events: { ipo: "2026-06-01" } }),
-    )[0].interchange;
+    ).interchange;
     expect(fired).toEqual(unfired);
   });
 
@@ -628,7 +628,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   // cliff (6/12 regardless of when ipo fires), so the undated tail stays the
   // obstacle.
   it("a grid-unit duration cliff on the tail keeps EVENT_CHAINED_TAIL", () => {
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       chain({
         ...monthly12,
         cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
@@ -648,7 +648,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   // A months cliff over a days grid can't be placed until the firing is known —
   // the cliff cause wins over the tail one, same as the non-chained analog above.
   it("a cross-unit duration cliff on the tail reports DEFERRED_CLIFF", () => {
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       chain({
         type: "DAYS",
         length: 30,
@@ -677,7 +677,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       false,
       [makeDuration(6, "MONTHS", "PLUS")],
     );
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       chain({ ...monthly12, cliff: gatedCliff }),
       ctxInput(),
     );
@@ -698,7 +698,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
         makeDuration(6, "MONTHS", "PLUS"),
       ]),
     );
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       chain({ ...monthly12, cliff: gatedEventCliff }),
       ctxInput(),
     );
@@ -737,7 +737,7 @@ describe("interchange — allocation is its own axis", () => {
       occurrences: 2,
     });
 
-    const [out] = evaluateProgram(
+    const out = evaluateProgram(
       [voidStmt, voidStmt],
       ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );

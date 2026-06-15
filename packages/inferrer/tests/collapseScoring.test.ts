@@ -20,7 +20,7 @@ function collapseEval(
   ctx: ResolutionContextInput,
 ): Map<string, number> {
   const program = normalizeProgram(parse(dsl));
-  const [schedule] = evaluateProgram(program, ctx);
+  const schedule = evaluateProgram(program, ctx);
   const byDate = new Map<string, number>();
   for (const inst of schedule.resolution.installments) {
     if (inst.state === "RESOLVED") {

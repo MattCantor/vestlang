@@ -358,10 +358,12 @@ describe("interchange — firing-invariance across a corpus of shapes", () => {
   // every-referenced-event-fired all produce the identical storable verdict.
   for (const { name, program, events } of corpus) {
     it(`${name}: interchange verdict is identical across firing contexts`, () => {
-      const own = evaluateProgram(program, ctxWith(events))[0].interchange;
-      const none = evaluateProgram(program, ctxWith({}))[0].interchange;
-      const fired = evaluateProgram(program, ctxWith(allFired(program)))[0]
-        .interchange;
+      const own = evaluateProgram(program, ctxWith(events)).interchange;
+      const none = evaluateProgram(program, ctxWith({})).interchange;
+      const fired = evaluateProgram(
+        program,
+        ctxWith(allFired(program)),
+      ).interchange;
 
       expect(none).toEqual(own);
       expect(fired).toEqual(own);
@@ -402,7 +404,7 @@ describe("interchange — firing-free programs tie the two verdicts together", (
     isFiringFree(e.program),
   )) {
     it(`${name}: resolution template implies interchange template`, () => {
-      const out = evaluateProgram(program, ctxWith({}))[0];
+      const out = evaluateProgram(program, ctxWith({}));
       if (out.resolution.status === "template") {
         expect(out.interchange.status).toBe("template");
       }
@@ -415,7 +417,7 @@ describe("interchange — firing-free programs tie the two verdicts together", (
     const witnesses = corpus.filter(
       (e) =>
         isFiringFree(e.program) &&
-        evaluateProgram(e.program, ctxWith({}))[0].resolution.status ===
+        evaluateProgram(e.program, ctxWith({})).resolution.status ===
           "template",
     );
     expect(witnesses.length).toBeGreaterThan(0);

@@ -81,7 +81,7 @@ function observe(
   events: Record<string, OCTDate> = {},
 ): Verdict {
   const program = normalizeProgram(parse(dsl));
-  const [schedule] = evaluateProgram(program, {
+  const schedule = evaluateProgram(program, {
     grantDate: GRANT,
     events,
     grantQuantity: 100_000,

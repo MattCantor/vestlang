@@ -142,7 +142,7 @@ describe("inferSchedule — sequential recovery end to end", () => {
       grantQuantity: 800,
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.status).toBe("template");
   });
 
@@ -201,7 +201,7 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
       vesting_day_of_month:
         dom as ResolutionContextInput["vesting_day_of_month"],
     };
-    return evaluateProgram(normalizeProgram(parse(dsl)), ctx)[0];
+    return evaluateProgram(normalizeProgram(parse(dsl)), ctx);
   }
 
   it("recovers the stream as one template", () => {

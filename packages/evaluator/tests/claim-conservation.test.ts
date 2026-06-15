@@ -41,7 +41,7 @@ describe("claim conservation (R2-B20)", () => {
       grantQuantity: 100,
     };
 
-    const [{ resolution }] = evaluateProgram(program, ctx);
+    const { resolution } = evaluateProgram(program, ctx);
     expect(resolution.status).toBe("template");
     expect(resolution.installments.map((i) => i.amount)).toEqual([33, 33, 34]);
   });
@@ -108,7 +108,7 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const [{ resolution }] = evaluateProgram(program, ctx);
+    const { resolution } = evaluateProgram(program, ctx);
     expect(resolution.status).toBe("template");
     // Dated tranches first: 33 @ 2024-02-01, 33 @ 2024-03-01; then pending: 34.
     expect(resolution.installments).toEqual([
@@ -138,7 +138,7 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const [{ resolution }] = evaluateProgram(program, ctx);
+    const { resolution } = evaluateProgram(program, ctx);
     expect(resolution.status).toBe("unresolved");
     expect(resolution.installments.map((i) => i.amount)).toEqual([33, 67]);
 
@@ -163,7 +163,7 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const [{ resolution, findings }] = evaluateProgram(program, ctx);
+    const { resolution, findings } = evaluateProgram(program, ctx);
     expect(resolution.status).toBe("template");
     expect(resolution.installments.map((i) => i.amount)).toEqual([75, 25]);
 
@@ -198,7 +198,7 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const [{ resolution }] = evaluateProgram(program, ctx);
+    const { resolution } = evaluateProgram(program, ctx);
     expect(resolution.status).toBe("unresolved");
     // In program order: impossible a (34), unresolved b (66).
     // The live portion's 66 is undeflated by the dead clause ahead of it.
