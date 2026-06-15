@@ -35,11 +35,11 @@ import { brandStatic } from "../evaluate/blockerTree.js";
  *   - EVENT_CLIFF        a cliff hangs off a named event — the schema has no home
  *                        for it at all, gated or not (kept firing-invariant:
  *                        blind to firings an event cliff always reads unfired,
- *                        landing here as the EVENT record when bare, or as an
- *                        UNRESOLVED record carrying the event id when a pending
- *                        gate did the routing). Reported the same whether the
- *                        start resolved, is itself pending, or is a THEN tail
- *                        behind a pending head.
+ *                        landing here as the EVENT_PENDING record when bare, or as
+ *                        an UNRESOLVED record carrying the event id on its shape
+ *                        when a pending gate did the routing). Reported the same
+ *                        whether the start resolved, is itself pending, or is a
+ *                        THEN tail behind a pending head.
  *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
  *                        with no cliff anywhere — the tail just can't be dated yet.
  *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
@@ -50,15 +50,18 @@ import { brandStatic } from "../evaluate/blockerTree.js";
  * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
  */
 const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
-  // First statement (program order) whose cliff is event-anchored — the EVENT
-  // record state, or an UNRESOLVED record whose gate routing kept the event id.
+  // First statement (program order) whose cliff is event-anchored — an
+  // EVENT_PENDING record, or an UNRESOLVED record whose gate routing kept the
+  // event id on its shape. The scan runs only on the firing-blind interchange
+  // build, where an event cliff always reads unfired, so EVENT_FIRED can't arise
+  // here and is intentionally excluded.
   for (const r of resolutions) {
     const c = r.cliff;
     const eventId =
-      c.state === "EVENT"
+      c.state === "EVENT_PENDING"
         ? c.eventId
-        : c.state === "UNRESOLVED"
-          ? c.eventId
+        : c.state === "UNRESOLVED" && c.shape.kind !== "dated-floor"
+          ? c.shape.eventId
           : undefined;
     if (eventId !== undefined) return { kind: "EVENT_CLIFF", eventId };
   }

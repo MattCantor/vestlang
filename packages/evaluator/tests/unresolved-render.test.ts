@@ -44,3 +44,54 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
     ).toBe(true);
   });
 });
+
+// The cliff mirror of the above: a partial `LATER OF` *cliff* (the +12mo arm
+// resolves, the event is pending) records a `dated-floor` shape whose `floor` is
+// the resolved lower bound. The unresolved renderer must fold every pre-cliff
+// tranche onto that floor — not collapse the cliff to it, and not fold onto the
+// grant date. grantDate (2025-01-01) and the floor (2026-01-01) differ here, so a
+// tranche landing on the floor proves the renderer read `shape.floor`.
+describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () => {
+  const DSL =
+    "VEST FROM grantDate OVER 48 months EVERY 1 month " +
+    "CLIFF LATER OF(vestingStart + 12 months, EVENT ipo)";
+
+  it("renders UNRESOLVED_CLIFF installments folded onto the 12-month floor", () => {
+    const program = normalizeProgram(parse(DSL));
+    const [{ resolution }] = evaluateProgram(program, {
+      grantDate: "2025-01-01",
+      events: {}, // ipo unfired → the cliff's later arm is pending
+      grantQuantity: 4800,
+    });
+
+    expect(resolution.status).toBe("unresolved");
+    if (resolution.status !== "unresolved") return;
+
+    // Every installment is a cliff lump waiting on the event.
+    expect(
+      resolution.installments.every(
+        (i) =>
+          i.state === "UNRESOLVED" &&
+          i.symbolicDate.type === "UNRESOLVED_CLIFF",
+      ),
+    ).toBe(true);
+    // Some tranche folded onto the floor (start + 12mo), not the grant date.
+    expect(
+      resolution.installments.some(
+        (i) =>
+          i.state === "UNRESOLVED" &&
+          i.symbolicDate.type === "UNRESOLVED_CLIFF" &&
+          i.symbolicDate.date === "2026-01-01",
+      ),
+    ).toBe(true);
+    // Shares are conserved across the fold.
+    expect(resolution.installments.reduce((sum, i) => sum + i.amount, 0)).toBe(
+      4800,
+    );
+    expect(
+      resolution.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+});

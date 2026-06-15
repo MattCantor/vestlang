@@ -128,13 +128,13 @@ export const resolveToCore = (
 // `start.date` is the handoff date — which is the very anchor lowerCliff measured
 // against — so heads, tails, independent grids, and fired EVENT starts (whose
 // `start.date` already folds in the firing and any offsets) all go through this
-// one expression. A fired event cliff carries its landing spot directly as
-// `effectiveAt`; an unfired one leaves it undefined.
+// one expression. An EVENT_FIRED cliff carries its landing spot directly as
+// `effectiveAt`; an EVENT_PENDING one has no date to return.
 const statementCliffDate = (
   r: StmtResolution,
   dom: VestingDayOfMonth,
 ): OCTDate | undefined => {
-  if (r.cliff.state === "EVENT") return r.cliff.effectiveAt;
+  if (r.cliff.state === "EVENT_FIRED") return r.cliff.effectiveAt;
   if (r.cliff.state === "RESOLVED" && r.start.state === "RESOLVED")
     return addPeriod(
       r.start.date,

@@ -559,14 +559,11 @@ export const buildTemplate = (
   // whole grid — the program is pending, and routing it to the events arm would
   // release the very installments the cliff holds back. Fired, the lump is
   // datable and the program flattens to dated events.
-  if (
-    resolutions.some(
-      (r) => r.cliff.state === "EVENT" && r.cliff.effectiveAt === undefined,
-    )
-  )
+  if (resolutions.some((r) => r.cliff.state === "EVENT_PENDING"))
     return unresolved();
-  const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT");
-  if (eventCliff && eventCliff.cliff.state === "EVENT") {
+  const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT_FIRED");
+  // TS doesn't carry the `.find` predicate out, so re-narrow before reading the id.
+  if (eventCliff && eventCliff.cliff.state === "EVENT_FIRED") {
     return events({ kind: "EVENT_CLIFF", eventId: eventCliff.cliff.eventId });
   }
 
