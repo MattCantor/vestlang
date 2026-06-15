@@ -109,11 +109,10 @@ const expandResolution = (
 const resolvedInstallments = (
   resolutions: StmtResolution[],
   ctx: ResolutionContext,
-  totalShares: number,
 ): ResolvedInstallment[] =>
   allocateEvents(
     resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx)),
-    totalShares,
+    ctx.grantQuantity,
     ctx.grantDate,
   ).map((t) => makeResolvedInstallment(t.date, t.amount));
 
@@ -128,14 +127,14 @@ const resolvedInstallments = (
 const eventsArm = (
   build: Extract<TemplateBuild, { why: "events" }>,
 ): ResolveVerdict => {
-  const { ctx, totalShares, resolutions, reason } = build;
+  const { ctx, resolutions, reason } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   const dated: StmtResolution[] = [];
   // RESOLVED starts in this arm always have a dated cliff — buildTemplate routes
   // unfired event cliffs and dead cliffs to the unresolved arm first — so the
   // dated set here and isDated's definition agree.
-  const claims = symbolicClaims(resolutions, totalShares);
+  const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     if (r.start.state === "RESOLVED") {
       dated.push(r);
@@ -153,10 +152,7 @@ const eventsArm = (
   });
   return {
     kind: "events",
-    installments: [
-      ...resolvedInstallments(dated, ctx, totalShares),
-      ...symbolic,
-    ],
+    installments: [...resolvedInstallments(dated, ctx), ...symbolic],
     blockers,
     reason,
   };
@@ -165,7 +161,7 @@ const eventsArm = (
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
 ): ResolveVerdict => {
-  const { ctx, totalShares, resolutions } = build;
+  const { ctx, resolutions } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   // The fully-resolved siblings, kept to materialize their dated tranches below.
@@ -177,7 +173,7 @@ const unresolvedArm = (
   // scoped so the head's aren't restated per tail.
   // Dated statements get a 0 claim they never use — their paths return EMPTY
   // before any amount matters.
-  const claims = symbolicClaims(resolutions, totalShares);
+  const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     const ev = unresolvedInstallments(r, ctx, claims[i]);
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
@@ -216,7 +212,7 @@ const unresolvedArm = (
   // A mixed program is still unresolved, but its projection includes the resolved
   // siblings' dated tranches (sorted) ahead of the dateless symbolic ones.
   const resolved = resolvedResolutions.length
-    ? resolvedInstallments(resolvedResolutions, ctx, totalShares)
+    ? resolvedInstallments(resolvedResolutions, ctx)
     : [];
   return {
     kind: "unresolved",

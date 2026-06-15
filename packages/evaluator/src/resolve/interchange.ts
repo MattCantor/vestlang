@@ -180,14 +180,12 @@ export const resolveInterchange = (
   ctxInput: ResolutionContextInput,
 ): InterchangeVerdict => {
   const ctx = createEvaluationContext(ctxInput);
-  const totalShares = ctx.grantQuantity;
   // grantDate and vestingStart are their own context fields, so blanking `events`
   // drops only the genuine named firings, not the system anchors a start needs.
   const interchangeCtx = { ...ctx, events: {} };
   const build = buildTemplate(
-    resolveStatements(program, interchangeCtx, totalShares),
+    resolveStatements(program, interchangeCtx),
     interchangeCtx,
-    totalShares,
   );
   return mapTemplateBuild(build);
 };
