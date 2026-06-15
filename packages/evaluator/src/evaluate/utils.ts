@@ -1,26 +1,33 @@
 import type {
-  ResolutionContext,
   ImpossibleNode,
-  LaterOfVestingNode,
   OCTDate,
   ResolvedNode,
   UnresolvedNode,
 } from "@vestlang/types";
-import { lt } from "@vestlang/core";
-import { evaluateVestingNodeExpr } from "./selectors.js";
 
-// A Picked result carries the chosen item plus its resolution meta. When meta is
-// an UnresolvedNode, the pick is a partially-resolved LATER_OF: `picked` is the
-// latest of the items resolved so far, still pending the rest.
-interface Picked<T> {
+// A Picked result carries the chosen item plus its resolution meta. It splits in
+// two on `meta.type` (both arms stay `type: "PICKED"`):
+//   - resolved: the pick has fully settled to a date.
+//   - partial: a partially-resolved LATER_OF — `picked` is the latest of the arms
+//     settled so far, still waiting on the rest. `pivot` is that latest settled
+//     arm's date: a lower bound the pending arms can only push later, never earlier.
+//     It's required on this arm so any construction site that omits it fails the
+//     build — the partial pick can't exist without knowing the floor it sits on.
+interface PickedBase<T> {
   type: "PICKED";
   picked: T;
-  meta: ResolvedNode | UnresolvedNode;
 }
 
-export interface PickedResolved<T> extends Picked<T> {
+export interface PickedResolved<T> extends PickedBase<T> {
   meta: ResolvedNode;
 }
+
+export interface PickedPartial<T> extends PickedBase<T> {
+  meta: UnresolvedNode;
+  pivot: OCTDate;
+}
+
+type Picked<T> = PickedResolved<T> | PickedPartial<T>;
 
 export type PickReturn<T> = Picked<T> | UnresolvedNode | ImpossibleNode;
 
@@ -28,25 +35,6 @@ export function isPickedResolved<T>(x: PickReturn<T>): x is PickedResolved<T> {
   return x.type === "PICKED" && x.meta.type === "RESOLVED";
 }
 
-/** Probe for the latest resolved date within a LATER OF (ignoring pending items). */
-export function probeLaterOf(
-  expr: LaterOfVestingNode,
-  ctx: ResolutionContext,
-): OCTDate | undefined {
-  const resolvedDates: OCTDate[] = [];
-
-  for (const item of expr.items) {
-    const res = evaluateVestingNodeExpr(item, ctx);
-    if (res.type === "PICKED" && res.meta.type === "RESOLVED")
-      resolvedDates.push(res.meta.date);
-  }
-
-  if (resolvedDates.length === 0) return undefined;
-
-  let latest = resolvedDates[0];
-  for (let i = 1; i < resolvedDates.length; i++) {
-    if (lt(latest, resolvedDates[i])) latest = resolvedDates[i];
-  }
-
-  return latest;
+export function isPickedPartial<T>(x: PickReturn<T>): x is PickedPartial<T> {
+  return x.type === "PICKED" && x.meta.type === "UNRESOLVED";
 }

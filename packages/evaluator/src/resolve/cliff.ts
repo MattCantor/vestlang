@@ -28,7 +28,7 @@ import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { isPickedResolved, probeLaterOf } from "../evaluate/utils.js";
+import { isPickedPartial, isPickedResolved } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
 import {
   isVestingStartPlaceholder,
@@ -227,25 +227,23 @@ export const lowerCliff = (
     // lump's exact spot is still open. A partial LATER_OF additionally carries its
     // resolved branch's date as the fold floor (`dated-floor`): the lump can only
     // move later than that lower bound, so every pre-cliff tranche sits at it.
-    // With no resolved branch there's no floor.
-    if (res.type === "PICKED") {
-      // Resolved meta was caught by `cliffDate` above, so meta is UNRESOLVED here.
-      const blockers = res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
-      const floor =
-        cliffExpr.type === "NODE_LATER_OF"
-          ? probeLaterOf(cliffExpr, overlayCtx)
-          : undefined;
-      return floor !== undefined
-        ? {
-            state: "UNRESOLVED",
-            blockers,
-            shape: { kind: "dated-floor", floor },
-          }
-        : { state: "UNRESOLVED", blockers, shape: { kind: "dated" } };
+    //
+    // A partial pick can only arise from a `NODE_LATER_OF` with at least one
+    // resolved arm (partial emit is LATER_OF-only), so its `pivot` is always the
+    // latest settled arm's date — exactly the floor. We read it straight off the
+    // pick the selector already produced, no re-resolution.
+    if (isPickedPartial(res)) {
+      return {
+        state: "UNRESOLVED",
+        blockers: res.meta.blockers,
+        shape: { kind: "dated-floor", floor: res.pivot },
+      };
     }
+    // A resolved pick set `cliffDate` above, so what's left here is a bare
+    // UNRESOLVED node (no resolved branch, hence no floor).
     return {
       state: "UNRESOLVED",
-      blockers: res.blockers,
+      blockers: res.type === "UNRESOLVED" ? res.blockers : [],
       shape: { kind: "dated" },
     };
   }
