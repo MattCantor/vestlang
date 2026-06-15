@@ -25,7 +25,7 @@ import {
   isRehydrateDefinitionError,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
-import { lintText } from "@vestlang/linter";
+import { errorDiagnostics, lintText } from "@vestlang/linter";
 import { compileToInstallments } from "@vestlang/core";
 import type {
   DeadBlocker,
@@ -94,9 +94,7 @@ export function runPersist(input: PersistInput): PersistResult {
   // is advisory and leaves the schedule storable. lintText is the same entry the
   // vestlang_lint tool uses, so persist and lint share one analysis path. Static
   // and cheap, so it runs before the heavier evaluate.
-  const lintErrors = lintText(input.dsl).diagnostics.filter(
-    (d) => d.severity === "error",
-  );
+  const lintErrors = errorDiagnostics(lintText(input.dsl).diagnostics);
   if (lintErrors.length > 0) {
     return {
       ok: false,
