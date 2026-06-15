@@ -69,6 +69,9 @@ importers:
       '@vestlang/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
+      '@vestlang/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       commander:
         specifier: ^14.0.1
         version: 14.0.1
@@ -82,6 +85,9 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.2
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.5.2)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.9.0)
 
   apps/docs:
     dependencies:

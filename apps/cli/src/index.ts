@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { Command, InvalidArgumentError } from "commander";
+import { Command } from "commander";
 import { inspect } from "./inspect.js";
 import { compile } from "./compile.js";
 import { asof } from "./asof.js";
 import { evaluate } from "./evaluate.js";
 import { lint } from "./lint.js";
+import { parseEvent } from "./utils.js";
 
 const program = new Command();
 
@@ -87,21 +88,6 @@ program
 /* ------------------------
  * Evaluate
  * ------------------------ */
-
-/** Collect repeated --event NAME=YYYY-MM-DD into an array of { name, date }. */
-function parseEvent(
-  value: string,
-  prev: Record<string, string> = {},
-): Record<string, string> {
-  const m = /^([^=]+)=(\d{4}-\d{2}-\d{2})$/.exec(value);
-  if (!m) {
-    throw new InvalidArgumentError(
-      "Invalid --event. Use NAME=YYYY-MM-DD (e.g., --event milestone=2025-01-01)",
-    );
-  }
-  const [, name, date] = m;
-  return { ...prev, [name]: date };
-}
 
 program
   .command("evaluate")
