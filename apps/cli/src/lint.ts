@@ -3,6 +3,15 @@ import type { MarkdownDiagnostic } from "@vestlang/linter";
 import { input } from "./utils.js";
 import { readFileSync } from "node:fs";
 
+// One exit-code policy for both the text and markdown-pretty paths: only an
+// error-severity diagnostic fails the run (warnings/info exit 0), matching most
+// linters. Sharing the function makes the two modes provably consistent.
+export function exitCode(
+  diagnostics: { severity: Diagnostic["severity"] }[],
+): number {
+  return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+}
+
 function prettyPrint(diagnostics: Diagnostic[]) {
   if (diagnostics.length === 0) {
     console.log("No problems found.");
@@ -71,12 +80,12 @@ export function lint(
       process.exit(0); // diagnostics are in stdout; editors read them there
     }
     prettyPrintMarkdown(file, diags);
-    process.exit(diags.some((d) => d.severity === "error") ? 1 : 0);
+    process.exit(exitCode(diags));
   }
 
   // Default: lint a DSL string (args or stdin).
   const src = input(parts, opts.stdin);
   const { diagnostics } = lintText(src);
   prettyPrint(diagnostics);
-  process.exit(diagnostics.length ? 1 : 0);
+  process.exit(exitCode(diagnostics));
 }
