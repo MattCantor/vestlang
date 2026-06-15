@@ -130,13 +130,6 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
 
   const v = classify(build);
   switch (v.kind) {
-    // classify only ever runs on non-template builds, so it can't hand back a
-    // template here — but its return type spans the whole verdict union, so we
-    // name the case rather than leave the switch open.
-    case "template":
-      throw new Error(
-        "interchange: a non-template build classified as a template",
-      );
     case "events":
       // Two date grids stay events-only here too — they're firing-invariant. An
       // event cliff is the one place the two verdicts disagree: the record keeper

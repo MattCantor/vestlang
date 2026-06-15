@@ -8,7 +8,8 @@
 //    symbolic installments, its witnesses as blockers. The facts survive; the
 //    intent does not.
 //  - unresolved: a start/cliff can't be materialized yet. Reuses vestlang's
-//    evaluator to produce the symbolic (dateless) installments + blockers.
+//    evaluator to produce the symbolic (dateless) installments + blockers. A
+//    wholly-void program rolls up from here to the `impossible` arm.
 
 import type {
   Blocker,
@@ -32,7 +33,7 @@ import {
   symbolicClaims,
 } from "./unresolved.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
-import type { ResolveVerdict } from "./types.js";
+import type { ClassifiedVerdict } from "./types.js";
 
 /**
  * Expand one resolved statement to its dated fraction-of-grant events, honoring a
@@ -126,7 +127,7 @@ const resolvedInstallments = (
  */
 const eventsArm = (
   build: Extract<TemplateBuild, { why: "events" }>,
-): ResolveVerdict => {
+): ClassifiedVerdict => {
   const { ctx, resolutions, reason } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
@@ -160,7 +161,7 @@ const eventsArm = (
 
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
-): ResolveVerdict => {
+): ClassifiedVerdict => {
   const { ctx, resolutions } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
@@ -224,5 +225,5 @@ const unresolvedArm = (
 /** Map a non-template build to its verdict. */
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
-): ResolveVerdict =>
+): ClassifiedVerdict =>
   build.why === "unresolved" ? unresolvedArm(build) : eventsArm(build);
