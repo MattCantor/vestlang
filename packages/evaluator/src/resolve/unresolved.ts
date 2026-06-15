@@ -39,7 +39,7 @@ const isDated = (r: StmtResolution): boolean =>
   r.start.state === "RESOLVED" &&
   (r.cliff.state === "NONE" ||
     r.cliff.state === "RESOLVED" ||
-    (r.cliff.state === "EVENT" && r.cliff.effectiveAt !== undefined));
+    r.cliff.state === "EVENT_FIRED");
 
 // One claim per statement, drawn from a single program-wide cumulative so the
 // symbolic side telescopes the way the allocator does. Dated statements seed
@@ -163,34 +163,38 @@ export const unresolvedInstallments = (
       return EMPTY;
     case "IMPOSSIBLE":
       return makeImpossibleSchedule(amounts, r.cliff.blockers);
-    case "EVENT": {
-      // An event cliff: once the event fires the lump is dated (the events arm
-      // places it at the cliff's effective date); until then the whole grid
-      // waits on that event. Fired-ness is read off the record, the same place
-      // the routing reads it.
-      return r.cliff.effectiveAt !== undefined
-        ? EMPTY
-        : makeUnresolvedCliffSchedule(dates, amounts, [
-            { type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.eventId },
-          ]);
-    }
+    // A fired event cliff is dated — the events arm places its lump at the
+    // effective date — so it contributes nothing to the unresolved verdict.
+    case "EVENT_FIRED":
+      return EMPTY;
+    case "EVENT_PENDING":
+      // The event hasn't fired, so the whole grid waits on it.
+      return makeUnresolvedCliffSchedule(dates, amounts, [
+        { type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.eventId },
+      ]);
     case "UNRESOLVED": {
-      const { dated, probeDate, blockers } = r.cliff;
-      if (!dated)
-        // No placeable grid — the cliff is fully symbolic, so the tranches are
-        // start-relative.
-        return makeStartPlusSchedule(amounts, type, length, blockers);
-      if (probeDate === undefined)
-        return makeUnresolvedCliffSchedule(dates, amounts, blockers);
-      // A partial LATER OF: the cliff can only land at or after the resolved
-      // branch's date, so fold every pre-cliff tranche onto that lower bound.
-      const folded = foldToGrantDate(dates, amounts, probeDate);
-      return {
-        installments: folded.dates.map((d, i) =>
-          makeUnresolvedCliffInstallment(d, folded.amounts[i], blockers),
-        ),
-        blockers,
-      };
+      const { shape, blockers } = r.cliff;
+      switch (shape.kind) {
+        case "symbolic":
+          // No placeable grid — the cliff is fully symbolic, so the tranches are
+          // start-relative.
+          return makeStartPlusSchedule(amounts, type, length, blockers);
+        case "dated":
+          return makeUnresolvedCliffSchedule(dates, amounts, blockers);
+        case "dated-floor": {
+          // A partial LATER OF: the cliff can only land at or after the resolved
+          // branch's date, so fold every pre-cliff tranche onto that lower bound.
+          const folded = foldToGrantDate(dates, amounts, shape.floor);
+          return {
+            installments: folded.dates.map((d, i) =>
+              makeUnresolvedCliffInstallment(d, folded.amounts[i], blockers),
+            ),
+            blockers,
+          };
+        }
+        default:
+          return assertNever(shape);
+      }
     }
     default:
       return assertNever(r.cliff);

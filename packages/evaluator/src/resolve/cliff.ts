@@ -38,33 +38,52 @@ import {
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
-  // Event-anchored cliff: no time-based `cliff` representation. `effectiveAt` is
-  // where the cliff lands once the event is on record — the firing shifted by any
-  // offsets on the cliff anchor (`CLIFF EVENT ipo + 1 month` lands a month after
-  // the firing), absent while the event is unfired. The record carries the date
-  // so downstream routing never has to re-consult the events map (and can't
-  // quietly treat an unfired cliff as no cliff).
-  | { state: "EVENT"; eventId: string; effectiveAt?: OCTDate }
-  // A pending cliff the renderer reproduces without re-resolving. `dated` picks
-  // the render shape (grid occurrences placeable vs. fully symbolic) and
-  // `probeDate` is the partial-`LATER OF` lower bound the dated case folds from;
-  // both are populated in a later phase (placeholders until then). `eventId` is
-  // event identity that survived a gate: set whenever the lowered expression is
-  // event-anchored but the gate's verdict carried the routing (a pending
-  // BEFORE/AFTER gate on `CLIFF EVENT x ...`). Identity only — routing,
-  // rendering, and blocker merging all key on the other fields; the storable-
-  // reason scan reads it so a gated event cliff still reports "no schema home,
-  // ever" (EVENT_CLIFF) rather than "can't be placed yet" (DEFERRED_CLIFF).
+  // Event-anchored cliff whose event is on record. `effectiveAt` is where the
+  // cliff lands — the firing shifted by any offsets on the cliff anchor (`CLIFF
+  // EVENT ipo + 1 month` lands a month after the firing). The record carries the
+  // date so downstream routing never has to re-consult the events map.
+  | { state: "EVENT_FIRED"; eventId: string; effectiveAt: OCTDate }
+  // Event-anchored cliff still waiting on its event. No date yet — fired-ness is
+  // the state, not an absent field, so routing can't quietly treat an unfired
+  // cliff as no cliff.
+  | { state: "EVENT_PENDING"; eventId: string }
+  // A pending cliff the renderer reproduces without re-resolving. `shape` carries
+  // the render variance (only the unresolved renderer branches on it):
+  //   - `symbolic`: no placeable grid, so the tranches are start-relative.
+  //   - `dated`: the grid is placeable from the resolved start; only the cliff
+  //     lump's exact spot is still open.
+  //   - `dated-floor`: a partial `LATER OF` whose `floor` is the resolved branch's
+  //     date — the lump can only move later than that lower bound, so every
+  //     pre-cliff tranche folds onto it.
+  // `eventId` is event identity that survived a gate (a pending BEFORE/AFTER gate
+  // on `CLIFF EVENT x ...`): identity only, read by the storable-reason scan so a
+  // gated event cliff still reports "no schema home, ever" (EVENT_CLIFF) rather
+  // than "can't be placed yet" (DEFERRED_CLIFF). It rides only the `symbolic` and
+  // `dated` shapes — a `floor` comes only from a combinator (`NODE_LATER_OF`),
+  // which has no event id, so a floor never coexists with one.
   | {
       state: "UNRESOLVED";
       blockers: Blocker[];
-      dated: boolean;
-      probeDate?: OCTDate;
-      eventId?: string;
+      shape:
+        | { kind: "symbolic"; eventId?: string }
+        | { kind: "dated"; eventId?: string }
+        | { kind: "dated-floor"; floor: OCTDate };
     }
   // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
   // are already ImpossibleBlocker[], so no cast is needed when it's produced.
   | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
+
+// A gate verdict's UNRESOLVED shape is only ever `dated` or `symbolic` — the gate
+// path has no resolved branch to fold from, so it never produces `dated-floor`.
+// Naming that narrower type lets the call sites stamp an event id onto the shape
+// without TS fearing a `{ dated-floor, eventId }` phantom.
+type GateUnresolved = {
+  state: "UNRESOLVED";
+  blockers: Blocker[];
+  shape:
+    | { kind: "symbolic"; eventId?: string }
+    | { kind: "dated"; eventId?: string };
+};
 
 // The verdict a BEFORE/AFTER gate forces on a cliff, read off the cliff
 // expression's resolution: a violated gate kills it (IMPOSSIBLE), a still-pending
@@ -79,7 +98,8 @@ const gateVerdict = (
   dated: boolean,
   filter: (b: Blocker[]) => Blocker[] = (b) => b,
 ):
-  | Extract<LoweredCliff, { state: "IMPOSSIBLE" | "UNRESOLVED" }>
+  | GateUnresolved
+  | Extract<LoweredCliff, { state: "IMPOSSIBLE" }>
   | undefined => {
   if (res.type === "IMPOSSIBLE")
     return { state: "IMPOSSIBLE", blockers: res.blockers };
@@ -91,7 +111,13 @@ const gateVerdict = (
         : undefined;
   return pending === undefined
     ? undefined // gate satisfied — caller proceeds
-    : { state: "UNRESOLVED", blockers: filter(pending), dated };
+    : {
+        state: "UNRESOLVED",
+        blockers: filter(pending),
+        // The gate path never yields a floor (no resolved branch to fold from)
+        // and never sets eventId itself — the two call sites stamp it on.
+        shape: dated ? { kind: "dated" } : { kind: "symbolic" },
+      };
 };
 
 /**
@@ -145,26 +171,31 @@ export const lowerCliff = (
   const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
   // A genuinely event-anchored cliff has no time-based cliff field, so it's
-  // reported as EVENT for the classifier (4b) to route on. A gate on
-  // it still decides whether the cliff stands: a violated or still-pending gate
-  // routes it away (UNRESOLVED), exactly as a non-event cliff that resolves
+  // reported as EVENT_FIRED / EVENT_PENDING for the classifier (4b) to route on. A
+  // gate on it still decides whether the cliff stands: a violated or still-pending
+  // gate routes it away (UNRESOLVED), exactly as a non-event cliff that resolves
   // impossible/pending does — the gate is enforced by the shared evaluator above,
   // never by re-deciding here. (This used to return EVENT unconditionally, so a
   // gate on an event cliff was silently dropped — #113.)
   const evId = eventBaseId(cliffExpr);
   if (evId) {
     // The gate decides whether the event cliff stands. A violated gate kills it; a
-    // still-pending gate keeps it unresolved (but `dated` — the grid is placeable
-    // from the resolved start); a satisfied gate clears and falls through to the
-    // bare event cliff below. Carrying the gate here is what stops it being dropped
-    // (#113). A pending gate holds the cliff but doesn't change what it's anchored
-    // to, so the event id rides on the UNRESOLVED record for the storable-reason
-    // scan. A violated gate passes through untouched: a dead cliff is a
-    // contradiction, not an event cliff.
+    // still-pending gate keeps it unresolved (with a `dated` shape — the grid is
+    // placeable from the resolved start); a satisfied gate clears and falls through
+    // to the bare event cliff below. Carrying the gate here is what stops it being
+    // dropped (#113). A pending gate holds the cliff but doesn't change what it's
+    // anchored to, so the event id rides on the UNRESOLVED record's shape for the
+    // storable-reason scan. A violated gate passes through untouched: a dead cliff
+    // is a contradiction, not an event cliff.
     if (isGatedNode(cliffExpr)) {
       const gate = gateVerdict(res, true);
       if (gate)
-        return gate.state === "UNRESOLVED" ? { ...gate, eventId: evId } : gate;
+        // Stamp the event id onto the gate's shape so the storable-reason scan
+        // still reads EVENT_CLIFF. The gate path produces only `dated`/`symbolic`
+        // shapes, both of which carry an optional eventId.
+        return gate.state === "UNRESOLVED"
+          ? { ...gate, shape: { ...gate.shape, eventId: evId } }
+          : gate;
     }
     // The shared resolution above already applied the anchor's offsets to the
     // firing, so the resolved date IS the cliff's effective spot. Reading the raw
@@ -172,8 +203,8 @@ export const lowerCliff = (
     // early. The expression resolves exactly when the event has fired (a pending
     // gate was routed away just above).
     return isPickedResolved(res)
-      ? { state: "EVENT", eventId: evId, effectiveAt: res.meta.date }
-      : { state: "EVENT", eventId: evId };
+      ? { state: "EVENT_FIRED", eventId: evId, effectiveAt: res.meta.date }
+      : { state: "EVENT_PENDING", eventId: evId };
   }
 
   // A violated gate (or any contradictory cliff) is dead.
@@ -191,24 +222,32 @@ export const lowerCliff = (
     : undefined;
 
   if (!cliffDate) {
-    // Pending cliff. The grid is placeable from the resolved start, so it's
-    // `dated` — the renderer can lay the tranches and only the cliff lump's exact
-    // spot is still open. A partial LATER_OF additionally carries its resolved
-    // branch's date as the fold pivot (`probeDate`): the lump can only move later
-    // than that lower bound, so every pre-cliff tranche sits at the bound. With no
-    // resolved branch there's no pivot.
+    // Pending cliff. The grid is placeable from the resolved start, so the render
+    // shape is `dated` — the renderer can lay the tranches and only the cliff
+    // lump's exact spot is still open. A partial LATER_OF additionally carries its
+    // resolved branch's date as the fold floor (`dated-floor`): the lump can only
+    // move later than that lower bound, so every pre-cliff tranche sits at it.
+    // With no resolved branch there's no floor.
     if (res.type === "PICKED") {
       // Resolved meta was caught by `cliffDate` above, so meta is UNRESOLVED here.
       const blockers = res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
-      const probeDate =
+      const floor =
         cliffExpr.type === "NODE_LATER_OF"
           ? probeLaterOf(cliffExpr, overlayCtx)
           : undefined;
-      return probeDate !== undefined
-        ? { state: "UNRESOLVED", blockers, dated: true, probeDate }
-        : { state: "UNRESOLVED", blockers, dated: false };
+      return floor !== undefined
+        ? {
+            state: "UNRESOLVED",
+            blockers,
+            shape: { kind: "dated-floor", floor },
+          }
+        : { state: "UNRESOLVED", blockers, shape: { kind: "dated" } };
     }
-    return { state: "UNRESOLVED", blockers: res.blockers, dated: true };
+    return {
+      state: "UNRESOLVED",
+      blockers: res.blockers,
+      shape: { kind: "dated" },
+    };
   }
 
   // Cliff at/before the start has no effect.
@@ -257,13 +296,13 @@ export const lowerCliff = (
  *
  * Everything else needs the firing date and can't lower to a `cliff` field:
  *   - a bare event cliff (`CLIFF EVENT x`, no time-based form) keeps its
- *     event-anchoredness, lowered to the EVENT record state with no `effectiveAt`
- *     (on this path the start is pending, so the cliff's event can never have a
- *     placeable date). buildTemplate's unfired-EVENT-cliff guard still routes the
- *     statement to `unresolved` — the routing is unchanged from when this returned
- *     a bare UNRESOLVED — but the record now says *why* it's unstorable (no schema
- *     home for an event cliff) rather than collapsing to "a cliff that can't be
- *     placed yet", which is the same answer a resolved start with this cliff gets.
+ *     event-anchoredness, lowered to EVENT_PENDING (on this path the start is
+ *     pending, so the cliff's event can never have a placeable date). buildTemplate's
+ *     pending-event-cliff guard still routes the statement to `unresolved` — the
+ *     routing is unchanged from when this returned a bare UNRESOLVED — but the
+ *     record now says *why* it's unstorable (no schema home for an event cliff)
+ *     rather than collapsing to "a cliff that can't be placed yet", which is the
+ *     same answer a resolved start with this cliff gets.
  *   - a cliff whose unit differs from the grid's (a months-cliff over a days-grid
  *     counts a varying number of pre-cliff occurrences depending on the anchor) is
  *     UNRESOLVED — it genuinely can't be placed until the firing is known.
@@ -303,19 +342,21 @@ export const lowerDeferredCliff = (
   const gated = isGatedNode(cliffExpr);
 
   // A bare (ungated) event cliff keeps its event-anchoredness rather than
-  // flattening to a generic UNRESOLVED: it's an EVENT record with no effectiveAt,
-  // since a pending start means the cliff's firing can never be placed on this
-  // path. buildTemplate routes the unfired EVENT cliff to `unresolved` exactly as
-  // the old UNRESOLVED return did, but the record now reports the truer cause (no
+  // flattening to a generic UNRESOLVED: it's EVENT_PENDING (no date), since a
+  // pending start means the cliff's firing can never be placed on this path.
+  // buildTemplate routes the pending event cliff to `unresolved` exactly as the
+  // old UNRESOLVED return did, but the record now reports the truer cause (no
   // schema home for an event cliff at all). A gated event cliff is handled below —
   // the gate's verdict carries the routing and blockers, with the event identity
   // stamped on the record.
   const evId = eventBaseId(cliffExpr);
-  if (evId && !gated) return { state: "EVENT", eventId: evId };
+  if (evId && !gated) return { state: "EVENT_PENDING", eventId: evId };
 
   // An ungated, non-event non-derivable cliff (a cross-unit duration) has no gate
-  // to report; it stays unresolved until the firing date arrives.
-  if (!gated) return { state: "UNRESOLVED", blockers: [], dated: false };
+  // to report; it stays unresolved until the firing date arrives. No start anchor
+  // means no placeable grid, so its shape is fully symbolic.
+  if (!gated)
+    return { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } };
 
   // A gated cliff (including a gated *event* cliff): the gate's own verdict is the
   // sharper answer, so surface it. Resolve the cliff with no vesting-start overlay
@@ -328,13 +369,20 @@ export const lowerDeferredCliff = (
   const gate = gateVerdict(res, false, (bs) =>
     bs.filter((b) => !isVestingStartPlaceholder(b)),
   );
-  const lowered: Extract<LoweredCliff, { state: "UNRESOLVED" | "IMPOSSIBLE" }> =
-    gate ?? { state: "UNRESOLVED", blockers: [], dated: false };
+  const lowered:
+    | GateUnresolved
+    | Extract<LoweredCliff, { state: "IMPOSSIBLE" }> = gate ?? {
+    state: "UNRESOLVED",
+    blockers: [],
+    shape: { kind: "symbolic" },
+  };
   // Same identity rule as the anchored path: a gated *event* cliff keeps its
   // event id on the UNRESOLVED record — whether the gate is pending or cleared
   // without an anchor to place against. Only a violated gate (IMPOSSIBLE)
-  // drops it: a dead cliff isn't an event cliff anymore.
+  // drops it: a dead cliff isn't an event cliff anymore. The deferred path's
+  // shapes are always `symbolic` (no anchor to date a grid against, no floor),
+  // both of which carry an optional eventId.
   return lowered.state === "UNRESOLVED" && evId !== undefined
-    ? { ...lowered, eventId: evId }
+    ? { ...lowered, shape: { ...lowered.shape, eventId: evId } }
     : lowered;
 };

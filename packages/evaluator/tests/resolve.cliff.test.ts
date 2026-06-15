@@ -56,12 +56,12 @@ describe("lowerCliff", () => {
     });
   });
 
-  it("event-anchored cliff → EVENT (no time-based representation)", () => {
+  it("event-anchored cliff → EVENT_FIRED (no time-based representation)", () => {
     const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
       makeVestingBaseEvent("ipo"),
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
-      state: "EVENT",
+      state: "EVENT_FIRED",
       eventId: "ipo",
       effectiveAt: "2026-04-01",
     });
@@ -75,20 +75,20 @@ describe("lowerCliff", () => {
       [makeDuration(1, "MONTHS", "PLUS")],
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx)).toEqual({
-      state: "EVENT",
+      state: "EVENT_FIRED",
       eventId: "ipo",
       effectiveAt: "2026-05-01",
     });
   });
 
-  it("unfired event cliff with an offset → EVENT with no effectiveAt, eventId intact", () => {
+  it("unfired event cliff with an offset → EVENT_PENDING, eventId intact", () => {
     const noIpo = baseCtx({ grantDate: "2025-01-01", events: {} });
     const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
       makeVestingBaseEvent("ipo"),
       [makeDuration(1, "MONTHS", "PLUS")],
     );
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, noIpo)).toEqual({
-      state: "EVENT",
+      state: "EVENT_PENDING",
       eventId: "ipo",
     });
   });
@@ -135,6 +135,14 @@ describe("lowerCliff", () => {
       expect(
         result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
       ).toBe(true);
+      // The resolved +12mo branch is the lower bound, recorded as the
+      // `dated-floor` shape's `floor` so the renderer folds every pre-cliff tranche
+      // onto it instead of collapsing the cliff to that date. anchor 2025-01-01 +
+      // 12mo lands on the 31st under this ctx's day-of-month (31_OR_LAST_DAY).
+      expect(result.shape).toEqual({
+        kind: "dated-floor",
+        floor: "2026-01-31",
+      });
     }
   });
 });
@@ -166,7 +174,7 @@ describe("lowerCliff — gated event cliff (#113)", () => {
     }
   });
 
-  it("gate satisfied (event fired after the gate) → EVENT", () => {
+  it("gate satisfied (event fired after the gate) → EVENT_FIRED", () => {
     // acquisition 2026-06-01 is after grantDate + 12 months; the gate holds, so
     // the cliff is the bare event cliff again (events-only downstream).
     const c = baseCtx({
@@ -174,13 +182,16 @@ describe("lowerCliff — gated event cliff (#113)", () => {
       events: { acquisition: "2026-06-01" },
     });
     expect(lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c)).toEqual({
-      state: "EVENT",
+      state: "EVENT_FIRED",
       eventId: "acquisition",
       effectiveAt: "2026-06-01",
     });
   });
 
-  it("gate pending (event unfired) → UNRESOLVED with EVENT_NOT_YET_OCCURRED", () => {
+  it("gate pending (event unfired) → UNRESOLVED, dated shape keeps the event id (#218)", () => {
+    // A pending gate holds the cliff but doesn't change what it's anchored to, so
+    // the event id rides on the shape — that's what lets the storable-reason scan
+    // report EVENT_CLIFF rather than the weaker DEFERRED_CLIFF.
     const c = baseCtx({ grantDate: "2025-01-01", events: {} });
     const result = lowerCliff(gatedCliff, anchor, "MONTHS", 1, 48, c);
     expect(result.state).toBe("UNRESOLVED");
@@ -188,6 +199,12 @@ describe("lowerCliff — gated event cliff (#113)", () => {
       expect(
         result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
       ).toBe(true);
+      // Grid is placeable from the resolved start, so the shape is `dated`; the
+      // gated event cliff stamps its event id onto it.
+      expect(result.shape.kind).toBe("dated");
+      if (result.shape.kind !== "dated-floor") {
+        expect(result.shape.eventId).toBe("acquisition");
+      }
     }
   });
 });
@@ -257,19 +274,19 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     ).toEqual({
       state: "UNRESOLVED",
       blockers: [],
-      dated: false,
+      shape: { kind: "symbolic" },
     });
   });
 
-  it("bare event-anchored cliff keeps its event-anchoredness → EVENT (no effectiveAt)", () => {
+  it("bare event-anchored cliff keeps its event-anchoredness → EVENT_PENDING", () => {
     // A pending start means this cliff's event can never be placed on this path, so
-    // there's no effectiveAt. Lowering it to EVENT (rather than flattening to
+    // there's no date. Lowering it to EVENT_PENDING (rather than flattening to
     // UNRESOLVED) preserves the fact that the schema has no home for an event cliff
-    // at all — buildTemplate's unfired-EVENT-cliff guard still routes it to the
+    // at all — buildTemplate's pending-event-cliff guard still routes it to the
     // unresolved arm, so the routing is unchanged.
     const cliff = makeSingletonNode(makeVestingBaseEvent("ipo"));
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx)).toEqual({
-      state: "EVENT",
+      state: "EVENT_PENDING",
       eventId: "ipo",
     });
   });
@@ -287,7 +304,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     expect(lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx)).toEqual({
       state: "UNRESOLVED",
       blockers: [],
-      dated: false,
+      shape: { kind: "symbolic" },
     });
   });
 
@@ -308,7 +325,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
     const result = lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx);
     expect(result.state).toBe("UNRESOLVED");
     if (result.state === "UNRESOLVED") {
-      expect(result.dated).toBe(false);
+      expect(result.shape.kind).toBe("symbolic");
       expect(
         result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION"),
       ).toBe(true);
