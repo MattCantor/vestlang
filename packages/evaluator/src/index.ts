@@ -5,6 +5,10 @@ export {
   evaluateProgram,
 } from "./evaluate/index.js";
 export {
+  resolveVestingStart,
+  type ResolvedAnchor,
+} from "./evaluate/resolveVestingStart.js";
+export {
   evaluateStatementAsOf,
   evaluateProgramAsOf,
   type VestedResult,

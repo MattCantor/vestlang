@@ -43,9 +43,7 @@ describe("runResolveOffset", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error).toMatch(/unresolved/i);
-      // The hold-up names the missing event (the installment's own reason, here
-      // "EVENT ipo"; the blockerSummary fallback would word it as
-      // "event(s) not provided: …").
+      // The hold-up names the missing event via blockerToString — "EVENT ipo".
       expect(r.unresolved).toMatch(/ipo/i);
     }
   });
@@ -115,5 +113,82 @@ describe("runResolveOffset", () => {
     });
     expect(unset).toEqual(explicit);
     expect(unset).toEqual({ ok: true, date: "2025-02-28" });
+  });
+
+  // AC#1 — a flat DATE before grant_date resolves to itself, not up to grant_date.
+  // The old installment path folded any pre-grant amount onto grant_date and
+  // returned "2025-06-01" here; the direct anchor resolution doesn't.
+  it("resolves a pre-grant flat DATE to itself (no grant-date fold)", () => {
+    const r = runResolveOffset({
+      expr: "DATE 2024-01-01",
+      grant_date: "2025-06-01",
+    });
+    expect(r).toEqual({ ok: true, date: "2024-01-01" });
+  });
+
+  // AC#2 — an event offset that lands before grant_date resolves to the true date.
+  it("resolves a pre-grant EVENT offset to the true date", () => {
+    const r = runResolveOffset({
+      expr: "EVENT ipo - 6 months",
+      grant_date: "2025-06-01",
+      events: { ipo: "2025-09-30" },
+    });
+    expect(r).toEqual({ ok: true, date: "2025-03-30" });
+  });
+
+  // AC#3 — a small negative offset just before grant resolves strictly below it,
+  // asserted as the anti-fold invariant directly.
+  it("resolves a date just before grant strictly below grant_date", () => {
+    const r = runResolveOffset({
+      expr: "DATE 2025-06-01 - 2 days",
+      grant_date: "2025-06-01",
+    });
+    expect(r).toEqual({ ok: true, date: "2025-05-30" });
+    expect(r.ok && r.date < "2025-06-01").toBe(true);
+  });
+
+  // AC#5 — an unresolved selector names both unfired events through the same
+  // blockerToString rendering ("EARLIER OF ( EVENT a, EVENT b )").
+  it("names both events of an unresolved EARLIER OF selector", () => {
+    const r = runResolveOffset({
+      expr: "EARLIER OF ( EVENT a, EVENT b )",
+      grant_date: "2025-01-01",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.unresolved).toMatch(/a/);
+      expect(r.unresolved).toMatch(/b/);
+    }
+  });
+
+  // AC#6 — multi-statement input is refused, not truncated to the first head.
+  // A PLUS fan-out parses to two independent heads; we used to drop the second and
+  // return the first head's date, now we refuse.
+  it("refuses a PLUS fan-out instead of returning the first head", () => {
+    const r = runResolveOffset({
+      expr: "EVENT a PLUS VEST FROM EVENT b",
+      grant_date: "2025-01-01",
+      events: { a: "2025-03-01", b: "2025-04-01" },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok)
+      expect(r.error).toMatch(
+        /single|one statement|multiple statements|offset expression/i,
+      );
+  });
+
+  // AC#6 — a THEN tail parses to a head + chained tail. This is the intentional
+  // behavior change: it used to return the head anchor's date, now it refuses.
+  it("refuses a THEN tail instead of returning the head anchor's date", () => {
+    const r = runResolveOffset({
+      expr: "EVENT a THEN 200 VEST OVER 12 months EVERY 1 month",
+      grant_date: "2025-01-01",
+      events: { a: "2025-03-01" },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok)
+      expect(r.error).toMatch(
+        /single|one statement|multiple statements|offset expression/i,
+      );
   });
 });
