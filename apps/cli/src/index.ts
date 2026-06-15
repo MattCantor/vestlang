@@ -132,7 +132,7 @@ program
       parts: string[] = [],
       opts: { stdin?: boolean; markdown?: string; format?: string },
     ) => {
-      lint(parts, opts);
+      withBoundary(() => lint(parts, opts));
     },
   );
 
