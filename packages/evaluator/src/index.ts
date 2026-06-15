@@ -8,11 +8,7 @@ export {
   resolveVestingStart,
   type ResolvedAnchor,
 } from "./evaluate/resolveVestingStart.js";
-export {
-  evaluateStatementAsOf,
-  evaluateProgramAsOf,
-  type VestedResult,
-} from "./asof.js";
+export { evaluateProgramAsOf, type VestedResult } from "./asof.js";
 
 // Persistence / sidecar — consumed by @vestlang/pipeline (persist/rehydrate
 // orchestration, behind the vestlang_persist / vestlang_rehydrate MCP tools)

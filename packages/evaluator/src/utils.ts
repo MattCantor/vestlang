@@ -4,17 +4,7 @@ import {
   ResolutionContextInput,
   AsOfContext,
   AsOfContextInput,
-  Statement,
 } from "@vestlang/types";
-import { amountClaim } from "./claims.js";
-
-// `prepare` runs on the point-in-time path, so it takes (and returns) the
-// as-of-bearing context.
-export function prepare(stmt: Statement, ctx_input: AsOfContextInput) {
-  const ctx = createEvaluationContext(ctx_input);
-  const statementQuantity = amountClaim(stmt.amount, ctx.grantQuantity);
-  return { ctx, statementQuantity };
-}
 
 // One builder over both context flavors: hand it a structure (no-`asOf`) input
 // and you get a `ResolutionContext` back; hand it an as-of input and the `asOf`

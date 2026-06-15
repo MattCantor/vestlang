@@ -49,10 +49,3 @@ export const claimAllocator = (
     return claim;
   };
 };
-
-// A lone statement's claim: one draw from a fresh cursor. For a QUANTITY this
-// is min(value, grant) (floor(grant × v/grant) = v exactly); for a PORTION ≤ 1
-// it is the plain per-statement floor — identical to what amountToQuantify
-// returned, which this replaces.
-export const amountClaim = (a: Amount, grantQuantity: number): number =>
-  claimAllocator(grantQuantity)(amountToFraction(a, grantQuantity));

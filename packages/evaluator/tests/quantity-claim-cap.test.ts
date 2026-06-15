@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "../src/evaluate/index";
-import { evaluateProgramAsOf, evaluateStatementAsOf } from "../src/asof";
+import { evaluateProgramAsOf } from "../src/asof";
 
 describe("QUANTITY claim capped at the grant", () => {
   // Repro 1: a pending event-gated start with an over-grant authored quantity.
@@ -99,22 +99,6 @@ describe("QUANTITY claim capped at the grant", () => {
     expect(result.vested).toHaveLength(0);
     expect(result.unvested).toHaveLength(0);
     expect(result.impossible).toHaveLength(0);
-  });
-
-  // The statement-level fallback (prepare → evaluateStatementAsOf) caps the same way.
-  it("statement-level as-of fallback caps at 0 on a zero-share grant", () => {
-    const program = normalizeProgram(
-      parse("100 VEST OVER 2 months EVERY 1 month"),
-    );
-    const ctx = {
-      grantDate: "2024-01-01",
-      events: {},
-      grantQuantity: 0,
-      asOf: "2026-06-01",
-    };
-
-    const result = evaluateStatementAsOf(program[0], ctx);
-    expect(result.unresolved).toBe(0);
   });
 
   // Within-grant QUANTITY: the cap is a no-op and nothing moves.
