@@ -85,7 +85,6 @@ function observe(
     grantDate: GRANT,
     events,
     grantQuantity: 100_000,
-    asOf,
   });
   return verdictOf(schedule);
 }

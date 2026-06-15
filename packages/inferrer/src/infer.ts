@@ -103,7 +103,6 @@ function runOne(
   policy: VestingDayOfMonth,
   totalQuantity: number,
   grantDate: OCTDate,
-  asOf: OCTDate,
   grantDateKnown: boolean,
 ): Attempt {
   const { components, cadencesTried } = decompose(sorted, policy);
@@ -121,7 +120,7 @@ function runOne(
   // the inferrer can separate — a cliff from pre-grant accrual being the case in
   // point, since the two are numerically identical until a grant date splits them.
   const pg = grantDateKnown
-    ? foldPreGrant(sorted, reshaped, grantDate, totalQuantity, asOf, policy)
+    ? foldPreGrant(sorted, reshaped, grantDate, totalQuantity, policy)
     : { components: reshaped, foldCount: 0, vestingStarts: [] as OCTDate[] };
   const { components: folded, foldCount } = foldCliffs(
     pg.components,
@@ -133,7 +132,7 @@ function runOne(
   const ordered = orderByCursorChain(folded, policy);
   const program: Program = ordered.map((c) => buildStatement(c, policy));
 
-  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, asOf, policy);
+  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, policy);
   const { residual } = residualAgainstInput(program, sorted, verifyCtx);
 
   return {
@@ -157,7 +156,6 @@ function runSequential(
   policy: VestingDayOfMonth,
   totalQuantity: number,
   grantDate: OCTDate,
-  asOf: OCTDate,
 ): Attempt | null {
   const seq = segmentSequential(sorted, policy);
   if (seq === null) return null;
@@ -171,7 +169,7 @@ function runSequential(
     const stmt = buildStatement(c, policy);
     return seq.continuation[i] ? asChainedTail(stmt) : stmt;
   });
-  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, asOf, policy);
+  const verifyCtx = makeVerifyContext(grantDate, totalQuantity, policy);
   const { residual, status } = collapseAgainstInput(program, sorted, verifyCtx);
 
   return {
@@ -226,7 +224,6 @@ function selectBest(
   attempts: Attempt[],
   grantDate: OCTDate,
   totalQuantity: number,
-  asOf: OCTDate,
 ): Attempt {
   const verdictOf = (a: Attempt): number => {
     if (a.residual >= EPSILON) return 0;
@@ -235,7 +232,7 @@ function selectBest(
         ? a.status
         : programStatus(
             a.program,
-            makeVerifyContext(grantDate, totalQuantity, asOf, a.policy),
+            makeVerifyContext(grantDate, totalQuantity, a.policy),
           );
     return verdictRank(status);
   };
@@ -284,13 +281,12 @@ function rescoreOnCollapse(
   sorted: TrancheInput[],
   grantDate: OCTDate,
   totalQuantity: number,
-  asOf: OCTDate,
 ): Attempt {
   if (attempt.kind === "sequential") return attempt;
   const { residual } = collapseAgainstInput(
     attempt.program,
     sorted,
-    makeVerifyContext(grantDate, totalQuantity, asOf, attempt.policy),
+    makeVerifyContext(grantDate, totalQuantity, attempt.policy),
   );
   return { ...attempt, residual };
 }
@@ -310,7 +306,6 @@ export function inferSchedule(input: InferInput): InferResult {
   const sorted = sortInput(input.tranches);
   const totalQuantity = sorted.reduce((a, t) => a + t.amount, 0);
   const firstDate = sorted[0].date;
-  const lastDate = sorted[sorted.length - 1].date;
   const grantDateKnown = input.grantDate !== undefined;
   const grantDate = input.grantDate ?? firstDate;
 
@@ -332,29 +327,16 @@ export function inferSchedule(input: InferInput): InferResult {
   const attempts: Attempt[] = [];
   for (const policy of policies) {
     attempts.push(
-      runOne(
-        sorted,
-        policy,
-        totalQuantity,
-        grantDate,
-        lastDate,
-        grantDateKnown,
-      ),
+      runOne(sorted, policy, totalQuantity, grantDate, grantDateKnown),
     );
-    const seq = runSequential(
-      sorted,
-      policy,
-      totalQuantity,
-      grantDate,
-      lastDate,
-    );
+    const seq = runSequential(sorted, policy, totalQuantity, grantDate);
     if (seq !== null) attempts.push(seq);
   }
 
   if (attempts.length === 0) {
     throw new Error("inferSchedule: no attempt succeeded");
   }
-  let best: Attempt = selectBest(attempts, grantDate, totalQuantity, lastDate);
+  let best: Attempt = selectBest(attempts, grantDate, totalQuantity);
 
   // The per-statement residual on `best` was a search heuristic; the number we
   // report and gate on has to come from the collapse the consumer actually runs
@@ -363,7 +345,7 @@ export function inferSchedule(input: InferInput): InferResult {
   // its statements share a grid — exactly the asymmetry that let #144 ship behind
   // residualError: 0. The sequential candidate already carries a collapse residual,
   // so rescore only when it doesn't.
-  best = rescoreOnCollapse(best, sorted, grantDate, totalQuantity, lastDate);
+  best = rescoreOnCollapse(best, sorted, grantDate, totalQuantity);
 
   if (best.residual >= EPSILON) {
     const fallbackComponents = explicitListFallback(sorted);
@@ -373,12 +355,7 @@ export function inferSchedule(input: InferInput): InferResult {
     const { residual: fallbackResidual } = collapseAgainstInput(
       fallbackProgram,
       sorted,
-      makeVerifyContext(
-        grantDate,
-        totalQuantity,
-        lastDate,
-        DEFAULT_VESTING_DAY_OF_MONTH,
-      ),
+      makeVerifyContext(grantDate, totalQuantity, DEFAULT_VESTING_DAY_OF_MONTH),
     );
     if (fallbackResidual < best.residual) {
       notes.push(

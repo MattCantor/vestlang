@@ -12,7 +12,7 @@ import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type { Installment, OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
-import { buildContext } from "./context.js";
+import { buildContext, buildAsOfContext } from "./context.js";
 import { computeSummary, filterByWindow, type Summary } from "./summary.js";
 
 // The grant a schedule is evaluated against. `events.grantDate` is injected by
@@ -141,7 +141,7 @@ export function runAsOf(
 ): Result<{ asOf: OCTDate } & AsOfView> {
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) return parsed;
-  const ctx = buildContext({ ...g, as_of: asOf });
+  const ctx = buildAsOfContext({ ...g, as_of: asOf });
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
     return {
@@ -178,7 +178,7 @@ export function runVestedBetween(
   }
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) return parsed;
-  const ctx = buildContext({ ...g, as_of: to });
+  const ctx = buildAsOfContext({ ...g, as_of: to });
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
     const { installments, total } = filterByWindow(result.vested, from, to);

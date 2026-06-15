@@ -9,7 +9,7 @@ import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
   Amount,
-  EvaluationContextInput,
+  AsOfContextInput,
   Installment,
   OCTDate,
   Program,
@@ -32,8 +32,8 @@ import {
 } from "./helpers";
 
 const ctxInput = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+  overrides: Partial<AsOfContextInput> = {},
+): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,
@@ -280,7 +280,6 @@ describe("chain origin day-of-month — never-clamped DAYS handoff (#171)", () =
     const [schedule] = evaluateProgram(program, {
       grantDate: "2025-01-31",
       grantQuantity: 100000,
-      asOf: "2035-01-01",
       events: {},
     });
     const installments = schedule.resolution.installments.map((i) =>

@@ -1,13 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { addMonthsRule } from "../src/evaluate/time.js";
-import { EvaluationContext, OCTDate, VestingDayOfMonth } from "@vestlang/types";
+import { ResolutionContext, OCTDate, VestingDayOfMonth } from "@vestlang/types";
 
-const ctx = (v: VestingDayOfMonth): EvaluationContext => ({
+const ctx = (v: VestingDayOfMonth): ResolutionContext => ({
   grantDate: "2025-01-01",
   events: {},
   vesting_day_of_month: v,
   grantQuantity: 100,
-  asOf: "2024-01-31",
 });
 
 const applyTest = (x: {

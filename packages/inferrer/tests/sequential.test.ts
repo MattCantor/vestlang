@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { evaluateProgram } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { ResolutionContextInput } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import { segmentSequential } from "../src/sequential.js";
 import type { TrancheInput } from "../src/types.js";
@@ -136,11 +136,10 @@ describe("inferSchedule — sequential recovery end to end", () => {
     // Collapse the emitted DSL the way a consumer would and confirm the program
     // reads as one reusable template, not a flat events-only list.
     const program = normalizeProgram(parse(inferred.dsl));
-    const ctx: EvaluationContextInput = {
+    const ctx: ResolutionContextInput = {
       grantDate: RATE_CHANGE[0].date,
       events: {},
       grantQuantity: 800,
-      asOf: "2030-01-01",
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
     };
     const [schedule] = evaluateProgram(program, ctx);
@@ -195,13 +194,12 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
   const GRANT = "2023-11-30";
 
   function collapse(dsl: string, dom: string) {
-    const ctx: EvaluationContextInput = {
+    const ctx: ResolutionContextInput = {
       grantDate: GRANT,
       events: {},
       grantQuantity: 600,
-      asOf: "2030-01-01",
       vesting_day_of_month:
-        dom as EvaluationContextInput["vesting_day_of_month"],
+        dom as ResolutionContextInput["vesting_day_of_month"],
     };
     return evaluateProgram(normalizeProgram(parse(dsl)), ctx)[0];
   }

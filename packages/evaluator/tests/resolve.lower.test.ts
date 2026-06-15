@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
 import type {
   Amount,
-  EvaluationContextInput,
+  ResolutionContextInput,
   OCTDate,
   Program,
   VestingNodeExpr,
@@ -21,14 +21,13 @@ import {
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
-): EvaluationContextInput => {
+): ResolutionContextInput => {
   // Callers override the grant date by passing `grantDate` in this map.
   const { grantDate = "2025-01-01", ...rest } = events;
   return {
     grantDate,
     events: rest,
     grantQuantity,
-    asOf: "2035-01-01",
   };
 };
 
@@ -207,7 +206,6 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
         grantDate: "2024-01-01",
         events: { ipo: "2024-03-01" },
         grantQuantity: 100000,
-        asOf: "2035-01-01",
       },
     );
     expect(runtime.eventFirings).toEqual([
@@ -265,7 +263,6 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
         grantDate: "2024-01-01",
         events: { ipo: "2024-03-01" },
         grantQuantity: 100000,
-        asOf: "2035-01-01",
       },
     );
     expect(after.template).toEqual(before.template);

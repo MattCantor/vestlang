@@ -6,7 +6,7 @@
 
 import type {
   Blocker,
-  EvaluationContext,
+  ResolutionContext,
   InstallmentSet,
   OCTDate,
   Statement,
@@ -79,7 +79,7 @@ export const symbolicClaims = (
 export const unresolvedInstallments = (
   r: StmtResolution,
   stmt: Statement,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   claim: number,
 ): InstallmentSet => {
   const statementQuantity = claim;

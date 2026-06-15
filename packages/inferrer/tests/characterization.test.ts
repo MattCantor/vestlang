@@ -3,7 +3,7 @@ import { parse } from "@vestlang/dsl";
 import { evaluateProgram } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   NonTemplateReason,
   OCTDate,
 } from "@vestlang/types";
@@ -63,10 +63,6 @@ const renderReason = (r: NonTemplateReason): string => {
  * below are simply what `inferSchedule` produces today.
  */
 
-// Any date past the last installment works; this is comfortably clear of the
-// whole corpus, so every tranche has resolved by the time we collapse.
-const AS_OF: OCTDate = "2030-01-01";
-
 interface CorpusCase {
   id: string;
   /** Plain-English description of what this stream is meant to exercise. */
@@ -106,11 +102,10 @@ function characterize(c: CorpusCase): CaseSnapshot {
   // program into a single schedule. This is the same route the evaluate_program
   // tool takes, so `status` here is the program-level verdict a consumer sees.
   const program = normalizeProgram(parse(inferred.dsl));
-  const ctx: EvaluationContextInput = {
+  const ctx: ResolutionContextInput = {
     grantDate: c.grantDate ?? c.tranches[0].date,
     events: {},
     grantQuantity: c.grant,
-    asOf: AS_OF,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
   const [schedule] = evaluateProgram(program, ctx);

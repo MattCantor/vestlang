@@ -5,7 +5,7 @@ import {
   evaluateProgramAsOf,
   evaluateStatementAsOf,
 } from "@vestlang/evaluator";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { AsOfContextInput } from "@vestlang/types";
 import { computeSummary, filterByWindow } from "../src/summary";
 import { runAsOf, runEvaluate } from "../src/run";
 
@@ -13,9 +13,7 @@ import { runAsOf, runEvaluate } from "../src/run";
 // drive a DSL string through the engine and check the roll-up the consumers
 // print.
 
-const ctx = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+const ctx = (overrides: Partial<AsOfContextInput> = {}): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,

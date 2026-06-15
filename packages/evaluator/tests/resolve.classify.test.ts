@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
 import type {
   Amount,
-  EvaluationContextInput,
+  ResolutionContextInput,
   Finding,
   OCTDate,
   Program,
@@ -91,14 +91,13 @@ const isResolved = (i: { state: string }): i is ResolvedInstallment =>
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 100000,
-): EvaluationContextInput => {
+): ResolutionContextInput => {
   // Callers override the grant date by passing `grantDate` in this map.
   const { grantDate = "2025-01-01", ...rest } = events;
   return {
     grantDate,
     events: rest,
     grantQuantity,
-    asOf: "2035-01-01",
   };
 };
 
@@ -447,11 +446,10 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
   };
   const ctx21 = (
     events: Record<string, OCTDate> = {},
-  ): EvaluationContextInput => ({
+  ): ResolutionContextInput => ({
     grantDate: "2024-01-01",
     events: { ...events },
     grantQuantity: 48000,
-    asOf: "2035-01-01",
   });
   const fullGrant = portion(1, 1);
 

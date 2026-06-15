@@ -54,8 +54,8 @@ Typical workflows:
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL (branch-and-bound
   minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
-  encoded in the DSL — pass it back as EvaluationContext when evaluating the
-  returned DSL.
+  encoded in the DSL — pass it back as the vesting_day_of_month input when
+  evaluating the returned DSL.
 - Persistence lifecycle: vestlang_persist compiles a DSL program ONCE into a
   storable artifact (canonical template + runtime + an out-of-band sidecar that
   maps each synthetic event to its definition). A program is storable only when it
@@ -256,7 +256,7 @@ export function createServer(): McpServer {
     {
       title: "Infer vestlang from tranche array",
       description:
-        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Decomposes the stream by branch-and-bound minimum-cardinality exact cover — the fewest uniform trains, cliffs, and one-off pulses that reproduce it (a greedy seed sets the bound, then the search tries to beat it), with a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as EvaluationContext, or they will get a slightly different schedule.",
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Decomposes the stream by branch-and-bound minimum-cardinality exact cover — the fewest uniform trains, cliffs, and one-off pulses that reproduce it (a greedy seed sets the bound, then the search tries to beat it), with a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
       inputSchema: z
         .object({
           tranches: z
@@ -493,7 +493,7 @@ export function createServer(): McpServer {
     {
       title: "Rehydrate a persisted artifact against fired events",
       description:
-        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns FOUR things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — gates whose definitions still don't resolve because their gating events simply haven't fired yet (keep waiting), with dead/impossible arms reported SEPARATELY under `dead`, not here; `dead` — gates that can never resolve given the firings we now know (e.g. the gating event fired OUTSIDE its window), so stop waiting on them (always present, [] when none); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it (the grant date also defaults `as_of`); you supply only the newly-fired events and grant_quantity.",
+        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns FOUR things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — gates whose definitions still don't resolve because their gating events simply haven't fired yet (keep waiting), with dead/impossible arms reported SEPARATELY under `dead`, not here; `dead` — gates that can never resolve given the firings we now know (e.g. the gating event fired OUTSIDE its window), so stop waiting on them (always present, [] when none); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it; you supply only the newly-fired events and grant_quantity.",
       inputSchema: z
         .object({
           artifact: PERSISTED_ARTIFACT,
@@ -509,9 +509,6 @@ export function createServer(): McpServer {
             .describe(
               `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
             ),
-          as_of: ISO_DATE.optional().describe(
-            "As-of date (YYYY-MM-DD). Defaults to the artifact's stored grant date.",
-          ),
         })
         .strict().shape,
       annotations: {
@@ -526,7 +523,6 @@ export function createServer(): McpServer {
         artifact: params.artifact,
         grant_quantity: params.grant_quantity,
         events: params.events,
-        as_of: params.as_of,
       });
       if (!result.ok) return toolError(result.error);
       const { ok: _ok, ...output } = result;

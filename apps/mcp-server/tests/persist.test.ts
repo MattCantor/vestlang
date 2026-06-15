@@ -162,7 +162,6 @@ describe("mcp-server / persistence tool pair", () => {
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 1000,
-      as_of: "2026-01-01",
     });
 
     // ipo hasn't fired; the EARLIER OF can't settle (open lower bound), so no
@@ -183,7 +182,6 @@ describe("mcp-server / persistence tool pair", () => {
       artifact: persisted.artifact,
       grant_quantity: 1000,
       events: { ipo: "2026-06-01" },
-      as_of: "2026-07-01",
     });
 
     // The synthetic id now resolves; the EARLIER OF picks ipo (2026-06-01, before
@@ -223,7 +221,6 @@ describe("mcp-server / persistence tool pair", () => {
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 1200,
-      as_of: "2026-01-01",
     });
     // A dropped/absent sidecar resolves no synthetic witnesses — empty delta — but
     // the time-based projection still compiles.
@@ -521,11 +518,12 @@ describe("mcp-server / persistence tool pair", () => {
     ]);
   });
 
-  it("no longer accepts grant_date or vesting_day_of_month (schema + description)", async () => {
+  it("no longer accepts grant_date, vesting_day_of_month, or as_of (schema + description)", async () => {
     const client = await connectClient();
 
-    // The registered tool drops both params from its strict input schema and its
-    // description no longer mentions either.
+    // The registered tool drops these params from its strict input schema and its
+    // description no longer mentions them. `as_of` was inert all the way to this
+    // public surface — it fed a context field nobody read — so it's removed (AC#8).
     const { tools } = await client.listTools();
     const rehydrateTool = tools.find((t) => t.name === "vestlang_rehydrate");
     expect(rehydrateTool).toBeDefined();
@@ -535,10 +533,12 @@ describe("mcp-server / persistence tool pair", () => {
     expect(props).toBeDefined();
     expect(props).not.toHaveProperty("grant_date");
     expect(props).not.toHaveProperty("vesting_day_of_month");
+    expect(props).not.toHaveProperty("as_of");
     expect(rehydrateTool!.description ?? "").not.toMatch(/grant_date/);
     expect(rehydrateTool!.description ?? "").not.toMatch(
       /vesting_day_of_month/,
     );
+    expect(rehydrateTool!.description ?? "").not.toMatch(/as_of/);
 
     // A call supplying only the surviving params succeeds.
     const persisted = await persistOk(client, {
@@ -550,7 +550,6 @@ describe("mcp-server / persistence tool pair", () => {
       artifact: persisted.artifact,
       grant_quantity: 400,
       events: { ipo: "2025-01-31" },
-      as_of: "2025-06-01",
     });
     expect(out.projection.length).toBeGreaterThan(0);
   });
@@ -652,7 +651,6 @@ describe("mcp-server / persistence tool pair", () => {
       artifact: persisted.artifact,
       grant_quantity: 4800,
       events: { ipo: "2027-01-01" },
-      as_of: "2027-06-01",
     });
 
     expect(out.dead.length).toBeGreaterThan(0);
@@ -696,7 +694,6 @@ describe("mcp-server / persistence tool pair", () => {
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 1000,
-      as_of: "2026-01-01",
     });
 
     expect(out.pending.length).toBeGreaterThan(0);
@@ -717,7 +714,6 @@ describe("mcp-server / persistence tool pair", () => {
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 1200,
-      as_of: "2026-01-01",
     });
 
     // No gate at all, so nothing pending and nothing dead — but `dead` is present.
@@ -738,7 +734,6 @@ describe("mcp-server / persistence tool pair", () => {
       artifact: persisted.artifact,
       grant_quantity: 4800,
       events: { ipo: "2027-01-01" },
-      as_of: "2027-06-01",
     });
 
     // The partition is disjoint: every dead blocker is impossible, every pending one

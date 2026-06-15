@@ -35,14 +35,6 @@ export function isValidCalendarDate(s: string): boolean {
 }
 
 /**
- * The largest date the engine can represent: core's calendar runs 0001–9999, and
- * arithmetic past `9999-12-31` throws. It doubles as the far-future "end of time"
- * as-of: evaluating a zero-length `VEST FROM <expr>` schedule against it forces the
- * sole installment to resolve to a date rather than read as "not yet."
- */
-export const MAX_REPRESENTABLE_DATE: OCTDate = "9999-12-31";
-
-/**
  * Today's date as a canonical `YYYY-MM-DD` string. Read in the host's *local*
  * timezone on purpose: when a caller evaluates a schedule "as of today" without
  * naming a date, "today" should mean the user's today, not UTC's — near

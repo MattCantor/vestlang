@@ -1,9 +1,9 @@
 // The persistence lifecycle's orchestration: persist a DSL program down to a
 // storable artifact, and rehydrate that artifact against the world's firings. Both
-// route context construction through the pipeline's internal `buildContext`, with
-// an explicit `asOf` (Decision 7) — persist evaluates as of the grant date, and
-// rehydrate as of the caller's date (falling back to the stored grant date), never
-// the wall-clock `todayISO()` default.
+// route context construction through the pipeline's internal `buildContext`.
+// Neither reads an observation date — they resolve a schedule's structural state
+// (which template, which witnesses), and that is the same whenever you ask — so
+// neither touches the wall-clock `todayISO()` default the as-of path uses.
 //
 // Lifecycle, per the demo story: author DSL → compile once → store the canonical
 // template + runtime + sidecar (the out-of-band source map of synthetic-event
@@ -81,8 +81,8 @@ export type PersistResult =
 // artifact isn't yet fully resolved. `dead` is always `[]` here: the classifier
 // never pairs a template resolution with a contradiction.
 //
-// The schedule is evaluated as of the grant date (Decision 7): persist asks "what
-// does this resolve to at grant time?", never against the wall-clock today.
+// Persist resolves the program's storable structure — which canonical template it
+// is — and that doesn't depend on when you look, so no observation date enters.
 export function runPersist(input: PersistInput): PersistResult {
   const parsed = parseToProgram(input.dsl);
   if (!parsed.ok) {
@@ -110,7 +110,6 @@ export function runPersist(input: PersistInput): PersistResult {
     grant_date: input.grant_date,
     events: input.events,
     grant_quantity: input.grant_quantity,
-    as_of: input.grant_date,
     vesting_day_of_month: input.vesting_day_of_month,
   });
 
@@ -174,7 +173,6 @@ export interface RehydrateInput {
   artifact: PersistedArtifact;
   grant_quantity: number;
   events?: Record<string, OCTDate>;
-  as_of?: OCTDate;
 }
 
 // The success payload, also the shape the server returns once it strips `ok`. The
@@ -219,10 +217,10 @@ function computeDelta(
 }
 
 export function runRehydrate(input: RehydrateInput): RehydrateResult {
-  // The grant date is the artifact's, not the caller's — it now feeds both the
-  // witness re-resolution and the as_of default, so a missing one would silently
-  // resolve everything against undefined. Persist always stores it; only a
-  // hand-built artifact can omit it, and we turn that away up front.
+  // The grant date is the artifact's, not the caller's — it feeds the witness
+  // re-resolution, so a missing one would silently resolve everything against
+  // undefined. Persist always stores it; only a hand-built artifact can omit it,
+  // and we turn that away up front.
   const grantDate = input.artifact.runtime.grantDate;
   if (grantDate === undefined) {
     return {
@@ -236,7 +234,6 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     grant_date: grantDate,
     events: input.events,
     grant_quantity: input.grant_quantity,
-    as_of: input.as_of ?? grantDate,
   });
 
   // A persisted artifact can be edited in external storage, so a stored event

@@ -12,7 +12,7 @@
 
 import type {
   Blocker,
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
   Program,
@@ -43,7 +43,7 @@ import type { ResolveVerdict } from "./types.js";
 const expandResolution = (
   r: StmtResolution,
   order: number,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): RawEvent[] => {
   if (r.start.state !== "RESOLVED") return [];
   const anchor = r.start.date;
@@ -106,7 +106,7 @@ const expandResolution = (
  */
 const resolvedInstallments = (
   resolutions: StmtResolution[],
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   totalShares: number,
 ): ResolvedInstallment[] =>
   allocateEvents(

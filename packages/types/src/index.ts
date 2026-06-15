@@ -74,8 +74,10 @@ export {
   RawProgram,
 } from "./ast.js";
 export {
-  EvaluationContext,
-  EvaluationContextInput,
+  ResolutionContext,
+  ResolutionContextInput,
+  AsOfContext,
+  AsOfContextInput,
   SymbolicDate,
   UnresolvedBlocker,
   ImpossibleBlocker,

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateStatement } from "@vestlang/evaluator";
-import type { EvaluationContextInput, Installment } from "@vestlang/types";
+import type { ResolutionContextInput, Installment } from "@vestlang/types";
 
 /* ------------------------
  * Helpers
@@ -18,8 +18,7 @@ const createCtx = (grantQuantity: number = 100) =>
       X: today,
     },
     grantQuantity: grantQuantity,
-    asOf: today,
-  }) as EvaluationContextInput;
+  }) as ResolutionContextInput;
 
 const evaluate = (stmt: string, grantQuantity: number = 100) => {
   const rawProgram = parse(stmt);

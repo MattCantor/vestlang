@@ -17,7 +17,7 @@
 
 import type {
   Blocker,
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleBlocker,
   OCTDate,
   VestingNode,
@@ -132,7 +132,7 @@ export const lowerCliff = (
   periodType: PeriodType,
   period: number,
   occurrences: number,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
   origin: OCTDate = anchor,
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
@@ -273,7 +273,7 @@ export const lowerDeferredCliff = (
   periodType: PeriodType,
   period: number,
   occurrences: number,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 

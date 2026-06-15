@@ -3,7 +3,7 @@ import { parse } from "@vestlang/dsl";
 import { evaluateStatement } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   Installment,
   OCTDate,
   Program,
@@ -211,7 +211,6 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
       grantDate: d("2024-01-01"),
       events: {},
       grantQuantity: 100000,
-      asOf: d("2030-01-01"),
       vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
     });
 
@@ -302,7 +301,6 @@ describe("inferSchedule — policy detection", () => {
       grantDate: d("2024-01-31"),
       events: {},
       grantQuantity: 48000,
-      asOf: d("2028-02-01"),
       vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const,
     };
     const stmt = normalizeProgram(
@@ -356,7 +354,7 @@ describe("inferSchedule — policy detection", () => {
 
 function evalAllResolved(
   program: Program,
-  ctx: EvaluationContextInput,
+  ctx: ResolutionContextInput,
 ): TrancheInput[] {
   const map = new Map<string, number>();
   for (const stmt of program) {
@@ -385,11 +383,10 @@ interface RoundTripCase {
 
 function runRoundTrip(c: RoundTripCase) {
   const grantDate = d(c.grantDate);
-  const ctx: EvaluationContextInput = {
+  const ctx: ResolutionContextInput = {
     grantDate,
     events: {},
     grantQuantity: c.grantQuantity,
-    asOf: d("2030-01-01"),
     vesting_day_of_month: c.policy,
   };
   const program = normalizeProgram(parse(c.dsl));
@@ -404,11 +401,10 @@ function runRoundTrip(c: RoundTripCase) {
 
   const inferredProgram = normalizeProgram(parse(inferred.dsl));
   const totalFromInferred = originalTranches.reduce((a, t) => a + t.amount, 0);
-  const inferredCtx: EvaluationContextInput = {
+  const inferredCtx: ResolutionContextInput = {
     grantDate,
     events: {},
     grantQuantity: totalFromInferred,
-    asOf: d("2030-01-01"),
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
   const reTranches = evalAllResolved(inferredProgram, inferredCtx);
@@ -510,11 +506,10 @@ describe("inferSchedule — rounded trains", () => {
 
   for (const c of cases) {
     it(`folds ${c.total} over ${c.over} months into one UNIFORM`, () => {
-      const ctx: EvaluationContextInput = {
+      const ctx: ResolutionContextInput = {
         grantDate: d("2024-01-01"),
         events: {},
         grantQuantity: c.total,
-        asOf: d("2031-01-01"),
         vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
       };
       const stmt = normalizeProgram(

@@ -1,13 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import type { EvaluationContextInput } from "@vestlang/types";
+import type { ResolutionContextInput } from "@vestlang/types";
 import { evaluateProgram } from "../src/index.js";
 
-const ctx: EvaluationContextInput = {
+const ctx: ResolutionContextInput = {
   grantDate: "2025-02-01",
   grantQuantity: 1000,
-  asOf: "2030-01-01",
   events: {},
 };
 

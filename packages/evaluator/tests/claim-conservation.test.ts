@@ -39,7 +39,6 @@ describe("claim conservation (R2-B20)", () => {
       grantDate: "2024-01-01",
       events: {},
       grantQuantity: 100,
-      asOf: "2026-01-01",
     };
 
     const [{ resolution }] = evaluateProgram(program, ctx);

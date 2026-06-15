@@ -4,7 +4,7 @@ import {
   Constraint,
   ConstraintTag,
   Duration,
-  EvaluationContext,
+  ResolutionContext,
   ImpossibleBlocker,
   OCTDate,
   Offsets,
@@ -24,13 +24,12 @@ import {
 } from "@vestlang/types";
 
 export const baseCtx = (
-  overrides: Partial<EvaluationContext> = {},
-): EvaluationContext => ({
+  overrides: Partial<ResolutionContext> = {},
+): ResolutionContext => ({
   grantDate: "2025-01-01",
   events: {},
   vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
   grantQuantity: 100,
-  asOf: "2025-06-01",
   ...overrides,
 });
 

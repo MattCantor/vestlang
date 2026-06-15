@@ -5,23 +5,39 @@ import { OCTDate } from "./helpers.js";
 import { VestingDayOfMonth } from "./oct_types.js";
 import type { Finding } from "./diagnostic.js";
 
-export interface EvaluationContext {
+// The context every engine operation needs to resolve a schedule's structure:
+// the grant anchor, fired events, share count, and the day-of-month rule. It
+// carries no observation time — structure resolution is the same whether you
+// ask "today" or "in a decade", so a `ResolutionContext` simply can't express
+// one.
+export interface ResolutionContext {
   /** The grant-date system anchor. A runtime input, not a fired milestone, so it
    *  is its own field (mirroring VestingRuntime) rather than an `events` entry. */
   grantDate: OCTDate;
   /** Genuine fired named events only (`ipo`, `milestone`) — no system anchors. */
   events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
-  asOf: OCTDate;
   vesting_day_of_month: VestingDayOfMonth;
 }
 
+// A point-in-time query adds the observation date on top of the structure
+// context. `AsOfContext` IS-A `ResolutionContext` (the extra field only widens
+// it), so an as-of entry can hand its context straight down to the structure
+// evaluators that ignore `asOf` — that assignability is the point of the split.
+export type AsOfContext = ResolutionContext & {
+  asOf: OCTDate;
+};
+
 // Callers supply everything but the day-of-month rule (the evaluator defaults it).
-export type EvaluationContextInput = Omit<
-  EvaluationContext,
+export type ResolutionContextInput = Omit<
+  ResolutionContext,
   "vesting_day_of_month"
 > &
-  Partial<Pick<EvaluationContext, "vesting_day_of_month">>;
+  Partial<Pick<ResolutionContext, "vesting_day_of_month">>;
+
+export type AsOfContextInput = ResolutionContextInput & {
+  asOf: OCTDate;
+};
 
 export type SymbolicDate =
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }

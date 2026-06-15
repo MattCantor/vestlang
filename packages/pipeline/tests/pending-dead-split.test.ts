@@ -8,7 +8,7 @@
 // through presentSchedule and toScheduleView (the two boundaries the split crosses).
 
 import { describe, it, expect } from "vitest";
-import type { EvaluationContextInput, Program } from "@vestlang/types";
+import type { ResolutionContextInput, Program } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "@vestlang/evaluator";
@@ -17,11 +17,10 @@ import { toScheduleView } from "../src/view";
 
 const evalDsl = (dsl: string, events: Record<string, string> = {}) => {
   const program: Program = normalizeProgram(parse(dsl));
-  const ctx: EvaluationContextInput = {
+  const ctx: ResolutionContextInput = {
     grantDate: "2025-01-01",
     events,
     grantQuantity: 4800,
-    asOf: "2035-01-01",
   };
   return evaluateProgram(program, ctx)[0];
 };

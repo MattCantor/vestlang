@@ -6,8 +6,9 @@
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
+  AsOfContextInput,
   Blocker,
-  EvaluationContextInput,
+  ResolutionContextInput,
   Installment,
   OCTDate,
   Program,
@@ -33,14 +34,14 @@ import {
 // (which arm a schedule lands in, the dated installments, the blockers), so these
 // helpers grab that verdict straight off the result. The firing-invariant
 // interchange verdict has its own suite in interchange.test.ts.
-const evalStmt = (stmt: Statement, ctx: EvaluationContextInput) =>
+const evalStmt = (stmt: Statement, ctx: ResolutionContextInput) =>
   evaluateStatement(stmt, ctx).resolution;
-const evalProgram = (program: Program, ctx: EvaluationContextInput) =>
+const evalProgram = (program: Program, ctx: ResolutionContextInput) =>
   evaluateProgram(program, ctx).map((s) => s.resolution);
 
 const ctxInput = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+  overrides: Partial<AsOfContextInput> = {},
+): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,

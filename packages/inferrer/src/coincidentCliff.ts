@@ -14,8 +14,9 @@ import type {
  * A `UniformComponent.startDate` is only a *seed*: under a snapping day-of-month
  * convention (e.g. the 29th) the evaluator moves the real installments off it, so
  * we must ask the evaluator rather than trust `startDate`. We evaluate against a
- * far-past grant date so nothing lumps onto a grant cliff, and a far-future as-of
- * so the whole train resolves. Returns null if it doesn't fully resolve.
+ * far-past grant date so nothing lumps onto a grant cliff; the whole train
+ * resolves regardless of any observation date, so none is passed. Returns null if
+ * it doesn't fully resolve.
  */
 function installmentDates(
   u: UniformComponent,
@@ -27,7 +28,6 @@ function installmentDates(
       grantDate: "1900-01-01",
       events: {},
       grantQuantity: u.total,
-      asOf: "2999-12-31",
       vesting_day_of_month: policy,
     });
   } catch {

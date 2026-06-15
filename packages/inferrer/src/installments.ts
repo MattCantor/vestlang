@@ -1,6 +1,6 @@
 import { evaluateStatement } from "@vestlang/evaluator";
 import type {
-  EvaluationContextInput,
+  ResolutionContextInput,
   OCTDate,
   Statement,
 } from "@vestlang/types";
@@ -19,7 +19,7 @@ import type {
  */
 export function resolvedInstallmentMap(
   stmt: Statement,
-  ctx: EvaluationContextInput,
+  ctx: ResolutionContextInput,
 ): Map<OCTDate, number> | null {
   const { installments } = evaluateStatement(stmt, ctx).resolution;
   const map = new Map<OCTDate, number>();

@@ -18,14 +18,12 @@ function evalToMap(
   stmt: Statement,
   grantDate: OCTDate,
   totalQuantity: number,
-  asOf: OCTDate,
   policy: VestingDayOfMonth,
 ): AmtMap | null {
   return resolvedInstallmentMap(stmt, {
     grantDate,
     events: {},
     grantQuantity: totalQuantity,
-    asOf,
     vesting_day_of_month: policy,
   });
 }
@@ -75,7 +73,6 @@ export function foldPreGrant(
   components: Component[],
   grantDate: OCTDate,
   totalQuantity: number,
-  asOf: OCTDate,
   policy: VestingDayOfMonth,
 ): PreGrantResult {
   const gKey = grantDate;
@@ -107,7 +104,6 @@ export function foldPreGrant(
       buildStatement(c, policy),
       grantDate,
       totalQuantity,
-      asOf,
       policy,
     );
     if (!uMap || uMap.size === 0) continue;
@@ -154,7 +150,6 @@ export function foldPreGrant(
         buildStatement(extended, policy),
         grantDate,
         totalQuantity,
-        asOf,
         policy,
       );
       if (!prod) continue;

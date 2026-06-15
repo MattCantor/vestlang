@@ -6,7 +6,6 @@
 // evaluate-backed resolution moved here.
 
 import { evaluateStatement } from "@vestlang/evaluator";
-import { MAX_REPRESENTABLE_DATE } from "@vestlang/utils";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { parseToProgram } from "./parse.js";
 import { buildContext } from "./context.js";
@@ -29,9 +28,9 @@ export type ResolveOffsetResult =
  * Implemented by wrapping the expression as `VEST FROM <expr>` — a zero-length
  * schedule whose sole installment's date is the resolved start. This reuses
  * the full DSL parser and evaluator so day-of-month rules, event lookup, and
- * offset arithmetic all flow through the single source of truth. Evaluated as of
- * `MAX_REPRESENTABLE_DATE` (Decision 7/9): the far-future as-of forces the
- * zero-length schedule to resolve to a date rather than read as "not yet."
+ * offset arithmetic all flow through the single source of truth. No observation
+ * date enters: resolving the start reads the schedule's structural installment
+ * state, which is the same whenever you ask, so there is nothing to be "as of."
  */
 export function runResolveOffset(
   input: ResolveOffsetInput,
@@ -56,7 +55,6 @@ export function runResolveOffset(
     grant_date: input.grant_date,
     events: input.events,
     grant_quantity: 1,
-    as_of: MAX_REPRESENTABLE_DATE,
     vesting_day_of_month: input.vesting_day_of_month,
   });
 

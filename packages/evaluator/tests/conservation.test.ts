@@ -323,7 +323,7 @@ function checkCell(
   const base = { grantDate: GRANT_DATE, events, grantQuantity: grant };
   const label = cellLabel(shape, grant, events);
 
-  const [schedule] = evaluateProgram(program, { ...base, asOf: AS_OFS[0] });
+  const [schedule] = evaluateProgram(program, base);
   recordCoverage(schedule);
 
   // The schedule stream itself, in whichever arm it landed.

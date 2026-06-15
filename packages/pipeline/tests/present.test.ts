@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import type {
   Amount,
   EvaluatedSchedule,
-  EvaluationContextInput,
+  ResolutionContextInput,
   Finding,
   Installment,
   InterchangeVerdict,
@@ -188,11 +188,10 @@ describe("presentSchedule — end-to-end hybrid", () => {
     amount,
     expr: makeSingletonSchedule(start, periodicity),
   });
-  const ctxInput = (): EvaluationContextInput => ({
+  const ctxInput = (): ResolutionContextInput => ({
     grantDate: "2025-01-01",
     events: {},
     grantQuantity: 4800,
-    asOf: "2035-01-01",
   });
 
   it("75% MONTHLY + 25% unfired EVENT → template that is representable-but-pending", () => {
@@ -258,7 +257,6 @@ describe("presentSchedule — end-to-end hybrid", () => {
       grantDate: "2025-01-01",
       events: { a: "2025-06-01" },
       grantQuantity: 4800,
-      asOf: "2035-01-01",
     });
     // The two verdicts come apart here, which is the whole point of splitting
     // them. Closed-world, with `a` fired late, the gated half is dead and the

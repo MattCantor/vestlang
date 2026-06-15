@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
 import type {
   Amount,
-  EvaluationContextInput,
+  ResolutionContextInput,
   OCTDate,
   Program,
   ResolvedInstallment,
@@ -48,14 +48,13 @@ const stmt = (
 const ctxInput = (
   events: Record<string, OCTDate> = {},
   grantQuantity = 96000,
-): EvaluationContextInput => {
+): ResolutionContextInput => {
   // Callers override the grant date by passing `grantDate` in this map.
   const { grantDate = "2025-01-01", ...rest } = events;
   return {
     grantDate,
     events: rest,
     grantQuantity,
-    asOf: "2040-01-01",
   };
 };
 

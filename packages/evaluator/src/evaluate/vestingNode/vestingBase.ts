@@ -1,6 +1,6 @@
 import type {
   Blocker,
-  EvaluationContext,
+  ResolutionContext,
   OCTDate,
   Offsets,
   ResolvedNode,
@@ -23,7 +23,7 @@ const VESTING_START_LABEL = "vestingStart";
 // extension of the published context rather than on the published type itself.
 // Optional because the base (un-overlaid) context has no start: a VESTING_START
 // anchor evaluated without the overlay falls through to the pending arm below.
-export type CliffEvaluationContext = EvaluationContext & {
+export type CliffEvaluationContext = ResolutionContext & {
   vestingStart?: OCTDate;
 };
 
@@ -89,7 +89,7 @@ export function evaluateVestingBase(
 function applyOffsets(
   base: OCTDate,
   offsets: Offsets,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): OCTDate {
   let d = base;
   for (const o of offsets) {

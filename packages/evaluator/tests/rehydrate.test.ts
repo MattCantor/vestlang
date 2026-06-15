@@ -7,8 +7,9 @@
 import { describe, it, expect } from "vitest";
 import type {
   Amount,
+  AsOfContextInput,
   Blocker,
-  EvaluationContextInput,
+  ResolutionContextInput,
   Statement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
@@ -35,7 +36,7 @@ import {
 // map, and runtime. Used by the convention-source tests, which need the runtime
 // lower.ts actually produces (e.g. vestingDayOfMonth stored only when non-default)
 // rather than a hand-assembled one.
-const storedFromDsl = (dsl: string, ctx: EvaluationContextInput) => {
+const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));
   const [schedule] = evaluateProgram(program, ctx);
   const { resolution } = schedule;
@@ -49,8 +50,8 @@ const storedFromDsl = (dsl: string, ctx: EvaluationContextInput) => {
 };
 
 const ctxInput = (
-  overrides: Partial<EvaluationContextInput> = {},
-): EvaluationContextInput => ({
+  overrides: Partial<AsOfContextInput> = {},
+): AsOfContextInput => ({
   grantDate: "2025-01-01",
   events: {},
   grantQuantity: 100000,

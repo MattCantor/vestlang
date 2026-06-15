@@ -1,5 +1,5 @@
 import {
-  EvaluationContextInput,
+  AsOfContextInput,
   OCTDate,
   Program,
   Statement,
@@ -63,7 +63,7 @@ function partitionAsOf(
  */
 export function evaluateStatementAsOf(
   stmt: Statement,
-  ctx_input: EvaluationContextInput,
+  ctx_input: AsOfContextInput,
 ): VestedResult {
   const { ctx, statementQuantity } = prepare(stmt, ctx_input);
   const schedule = evaluateStatement(stmt, ctx_input);
@@ -86,7 +86,7 @@ export function evaluateStatementAsOf(
  */
 export function evaluateProgramAsOf(
   program: Program,
-  ctx_input: EvaluationContextInput,
+  ctx_input: AsOfContextInput,
 ): VestedResult {
   assertProgramInstallmentCap(program);
   const ctx = createEvaluationContext(ctx_input);

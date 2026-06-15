@@ -1,5 +1,5 @@
 import type {
-  EvaluationContext,
+  ResolutionContext,
   ResolvedNode,
   Blocker,
   VestingNodeExpr,
@@ -263,7 +263,7 @@ const isScheduleLeaf = (e: ScheduleExpr): e is Schedule =>
 
 export function evaluateScheduleExpr(
   expr: ScheduleExpr,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): PickReturn<Schedule> {
   return evaluateSelectorExpr(expr, isScheduleLeaf, (leaf) => {
     const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
@@ -278,7 +278,7 @@ const isNodeLeaf = (e: VestingNodeExpr): e is VestingNode => e.type === "NODE";
 
 export function evaluateVestingNodeExpr(
   expr: VestingNodeExpr,
-  ctx: EvaluationContext,
+  ctx: ResolutionContext,
 ): PickReturn<VestingNode> {
   return evaluateSelectorExpr(expr, isNodeLeaf, (leaf) => {
     const res = evaluateVestingNode(leaf, ctx);
