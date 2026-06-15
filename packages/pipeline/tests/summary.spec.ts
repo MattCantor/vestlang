@@ -1,10 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import {
-  evaluateProgramAsOf,
-  evaluateStatementAsOf,
-} from "@vestlang/evaluator";
+import { evaluateProgramAsOf } from "@vestlang/evaluator";
 import type { AsOfContextInput } from "@vestlang/types";
 import { computeSummary, filterByWindow } from "../src/summary";
 import { runAsOf, runEvaluate } from "../src/run";
@@ -21,14 +18,7 @@ const ctx = (overrides: Partial<AsOfContextInput> = {}): AsOfContextInput => ({
   ...overrides,
 });
 
-const run = (dsl: string, context = ctx()) => {
-  const program = normalizeProgram(parse(dsl));
-  return evaluateStatementAsOf(program[0], context);
-};
-
-// Multi-statement cases (PLUS / THEN) collapse into one schedule, so they go
-// through the program path rather than picking statement [0].
-const runProgram = (dsl: string, context = ctx()) =>
+const run = (dsl: string, context = ctx()) =>
   evaluateProgramAsOf(normalizeProgram(parse(dsl)), context);
 
 describe("computeSummary", () => {
@@ -152,7 +142,7 @@ describe("computeSummary", () => {
   });
 
   it("a PLUS program reports the earliest placeable cliff", () => {
-    const result = runProgram(
+    const result = run(
       "1/2 VEST OVER 24 months EVERY 1 month CLIFF 6 months PLUS " +
         "1/2 VEST FROM DATE 2026-01-01 OVER 24 months EVERY 1 month CLIFF 12 months",
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2025-03-01" }),
@@ -163,7 +153,7 @@ describe("computeSummary", () => {
   });
 
   it("a THEN program with the cliff on the head measures from the grant", () => {
-    const result = runProgram(
+    const result = run(
       "0.25 VEST OVER 12 months EVERY 1 month CLIFF 6 months THEN " +
         "0.75 VEST OVER 36 months EVERY 1 month",
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2025-03-01" }),
@@ -175,7 +165,7 @@ describe("computeSummary", () => {
   it("a THEN tail cliff measures from the handoff", () => {
     // The head finishes 2026-01-01; the tail's 6-month cliff measures from that
     // handoff, not from the grant — and the head's first tranche is no phantom.
-    const result = runProgram(
+    const result = run(
       "0.25 VEST OVER 12 months EVERY 1 month THEN " +
         "0.75 VEST OVER 36 months EVERY 1 month CLIFF 6 months",
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2025-03-01" }),
@@ -319,7 +309,7 @@ describe("summary — pending THEN tail share claim (R2-B2)", () => {
   it("a THEN tail behind an unfired head keeps its claim in total_unvested", () => {
     // The #217 repro: 2,400 granted, both halves waiting on ipo; before the fix
     // only the head's 1,200 was counted anywhere.
-    const result = runProgram(
+    const result = run(
       "1/2 VEST FROM EVENT ipo OVER 12 months EVERY 1 month " +
         "THEN 1/2 VEST OVER 12 months EVERY 1 month",
       ctx({ grantQuantity: 2400, asOf: "2026-01-01" }),

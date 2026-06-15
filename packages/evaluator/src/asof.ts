@@ -2,12 +2,11 @@ import {
   AsOfContextInput,
   OCTDate,
   Program,
-  Statement,
   Installment,
 } from "@vestlang/types";
-import { evaluateProgram, evaluateStatement } from "./evaluate/index.js";
+import { evaluateProgram } from "./evaluate/index.js";
 import { assertProgramInstallmentCap } from "./resolve/index.js";
-import { createEvaluationContext, prepare } from "./utils.js";
+import { createEvaluationContext } from "./utils.js";
 import { amountToFraction, claimAllocator } from "./claims.js";
 
 export interface VestedResult {
@@ -55,26 +54,6 @@ function partitionAsOf(
   }
 
   return { vested, unvested, impossible, unresolved };
-}
-
-/**
- * Evaluate a normallized Statement as of a given date.
- * Expands the schedule, converts amount -> quantity, and splits tranches
- */
-export function evaluateStatementAsOf(
-  stmt: Statement,
-  ctx_input: AsOfContextInput,
-): VestedResult {
-  const { ctx, statementQuantity } = prepare(stmt, ctx_input);
-  const schedule = evaluateStatement(stmt, ctx_input);
-  return {
-    ...partitionAsOf(
-      schedule.resolution.installments,
-      ctx.asOf,
-      statementQuantity,
-    ),
-    cliffDate: schedule.cliffDate,
-  };
 }
 
 /**

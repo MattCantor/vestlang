@@ -18,7 +18,6 @@ import {
   evaluateProgram,
   evaluateStatement,
   evaluateProgramAsOf,
-  evaluateStatementAsOf,
 } from "@vestlang/evaluator";
 import { buildContext, buildAsOfContext } from "../src/context.js";
 
@@ -84,9 +83,7 @@ describe("structure entries reject an asOf literal but accept an as-of value (AC
 describe("point-in-time entries require the as-of form (AC#3)", () => {
   it("their context param carries the observation date", () => {
     type ProgramAsOfCtx = Parameters<typeof evaluateProgramAsOf>[1];
-    type StatementAsOfCtx = Parameters<typeof evaluateStatementAsOf>[1];
     expectTypeOf<ProgramAsOfCtx>().toMatchTypeOf<AsOfContextInput>();
-    expectTypeOf<StatementAsOfCtx>().toMatchTypeOf<AsOfContextInput>();
   });
 
   it("a structure-only context (no asOf) is rejected by an as-of entry", () => {
