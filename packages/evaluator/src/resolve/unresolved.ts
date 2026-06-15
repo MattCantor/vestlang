@@ -95,8 +95,9 @@ export const unresolvedInstallments = (
 
   // A THEN tail behind a pending head. The chaining walk injected this start
   // (state UNRESOLVED, carrying the head's own blockers), so the tail's share
-  // claim renders like any pending start: one undated lump whose `unresolved`
-  // string names what the chain is waiting on. The returned blocker list is
+  // claim renders like any pending start: one undated lump. What the chain is
+  // waiting on is reported once, on the schedule-level pending blocker list
+  // (`resolution.pending`), not restated per installment. The returned blocker list is
   // scoped to the cliff's own contribution, though — the head is a statement
   // in the same program and reports its start blockers itself, so restating
   // them on every tail would duplicate each pending-head blocker in the
@@ -192,7 +193,7 @@ export const unresolvedInstallments = (
           const folded = foldToGrantDate(dates, amounts, shape.floor);
           return {
             installments: folded.dates.map((d, i) =>
-              makeUnresolvedCliffInstallment(d, folded.amounts[i], blockers),
+              makeUnresolvedCliffInstallment(d, folded.amounts[i]),
             ),
             blockers,
           };

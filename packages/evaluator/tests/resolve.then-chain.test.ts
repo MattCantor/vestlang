@@ -568,9 +568,10 @@ describe("resolveToCore — event-origin THEN chain, event unfired", () => {
     ).toBe(true);
     // Conservation: the whole grant is accounted for.
     expect(total(result.installments)).toBe(100000);
-    // The tail's lump says what the chain waits on.
+    // The tail's lump is undated; what the chain waits on lives on the
+    // schedule-level blocker list (asserted in the next test).
     const tail = result.installments[1];
-    expect(tail.state === "UNRESOLVED" && tail.unresolved).toContain("ipo");
+    expect(tail.state).toBe("UNRESOLVED");
   });
 
   it("reports the head's blocker exactly once — tails don't restate it", () => {
@@ -655,11 +656,10 @@ describe("resolveToCore — pending-head chain, tail cliff gate is disclosed (R2
     expect(result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(
       true,
     );
-    // The tail's lump names the chain's wait; amounts are untouched.
+    // The tail's lump is undated (the chain's wait lives on the schedule-level
+    // blockers asserted above); amounts are untouched.
     const tailLump = result.installments[1];
-    expect(tailLump.state === "UNRESOLVED" && tailLump.unresolved).toContain(
-      "ipo",
-    );
+    expect(tailLump.state).toBe("UNRESOLVED");
     expect(total(result.installments)).toBe(100000);
   });
 });
