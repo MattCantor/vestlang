@@ -40,6 +40,8 @@ export type AsOfContextInput = ResolutionContextInput & {
 };
 
 export type SymbolicDate =
+  // `steps` is periods past the start, counted from 1: the first installment
+  // reads START + 1 period, matching the resolved grid (gridDate's at(i + 1)).
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }
   | { type: "UNRESOLVED_VESTING_START" }
   | { type: "UNRESOLVED_CLIFF"; date: OCTDate };

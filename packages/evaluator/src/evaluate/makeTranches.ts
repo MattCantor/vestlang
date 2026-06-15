@@ -70,7 +70,11 @@ export function makeStartPlusSchedule(
   return makeSchedule(amounts, blockers, (i, amount) => ({
     state: "UNRESOLVED",
     amount,
-    symbolicDate: { type: "START_PLUS", unit, steps: i * steplength },
+    // The j-th occurrence (j from 1) lands at START + j periods, so the 0-based
+    // array index i maps to (i + 1) * steplength — the same anchor convention the
+    // resolved grid uses (gridDate / at(i + 1)). Counting from i alone would put
+    // the first vest on the start date and shift every tranche a period early.
+    symbolicDate: { type: "START_PLUS", unit, steps: (i + 1) * steplength },
   }));
 }
 

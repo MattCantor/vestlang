@@ -36,6 +36,14 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
         (i) => i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS",
       ),
     ).toBe(true);
+    // No grant-date fold runs on this path, so the months count up cleanly: the
+    // first tranche reads START + 1 month and the last START + 48 months.
+    const steps = resolution.installments.map((i) =>
+      i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS"
+        ? i.symbolicDate.steps
+        : undefined,
+    );
+    expect(steps).toEqual(Array.from({ length: 48 }, (_, i) => i + 1));
     expect(resolution.installments.every((i) => i.amount === 100)).toBe(true);
     expect(
       resolution.pending.some(
