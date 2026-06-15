@@ -2,7 +2,7 @@
 //
 // Lowering a combinator-over-anchors start into a `template` externalizes the gate
 // as a grant-scoped synthetic event (`evt:<n>`) plus a source map
-// (`event_id` to `{ definition, label? }`). The template and runtime are ordinary
+// (`event_id` to `{ definition }`). The template and runtime are ordinary
 // OCF canonical objects; the source map is vestlang-specific meaning that canonical
 // can't hold today.
 //
