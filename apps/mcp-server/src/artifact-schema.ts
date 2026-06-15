@@ -82,7 +82,6 @@ const RUNTIME = z
 const SOURCE_MAP_ENTRY = z
   .object({
     definition: z.string(),
-    label: z.string().optional(),
   })
   .strict();
 
