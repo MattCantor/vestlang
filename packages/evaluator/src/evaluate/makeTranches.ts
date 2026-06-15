@@ -49,16 +49,6 @@ export function makeResolvedInstallment(
   };
 }
 
-export function makeResolvedSchedule(
-  dates: OCTDate[],
-  amounts: number[],
-): InstallmentSet {
-  const installments = dates.map((date, i) =>
-    makeResolvedInstallment(date, amounts[i]),
-  );
-  return { installments, blockers: [] };
-}
-
 /* ------------------------
  * Impossible
  * ------------------------ */
