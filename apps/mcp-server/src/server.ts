@@ -575,7 +575,7 @@ export function createServer(): McpServer {
     {
       title: "Difference between two dates",
       description:
-        "Count the calendar days or whole calendar months between two dates. For months, also returns remainder_days (days from the anchor month-boundary to 'to'). Direction is signed: if 'to' is before 'from', the diff is negative.",
+        "Count the calendar days or whole calendar months between two dates. For months, also returns remainder_days (days from the anchor month-boundary to 'to'). Direction is signed: if 'to' is before 'from', the diff is negative. Months are anchored on 'from' — the count is how many whole months 'to' is past 'from's day-of-month — so 'from' is privileged and swapping the two does not simply negate the result near month-ends. E.g. Jan 31 -> Feb 29 is 1 month (Feb 29 is the clamped one-month landing), but Feb 29 -> Jan 31 is 0 (one month before Feb 29 is Jan 29, which Jan 31 has not yet reached).",
       inputSchema: z
         .object({
           from: ISO_DATE,

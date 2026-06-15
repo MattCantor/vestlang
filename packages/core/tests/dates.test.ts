@@ -5,6 +5,7 @@ import {
   addPeriod,
   advanceCursor,
   daysBetween,
+  monthsBetween,
   lt,
   gt,
   eq,
@@ -257,5 +258,98 @@ describe("daysBetween", () => {
   it("is exact across a DST boundary and a leap day", () => {
     expect(daysBetween("2024-02-26", "2024-03-11")).toBe(14); // spring-forward
     expect(daysBetween("2024-02-28", "2024-03-01")).toBe(2); // leap day between
+  });
+});
+
+describe("monthsBetween", () => {
+  // The defining property: monthsBetween inverts addPeriod(…, MONTHS) under the
+  // default day-of-month rule, exactly, both directions. Whatever clamp policy
+  // the month stepper uses, this loop pins the inverse to match it — so a change
+  // to one without the other fails here, in core, where the arithmetic lives.
+  it("inverts addPeriod(MONTHS) exactly: k months → k rem 0", () => {
+    const anchors = [
+      "2025-01-31", // Jan-31: every monthly landing clamps in short months
+      "2024-02-29", // leap-day anchor
+      "2024-01-31", // Jan-31 in a leap year
+      "2025-01-15", // ordinary mid-month day
+      "2025-01-30", // Jan-30: clamps in Feb but not elsewhere
+      "2025-04-30", // Apr-30: a 30-day month-end
+    ] as const;
+    for (const anchor of anchors) {
+      for (let k = 0; k <= 24; k++) {
+        const forward = addPeriod(anchor, k, "MONTHS");
+        expect(monthsBetween(anchor, forward)).toEqual({
+          diff: k,
+          remainderDays: 0,
+        });
+      }
+      // Reverse from k=1 (k=0 would assert -0, which toEqual treats as distinct
+      // from the +0 diff returns).
+      for (let k = 1; k <= 24; k++) {
+        const backward = addPeriod(anchor, -k, "MONTHS");
+        expect(monthsBetween(anchor, backward)).toEqual({
+          diff: -k,
+          remainderDays: 0,
+        });
+      }
+    }
+  });
+
+  // AC3 — a month-end-clamped endpoint counts as a full month. The forward count
+  // compares `to` against from's day clamped to the target month's length, so
+  // landing on the clamped day (Feb's last) reads a complete month.
+  it("credits a forward month-end clamp as a full month", () => {
+    expect(monthsBetween("2024-01-31", "2024-02-29").diff).toBe(1); // leap
+    expect(monthsBetween("2023-01-31", "2023-02-28").diff).toBe(1); // non-leap
+  });
+
+  // AC4 — signed and, near a clamp, deliberately asymmetric.
+  describe("signed direction, asymmetric at the clamp", () => {
+    it("returns a negative diff for a backward whole-month span", () => {
+      expect(monthsBetween("2025-04-15", "2025-01-15").diff).toBe(-3);
+    });
+
+    it("is sign-symmetric when no endpoint hits a clamp (day ≤ 28)", () => {
+      expect(monthsBetween("2025-01-15", "2025-04-15").diff).toBe(3);
+      expect(monthsBetween("2025-04-15", "2025-01-15").diff).toBe(-3);
+    });
+
+    it("is asymmetric across a clamp pair", () => {
+      // Forward, the Feb-29 landing counts as a whole month from Jan 31.
+      expect(monthsBetween("2024-01-31", "2024-02-29")).toEqual({
+        diff: 1,
+        remainderDays: 0,
+      });
+      // Backward, no clamp applies (Jan 31 is a real day of January), so Feb 29
+      // → Jan 31 is short of a whole month: 0 months, 29 days back.
+      expect(monthsBetween("2024-02-29", "2024-01-31")).toEqual({
+        diff: 0,
+        remainderDays: -29,
+      });
+    });
+  });
+
+  // AC5 — remainder days carry the direction's sign.
+  describe("remainder days, signed", () => {
+    it("forward non-whole span", () => {
+      expect(monthsBetween("2024-01-15", "2024-02-20")).toEqual({
+        diff: 1,
+        remainderDays: 5,
+      });
+    });
+
+    it("backward non-whole span", () => {
+      expect(monthsBetween("2025-01-15", "2024-12-10")).toEqual({
+        diff: -1,
+        remainderDays: -5,
+      });
+    });
+  });
+
+  it("is zero months, zero days for the same date", () => {
+    expect(monthsBetween("2025-01-15", "2025-01-15")).toEqual({
+      diff: 0,
+      remainderDays: 0,
+    });
   });
 });

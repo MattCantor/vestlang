@@ -83,85 +83,39 @@ describe("addPeriod — year range", () => {
   });
 });
 
-describe("dateDiff", () => {
-  it("counts whole days", () => {
-    expect(dateDiff("2025-01-01", "2025-01-31", "days")).toEqual({ diff: 30 });
+// The whole-month arithmetic and its parity property are tested in core, where
+// monthsBetween lives (packages/core/tests/dates.test.ts). These cases only guard
+// the thin wrapper: the days/months dispatch and the snake_case reshaping.
+describe("dateDiff — dispatch and response shaping", () => {
+  it("days case returns just { diff }, with no remainder_days key", () => {
+    expect(dateDiff("2025-01-01", "2025-01-15", "days")).toEqual({ diff: 14 });
   });
 
-  it("is signed — negative when to < from", () => {
+  it("days case is signed — negative when to < from", () => {
     expect(dateDiff("2025-01-31", "2025-01-01", "days")).toEqual({ diff: -30 });
   });
 
-  it("counts whole calendar months with remainder_days", () => {
-    const r = dateDiff("2025-01-15", "2025-04-20", "months");
-    expect(r.diff).toBe(3);
-    expect(r.remainder_days).toBe(5);
+  it("reshapes core's remainderDays into snake_case remainder_days", () => {
+    // Forward whole, forward partial, backward partial — each delegated to core
+    // and surfaced as { diff, remainder_days }.
+    expect(dateDiff("2025-01-31", "2025-02-28", "months")).toEqual({
+      diff: 1,
+      remainder_days: 0,
+    });
+    expect(dateDiff("2025-01-15", "2025-04-20", "months")).toEqual({
+      diff: 3,
+      remainder_days: 5,
+    });
+    expect(dateDiff("2025-01-15", "2024-12-10", "months")).toEqual({
+      diff: -1,
+      remainder_days: -5,
+    });
   });
 
-  it("decrements month count when day hasn't reached the clamped from.day", () => {
-    // Feb 15 is short of min(31, daysInMonth(Feb 2025)=28)=28, so the final
-    // month isn't complete — still 0. (The clamp-aware rule doesn't change this
-    // case: the decrement holds whenever `to` is genuinely before the clamp.)
-    const r = dateDiff("2025-01-31", "2025-02-15", "months");
-    expect(r.diff).toBe(0);
-    expect(r.remainder_days).toBeGreaterThan(0);
-  });
-
-  it("same date is zero months, zero days", () => {
-    const r = dateDiff("2025-01-15", "2025-01-15", "months");
-    expect(r.diff).toBe(0);
-    expect(r.remainder_days).toBe(0);
-  });
-
-  // #139: a month-end-clamped endpoint must count as a completed month. The old
-  // raw-day comparison (to.day < from.day) never credited the clamp, so Jan 31 →
-  // Feb 28 read 0 rem 28 even though add_period(Jan 31, 1mo) lands exactly there.
-  describe("month-end clamp counts as a completed month (#139)", () => {
-    it("Jan 31 → Feb 28 is 1 month, 0 remainder", () => {
-      expect(dateDiff("2025-01-31", "2025-02-28", "months")).toEqual({
-        diff: 1,
-        remainder_days: 0,
-      });
-    });
-
-    it("leap Feb 29 → next non-leap Feb 28 is 12 months", () => {
-      expect(dateDiff("2024-02-29", "2025-02-28", "months").diff).toBe(12);
-    });
-
-    it("count is monotone across a clamped boundary", () => {
-      // From a Jan 31 anchor, the clamped one-month landing (Feb 28) reads 1,
-      // and advancing one more day into March must not drop back to 0.
-      expect(dateDiff("2025-01-31", "2025-02-27", "months").diff).toBe(0);
-      expect(dateDiff("2025-01-31", "2025-02-28", "months").diff).toBe(1);
-      expect(dateDiff("2025-01-31", "2025-03-01", "months").diff).toBe(1);
-    });
-
-    it("inverts add_period(months) exactly: n months → n rem 0", () => {
-      const rule = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const;
-      const anchors = [
-        "2025-01-31", // Jan-31: every monthly landing clamps in short months
-        "2024-02-29", // leap-day anchor
-        "2024-01-31", // Jan-31 in a leap year
-        "2025-01-15", // ordinary mid-month day
-      ];
-      for (const anchor of anchors) {
-        for (let n = 0; n <= 24; n++) {
-          const forward = addPeriod(anchor, n, "months", rule);
-          expect(dateDiff(anchor, forward, "months")).toEqual({
-            diff: n,
-            remainder_days: 0,
-          });
-        }
-        // Reverse from n=1 (n=0 would assert -0, which toEqual treats as
-        // distinct from the +0 the diff returns).
-        for (let n = 1; n <= 24; n++) {
-          const backward = addPeriod(anchor, -n, "months", rule);
-          expect(dateDiff(anchor, backward, "months")).toEqual({
-            diff: -n,
-            remainder_days: 0,
-          });
-        }
-      }
+  it("handles a multi-year month span", () => {
+    expect(dateDiff("2024-02-29", "2025-02-28", "months")).toEqual({
+      diff: 12,
+      remainder_days: 0,
     });
   });
 });
