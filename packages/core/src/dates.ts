@@ -12,7 +12,11 @@
 // so day arithmetic never drifts across DST transitions.
 
 import type { OCTDate, PeriodType, VestingDayOfMonth } from "@vestlang/types";
-import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
+import {
+  DEFAULT_VESTING_DAY_OF_MONTH,
+  isNumericDayOfMonth,
+} from "@vestlang/types";
+import { assertNever } from "@vestlang/utils";
 
 // ISO-string ↔ Date (UTC midnight).
 //
@@ -92,10 +96,16 @@ export function addMonthsRule(
   const lastDay = utcMidnight(ty, tm + 1, 0).getUTCDate();
 
   const pickDay = (): number => {
-    // The numeric day-of-month literals "01"–"31" all share one path (parseInt
-    // then clamp to the month's last day), so they live in `default` rather than
-    // as 31 explicit cases — a deliberate non-exhaustive switch over the union.
-    // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+    // A fixed numeric day "01"–"28" picks itself. The clamp is provably a no-op
+    // here — every value the guard admits is ≤28, below every month's last day —
+    // but it's kept as an executable statement of the "day ≤ month length"
+    // invariant the named policies below have to enforce for real.
+    if (isNumericDayOfMonth(dayOfMonth)) {
+      return Math.min(parseInt(dayOfMonth, 10), lastDay);
+    }
+    // The four named policies resolve to a month-end fallback. Exhaustive over
+    // `NamedDayPolicy`, so a fifth named policy is a typecheck error at the
+    // `assertNever` default rather than a silent fall-through.
     switch (dayOfMonth) {
       case "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH":
         return Math.min(toDate(origin).getUTCDate(), lastDay);
@@ -106,8 +116,7 @@ export function addMonthsRule(
       case "31_OR_LAST_DAY_OF_MONTH":
         return Math.min(31, lastDay);
       default:
-        // Fixed numeric day "01"–"28"; clamp to last day to avoid overflow.
-        return Math.min(parseInt(dayOfMonth, 10), lastDay);
+        return assertNever(dayOfMonth);
     }
   };
 
