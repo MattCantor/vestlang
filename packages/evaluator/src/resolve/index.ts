@@ -82,13 +82,12 @@ export const resolveToCore = (
     //    rendering happens through this channel.
     const claims = symbolicClaims(resolutions, totalShares);
     const pendingInstallments: UnresolvedInstallment[] = [];
-    program.forEach((stmt, i) => {
-      const r = resolutions[i];
+    resolutions.forEach((r, i) => {
       if (
         r.start.state === "PENDING_EVENT" ||
         r.start.state === "SYNTHETIC_EVENT"
       ) {
-        for (const inst of unresolvedInstallments(r, stmt, ctx, claims[i])
+        for (const inst of unresolvedInstallments(r, ctx, claims[i])
           .installments) {
           if (inst.state === "UNRESOLVED") pendingInstallments.push(inst);
         }
@@ -106,7 +105,7 @@ export const resolveToCore = (
     };
   } else {
     // Resolves but doesn't fit one template (events) or can't materialize (unresolved).
-    verdict = classify(build, program);
+    verdict = classify(build);
   }
 
   return {

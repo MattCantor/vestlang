@@ -91,10 +91,15 @@ const pendingHeadEvent = (
 ): string | undefined => {
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
-    if (!r.chained || r.start.state !== "UNRESOLVED") continue;
+    // A pending-tail is a chained tail whose start went UNRESOLVED behind a head
+    // still waiting on an event — exactly the role's definition, so no separate
+    // start-state clause is needed.
+    if (r.chain.role !== "pending-tail") continue;
     for (let j = i - 1; j >= 0; j--) {
       const head = resolutions[j];
-      if (head.chained) continue; // skip earlier tails of the same chain
+      // Walk back past every earlier segment of the same chain (dated tails as
+      // well as pending ones) to reach the head that actually anchors it.
+      if (head.chain.role !== "head") continue;
       if (head.start.state === "PENDING_EVENT") return head.start.eventId;
       if (head.start.state === "SYNTHETIC_EVENT")
         return stringifyVestingNodeExpr(head.start.expr);
@@ -113,10 +118,7 @@ const pendingHeadEvent = (
  * can't pin down its cliff both surface as `why: "unresolved"` here, and only
  * `classify` tells them apart — it rolls a fully-dead program up to `impossible`.
  */
-const mapTemplateBuild = (
-  build: TemplateBuild,
-  program: Program,
-): InterchangeVerdict => {
+const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
   if (build.ok) {
     assertValidVestingScheduleTemplate(build.template);
     return {
@@ -126,7 +128,7 @@ const mapTemplateBuild = (
     };
   }
 
-  const v = classify(build, program);
+  const v = classify(build);
   switch (v.kind) {
     // classify only ever runs on non-template builds, so it can't hand back a
     // template here — but its return type spans the whole verdict union, so we
@@ -187,5 +189,5 @@ export const resolveInterchange = (
     interchangeCtx,
     totalShares,
   );
-  return mapTemplateBuild(build, program);
+  return mapTemplateBuild(build);
 };
