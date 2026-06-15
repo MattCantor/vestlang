@@ -1,7 +1,7 @@
 import type { VestingRuntime, VestingScheduleTemplate } from "./canonical.js";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
-import { OCTDate } from "./helpers.js";
+import { OCTDate, SelectorTag } from "./helpers.js";
 import { VestingDayOfMonth } from "./oct_types.js";
 import type { Finding } from "./diagnostic.js";
 
@@ -61,7 +61,7 @@ export type UnresolvedBlocker =
     }
   | {
       type: "UNRESOLVED_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
+      selector: SelectorTag;
       blockers: Blocker[];
     }
   | {
@@ -72,7 +72,7 @@ export type UnresolvedBlocker =
 export type ImpossibleBlocker =
   | {
       type: "IMPOSSIBLE_SELECTOR";
-      selector: "EARLIER_OF" | "LATER_OF";
+      selector: SelectorTag;
       blockers: ImpossibleBlocker[];
     }
   | {
