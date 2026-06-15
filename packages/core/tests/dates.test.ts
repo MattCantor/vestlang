@@ -122,6 +122,62 @@ describe("addMonthsRule — fixed numeric day + multi-month", () => {
   });
 });
 
+// AC#4 — pin each of the four named policies' output through pickDay (via
+// addMonthsRule), and a numeric day, against the same Jan-31 + 1mo step into a
+// short month. After the union split, pickDay narrows the numeric branch off and
+// switches exhaustively over the named policies; these cases lock the resolved
+// day each branch produces so a future refactor can't quietly cross the wires.
+describe("addMonthsRule — pickDay per day-of-month policy", () => {
+  // Jan 31 + 1mo lands in February, the month that forces every policy's clamp.
+  it("29_OR_LAST clamps to Feb 28 (non-leap)", () => {
+    expect(addMonthsRule("2023-01-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2023-02-28",
+    );
+  });
+
+  it("29_OR_LAST resolves to Feb 29 (leap)", () => {
+    expect(addMonthsRule("2024-01-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2024-02-29",
+    );
+  });
+
+  it("30_OR_LAST clamps to the month end below 30", () => {
+    expect(addMonthsRule("2023-01-31", 1, "30_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2023-02-28",
+    );
+  });
+
+  it("31_OR_LAST clamps to the month end below 31", () => {
+    expect(addMonthsRule("2024-01-31", 1, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2024-02-29",
+    );
+  });
+
+  it("VESTING_START tracks the origin's day, clamped to month end", () => {
+    // Default origin: the date being stepped from. Jan 31's day-of-month (31)
+    // clamps onto February.
+    expect(
+      addMonthsRule("2024-01-31", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
+    ).toBe("2024-02-29");
+    // Explicit origin: the day comes from Jan 31 even when stepping from a
+    // clamped Feb 28 (see the origin tests below for the full story).
+    expect(
+      addMonthsRule(
+        "2025-02-28",
+        1,
+        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "2025-01-31",
+      ),
+    ).toBe("2025-03-31");
+  });
+
+  it("a numeric day picks itself, with the clamp a provable no-op (≤28)", () => {
+    expect(addMonthsRule("2023-01-31", 1, "28")).toBe("2023-02-28");
+    expect(addMonthsRule("2024-01-31", 1, "15")).toBe("2024-02-15");
+    expect(addMonthsRule("2024-01-31", 1, "01")).toBe("2024-02-01");
+  });
+});
+
 describe("addDays — UTC-pure across DST boundaries", () => {
   it("simple step", () => {
     expect(addDays("2024-01-10", 5)).toBe("2024-01-15");
