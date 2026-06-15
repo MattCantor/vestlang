@@ -65,6 +65,10 @@ export type ResolveVerdict =
       blockers: ImpossibleBlocker[];
     };
 
+// What `classify` actually produces: the non-template arms. A classified build
+// failed the template fit by construction, so `template` is off the table.
+export type ClassifiedVerdict = Exclude<ResolveVerdict, { kind: "template" }>;
+
 // The verdict plus what the resolver learned about the schedule as a whole,
 // independent of which arm it landed in:
 //   - `findings`  — allocation problems (over-/under-allocation).
