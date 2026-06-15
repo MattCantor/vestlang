@@ -396,6 +396,100 @@ describe("@vestlang/linter", () => {
         "this gate's date window is empty: no date is on or after 2026-01-01 and on or before 2025-01-01",
       );
     });
+
+    // Build an AND of `count` disjoint-arm OR groups: each group is
+    // `(BEFORE d_low OR AFTER d_high)` with d_low < d_high and distinct dates,
+    // so it carves a hole [d_low, d_high] out of the line. Disjoint arms are
+    // what matters: the issue's `AFTER d1 OR AFTER d2` merges to one interval and
+    // never exercises the blowup, whereas these stay two-interval and a
+    // cross-product would double per conjunct (2^count windows). A merge-sweep
+    // keeps it linear.
+    const disjointArmAnd = (count: number): string => {
+      const groups = Array.from({ length: count }, (_, i) => {
+        const year = 2010 + i;
+        return `OR(BEFORE DATE ${year}-01-01, AFTER DATE ${year}-06-01)`;
+      });
+      return `VEST FROM EVENT x AND(${groups.join(", ")}) OVER 4 months EVERY 1 month`;
+    };
+
+    // (a) no-blowup: 30 disjoint-arm conjuncts lint to a verdict well inside a
+    // deterministic per-test timeout. A 2^30 cross-product implementation hangs
+    // past 2 s; the merge-sweep finishes in milliseconds.
+    it(
+      "lints a 30-conjunct disjoint-arm AND-of-OR without exponential blowup",
+      { timeout: 2000 },
+      () => {
+        // (b) the same input is satisfiable — every date outside all 30 holes
+        // survives — so no diagnostic.
+        expect(flaggedOf(disjointArmAnd(30))).toEqual([]);
+      },
+    );
+
+    // (c) genuinely unsatisfiable deep AND-of-OR: among the disjoint-arm groups,
+    // one forces AFTER 2030-01-01 and another forces BEFORE 2020-01-01, so the
+    // merged interval-set intersects to empty. Exactly one diagnostic — the cap
+    // approach this rewrite replaced would have missed it.
+    it("flags a genuinely unsatisfiable deep AND-of-OR exactly once", () => {
+      const groups = Array.from({ length: 10 }, (_, i) => {
+        const year = 2040 + i;
+        return `OR(BEFORE DATE ${year}-01-01, AFTER DATE ${year}-06-01)`;
+      });
+      groups.push("OR(AFTER DATE 2030-01-01, AFTER DATE 2031-01-01)");
+      groups.push("OR(BEFORE DATE 2020-01-01, BEFORE DATE 2019-01-01)");
+      const flagged = flaggedOf(
+        `VEST FROM EVENT x AND(${groups.join(", ")}) OVER 4 months EVERY 1 month`,
+      );
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].ruleId).toBe("unsatisfiable-date-window");
+    });
+
+    // (d) a large condition with one undatable atom contributes the full line
+    // and can never make the set empty — it stays clean at scale.
+    it("stays clean on a large AND containing one undatable anchor", () => {
+      const groups = Array.from({ length: 29 }, (_, i) => {
+        const year = 2040 + i;
+        return `OR(BEFORE DATE ${year}-01-01, AFTER DATE ${year}-06-01)`;
+      });
+      groups.push("AFTER EVENT y");
+      expect(
+        flaggedOf(
+          `VEST FROM EVENT x AND(${groups.join(", ")}) OVER 4 months EVERY 1 month`,
+        ),
+      ).toEqual([]);
+    });
+
+    // (parity) a mixed empty-datable + undatable-conjunct AND with no OR still
+    // selects the *detailed* message — pins the no-OR message-selection branch.
+    it("keeps the detailed message for an OR-free empty window beside an undatable conjunct", () => {
+      const flagged = flaggedOf(`
+        VEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 AND AFTER EVENT y OVER 4 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].message).toBe(
+        "this gate's date window is empty: no date is on or after 2026-01-01 and on or before 2025-01-01",
+      );
+    });
+
+    // The OR-union merge is strictness-aware at a shared endpoint, and that
+    // distinction flips the verdict. Both arms meet at d; pinning the rest of the
+    // AND to exactly d isolates whether the union covers d.
+    it("leaves a hole at a shared day when both OR arms are strict", () => {
+      // (.., d) ∪ (d, ..) excludes d, so the AND forcing exactly d is empty.
+      const flagged = flaggedOf(`
+        VEST FROM EVENT x AND(OR(STRICTLY BEFORE DATE 2025-06-01, STRICTLY AFTER DATE 2025-06-01), AFTER DATE 2025-06-01, BEFORE DATE 2025-06-01) OVER 4 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].ruleId).toBe("unsatisfiable-date-window");
+    });
+
+    it("covers a shared day when an OR arm includes it", () => {
+      // (.., d] ∪ [d, ..) covers d, so the same exactly-d AND stays satisfiable.
+      expect(
+        flaggedOf(`
+          VEST FROM EVENT x AND(OR(BEFORE DATE 2025-06-01, AFTER DATE 2025-06-01), AFTER DATE 2025-06-01, BEFORE DATE 2025-06-01) OVER 4 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
   });
 
   describe("installment-cap", () => {
