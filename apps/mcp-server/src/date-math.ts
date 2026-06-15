@@ -1,5 +1,3 @@
-import { parseToProgram } from "@vestlang/pipeline";
-import { evaluateStatement } from "@vestlang/evaluator";
 import {
   addDays,
   addMonthsRule,
@@ -7,12 +5,7 @@ import {
   daysBetween,
   toDate,
 } from "@vestlang/core";
-import type {
-  EvaluationContextInput,
-  OCTDate,
-  VestingDayOfMonth,
-} from "@vestlang/types";
-import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";
 
@@ -92,90 +85,6 @@ export function dateDiff(
   const remainder_days = daysBetween(anchor, to);
 
   return { diff: monthsBetween, remainder_days };
-}
-
-export interface ResolveOffsetInput {
-  expr: string;
-  grant_date: OCTDate;
-  events?: Record<string, OCTDate>;
-  vesting_day_of_month?: VestingDayOfMonth;
-}
-
-export type ResolveOffsetResult =
-  | { ok: true; date: OCTDate }
-  | { ok: false; error: string; unresolved?: string };
-
-/**
- * Resolve an offset expression (e.g. "EVENT ipo + 6 months", "+3 months",
- * "DATE 2025-01-01 - 2 days") to a concrete date.
- *
- * Implemented by wrapping the expression as `VEST FROM <expr>` — a zero-length
- * schedule whose sole installment's date is the resolved start. This reuses
- * the full DSL parser and evaluator so day-of-month rules, event lookup, and
- * offset arithmetic all flow through the single source of truth.
- */
-export function resolveOffset(input: ResolveOffsetInput): ResolveOffsetResult {
-  const parsed = parseToProgram(`VEST FROM ${input.expr}`);
-  if (!parsed.ok) {
-    return {
-      ok: false,
-      error: `Could not parse expression: ${parsed.error.message}`,
-    };
-  }
-  const program = parsed.program;
-
-  if (program.length === 0) {
-    return { ok: false, error: "Expression produced no statements" };
-  }
-
-  const events: Record<string, OCTDate> = {};
-  for (const [k, v] of Object.entries(input.events ?? {})) events[k] = v;
-
-  const ctx: EvaluationContextInput = {
-    grantDate: input.grant_date,
-    events,
-    grantQuantity: 1,
-    asOf: "9999-12-31",
-    vesting_day_of_month:
-      input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
-  };
-
-  const { installments, pending, dead } = evaluateStatement(
-    program[0],
-    ctx,
-  ).resolution;
-  const first = installments[0] ?? null;
-
-  if (first?.state === "RESOLVED") {
-    return { ok: true, date: first.date };
-  }
-
-  // A date-math expression is one statement, so its hold-up is whatever's still
-  // pending or already dead — summarize across both for the error message.
-  const unresolvedReason =
-    first?.unresolved ??
-    blockerSummary([...pending, ...dead]) ??
-    "missing anchor";
-  return {
-    ok: false,
-    error: `Expression is unresolved: ${unresolvedReason}`,
-    unresolved: unresolvedReason,
-  };
-}
-
-function blockerSummary(blockers: unknown[]): string | null {
-  if (blockers.length === 0) return null;
-  const events: string[] = [];
-  for (const b of blockers) {
-    const bb = b as { type?: string; event?: string };
-    if (bb.type === "EVENT_NOT_YET_OCCURRED" && bb.event) {
-      events.push(bb.event);
-    }
-  }
-  if (events.length > 0) {
-    return `event(s) not provided: ${events.join(", ")}`;
-  }
-  return "expression not fully resolvable";
 }
 
 /**
