@@ -86,7 +86,6 @@ const symbolic: Installment[] = [
     state: "UNRESOLVED",
     amount: 100,
     symbolicDate: { type: "UNRESOLVED_VESTING_START" },
-    unresolved: "ipo",
   },
 ];
 const eventBlocker = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];

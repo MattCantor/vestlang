@@ -24,10 +24,11 @@ describe("makeTranches", () => {
       { type: "START_PLUS", unit: "MONTHS", steps: 3 },
       { type: "START_PLUS", unit: "MONTHS", steps: 6 },
     ]);
-    const first = out.installments[0];
-    expect(first.state === "UNRESOLVED" && first.unresolved).toContain(
-      "EVENT milestone",
-    ); // stringified via blockerToString
+    // The structured blockers ride beside the installments, naming the event.
+    expect(out.blockers).toContainEqual({
+      type: "EVENT_NOT_YET_OCCURRED",
+      event: "milestone",
+    });
   });
 
   it("makeImpossibleTranches repeats blockers and amounts", () => {
@@ -37,10 +38,8 @@ describe("makeTranches", () => {
     const out = makeImpossibleSchedule([5, 6], blockers);
     expect(out.installments).toHaveLength(2);
     expect(out.installments[0].state).toBe("IMPOSSIBLE");
-    const second = out.installments[1];
-    expect(second.state !== "RESOLVED" && second.unresolved).toBe(
-      "DATE 2025-01-01",
-    );
+    // The impossible-condition blocker rides beside the installments.
+    expect(out.blockers).toEqual(blockers);
   });
 
   it("before vesting start + before cliff use proper date meta", () => {
@@ -50,7 +49,7 @@ describe("makeTranches", () => {
       start.state === "UNRESOLVED" ? start.symbolicDate : undefined;
     expect(symbolicDate).toMatchObject({ type: "UNRESOLVED_VESTING_START" });
 
-    const unresolvedCliff = makeUnresolvedCliffInstallment("2024-03-01", 5, []);
+    const unresolvedCliff = makeUnresolvedCliffInstallment("2024-03-01", 5);
     const symbolicDate2 = unresolvedCliff.symbolicDate;
     expect(symbolicDate2).toMatchObject({
       type: "UNRESOLVED_CLIFF",

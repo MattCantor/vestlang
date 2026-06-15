@@ -144,13 +144,11 @@ export interface UnresolvedInstallment {
   state: "UNRESOLVED";
   amount: number;
   symbolicDate: SymbolicDate;
-  unresolved: string;
 }
 
 export interface ImpossibleInstallment {
   state: "IMPOSSIBLE";
   amount: number;
-  unresolved: string;
 }
 
 export type Installment =
@@ -332,9 +330,9 @@ export type InterchangeVerdict =
       // the as-of date, which is exactly the vocabulary a firing-invariant
       // verdict can't speak. The fact this verdict *can* state — "this portion
       // floats on event X, regardless of what's fired" — is already carried by
-      // the symbolic installments above (state UNRESOLVED, with `symbolicDate`
-      // and `unresolved`), so a consumer reads pending-ness off `state !==
-      // "RESOLVED"`, not off a blockers list. Widening this arm (adding
+      // the symbolic installments above (state UNRESOLVED, with `symbolicDate`),
+      // so a consumer reads pending-ness off `state !== "RESOLVED"`, not off a
+      // blockers list. Widening this arm (adding
       // blockers, or a weaker "storable but provisional" status) is held back
       // until the open question of whether canonical should keep expressing
       // contingency at all is settled — that answer could force or forbid

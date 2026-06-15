@@ -88,7 +88,6 @@ function printSchedule(view: ScheduleView): void {
             ? JSON.stringify(item.symbolicDate)
             : undefined,
       state: item.state,
-      unresolved: item.state === "RESOLVED" ? undefined : item.unresolved,
     })),
   );
   // Show the projection above, then flag it — the schedule is printed but not

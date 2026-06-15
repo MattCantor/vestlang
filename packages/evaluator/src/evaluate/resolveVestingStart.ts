@@ -9,8 +9,8 @@
 //   - PICKED + RESOLVED meta            → resolved, with the date
 //   - PICKED + UNRESOLVED meta          → not resolved (a partial LATER OF)
 //   - top-level UNRESOLVED / IMPOSSIBLE → not resolved (e.g. a contradictory gate)
-// The not-resolved arms gather their blockers and render a reason through the same
-// blockerToString machinery the installment path uses, so the wording matches.
+// The not-resolved arms gather their blockers and render a reason via
+// blockerToString — this is now its sole consumer.
 
 import type {
   Blocker,
