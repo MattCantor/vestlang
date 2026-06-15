@@ -5,7 +5,7 @@
 // CLI and the MCP server each map failures to their own output (a stderr line, a
 // JSON `{ error }`) in exactly one place.
 
-import { parse } from "@vestlang/dsl";
+import { parse, asParseFailure } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type { Program, RawProgram } from "@vestlang/types";
 
@@ -27,30 +27,23 @@ export type Result<T> =
   | ({ ok: true } & T)
   | { ok: false; error: PipelineError };
 
-// Shape of a thrown peggy parse error. After the grammar's reachable guards were
-// moved onto peggy's error(), every syntax error we can actually hit carries a
-// `.location`; the loc-less branch below is a defensive fallback.
-type ThrownParseError = {
-  name?: string;
-  message?: string;
-  location?: Loc;
-};
-
 export function toPipelineError(err: unknown): PipelineError {
-  const e = err as ThrownParseError;
-  if (e?.name === "SyntaxError" && e.location) {
+  // `@vestlang/dsl` owns the thrown-error shape; we just map its decode into the
+  // `syntax-error` arm. The decoded `loc` (a `SourceLocation`) is structurally
+  // assignable to our local `Loc`.
+  const failure = asParseFailure(err);
+  if (failure) {
     return {
       ruleId: "syntax-error",
-      message: e.message ?? "Syntax error",
-      loc: {
-        start: { line: e.location.start.line, column: e.location.start.column },
-        end: { line: e.location.end.line, column: e.location.end.column },
-      },
+      message: failure.message,
+      loc: failure.loc,
     };
   }
+  // Not a located peggy error (defensive fallback): keep it a loc-less
+  // `syntax-error`.
   return {
     ruleId: "syntax-error",
-    message: e?.message ?? String(err),
+    message: (err as { message?: string })?.message ?? String(err),
   };
 }
 

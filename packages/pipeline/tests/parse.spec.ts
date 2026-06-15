@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
+import { parse } from "@vestlang/dsl";
 import { parseToProgram, parseRaw, toPipelineError } from "../src/parse";
+
+// A real thrown peggy syntax error, the only thing the decoder treats as located.
+const caughtParseError = (src: string): unknown => {
+  try {
+    parse(src);
+  } catch (e) {
+    return e;
+  }
+  throw new Error(`expected parse to throw for: ${src}`);
+};
 
 describe("parseToProgram", () => {
   it("returns the normalized program for valid DSL", () => {
@@ -30,20 +41,13 @@ describe("parseRaw", () => {
 });
 
 describe("toPipelineError", () => {
-  it("carries loc when the thrown error has a location", () => {
-    const err = {
-      name: "SyntaxError",
-      message: "boom",
-      location: {
-        start: { line: 1, column: 3 },
-        end: { line: 1, column: 4 },
-      },
-    };
-    const mapped = toPipelineError(err);
+  it("carries loc when the thrown error is a located peggy error", () => {
+    const mapped = toPipelineError(caughtParseError("this is not vestlang"));
     expect(mapped.ruleId).toBe("syntax-error");
     if (mapped.ruleId === "syntax-error") {
-      expect(mapped.message).toBe("boom");
-      expect(mapped.loc?.start.column).toBe(3);
+      expect(typeof mapped.message).toBe("string");
+      expect(typeof mapped.loc?.start.column).toBe("number");
+      expect(typeof mapped.loc?.start.line).toBe("number");
     }
   });
 
@@ -52,6 +56,15 @@ describe("toPipelineError", () => {
     expect(mapped.ruleId).toBe("syntax-error");
     if (mapped.ruleId === "syntax-error") {
       expect(mapped.message).toBe("no location here");
+      expect(mapped.loc).toBeUndefined();
+    }
+  });
+
+  it("falls back to a loc-less syntax error for a bare global SyntaxError", () => {
+    const mapped = toPipelineError(new SyntaxError("bare"));
+    expect(mapped.ruleId).toBe("syntax-error");
+    if (mapped.ruleId === "syntax-error") {
+      expect(mapped.message).toBe("bare");
       expect(mapped.loc).toBeUndefined();
     }
   });

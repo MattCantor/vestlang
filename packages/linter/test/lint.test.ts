@@ -569,4 +569,19 @@ describe("@vestlang/linter", () => {
       ).toEqual([]);
     });
   });
+
+  // When `parse` throws inside `lintText`, the catch turns it into a single
+  // diagnostic. A located peggy syntax error becomes a `syntax-error` with a loc
+  // and a code frame, both derived from the dsl-owned decoder.
+  describe("lintText catch path (syntax error)", () => {
+    it("yields one located syntax-error diagnostic with a code frame", () => {
+      const { diagnostics } = lintText("this is not vestlang");
+      expect(diagnostics).toHaveLength(1);
+      const d = diagnostics[0];
+      expect(d.ruleId).toBe("syntax-error");
+      expect(typeof d.loc?.start.line).toBe("number");
+      expect(d.codeFrame).toBeDefined();
+      expect(d.codeFrame?.length).toBeGreaterThan(0);
+    });
+  });
 });

@@ -10,7 +10,7 @@ import {
 import { stableKey } from "@vestlang/utils";
 import { buildInRules } from "./rules/index.js";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { parse } from "@vestlang/dsl";
+import { parse, asParseFailure } from "@vestlang/dsl";
 
 // Every node-level hook has this shape once we've forgotten which exact node
 // kind it subscribed to — which is all the driver needs to fan a node out to it.
@@ -66,28 +66,19 @@ export function lintText(source: string): LintResult {
     const { diagnostics } = lintProgram(canonical);
     return { diagnostics: [...fromNormalizer, ...diagnostics] };
   } catch (err: unknown) {
-    const e = err as {
-      name?: string;
-      message?: string;
-      location?: {
-        start: { line: number; column: number };
-        end: { line: number; column: number };
-      };
-    };
-    if (e.name === "SyntaxError" && e.location) {
+    // `@vestlang/dsl` owns the thrown-error shape. A located peggy syntax error
+    // decodes to a `ParseFailure`; we render it (loc + code frame, built from the
+    // decoded loc, not the raw throw). Anything else falls through to the generic
+    // `unexpected-error` arm — that label is load-bearing in `markdown.ts`.
+    const failure = asParseFailure(err);
+    if (failure) {
       const diagnostic: Diagnostic = {
         ruleId: "syntax-error",
-        message: e.message ?? "Syntax error",
+        message: failure.message,
         severity: "error",
         path: [],
-        loc: {
-          start: {
-            line: e.location.start.line,
-            column: e.location.start.column,
-          },
-          end: { line: e.location.end.line, column: e.location.end.column },
-        },
-        codeFrame: buildCodeFrame(source, e.location),
+        loc: failure.loc,
+        codeFrame: buildCodeFrame(source, failure.loc),
       };
       return { diagnostics: [diagnostic] };
     }
@@ -95,7 +86,7 @@ export function lintText(source: string): LintResult {
     // Non-peggy errors - surface as generic diagnostic
     const diagnostic: Diagnostic = {
       ruleId: "unexpected-error",
-      message: String(e.message ?? err),
+      message: String((err as { message?: string })?.message ?? err),
       severity: "error",
       path: [],
     };
