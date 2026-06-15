@@ -17,8 +17,7 @@ describe("grant-date fold across statements", () => {
     // Both halves emit on the grant date, as separate entries. The grant-date
     // fold must not re-emit the first half against the second.
     const res = evaluateProgram(prog("0.5 VEST PLUS 0.5 VEST"), ctx);
-    expect(res).toHaveLength(1);
-    const installments = res[0].resolution.installments;
+    const installments = res.resolution.installments;
     const sum = installments.reduce((a, i) => a + i.amount, 0);
     expect(sum).toBe(1000);
   });

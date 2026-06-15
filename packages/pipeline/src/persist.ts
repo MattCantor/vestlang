@@ -115,7 +115,7 @@ export function runPersist(input: PersistInput): PersistResult {
 
   let schedule;
   try {
-    [schedule] = evaluateProgram(parsed.program, ctx);
+    schedule = evaluateProgram(parsed.program, ctx);
   } catch (err) {
     return {
       ok: false,

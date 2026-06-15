@@ -74,17 +74,14 @@ export function evaluateClauseGroups(
 
 /**
  * Evaluate a whole program. The program collapses to ONE canonical schedule
- * (single cumulative round-down across the ordered template), returned as a
- * one-element array.
+ * (single cumulative round-down across the ordered template).
  */
 export function evaluateProgram(
   stmts: Program,
   ctx_input: ResolutionContextInput,
-): EvaluatedSchedule[] {
-  return [
-    assemble(
-      resolveToCore(stmts, ctx_input),
-      resolveInterchange(stmts, ctx_input),
-    ),
-  ];
+): EvaluatedSchedule {
+  return assemble(
+    resolveToCore(stmts, ctx_input),
+    resolveInterchange(stmts, ctx_input),
+  );
 }

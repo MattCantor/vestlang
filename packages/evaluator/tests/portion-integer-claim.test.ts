@@ -30,7 +30,7 @@ describe("non-divisible PORTION in the symbolic arm", () => {
 
     expect(run).not.toThrow();
 
-    const [{ resolution }] = run();
+    const { resolution } = run();
     expect(resolution.installments.every((i) => isInt(i.amount))).toBe(true);
   });
 
@@ -41,7 +41,7 @@ describe("non-divisible PORTION in the symbolic arm", () => {
         "1/3 VEST OVER 12 months EVERY 1 month CLIFF EVENT board AFTER DATE 2026-01-01",
       ),
     );
-    const [{ resolution }] = evaluateProgram(program, {
+    const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {},
       grantQuantity: 100,

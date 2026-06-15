@@ -81,7 +81,7 @@ describe("absenceAssumptions", () => {
       stmt(portion(1, 2), dateBeforeEvent("2025-01-01", "ipo")),
       stmt(portion(1, 2), dateBeforeEvent("2026-03-01", "milestone")),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     expect(out.absenceAssumptions).toEqual([
       { eventId: "ipo", through: "2025-01-01" },
       { eventId: "milestone", through: "2026-03-01" },
@@ -143,7 +143,7 @@ describe("absenceAssumptions", () => {
         },
       },
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     expect(out.absenceAssumptions).toEqual([
       { eventId: "ipo", through: "2027-01-01" },
     ]);
@@ -154,7 +154,7 @@ describe("absenceAssumptions", () => {
       stmt(portion(1, 2), dateBeforeEvent("2025-01-01", "ipo")),
       stmt(portion(1, 2), dateBeforeEvent("2026-03-01", "ipo")),
     ];
-    const [out] = evaluateProgram(program, ctxInput());
+    const out = evaluateProgram(program, ctxInput());
     expect(out.absenceAssumptions).toEqual([
       { eventId: "ipo", through: "2026-03-01" },
     ]);

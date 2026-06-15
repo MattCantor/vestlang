@@ -108,7 +108,7 @@ function characterize(c: CorpusCase): CaseSnapshot {
     grantQuantity: c.grant,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
-  const [schedule] = evaluateProgram(program, ctx);
+  const schedule = evaluateProgram(program, ctx);
 
   // Keep the snapshot at the level we actually reason about: the DSL, the
   // verdict, and how many of each component the decomposition used. The DSL

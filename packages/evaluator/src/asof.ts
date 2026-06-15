@@ -69,7 +69,7 @@ export function evaluateProgramAsOf(
 ): VestedResult {
   assertProgramInstallmentCap(program);
   const ctx = createEvaluationContext(ctx_input);
-  const [schedule] = evaluateProgram(program, ctx_input);
+  const schedule = evaluateProgram(program, ctx_input);
   // If nothing got scheduled, every share the program allocates is still
   // unresolved. One cursor across the whole program — the same telescoping the
   // symbolic lumps use — so this is min(floor(grant × Σ fractions), grant),

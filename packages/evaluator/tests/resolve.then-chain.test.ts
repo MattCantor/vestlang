@@ -277,7 +277,7 @@ describe("chain origin day-of-month — never-clamped DAYS handoff (#171)", () =
 
   it("the MONTHS tail springs to the origin's day, not the DAYS handoff", () => {
     const program = normalizeProgram(parse(dsl));
-    const [schedule] = evaluateProgram(program, {
+    const schedule = evaluateProgram(program, {
       grantDate: "2025-01-31",
       grantQuantity: 100000,
       events: {},

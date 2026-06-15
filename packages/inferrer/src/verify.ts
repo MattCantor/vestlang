@@ -89,7 +89,7 @@ export function collapseAgainstInput(
   input: TrancheInput[],
   ctx: VerifyContext,
 ): { residual: number; status: ResolutionStatus } {
-  const [schedule] = evaluateProgram(program, {
+  const schedule = evaluateProgram(program, {
     grantDate: ctx.grantDate,
     events: {},
     grantQuantity: ctx.totalQuantity,
@@ -128,7 +128,7 @@ export function programStatus(
   program: Program,
   ctx: VerifyContext,
 ): ResolutionStatus {
-  const [schedule] = evaluateProgram(program, {
+  const schedule = evaluateProgram(program, {
     grantDate: ctx.grantDate,
     events: {},
     grantQuantity: ctx.totalQuantity,

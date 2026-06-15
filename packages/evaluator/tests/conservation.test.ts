@@ -323,7 +323,7 @@ function checkCell(
   const base = { grantDate: GRANT_DATE, events, grantQuantity: grant };
   const label = cellLabel(shape, grant, events);
 
-  const [schedule] = evaluateProgram(program, base);
+  const schedule = evaluateProgram(program, base);
   recordCoverage(schedule);
 
   // The schedule stream itself, in whichever arm it landed.
@@ -425,7 +425,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.status).toBe("template");
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       33, 33, 34,
@@ -469,7 +469,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       14, 28, 58,
     ]);
@@ -491,7 +491,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 1,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       0, 0, 1,
     ]);
@@ -517,7 +517,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     const inst = schedule.resolution.installments;
     const resolved = inst.filter((i) => i.state === "RESOLVED");
     const unresolved = inst.filter((i) => i.state === "UNRESOLVED");
@@ -541,7 +541,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     const unresolved = schedule.resolution.installments.filter(
       (i) => i.state === "UNRESOLVED",
     );
@@ -563,7 +563,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     const symbolic = schedule.resolution.installments.filter(
       (i) => i.state !== "RESOLVED",
     );
@@ -587,7 +587,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     const inst = schedule.resolution.installments;
     const impossible = inst.filter((i) => i.state === "IMPOSSIBLE");
     const unresolved = inst.filter((i) => i.state === "UNRESOLVED");
@@ -613,7 +613,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.status).toBe("impossible");
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       66, 34,
@@ -641,7 +641,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       grantQuantity: 100,
       asOf: AS_OFS[2],
     };
-    const [schedule] = evaluateProgram(program, ctx);
+    const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       100, 0,
     ]);
@@ -670,7 +670,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
     expect(sumAmounts(r.vested)).toBe(150);
     expect(r.unresolved).toBe(0);
     expect(
-      evaluateProgram(program, ctx)[0].findings.some(
+      evaluateProgram(program, ctx).findings.some(
         (f) => f.kind === "over-allocation",
       ),
     ).toBe(true);
