@@ -1,11 +1,11 @@
 // Resolve a vestlang offset expression (`EVENT ipo + 6 months`, `+3 months`,
 // `DATE 2025-01-01 - 2 days`) to a concrete date. Like the other run* entries it
-// owns the whole chain — parse → buildContext → evaluate → shape — so the app never
+// owns the whole chain — parse → buildContext → resolve → shape — so the app never
 // hand-assembles a context. The pure date math the date-math tools call directly
 // (addPeriod / dateDiff / resolveVestingDay) stays in the MCP app; only this
 // evaluate-backed resolution moved here.
 
-import { evaluateStatement } from "@vestlang/evaluator";
+import { resolveVestingStart } from "@vestlang/evaluator";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { parseToProgram } from "./parse.js";
 import { buildContext } from "./context.js";
@@ -25,12 +25,17 @@ export type ResolveOffsetResult =
  * Resolve an offset expression (e.g. "EVENT ipo + 6 months", "+3 months",
  * "DATE 2025-01-01 - 2 days") to a concrete date.
  *
- * Implemented by wrapping the expression as `VEST FROM <expr>` — a zero-length
- * schedule whose sole installment's date is the resolved start. This reuses
- * the full DSL parser and evaluator so day-of-month rules, event lookup, and
- * offset arithmetic all flow through the single source of truth. No observation
- * date enters: resolving the start reads the schedule's structural installment
- * state, which is the same whenever you ask, so there is nothing to be "as of."
+ * The expression is wrapped as `VEST FROM <expr>` so the full DSL parser and
+ * normalizer run over it, then its parsed anchor is resolved DIRECTLY via the
+ * evaluator's `resolveVestingStart` — no allocation, no installments, and crucially
+ * no grant-date payment fold (which is the allocation path's, and would wrongly
+ * raise any pre-grant date up to grant_date). No observation date enters: resolving
+ * a start reads structural state, the same whenever you ask, so there's nothing to
+ * be "as of."
+ *
+ * The contract is a single offset expression. A `THEN` tail or a `PLUS` fan-out
+ * parses to more than one statement; both used to silently resolve to the first
+ * head's start and drop the rest, so they're refused rather than truncated.
  */
 export function runResolveOffset(
   input: ResolveOffsetInput,
@@ -44,13 +49,35 @@ export function runResolveOffset(
   }
   const program = parsed.program;
 
-  if (program.length === 0) {
-    return { ok: false, error: "Expression produced no statements" };
+  // A single offset expression is exactly one statement. Anything else is a
+  // multi-statement input (a THEN tail or a PLUS fan-out) the tool can't honor —
+  // reading program[0] would silently drop the rest.
+  if (program.length !== 1) {
+    return {
+      ok: false,
+      error:
+        program.length === 0
+          ? "Expression produced no statements"
+          : `Expected a single offset expression, got ${program.length} statements`,
+    };
+  }
+
+  const stmt = program[0];
+  // A `VEST FROM <expr>` head is never a chained tail; the guard is what lets us
+  // read a non-null `vesting_start` off the schedule below.
+  if (stmt.chained || stmt.expr.type !== "SCHEDULE") {
+    return {
+      ok: false,
+      error: "Expected a single offset expression, got a selector",
+    };
   }
 
   // vesting_day_of_month is passed through, not re-defaulted here: the evaluator
   // coalesces it against the same DEFAULT_VESTING_DAY_OF_MONTH (evaluator
   // createEvaluationContext), so an unset rule lands on the identical default.
+  // grant_quantity is an unused placeholder — resolution reads no allocation, so
+  // the share count is never consumed, but ResolutionContextInput requires it and
+  // createEvaluationContext validates it.
   const ctx = buildContext({
     grant_date: input.grant_date,
     events: input.events,
@@ -58,40 +85,16 @@ export function runResolveOffset(
     vesting_day_of_month: input.vesting_day_of_month,
   });
 
-  const { installments, pending, dead } = evaluateStatement(
-    program[0],
-    ctx,
-  ).resolution;
-  const first = installments[0] ?? null;
-
-  if (first?.state === "RESOLVED") {
-    return { ok: true, date: first.date };
+  // No try/catch: a range/overflow RangeError from the date arithmetic (e.g.
+  // `+100000000 days`) must propagate and throw, the same as everywhere else.
+  const result = resolveVestingStart(stmt.expr.vesting_start, ctx);
+  if (result.resolved) {
+    return { ok: true, date: result.date };
   }
 
-  // A date-math expression is one statement, so its hold-up is whatever's still
-  // pending or already dead — summarize across both for the error message.
-  const unresolvedReason =
-    first?.unresolved ??
-    blockerSummary([...pending, ...dead]) ??
-    "missing anchor";
   return {
     ok: false,
-    error: `Expression is unresolved: ${unresolvedReason}`,
-    unresolved: unresolvedReason,
+    error: `Expression is unresolved: ${result.reason}`,
+    unresolved: result.reason,
   };
-}
-
-function blockerSummary(blockers: unknown[]): string | null {
-  if (blockers.length === 0) return null;
-  const events: string[] = [];
-  for (const b of blockers) {
-    const bb = b as { type?: string; event?: string };
-    if (bb.type === "EVENT_NOT_YET_OCCURRED" && bb.event) {
-      events.push(bb.event);
-    }
-  }
-  if (events.length > 0) {
-    return `event(s) not provided: ${events.join(", ")}`;
-  }
-  return "expression not fully resolvable";
 }
