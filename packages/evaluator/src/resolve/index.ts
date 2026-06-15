@@ -53,9 +53,9 @@ export const resolveToCore = (
 
   const ctx = createEvaluationContext(ctxInput);
   const totalShares = ctx.grantQuantity;
-  const resolutions = resolveStatements(program, ctx, totalShares);
+  const resolutions = resolveStatements(program, ctx);
 
-  const build = buildTemplate(resolutions, ctx, totalShares);
+  const build = buildTemplate(resolutions, ctx);
 
   let verdict: ResolveVerdict;
   if (build.ok) {

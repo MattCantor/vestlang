@@ -147,9 +147,8 @@ export interface StmtResolution {
 const resolveNonChained = (
   stmt: Extract<Statement, { chained?: false }>,
   ctx: ResolutionContext,
-  totalShares: number,
 ): StmtResolution => {
-  const percentage = amountToFraction(stmt.amount, totalShares);
+  const percentage = amountToFraction(stmt.amount, ctx.grantQuantity);
   const res = evaluateScheduleExpr(stmt.expr, ctx);
 
   if (isPickedResolved(res)) {
@@ -383,7 +382,6 @@ const anchorAfter = (
 export const resolveStatements = (
   program: Program,
   ctx: ResolutionContext,
-  totalShares: number,
 ): StmtResolution[] => {
   const dom = ctx.vesting_day_of_month;
   const out: StmtResolution[] = [];
@@ -404,7 +402,7 @@ export const resolveStatements = (
         length: p.length,
         occurrences: p.occurrences,
       };
-      const percentage = amountToFraction(stmt.amount, totalShares);
+      const percentage = amountToFraction(stmt.amount, ctx.grantQuantity);
 
       if (anchor.kind === "PENDING") {
         // The head's event hasn't fired, so there's no handoff date. The tail is
@@ -483,7 +481,7 @@ export const resolveStatements = (
       continue;
     }
 
-    const resolution = resolveNonChained(stmt, ctx, totalShares);
+    const resolution = resolveNonChained(stmt, ctx);
     out.push(resolution);
     // A non-chained statement begins a fresh component, so the chain restarts
     // from this statement rather than continuing the previous one.
@@ -514,7 +512,6 @@ export type TemplateBuild =
       why: "unresolved";
       resolutions: StmtResolution[];
       ctx: ResolutionContext;
-      totalShares: number;
     }
   | {
       ok: false;
@@ -522,7 +519,6 @@ export type TemplateBuild =
       reason: NonTemplateReason;
       resolutions: StmtResolution[];
       ctx: ResolutionContext;
-      totalShares: number;
     };
 
 /**
@@ -534,14 +530,12 @@ export type TemplateBuild =
 export const buildTemplate = (
   resolutions: StmtResolution[],
   ctx: ResolutionContext,
-  totalShares: number,
 ): TemplateBuild => {
   const unresolved = (): TemplateBuild => ({
     ok: false,
     why: "unresolved",
     resolutions,
     ctx,
-    totalShares,
   });
   const events = (reason: NonTemplateReason): TemplateBuild => ({
     ok: false,
@@ -549,7 +543,6 @@ export const buildTemplate = (
     reason,
     resolutions,
     ctx,
-    totalShares,
   });
 
   // Only a genuinely-unresolved or contradictory start poisons the program. An
@@ -713,7 +706,7 @@ export const buildTemplate = (
     ok: true,
     template: { id: "resolved", statements },
     runtime,
-    totalShares,
+    totalShares: ctx.grantQuantity,
     sourceMap,
     blockers,
   };
