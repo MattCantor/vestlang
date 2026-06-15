@@ -15,7 +15,6 @@ import type {
   ResolutionContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
-  Program,
   ResolvedInstallment,
   SymbolicInstallment,
 } from "@vestlang/types";
@@ -49,9 +48,10 @@ const expandResolution = (
   const anchor = r.start.date;
   // For a chain tail, `anchor` is the handoff the previous segment ended on (Feb 28
   // off a Jan 31 head, or mid-month off a DAYS run) while `origin` keeps the chain's
-  // first day (the 31st), so the grid lands on the grant's vesting day. A non-tail
-  // is its own origin.
-  const origin = r.origin ?? anchor;
+  // first day (the 31st), so the grid lands on the grant's vesting day. A head is
+  // its own origin. (A RESOLVED start is only ever a head or a dated tail, never a
+  // pending-tail, so the role check is total here.)
+  const origin = r.chain.role === "tail" ? r.chain.origin : anchor;
   const { type, length: period, occurrences } = r.periodicity;
   const dom = ctx.vesting_day_of_month;
 
@@ -127,7 +127,6 @@ const resolvedInstallments = (
  */
 const eventsArm = (
   build: Extract<TemplateBuild, { why: "events" }>,
-  program: Program,
 ): ResolveVerdict => {
   const { ctx, totalShares, resolutions, reason } = build;
   const symbolic: SymbolicInstallment[] = [];
@@ -137,8 +136,7 @@ const eventsArm = (
   // unfired event cliffs and dead cliffs to the unresolved arm first — so the
   // dated set here and isDated's definition agree.
   const claims = symbolicClaims(resolutions, totalShares);
-  program.forEach((stmt, i) => {
-    const r = resolutions[i];
+  resolutions.forEach((r, i) => {
     if (r.start.state === "RESOLVED") {
       dated.push(r);
       return;
@@ -147,7 +145,7 @@ const eventsArm = (
     // unresolved arm, and a pending chain head keeps its tails out of the
     // events build too — so what lands here is a pending event or synthetic
     // combinator start on a statement of its own.
-    const ev = unresolvedInstallments(r, stmt, ctx, claims[i]);
+    const ev = unresolvedInstallments(r, ctx, claims[i]);
     for (const inst of ev.installments) {
       if (inst.state !== "RESOLVED") symbolic.push(inst);
     }
@@ -166,7 +164,6 @@ const eventsArm = (
 
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
-  program: Program,
 ): ResolveVerdict => {
   const { ctx, totalShares, resolutions } = build;
   const symbolic: SymbolicInstallment[] = [];
@@ -181,9 +178,8 @@ const unresolvedArm = (
   // Dated statements get a 0 claim they never use — their paths return EMPTY
   // before any amount matters.
   const claims = symbolicClaims(resolutions, totalShares);
-  program.forEach((stmt, i) => {
-    const r = resolutions[i];
-    const ev = unresolvedInstallments(r, stmt, ctx, claims[i]);
+  resolutions.forEach((r, i) => {
+    const ev = unresolvedInstallments(r, ctx, claims[i]);
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
     // are dropped there; collect the resolution so the resolved producer can
     // materialize them. (A vacuous 0-occurrence statement is also empty — treating
@@ -232,8 +228,5 @@ const unresolvedArm = (
 /** Map a non-template build to its verdict. */
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
-  program: Program,
 ): ResolveVerdict =>
-  build.why === "unresolved"
-    ? unresolvedArm(build, program)
-    : eventsArm(build, program);
+  build.why === "unresolved" ? unresolvedArm(build) : eventsArm(build);

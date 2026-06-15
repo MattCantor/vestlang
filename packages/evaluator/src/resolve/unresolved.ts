@@ -9,7 +9,6 @@ import type {
   ResolutionContext,
   InstallmentSet,
   OCTDate,
-  Statement,
 } from "@vestlang/types";
 import { allocateVector, foldToGrantDate, gridDate } from "@vestlang/core";
 import { assertNever, fracSum } from "@vestlang/utils";
@@ -78,7 +77,6 @@ export const symbolicClaims = (
  */
 export const unresolvedInstallments = (
   r: StmtResolution,
-  stmt: Statement,
   ctx: ResolutionContext,
   claim: number,
 ): InstallmentSet => {
@@ -106,7 +104,12 @@ export const unresolvedInstallments = (
   // deferred path, so a pending or dead gate's blockers arrive here through
   // `cliffBlockers`; a bare event cliff carries no blockers of its own — its
   // identity rides on the record for the storable-reason scan instead.)
-  if (stmt.chained && r.start.state === "UNRESOLVED") {
+  //
+  // The role check is what decides tail-ness; the start clause is only there so
+  // TS can read `r.start.blockers` (which exists on the UNRESOLVED arm, not on
+  // every start). The producer guarantees a pending-tail always has an UNRESOLVED
+  // start, but that isn't in the type, so the clause stays explicit.
+  if (r.chain.role === "pending-tail" && r.start.state === "UNRESOLVED") {
     const { installments } = makeUnresolvedVestingStartSchedule(
       [statementQuantity],
       [...r.start.blockers, ...cliffBlockers],
@@ -135,7 +138,9 @@ export const unresolvedInstallments = (
   // day, the grant's vesting day, not the handoff this tail landed on), fold the
   // grant-date lump, then read the cliff off the record.
   const start = r.start.date;
-  const origin = r.origin ?? start;
+  // A RESOLVED start is only ever a head or a dated tail; a head is its own
+  // origin, a dated tail carries the chain's first day.
+  const origin = r.chain.role === "tail" ? r.chain.origin : start;
   const { type, length, occurrences } = r.periodicity;
   const amounts = allocateVector(statementQuantity, occurrences);
   const at = gridDate({

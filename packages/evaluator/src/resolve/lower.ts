@@ -118,18 +118,26 @@ export interface StmtResolution {
     // it lets buildTemplate poison the program directly off the record.
     | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
   cliff: LoweredCliff;
-  // True for a THEN tail (a segment that continues the previous one). The
-  // start above was injected by the chaining walk rather than read off the
-  // statement's own FROM, and buildTemplate uses this to word the right error
-  // when an event-anchored chain can't become a single template.
-  chained?: boolean;
-  // The date the chain this segment belongs to started from, set only on tails.
-  // A tail's own `start` is wherever the previous segment handed off (Feb 28 off
-  // a Jan 31 head, or mid-month off a DAYS run); the origin keeps the chain's
-  // first day-of-month (the 31st) around so every tail grids on the grant's one
-  // vesting day rather than the handoff. Absent on a non-tail, where the segment
-  // is its own origin and consumers fall back to `start.date`.
-  origin?: OCTDate;
+  // Where this segment sits in a THEN chain. A `head` is a fresh component (a
+  // statement with its own FROM). A tail's start was injected by the chaining
+  // walk rather than read off its own FROM: when the handoff produced a date the
+  // tail is a `tail` and carries the chain's `origin`; when the head is still
+  // waiting on an event there's no date to hand off and the tail is a
+  // `pending-tail`. buildTemplate keys on the role to word the right error when
+  // an event-anchored chain can't become a single template, and the projection
+  // reads `origin` to grid the tail on the grant's vesting day.
+  //
+  // The `origin` is the date the whole chain started from. A tail's own `start`
+  // is wherever the previous segment handed off (Feb 28 off a Jan 31 head, or
+  // mid-month off a DAYS run); the origin keeps the chain's first day-of-month
+  // (the 31st) so every tail grids on the grant's one vesting day rather than on
+  // the handoff. A head is its own origin, so consumers fall back to `start.date`
+  // there. It lives only on the `tail` arm, where a date is known: a head has no
+  // chain to date from, and a pending-tail never produced one.
+  chain:
+    | { role: "head" }
+    | { role: "tail"; origin: OCTDate }
+    | { role: "pending-tail" };
 }
 
 /** Resolve one ordinary (non-chained) statement: its start comes from its own
@@ -175,6 +183,7 @@ const resolveNonChained = (
         p.occurrences,
         ctx,
       ),
+      chain: { role: "head" },
     };
   }
 
@@ -250,6 +259,7 @@ const resolveNonChained = (
         partial: res.type === "PICKED",
       },
       cliff,
+      chain: { role: "head" },
     };
   }
 
@@ -264,6 +274,7 @@ const resolveNonChained = (
       periodicity,
       start: { state: "PENDING_EVENT", eventId: sb.eventId, blockers },
       cliff,
+      chain: { role: "head" },
     };
   }
 
@@ -278,6 +289,7 @@ const resolveNonChained = (
         ? { state: "IMPOSSIBLE", blockers: res.blockers }
         : { state: "UNRESOLVED", blockers },
     cliff,
+    chain: { role: "head" },
   };
 };
 
@@ -413,7 +425,7 @@ export const resolveStatements = (
             p.occurrences,
             ctx,
           ),
-          chained: true,
+          chain: { role: "pending-tail" },
         });
         continue;
       }
@@ -448,10 +460,10 @@ export const resolveStatements = (
           ctx,
           anchor.origin,
         ),
-        chained: true,
-        // The chain's starting date, not this tail's handoff. Carried so a later
-        // materialization grids the tail on the grant's vesting day.
-        origin: anchor.origin,
+        // A dated tail: the handoff produced a date, and `origin` is the chain's
+        // starting date (not this tail's handoff) so a later materialization
+        // grids the tail on the grant's vesting day.
+        chain: { role: "tail", origin: anchor.origin },
       });
       anchor = {
         ...anchor,
@@ -641,9 +653,10 @@ export const buildTemplate = (
         // both floating to one event but wanting it on different days.
         return events({
           kind: "OVERLAPPING_ABSOLUTE_STARTS",
-          detail: r.chained
-            ? `An event-origin THEN chain anchored on "${eventId}" sequences its segments to different dates, which is not a single template; it classifies to events-only and would promote to a template if event chaining is later supported.`
-            : `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
+          detail:
+            r.chain.role === "tail"
+              ? `An event-origin THEN chain anchored on "${eventId}" sequences its segments to different dates, which is not a single template; it classifies to events-only and would promote to a template if event chaining is later supported.`
+              : `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
         });
       }
     } else {
