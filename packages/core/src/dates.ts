@@ -114,6 +114,68 @@ export function addMonthsRule(
   return toISO(utcMidnight(ty, tm, pickDay()));
 }
 
+/**
+ * Whole calendar months from `from` to `to`, plus the leftover days — the
+ * closed-form inverse of `addMonthsRule` under its default
+ * VESTING_START_DAY_OR_LAST_DAY_OF_MONTH rule. So
+ * `monthsBetween(d, addMonthsRule(d, k))` is `{ diff: k, remainderDays: 0 }`
+ * for every k.
+ *
+ * Both fields are signed by direction: `diff` is negative when `to` precedes
+ * `from`, and `remainderDays` carries the same sign (it is `daysBetween` from
+ * the clamped anchor to `to`).
+ *
+ * The month count is asymmetric near a month-end clamp, by design. Forward, the
+ * final month is complete once `to` reaches the day `addMonthsRule` would land
+ * on — that's `from`'s day clamped to the *target* month's length, so a clamped
+ * endpoint counts as a full month (Jan 31 → Feb 28 is one month, matching
+ * `addMonthsRule(Jan 31, 1)`). Backward, no clamp can apply: the target day is
+ * `from`'s own day in `from`'s own month, which always fits, so the comparison
+ * is the plain `td > fd`. The two directions therefore aren't mirror images —
+ * `monthsBetween(a, b).diff` is not universally `-monthsBetween(b, a).diff`
+ * across a clamp.
+ */
+export function monthsBetween(
+  from: OCTDate,
+  to: OCTDate,
+): { diff: number; remainderDays: number } {
+  const f = toDate(from);
+  const t = toDate(to);
+  const fy = f.getUTCFullYear();
+  const fm = f.getUTCMonth();
+  const fd = f.getUTCDate();
+  const ty = t.getUTCFullYear();
+  const tm = t.getUTCMonth();
+  const td = t.getUTCDate();
+
+  // Last day of the target month, via day 0 of the next month — the same idiom
+  // addMonthsRule uses for its month-end clamp.
+  const targetLastDay = utcMidnight(ty, tm + 1, 0).getUTCDate();
+
+  const direction = t.getTime() >= f.getTime() ? 1 : -1;
+  let diff = (ty - fy) * 12 + (tm - fm);
+  if (direction === 1 && td < Math.min(fd, targetLastDay)) {
+    // Forward: the final month isn't complete until `to` reaches `from`'s day
+    // clamped to the target month's length.
+    diff -= 1;
+  }
+  if (direction === -1 && td > fd) {
+    // Backward: the landing day is `from`'s day in `from`'s own month, so it can
+    // never overflow that month — clamping it would be a no-op (min(fd, …) is
+    // always fd, since fd is already a valid day of fm). A plain `td > fd` is
+    // the exact same test.
+    diff += 1;
+  }
+
+  // Remainder runs from the month-aligned anchor to `to`. The anchor takes its
+  // day from `from` (default origin), so it keeps `from`'s day where the month
+  // allows and clamps to month-end where it doesn't.
+  const anchor = addMonthsRule(from, diff);
+  const remainderDays = daysBetween(anchor, to);
+
+  return { diff, remainderDays };
+}
+
 // Step `n` calendar days in UTC. `setUTCDate` rolls months/years correctly and
 // is timezone-independent; a local-time stepper would drift a day across DST.
 export const addDays = (iso: OCTDate, n: number): OCTDate => {
