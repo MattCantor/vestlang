@@ -3,6 +3,7 @@ import {
   evaluateScheduleExpr,
   evaluateVestingNodeExpr,
 } from "../src/evaluate/selectors.js";
+import { isPickedPartial } from "../src/evaluate/utils.js";
 import {
   baseCtx,
   makeVestingBaseDate,
@@ -59,6 +60,13 @@ describe("evaluateVestingNodeExpr selectors", () => {
     expect(
       (res as { meta: { blockers: { type: string }[] } }).meta.blockers[0].type,
     ).toBe("EVENT_NOT_YET_OCCURRED");
+    // The partial pick carries its pivot: the latest settled arm's date — here the
+    // only resolved arm, 2024-02-01. This is the single source of truth the cliff
+    // lowering reads as the `dated-floor` floor, so pin it to the resolved-arm date.
+    expect(isPickedPartial(res)).toBe(true);
+    if (isPickedPartial(res)) {
+      expect(res.pivot).toBe("2024-02-01");
+    }
   });
 
   it("LATER_OF returns UNRESOLVED_SELECTOR when two or more items unresolved", () => {
@@ -217,5 +225,28 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
     const res = evaluateScheduleExpr(schedule, ctx);
     expect(res.type).toBe("PICKED");
     expect((res as { meta: { date: string } }).meta.date).toBe("2024-02-01");
+  });
+
+  it("partial LATER_OF vesting_start carries its pivot through the re-wrap", () => {
+    // A schedule whose start is a partial LATER OF(2024-02-01, EVENT laterEvent).
+    // The node layer settles the date arm and stamps the pivot; re-wrapping that
+    // pick around the schedule leaf must carry the pivot through unchanged, not
+    // drop it. Pinning it here guards the schedule-layer copy directly, not just
+    // by typecheck.
+    const partialStart = makeSingletonSchedule(
+      {
+        type: "NODE_LATER_OF",
+        items: [
+          makeSingletonNode(makeVestingBaseDate("2024-02-01")),
+          makeSingletonNode(makeVestingBaseEvent("laterEvent")),
+        ],
+      },
+      { type: "MONTHS", length: 1, occurrences: 2 },
+    );
+    const res = evaluateScheduleExpr(partialStart, ctx);
+    expect(isPickedPartial(res)).toBe(true);
+    if (isPickedPartial(res)) {
+      expect(res.pivot).toBe("2024-02-01");
+    }
   });
 });

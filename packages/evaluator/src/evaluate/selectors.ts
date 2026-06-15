@@ -15,6 +15,7 @@ import type {
 import { assertNever } from "@vestlang/utils";
 import { lt } from "@vestlang/core";
 import {
+  isPickedPartial,
   isPickedResolved,
   type PickedResolved,
   type PickReturn,
@@ -174,6 +175,10 @@ function handleSelector<T extends Schedule | VestingNode>(
     return {
       type: "PICKED",
       picked: best.picked,
+      // The latest settled arm's date is the pivot: a lower bound the pending arms
+      // can only push later. This is the single origin of that value — the cliff
+      // lowering reads it straight off the pick rather than re-deriving it.
+      pivot: best.meta.date,
       meta: {
         type: "UNRESOLVED",
         blockers:
@@ -267,8 +272,14 @@ export function evaluateScheduleExpr(
 ): PickReturn<Schedule> {
   return evaluateSelectorExpr(expr, isScheduleLeaf, (leaf) => {
     const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
+    // Re-wrap a picked vesting start around the schedule leaf. The partial arm
+    // carries a required pivot, so we have to carry it through here too — narrow
+    // first, then re-emit the matching arm.
+    if (isPickedPartial(res)) {
+      return { type: "PICKED", picked: leaf, meta: res.meta, pivot: res.pivot };
+    }
     if (res.type === "PICKED") {
-      return { type: res.type, picked: leaf, meta: res.meta };
+      return { type: "PICKED", picked: leaf, meta: res.meta };
     }
     return res;
   });
