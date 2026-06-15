@@ -1,11 +1,7 @@
-// The generic anchor-date fold — the shared primitive behind both the cliff and
-// the grant-date aggregation (the two are the same fold over a different anchor
-// date).
-//
-// Ported from vestlang's evaluate/cliff.ts `evaluateCliffGeneric` /
-// `evaluateGrantDate`, stripped to the pure date/amount mechanics. The
-// blocker/installment-producing callers stay in the evaluator; core only needs
-// the aggregation: amounts dated before `cliffDate` collapse onto `cliffDate`.
+// The anchor-date fold: amounts dated before `cliffDate` collapse onto
+// `cliffDate`, amounts on or after pass through. Used directly by
+// `foldToGrantDate`; in-repo the fold is reached via that wrapper (core's
+// kernel.ts grant-date fold and the evaluator's unresolved-arm folds).
 
 import type { OCTDate } from "@vestlang/types";
 import { eq, lt } from "./dates";
@@ -19,15 +15,13 @@ import { eq, lt } from "./dates";
  *   - amounts after cliffDate pass through unchanged.
  * Each emission spends the aggregate, so it resets to zero — a second date on
  * the cliff (e.g. installments from two statements) emits only its own amount.
- * `fn` maps each emitted {date, amount} to the caller's installment shape.
  */
-export function foldByCliffDate<T>(
+export function foldByCliffDate(
   dates: OCTDate[],
   amounts: number[],
   cliffDate: OCTDate,
-  fn: (x: { date: OCTDate; amount: number }) => T,
-): T[] {
-  const out: T[] = [];
+): { date: OCTDate; amount: number }[] {
+  const out: { date: OCTDate; amount: number }[] = [];
   let aggregate = 0;
   let cliffResolved = false;
 
@@ -44,7 +38,7 @@ export function foldByCliffDate<T>(
       // If this is the last date and we're still before the cliff, emit the
       // aggregate on the cliff date.
       if (i === dates.length - 1) {
-        out.push(fn({ date: cliffDate, amount: aggregate }));
+        out.push({ date: cliffDate, amount: aggregate });
         aggregate = 0;
       }
       continue;
@@ -53,7 +47,7 @@ export function foldByCliffDate<T>(
     // Date exactly on the cliff absorbs the aggregate.
     if (isAt) {
       aggregate += amt;
-      out.push(fn({ date, amount: aggregate }));
+      out.push({ date, amount: aggregate });
       aggregate = 0;
       cliffResolved = true;
       continue;
@@ -62,11 +56,11 @@ export function foldByCliffDate<T>(
     // Cliff date falls strictly between the previous date and this one: flush
     // the (non-zero) aggregate onto the cliff date before this installment.
     if (!cliffResolved && lt(cliffDate, date) && aggregate > 0) {
-      out.push(fn({ date: cliffDate, amount: aggregate }));
+      out.push({ date: cliffDate, amount: aggregate });
       aggregate = 0;
       cliffResolved = true;
     }
-    out.push(fn({ date, amount: amt }));
+    out.push({ date, amount: amt });
   }
 
   return out;
@@ -81,12 +75,7 @@ export function foldToGrantDate(
   amounts: number[],
   grantDate: OCTDate,
 ): { dates: OCTDate[]; amounts: number[] } {
-  const folded = foldByCliffDate<{ date: OCTDate; amount: number }>(
-    dates,
-    amounts,
-    grantDate,
-    ({ date, amount }) => ({ date, amount }),
-  );
+  const folded = foldByCliffDate(dates, amounts, grantDate);
 
   return {
     dates: folded.map((v) => v.date),
