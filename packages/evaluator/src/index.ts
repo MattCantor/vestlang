@@ -14,19 +14,16 @@ export {
   type VestedResult,
 } from "./asof.js";
 
-// Persistence / sidecar — no consumer today; its fate is an open Stage 5 decision.
+// Persistence / sidecar — consumed by @vestlang/pipeline (persist/rehydrate
+// orchestration, behind the vestlang_persist / vestlang_rehydrate MCP tools)
+// and by the MCP server's artifact-schema module.
 export {
-  rehydrate,
-  reparseDefinition,
-  RehydrateDefinitionError,
   isRehydrateDefinitionError,
+  RehydrateDefinitionError,
   type RehydrateResult,
-  type RehydrateDefinitionSource,
   VESTLANG_SIDECAR_NAMESPACE,
-  toSidecar,
   fromSidecar,
   toPersisted,
   rehydratePersisted,
-  type Sidecar,
   type PersistedArtifact,
 } from "./resolve/index.js";

@@ -203,10 +203,7 @@ export {
   RehydrateDefinitionError,
   isRehydrateDefinitionError,
 } from "./rehydrate.js";
-export type {
-  RehydrateResult,
-  RehydrateDefinitionSource,
-} from "./rehydrate.js";
+export type { RehydrateResult } from "./rehydrate.js";
 export {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,
@@ -214,6 +211,6 @@ export {
   toPersisted,
   rehydratePersisted,
 } from "./sidecar.js";
-export type { Sidecar, PersistedArtifact } from "./sidecar.js";
+export type { PersistedArtifact } from "./sidecar.js";
 export type { ResolveResult } from "./types.js";
 export { resolveInterchange } from "./interchange.js";
