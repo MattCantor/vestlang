@@ -86,13 +86,18 @@ export const gridDate =
  * Lay out one statement's vesting events — dates, the fraction of grant each
  * carries, and the cliff applied by date.
  *
- * No cliff, or one that has already passed by the time vesting starts: every
- * occurrence vests an equal slice on its own grid date.
- *
  * A cliff that bites: occurrences at or before the cliff date collapse into one
  * lump on that date; the rest split what's left evenly, each on its grid date. The
  * lump's size is the cliff's own percentage when it has one, otherwise the share of
  * occurrences that fell behind it.
+ *
+ * The two cliff kinds part ways at the edges. An event cliff (no stated
+ * percentage) takes only what the grid accrued by its firing, so a firing on or
+ * before the first installment simply yields the even grid. A duration cliff
+ * carries an authored percentage and honors it wherever it can land — including on
+ * the start date or before the first installment, where the lump still leads — and
+ * throws only when the percentage can't be placed: below 100% with no installment
+ * after the cliff (the remainder would vanish), or dated before the vesting start.
  */
 export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
   const {
@@ -125,59 +130,90 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
     );
   };
 
-  // A cliff dated on or before the anchor holds nothing back — treat it as no
-  // cliff and vest the plain even grid. (This is also what keeps a zero-spacing
-  // grid, where every occurrence lands on the start date, from dropping the shares
-  // the lump didn't cover.)
-  if (cliff.kind === "none" || !gt(cliff.date, anchor)) return evenGrid();
+  // No cliff at all → the plain even grid, before any cliff date is read.
+  if (cliff.kind === "none") return evenGrid();
 
-  const cliffDate = cliff.date;
-
-  // Split the occurrences around the cliff date: those strictly after it keep their
-  // own grid date, the rest fold into the lump.
-  const postOccurrences: number[] = [];
-  let preCount = 0;
-  for (let i = 1; i <= N; i++) {
-    if (gt(at(i), cliffDate)) postOccurrences.push(i);
-    else preCount++;
+  // An event cliff with no stated percentage takes whatever share of the grid sat
+  // at or before its firing. A firing on or before the anchor holds nothing back
+  // (even grid); a firing before the first installment likewise has a zero pre-cliff
+  // share, so it stays an even grid rather than emitting a spurious zero lump.
+  if (cliff.kind === "proportional") {
+    if (!gt(cliff.date, anchor)) return evenGrid();
+    const { pre, post } = splitAround(at, N, cliff.date);
+    if (pre === 0) return evenGrid();
+    const pct = fracReduce({ numerator: pre, denominator: N });
+    return cliffLump(event, at, stmtFraction, cliff.date, pct, post);
   }
 
-  // The cliff sits before the first installment → nothing to hold back, even grid.
-  if (preCount === 0) return evenGrid();
+  // A fixed (duration) cliff carries its own stated percentage and must honor it
+  // wherever it can land. A cliff date before the grant's vesting start can't —
+  // vesting would fall before the grant began.
+  if (gt(anchor, cliff.date)) {
+    throw new Error(
+      `expandGrid: statement ${statementOrder}: fixed cliff date ${cliff.date} falls before the statement's start ${anchor}`,
+    );
+  }
 
-  // A fixed cliff smaller than the whole statement needs at least one occurrence
-  // strictly after the cliff date to carry the (1 − percentage) the lump doesn't
-  // take. When the cliff swallows the entire grid there is nowhere for the
-  // remainder to vest — refuse loudly rather than drop it. The DSL can't get
-  // here: it pins the cliff percentage to the pre-cliff share of the grid, which
-  // is exactly 1 in the swallowed case. Only direct template input can.
-  if (
-    postOccurrences.length === 0 &&
-    cliff.kind === "fixed" &&
-    cliff.percentage.numerator !== cliff.percentage.denominator
-  ) {
+  const { post } = splitAround(at, N, cliff.date);
+  const pct = cliff.percentage;
+  const swallowsGrid = post.length === 0;
+  const isFullGrant = pct.numerator === pct.denominator;
+
+  // A cliff below 100% needs at least one installment strictly after it to carry
+  // the remaining (1 − percentage). When the cliff swallows the whole grid (the
+  // date sits at or past the last installment, or every installment lands on the
+  // start with zero spacing) there is nowhere for that remainder to vest — refuse
+  // loudly rather than drop it. A 100% cliff has no remainder, so it lands as one
+  // full-grant lump even with nothing after it. The DSL can't reach this throw: it
+  // pins a fixed cliff's percentage to the pre-cliff share of the grid, which is
+  // exactly 1 when the cliff swallows the grid. Only direct template input can.
+  if (swallowsGrid && !isFullGrant) {
     throw new Error(
       `expandGrid: statement ${statementOrder}: fixed cliff with percentage < 1 leaves no occurrence after the cliff date; the remaining fraction would silently vanish`,
     );
   }
 
-  const pct =
-    cliff.kind === "fixed"
-      ? cliff.percentage
-      : fracReduce({ numerator: preCount, denominator: N });
+  // The stated percentage lands as the lump on the cliff date — any installment at
+  // or before it folds in (nothing vests pre-cliff) — and (1 − percentage) spreads
+  // over the installments strictly after.
+  return cliffLump(event, at, stmtFraction, cliff.date, pct, post);
+};
 
+/** The occurrences strictly after `cliffDate`, and how many fell at or before it. */
+const splitAround = (
+  at: (i: number) => OCTDate,
+  N: number,
+  cliffDate: OCTDate,
+): { pre: number; post: number[] } => {
+  const post: number[] = [];
+  let pre = 0;
+  for (let i = 1; i <= N; i++) {
+    if (gt(at(i), cliffDate)) post.push(i);
+    else pre++;
+  }
+  return { pre, post };
+};
+
+/**
+ * The lump of `pct` on the cliff date (occurrence 0, so it leads its day), then
+ * (1 − pct) split evenly over the post-cliff occurrences on their own grid dates.
+ * No post-cliff occurrence means the lump is the whole statement.
+ */
+const cliffLump = (
+  event: (date: OCTDate, fraction: Fraction, occurrence: number) => RawEvent,
+  at: (i: number) => OCTDate,
+  stmtFraction: Fraction,
+  cliffDate: OCTDate,
+  pct: Fraction,
+  post: number[],
+): RawEvent[] => {
   const events: RawEvent[] = [event(cliffDate, fracMul(stmtFraction, pct), 0)];
-
-  // Whatever the lump didn't take spreads evenly over the occurrences after the
-  // cliff. None after it — the cliff is at or past the last grid date — means the
-  // lump is the whole statement.
-  const P = postOccurrences.length;
-  if (P > 0) {
+  if (post.length > 0) {
     const per = fracMul(
       stmtFraction,
-      fracMul(fracSub(ONE, pct), { numerator: 1, denominator: P }),
+      fracMul(fracSub(ONE, pct), { numerator: 1, denominator: post.length }),
     );
-    for (const i of postOccurrences) events.push(event(at(i), per, i));
+    for (const i of post) events.push(event(at(i), per, i));
   }
   return events;
 };

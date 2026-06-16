@@ -659,6 +659,61 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
   });
 });
 
+// The event-cliff (proportional) path stays put while the fixed-cliff edges
+// changed: it sizes its lump from whatever the grid accrued by the firing, so it
+// must keep folding the whole grid into one lump when the firing lands past every
+// installment, and keep yielding the plain even grid when the firing predates the
+// vesting start — never throwing on either edge.
+describe("resolveToCore — event cliff at the grid edges (proportional, unchanged)", () => {
+  const eventCliff48: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 48,
+    cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+  };
+  const program: Program = [
+    stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+      eventCliff48,
+    ),
+  ];
+
+  it("fired after the last installment → one full-grant lump on the firing", () => {
+    // The grid ends 2029-01-01; ipo fires a year later. Every installment sits at
+    // or before the firing, so the whole grant folds into one lump there.
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2030-01-01" }, 4800),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.installments).toEqual([
+      { state: "RESOLVED", date: "2030-01-01", amount: 4800 },
+    ]);
+    expect(sum(result.installments)).toBe(4800);
+  });
+
+  it("fired before the vesting start → the plain even grid, no lump", () => {
+    // ipo fires before 2025-01-01: nothing accrued by then, so the holdback is
+    // empty and the grid vests evenly across its 48 months.
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2024-06-01" }, 4800),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.installments).toHaveLength(48);
+    expect(result.installments.every(isResolved)).toBe(true);
+    expect(result.installments[0]).toEqual({
+      state: "RESOLVED",
+      date: "2025-02-01",
+      amount: 100,
+    });
+    expect(sum(result.installments)).toBe(4800);
+  });
+});
+
 describe("resolveToCore — event cliff with an offset (CLIFF EVENT ipo + 1 month)", () => {
   // 200 shares, monthly over 2 months from 2024-01-01. The cliff lands one month
   // after the firing, so with ipo on 2024-02-15 the lump belongs on 2024-03-15 —
