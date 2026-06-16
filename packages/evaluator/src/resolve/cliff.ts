@@ -120,6 +120,29 @@ const gateVerdict = (
       };
 };
 
+// Count the grid occurrences whose vesting date falls at or before `cliffDate`,
+// on the origin-day grid (see the note on `origin` at `lowerCliff`) — the same
+// grid core later partitions the cliff lump on. This is the proportional cliff's
+// numerator: a cliff folds whatever the grid has accrued by its date into one
+// lump, so zero pre-cliff occurrences means an empty lump, i.e. no cliff at all.
+const preCliffCount = (
+  cliffDate: OCTDate,
+  anchor: OCTDate,
+  origin: OCTDate,
+  period: number,
+  periodType: PeriodType,
+  dom: VestingDayOfMonth,
+  occurrences: number,
+): number => {
+  const at = gridDate({ anchor, origin, period, periodType, dom });
+  let m = 0;
+  for (let i = 1; i <= occurrences; i++) {
+    if (gt(at(i), cliffDate)) break;
+    m++;
+  }
+  return m;
+};
+
 /**
  * Find (length, period_type) such that `addPeriod(anchor, length, period_type)`
  * === cliffDate: prefer the statement's period_type when the cliff lands on an
@@ -202,9 +225,29 @@ export const lowerCliff = (
     // events map here instead would drop the offset and land the lump a period
     // early. The expression resolves exactly when the event has fired (a pending
     // gate was routed away just above).
-    return isPickedResolved(res)
-      ? { state: "EVENT_FIRED", eventId: evId, effectiveAt: res.meta.date }
-      : { state: "EVENT_PENDING", eventId: evId };
+    if (!isPickedResolved(res))
+      return { state: "EVENT_PENDING", eventId: evId };
+    const effectiveAt = res.meta.date;
+    // A fired event cliff is proportional: its lump is whatever the grid has
+    // accrued by the effective date. When nothing has — the date sits at/before
+    // the start, or after it but ahead of the first installment — the lump is
+    // empty and there is no cliff. Mirrors the duration path's two no-effect
+    // guards below, keyed on the effective date (firing plus any cliff offset),
+    // so a MINUS offset that drags the date before the first installment also
+    // normalizes away while a PLUS offset that lands on/after it stays real.
+    if (
+      preCliffCount(
+        effectiveAt,
+        anchor,
+        origin,
+        period,
+        periodType,
+        ctx.vesting_day_of_month,
+        occurrences,
+      ) === 0
+    )
+      return { state: "NONE" };
+    return { state: "EVENT_FIRED", eventId: evId, effectiveAt };
   }
 
   // A violated gate (or any contradictory cliff) is dead.
@@ -253,15 +296,16 @@ export const lowerCliff = (
 
   const dom: VestingDayOfMonth = ctx.vesting_day_of_month;
 
-  // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate,
-  // counted on the origin-day grid (see the note on `origin` above) — the same
-  // grid core later partitions the lump on.
-  const at = gridDate({ anchor, origin, period, periodType, dom });
-  let m = 0;
-  for (let i = 1; i <= occurrences; i++) {
-    if (gt(at(i), cliffDate)) break;
-    m++;
-  }
+  // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate.
+  const m = preCliffCount(
+    cliffDate,
+    anchor,
+    origin,
+    period,
+    periodType,
+    dom,
+    occurrences,
+  );
   if (m === 0) return { state: "NONE" };
 
   const { length, period_type } = measureDuration(
