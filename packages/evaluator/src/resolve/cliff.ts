@@ -38,6 +38,12 @@ import {
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
+  // The two event-anchored states below are the deliberate floor, not a stub. The
+  // engine can already place an event cliff (classify.ts feeds EVENT_FIRED through
+  // the proportional grid kernel), but canonical's Cliff is duration-only by
+  // choice: whether the storable interchange may hold an event cliff is an open
+  // product question (#255). Until it's settled these route to "unrepresentable"
+  // rather than into a template — read them as gated, not unfinished.
   // Event-anchored cliff whose event is on record. `effectiveAt` is where the
   // cliff lands — the firing shifted by any offsets on the cliff anchor (`CLIFF
   // EVENT ipo + 1 month` lands a month after the firing). The record carries the

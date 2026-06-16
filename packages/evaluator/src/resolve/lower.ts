@@ -559,8 +559,9 @@ export const buildTemplate = (
     )
   )
     return unresolved();
-  // An event-anchored cliff never fits a template, but where it goes depends on
-  // the firing, read off the cliff record. Unfired, the cliff still gates its
+  // An event-anchored cliff never fits a template (the deliberate #255 gate —
+  // canonical's Cliff is duration-only), but where it goes depends on the firing,
+  // read off the cliff record. Unfired, the cliff still gates its
   // whole grid — the program is pending, and routing it to the events arm would
   // release the very installments the cliff holds back. Fired, the lump is
   // datable and the program flattens to dated events.
