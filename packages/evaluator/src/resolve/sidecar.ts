@@ -19,7 +19,11 @@
 // The synthetic id is only ever carried through here, never recomputed (persisted
 // and read, never re-derived), so the round-trip is lossless.
 
-import type { ResolutionContextInput, SourceMap } from "@vestlang/types";
+import type {
+  ResolutionContextInput,
+  SourceMap,
+  SourceMapEntry,
+} from "@vestlang/types";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 
@@ -64,11 +68,16 @@ export const toSidecar = (sourceMap: SourceMap): Sidecar | undefined =>
 
 /**
  * Read the source map back from a (possibly absent or dropped) sidecar. A missing
- * sidecar yields `{}`, so rehydration then computes no synthetic witnesses, leaving
- * the opaque template intact.
+ * sidecar yields an empty map, so rehydration then computes no synthetic witnesses,
+ * leaving the opaque template intact. The map is always null-proto — including the
+ * populated branch, the one a key colliding with `Object.prototype` would live on —
+ * so rehydrate's `Object.hasOwn` membership check reads it cleanly.
  */
 export const fromSidecar = (sidecar?: Sidecar): SourceMap =>
-  sidecar?.[VESTLANG_SIDECAR_NAMESPACE] ?? {};
+  Object.assign(
+    Object.create(null) as Record<string, SourceMapEntry>,
+    sidecar?.[VESTLANG_SIDECAR_NAMESPACE],
+  );
 
 /**
  * Bundle a `template`-arm artifact into its persisted form. This is also the

@@ -73,7 +73,14 @@ export function evaluateVestingBase(
             ],
           };
     case "EVENT": {
-      const eventDate = ctx.events[base.value];
+      // Read through `Object.hasOwn` so an id that collides with an
+      // `Object.prototype` key (`constructor`, `toString`, …) can't read back the
+      // inherited value off a plain events map. Keep the truthiness check after it:
+      // a named-but-unfired event is present with value `undefined`, and that must
+      // stay pending, not resolve to a `undefined` date.
+      const eventDate = Object.hasOwn(ctx.events, base.value)
+        ? ctx.events[base.value]
+        : undefined;
       return eventDate
         ? { type: "RESOLVED", date: applyOffsets(eventDate, node.offsets, ctx) }
         : {
