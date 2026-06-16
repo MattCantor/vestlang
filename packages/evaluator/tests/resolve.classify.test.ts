@@ -13,6 +13,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
+import { evaluateProgram } from "../src/evaluate/index";
 import { evaluateProgramAsOf } from "../src/asof";
 import {
   makeSingletonSchedule,
@@ -659,12 +660,13 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
   });
 });
 
-// The event-cliff (proportional) path stays put while the fixed-cliff edges
-// changed: it sizes its lump from whatever the grid accrued by the firing, so it
-// must keep folding the whole grid into one lump when the firing lands past every
-// installment, and keep yielding the plain even grid when the firing predates the
-// vesting start — never throwing on either edge.
-describe("resolveToCore — event cliff at the grid edges (proportional, unchanged)", () => {
+// The event-cliff (proportional) path sizes its lump from whatever the grid
+// accrued by the firing. At the late edge — the firing past every installment —
+// that's the whole grant in one lump, a real cliff. At the early edge — the
+// firing before the first installment accrues — there's nothing to fold, so the
+// lump is empty: the cliff drops away and the grid vests as a plain template, no
+// lump and no reported cliff date.
+describe("resolveToCore — event cliff at the grid edges (proportional)", () => {
   const eventCliff48: VestingPeriod = {
     type: "MONTHS",
     length: 1,
@@ -694,23 +696,184 @@ describe("resolveToCore — event cliff at the grid edges (proportional, unchang
     expect(sum(result.installments)).toBe(4800);
   });
 
-  it("fired before the vesting start → the plain even grid, no lump", () => {
-    // ipo fires before 2025-01-01: nothing accrued by then, so the holdback is
-    // empty and the grid vests evenly across its 48 months.
-    const result = resolveToCore(
-      program,
-      ctxInput({ ipo: "2024-06-01" }, 4800),
-    );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.installments).toHaveLength(48);
-    expect(result.installments.every(isResolved)).toBe(true);
-    expect(result.installments[0]).toEqual({
+  it("fired before the vesting start → a plain template, no cliff", () => {
+    // ipo fires before 2025-01-01: nothing accrued by then, so the empty lump
+    // drops the cliff entirely and the grid vests evenly across its 48 months as
+    // a single template — no events split, no cliff date.
+    const ctx = ctxInput({ ipo: "2024-06-01" }, 4800);
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("template");
+
+    const out = evaluateProgram(program, ctx);
+    expect(out.resolution.status).toBe("template");
+    expect(out.cliffDate).toBeNull();
+    // The interchange verdict can't store an event-anchored cliff, fired or not.
+    expect(out.interchange.status).toBe("unrepresentable");
+
+    if (out.resolution.status !== "template") return;
+    const grid = out.resolution.installments;
+    expect(grid).toHaveLength(48);
+    expect(grid.every(isResolved)).toBe(true);
+    expect(grid[0]).toEqual({
       state: "RESOLVED",
       date: "2025-02-01",
       amount: 100,
     });
-    expect(sum(result.installments)).toBe(4800);
+    expect(sum(grid)).toBe(4800);
+  });
+});
+
+// A fired event cliff whose effective date lands before the first installment has
+// nothing to fold into a lump, so it carries no projection effect. The resolution
+// path must say so: a plain template, no cliff date — not an events split reported
+// as if a real cliff sat on the firing. The interchange verdict is firing-blind,
+// so it still can't store the event-anchored cliff: the two verdicts legitimately
+// part ways here.
+describe("resolveToCore — fired event cliff with no projection effect", () => {
+  // VEST FROM DATE 2025-06-01 OVER 12 months EVERY 1 month CLIFF EVENT fda,
+  // grant 120000 → a clean 12 × 10,000 grid starting 2025-07-01.
+  const eventCliff12: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 12,
+    cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
+  };
+  const program: Program = [
+    stmt(
+      portion(1, 1),
+      makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+      eventCliff12,
+    ),
+  ];
+  // Jul 2025 … Jun 2026, 10,000 each.
+  const gridDates = [
+    "2025-07-01",
+    "2025-08-01",
+    "2025-09-01",
+    "2025-10-01",
+    "2025-11-01",
+    "2025-12-01",
+    "2026-01-01",
+    "2026-02-01",
+    "2026-03-01",
+    "2026-04-01",
+    "2026-05-01",
+    "2026-06-01",
+  ];
+  const evenGrid = gridDates.map((date) => ({
+    state: "RESOLVED" as const,
+    date,
+    amount: 10000,
+  }));
+
+  // The grid vests evenly whether the firing sits before the start or after it but
+  // ahead of the first installment — both are "nothing accrued yet", so both drop
+  // the cliff. The first installment lands 2025-07-01.
+  it.each([
+    ["before the start", "2025-02-01"],
+    ["after the start, before the first installment", "2025-06-15"],
+  ])("fda fires %s → a plain template, no cliff", (_label, fda) => {
+    const ctx = ctxInput({ fda }, 120000);
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("template");
+
+    const out = evaluateProgram(program, ctx);
+    expect(out.resolution.status).toBe("template");
+    expect(out.cliffDate).toBeNull();
+    // Firing-invariant: an event-anchored cliff has no storable home regardless.
+    expect(out.interchange.status).toBe("unrepresentable");
+
+    if (out.resolution.status !== "template") return;
+    expect(out.resolution.installments).toEqual(evenGrid);
+  });
+
+  it("fda fires on the first installment → a real cliff (the lump stands)", () => {
+    // The effective date equals the first grid date, so one installment (10,000)
+    // accrues by then and folds into a lump there — a genuine cliff, reported.
+    const ctx = ctxInput({ fda: "2025-07-01" }, 120000);
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.reason.kind).toBe("EVENT_CLIFF");
+    expect(result.cliffDate).toBe("2025-07-01");
+    expect(result.installments[0]).toEqual({
+      state: "RESOLVED",
+      date: "2025-07-01",
+      amount: 10000,
+    });
+    expect(sum(result.installments)).toBe(120000);
+  });
+
+  it("unfired fda holds the whole grid back (pending, unchanged)", () => {
+    // No premature NONE: an unfired event cliff is still routed to the held-back
+    // arm with its event blocker, the grid claimed but not released.
+    const result = resolveToCore(program, ctxInput({}, 120000));
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    expect(result.installments).toHaveLength(12);
+    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
+      true,
+    );
+    expect(result.cliffDate).toBeNull();
+    expect(result.blockers).toEqual([
+      { type: "EVENT_NOT_YET_OCCURRED", event: "fda" },
+    ]);
+  });
+});
+
+// The guard keys on the cliff's effective date (firing plus any offset on the
+// cliff anchor), not the raw firing. A MINUS offset can drag a firing that's past
+// the first installment back ahead of it — and then the cliff has nothing to fold
+// and drops away; a PLUS offset can push an early firing onto a real installment —
+// and then the cliff stands.
+describe("resolveToCore — the no-effect guard keys on the effective date", () => {
+  // 200 shares, monthly over 2 months from 2024-01-01 → installments Feb 1, Mar 1.
+  const monthlyOffsetCliff = (sign: "PLUS" | "MINUS"): VestingPeriod => ({
+    type: "MONTHS",
+    length: 1,
+    occurrences: 2,
+    cliff: makeSingletonNode(makeVestingBaseEvent("ipo"), [
+      makeDuration(1, "MONTHS", sign),
+    ]),
+  });
+
+  it("MINUS offset drags the effective date before the first installment → no cliff", () => {
+    // ipo fires 2024-02-10 (after the Feb 1 installment), but the −1 month offset
+    // pulls the effective date to 2024-01-10, before any installment accrues. The
+    // empty lump drops the cliff: a plain template, no cliff date.
+    const program: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2024-01-01")),
+        monthlyOffsetCliff("MINUS"),
+      ),
+    ];
+    const ctx = ctxInput({ grantDate: "2024-01-01", ipo: "2024-02-10" }, 200);
+    expect(resolveToCore(program, ctx).kind).toBe("template");
+
+    const out = evaluateProgram(program, ctx);
+    expect(out.resolution.status).toBe("template");
+    expect(out.cliffDate).toBeNull();
+    expect(out.interchange.status).toBe("unrepresentable");
+  });
+
+  it("PLUS offset pushes the effective date onto an installment → a real cliff", () => {
+    // ipo fires 2024-01-10 (before the Feb 1 installment), but the +1 month offset
+    // pushes the effective date to 2024-02-10 — past the Feb 1 installment, which
+    // accrues and folds into a lump. The cliff stands and reports its date.
+    const program: Program = [
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2024-01-01")),
+        monthlyOffsetCliff("PLUS"),
+      ),
+    ];
+    const ctx = ctxInput({ grantDate: "2024-01-01", ipo: "2024-01-10" }, 200);
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(result.cliffDate).toBe("2024-02-10");
+    expect(sum(result.installments)).toBe(200);
   });
 });
 
