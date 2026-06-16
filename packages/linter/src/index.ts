@@ -11,7 +11,7 @@ import {
 import { stableKey } from "@vestlang/utils";
 import { buildInRules } from "./rules/index.js";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { parse, asParseFailure } from "@vestlang/dsl";
+import { parse, toParseError } from "@vestlang/dsl";
 
 // Every node-level hook has this shape once we've forgotten which exact node
 // kind it subscribed to — which is all the driver needs to fan a node out to it.
@@ -68,28 +68,16 @@ export function lintText(source: string): LintResult {
     return { diagnostics: [...fromNormalizer, ...diagnostics] };
   } catch (err: unknown) {
     // `@vestlang/dsl` owns the thrown-error shape. A located peggy syntax error
-    // decodes to a `ParseFailure`; we render it (loc + code frame, built from the
-    // decoded loc, not the raw throw). Anything else falls through to the generic
-    // `unexpected-error` arm — that label is load-bearing in `markdown.ts`.
-    const failure = asParseFailure(err);
-    if (failure) {
-      const diagnostic: Diagnostic = {
-        ruleId: "syntax-error",
-        message: failure.message,
-        severity: "error",
-        path: [],
-        loc: failure.loc,
-        codeFrame: buildCodeFrame(source, failure.loc),
-      };
-      return { diagnostics: [diagnostic] };
-    }
-
-    // Non-peggy errors - surface as generic diagnostic
+    // classifies to a `loc`; we render it as a `syntax-error` with a code frame
+    // built from that loc (not the raw throw). A position-less throw is the same
+    // `syntax-error`, just without the loc/code frame.
+    const { message, loc } = toParseError(err);
     const diagnostic: Diagnostic = {
-      ruleId: "unexpected-error",
-      message: String((err as { message?: string })?.message ?? err),
+      ruleId: "syntax-error",
+      message,
       severity: "error",
       path: [],
+      ...(loc ? { loc, codeFrame: buildCodeFrame(source, loc) } : {}),
     };
     return { diagnostics: [diagnostic] };
   }

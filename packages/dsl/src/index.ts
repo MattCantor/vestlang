@@ -7,4 +7,4 @@ export function parse(input: string): RawProgram {
   return parser.parse(input) as RawProgram;
 }
 
-export { asParseFailure, type ParseFailure } from "./error.js";
+export { toParseError, type ParseError } from "./error.js";

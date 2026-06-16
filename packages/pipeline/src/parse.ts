@@ -5,7 +5,7 @@
 // CLI and the MCP server each map failures to their own output (a stderr line, a
 // JSON `{ error }`) in exactly one place.
 
-import { parse, asParseFailure } from "@vestlang/dsl";
+import { parse, toParseError } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type { Program, RawProgram } from "@vestlang/types";
 
@@ -28,23 +28,12 @@ export type Result<T> =
   | { ok: false; error: PipelineError };
 
 export function toPipelineError(err: unknown): PipelineError {
-  // `@vestlang/dsl` owns the thrown-error shape; we just map its decode into the
-  // `syntax-error` arm. The decoded `loc` (a `SourceLocation`) is structurally
-  // assignable to our local `Loc`.
-  const failure = asParseFailure(err);
-  if (failure) {
-    return {
-      ruleId: "syntax-error",
-      message: failure.message,
-      loc: failure.loc,
-    };
-  }
-  // Not a located peggy error (defensive fallback): keep it a loc-less
-  // `syntax-error`.
-  return {
-    ruleId: "syntax-error",
-    message: (err as { message?: string })?.message ?? String(err),
-  };
+  // `@vestlang/dsl` owns the thrown-error shape; we just map its classified
+  // result into the `syntax-error` arm. A located throw carries a `loc` (a
+  // `SourceLocation`, structurally assignable to our local `Loc`); a
+  // position-less one drops it.
+  const { message, loc } = toParseError(err);
+  return { ruleId: "syntax-error", message, ...(loc ? { loc } : {}) };
 }
 
 // For things the engine throws mid-evaluation (e.g. the installment cap). These
