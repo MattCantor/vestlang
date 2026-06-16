@@ -14,6 +14,7 @@ import type {
   ResolutionContextInput,
   InterchangeVerdict,
   NonTemplateReason,
+  OCTDate,
   Program,
 } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
@@ -175,7 +176,12 @@ export const resolveInterchange = (
   const ctx = createEvaluationContext(ctxInput);
   // grantDate and vestingStart are their own context fields, so blanking `events`
   // drops only the genuine named firings, not the system anchors a start needs.
-  const interchangeCtx = { ...ctx, events: {} };
+  // Null-proto so an EVENT atom named after a `Object.prototype` key still reads
+  // "not fired" here rather than the inherited value (the firing-blind path).
+  const interchangeCtx = {
+    ...ctx,
+    events: Object.create(null) as Record<string, OCTDate | undefined>,
+  };
   const build = buildTemplate(
     resolveStatements(program, interchangeCtx),
     interchangeCtx,

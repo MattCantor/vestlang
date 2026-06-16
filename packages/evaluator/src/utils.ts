@@ -1,5 +1,6 @@
 import {
   DEFAULT_VESTING_DAY_OF_MONTH,
+  OCTDate,
   ResolutionContext,
   ResolutionContextInput,
   AsOfContext,
@@ -69,8 +70,19 @@ export function createEvaluationContext(
     );
   }
 
+  // Rebuild `events` on a null prototype. An event id can legally be a
+  // `Object.prototype` key (`constructor`, `toString`, `__proto__`, …); on a
+  // plain object an unfired such id reads back the inherited value, so the EVENT
+  // atom would treat it as fired with a function for a "date" and throw. Copying
+  // own entries onto a prototype-less object makes a missing key read `undefined`.
+  const events = Object.assign(
+    Object.create(null) as Record<string, OCTDate | undefined>,
+    input.events,
+  );
+
   return {
     ...input,
+    events,
     vesting_day_of_month:
       input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
   };

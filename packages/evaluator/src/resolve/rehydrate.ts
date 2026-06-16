@@ -238,7 +238,10 @@ export const rehydrate = (
   // trivial definition is just `EVENT <id>` — so its witness and its
   // EVENT_NOT_YET_OCCURRED blocker fall out in the identical shape to a synthetic.
   for (const eventId of templateEventIds) {
-    if (eventId in sourceMap) continue;
+    // `Object.hasOwn`, not `in`: a bare event named after a prototype key (e.g.
+    // `constructor`) would match `in` against the inherited member and be skipped
+    // as if it had a sidecar entry, dropping its firing.
+    if (Object.hasOwn(sourceMap, eventId)) continue;
     // A synthetic id with no sidecar entry is a template whose definitions were
     // dropped: deliberately opaque, so it resolves to no witness. Don't reparse it
     // as `EVENT <id>` — its colon isn't a legal bare name and the parser would throw.
