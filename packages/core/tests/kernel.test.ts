@@ -149,69 +149,132 @@ describe("expandGrid", () => {
     ]);
   });
 
-  it("a cliff on or before the start is no cliff — plain even grid, no lump", () => {
-    // Both a cliff exactly on the anchor and one before it collapse to the even
-    // grid: there's nothing for a past cliff to hold back.
-    const onAnchor = grid(4, {
+  it("a fixed cliff on the start date honors its percentage — lump leads the grid", () => {
+    // A duration cliff that lands exactly on the anchor still owns its stated
+    // percentage: a 25% lump on the start, then 75% over the four occurrences.
+    const events = grid(4, {
       kind: "fixed",
       date: "2025-01-01",
       percentage: frac(1, 4),
     });
-    const beforeAnchor = grid(4, {
-      kind: "fixed",
-      date: "2024-12-01",
-      percentage: frac(1, 4),
-    });
-    const evenGrid = grid(4, { kind: "none" });
-    expect(onAnchor).toEqual(evenGrid);
-    expect(beforeAnchor).toEqual(evenGrid);
-    // No occurrence-0 lump in sight.
-    expect(onAnchor.some((e) => e.occurrence === 0)).toBe(false);
-  });
-
-  it("zero-spacing grid with a cliff on the start → even grid, nothing dropped", () => {
-    // period 0 puts every occurrence on the start date, and a zero-length cliff
-    // lands there too. The cliff is on the anchor, so it's treated as no cliff and
-    // the full grant still vests across the four (same-date) occurrences — the
-    // remainder is NOT lost.
-    const events = grid(
-      4,
-      {
-        kind: "fixed",
-        date: "2025-01-01",
-        percentage: frac(1, 4),
-      },
-      0,
-    );
     expect(events).toEqual([
       {
         date: "2025-01-01",
         fractionOfGrant: frac(1, 4),
         statementOrder: 1,
+        occurrence: 0,
+      },
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(3, 16),
+        statementOrder: 1,
         occurrence: 1,
       },
       {
-        date: "2025-01-01",
-        fractionOfGrant: frac(1, 4),
+        date: "2025-03-01",
+        fractionOfGrant: frac(3, 16),
         statementOrder: 1,
         occurrence: 2,
       },
       {
-        date: "2025-01-01",
-        fractionOfGrant: frac(1, 4),
+        date: "2025-04-01",
+        fractionOfGrant: frac(3, 16),
         statementOrder: 1,
         occurrence: 3,
       },
       {
-        date: "2025-01-01",
-        fractionOfGrant: frac(1, 4),
+        date: "2025-05-01",
+        fractionOfGrant: frac(3, 16),
         statementOrder: 1,
         occurrence: 4,
+      },
+    ]);
+  });
+
+  it("a fixed cliff before the first installment honors its percentage (#254)", () => {
+    // Cliff 10 days in (2025-01-11), before the first Feb 1 occurrence: the 25%
+    // lump lands on its own date, then 75% over all four months. Previously this
+    // silently dropped the percentage and returned the even grid.
+    const events = expandGrid({
+      anchor: "2025-01-01",
+      origin: "2025-01-01",
+      period: 1,
+      periodType: "MONTHS",
+      occurrences: 4,
+      stmtFraction: ONE,
+      statementOrder: 1,
+      dom: undefined,
+      cliff: { kind: "fixed", date: "2025-01-11", percentage: frac(1, 4) },
+    });
+    expect(events[0]).toEqual({
+      date: "2025-01-11",
+      fractionOfGrant: frac(1, 4),
+      statementOrder: 1,
+      occurrence: 0,
+    });
+    expect(events.slice(1).map((e) => e.fractionOfGrant)).toEqual([
+      frac(3, 16),
+      frac(3, 16),
+      frac(3, 16),
+      frac(3, 16),
+    ]);
+  });
+
+  it("an event cliff before the first installment stays an even grid (proportional)", () => {
+    // A fired event cliff takes only what the grid accrued by its date. None has
+    // by 2025-01-11, so there's no lump — the plain even grid, no spurious zero.
+    const events = grid(4, { kind: "proportional", date: "2025-01-11" });
+    expect(events).toEqual(grid(4, { kind: "none" }));
+    expect(events.some((e) => e.occurrence === 0)).toBe(false);
+  });
+
+  it("a fixed cliff with pct < 1 swallowing a zero-spacing grid throws", () => {
+    // period 0 puts every occurrence on the start date, so nothing lands strictly
+    // after a cliff on the start. A 25% cliff has 75% with nowhere to vest →
+    // refuse loudly rather than drop it.
+    expect(() =>
+      grid(4, { kind: "fixed", date: "2025-01-01", percentage: frac(1, 4) }, 0),
+    ).toThrow(/percentage < 1 leaves no occurrence after the cliff date/);
+  });
+
+  it("a 100% fixed cliff swallowing a zero-spacing grid honors as one lump", () => {
+    // Same zero-spacing grid, but a full-grant cliff has no remainder, so it lands
+    // as one 100% lump on the start — no throw.
+    const events = grid(
+      4,
+      { kind: "fixed", date: "2025-01-01", percentage: ONE },
+      0,
+    );
+    expect(events).toEqual([
+      {
+        date: "2025-01-01",
+        fractionOfGrant: ONE,
+        statementOrder: 1,
+        occurrence: 0,
       },
     ]);
     expect(allocateEvents(events, 400).reduce((a, e) => a + e.amount, 0)).toBe(
       400,
     );
+  });
+
+  it("a fixed cliff dated before the anchor throws", () => {
+    // A zero-length MONTHS cliff under a numeric vesting-day-of-month lower than the
+    // anchor's day snaps before the anchor: 2025-01-15 with dom 05 → 2025-01-05,
+    // before the vesting start. Nothing can vest there.
+    expect(() =>
+      expandGrid({
+        anchor: "2025-01-15",
+        origin: "2025-01-15",
+        period: 1,
+        periodType: "MONTHS",
+        occurrences: 4,
+        stmtFraction: ONE,
+        statementOrder: 1,
+        dom: "05",
+        cliff: { kind: "fixed", date: "2025-01-05", percentage: frac(1, 4) },
+      }),
+    ).toThrow(/falls before the statement's start/);
   });
 });
 

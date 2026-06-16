@@ -66,14 +66,18 @@ describe("kernel oracle — event payout scaled by a realized fraction", () => {
   });
 });
 
-// Issue #90, now fixed. A degenerate-but-valid schedule: zero spacing (period 0,
-// so every occurrence lands on the start date) and a zero-length cliff (so the
-// cliff also falls on the start date). A cliff that has already arrived by the
-// time vesting starts holds nothing back, so it's treated as no cliff and the
-// whole grant still vests across the (same-date) occurrences. The compiler used
-// to emit only the 25% lump and drop the other 75%; it no longer does.
-describe("kernel oracle — zero-spacing cliff on the start vests the full grant (#90)", () => {
-  const template: VestingScheduleTemplate = {
+// A degenerate-but-reachable schedule: zero spacing (period 0, every occurrence on
+// the start date) under a zero-length cliff (so the cliff also lands on the start).
+// A duration cliff now owns its stated percentage at the start rather than being
+// waved through as a no-op. With nothing strictly after the cliff, a sub-100%
+// percentage has no remainder to vest, so the compiler refuses loudly; only a 100%
+// cliff (which keeps the whole grant) is placeable. (Originally #90 dropped the
+// (1 − pct) silently — neither the old silent drop nor the later silent even-grid.)
+describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
+  const zeroSpacing = (
+    numerator: number,
+    denominator: number,
+  ): VestingScheduleTemplate => ({
     id: "period-0-cliff",
     statements: [
       {
@@ -85,24 +89,24 @@ describe("kernel oracle — zero-spacing cliff on the start vests the full grant
         cliff: {
           length: 0, // cliff also on the start date
           period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 4 }, // 25%
+          percentage: { numerator, denominator },
         },
         percentage: { numerator: 1, denominator: 1 },
       },
     ],
-  };
+  });
   const runtime: VestingRuntime = { startDate: "2025-01-01" };
 
-  it("vests the four equal occurrences on the start date", () => {
-    expect(compile(template, 400, runtime)).toEqual([
-      { date: "2025-01-01", amount: "100" },
-      { date: "2025-01-01", amount: "100" },
-      { date: "2025-01-01", amount: "100" },
-      { date: "2025-01-01", amount: "100" },
-    ]);
+  it("a sub-100% cliff has no remainder to vest → throws, not a silent drop", () => {
+    expect(() => compile(zeroSpacing(1, 4), 400, runtime)).toThrow(
+      /percentage < 1 leaves no occurrence after the cliff date/,
+    );
   });
 
-  it("vests the whole grant — 400 of 400 shares, nothing dropped", () => {
-    expect(sum(compile(template, 400, runtime))).toBe(400);
+  it("a 100% cliff is placeable — one full-grant lump, nothing dropped", () => {
+    expect(compile(zeroSpacing(1, 1), 400, runtime)).toEqual([
+      { date: "2025-01-01", amount: "400" },
+    ]);
+    expect(sum(compile(zeroSpacing(1, 1), 400, runtime))).toBe(400);
   });
 });

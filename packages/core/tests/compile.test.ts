@@ -333,6 +333,152 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 });
 
+// A duration cliff honors its stated percentage wherever it can land — on the
+// vesting start, before the first installment, or at an interior point — and
+// throws only when the percentage can't be placed: below 100% with nothing after
+// the cliff, or dated before the vesting start. These are reachable through direct
+// template input (the DSL never mints them).
+describe("compile — fixed cliff honors its percentage at the left edge", () => {
+  const monthly = (
+    occurrences: number,
+    cliff: VestingScheduleTemplate["statements"][number]["cliff"],
+  ): VestingScheduleTemplate => ({
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: DATE_BASE,
+        occurrences,
+        period: 1,
+        period_type: "MONTHS",
+        ...(cliff ? { cliff } : {}),
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  });
+
+  it("a length-0 cliff vests its percentage upfront on the start date", () => {
+    // 25% on 2025-01-01 (the start), then 75% spread over the 12 monthly grid
+    // points. Previously the cliff silently dropped and the grid vested evenly.
+    const events = compile(
+      monthly(12, {
+        length: 0,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 4 },
+      }),
+      120_000,
+      startJan2025,
+    );
+    expect(events[0]).toEqual({ date: "2025-01-01", amount: "30000" });
+    expect(events).toHaveLength(13);
+    expect(sumAmounts(events)).toBe(120_000);
+  });
+
+  it("a cliff dated before the first installment still vests its percentage", () => {
+    // Cliff 10 days in (2025-01-11), ahead of the first Feb 1 occurrence: 25% on
+    // 2025-01-11, then 75% over the 12 months. (#254 — previously an even grid.)
+    const events = compile(
+      monthly(12, {
+        length: 10,
+        period_type: "DAYS",
+        percentage: { numerator: 1, denominator: 4 },
+      }),
+      120_000,
+      startJan2025,
+    );
+    expect(events[0]).toEqual({ date: "2025-01-11", amount: "30000" });
+    expect(events).toHaveLength(13);
+    expect(sumAmounts(events)).toBe(120_000);
+  });
+
+  it("an interior cliff with a free-form percentage lumps then spreads the rest", () => {
+    // 3 months in from 2025-01-01 lands the cliff on 2025-04-01: a 50% lump, then
+    // 50% over the 9 later months.
+    const events = compile(
+      monthly(12, {
+        length: 3,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 2 },
+      }),
+      1200,
+      startJan2025,
+    );
+    expect(events[0]).toEqual({ date: "2025-04-01", amount: "600" });
+    expect(sumAmounts(events)).toBe(1200);
+  });
+
+  it("a cliff below 100% that swallows the whole grid throws", () => {
+    // 12-month cliff on a 12-month grid at 25%: nothing lands strictly after, so
+    // the remaining 75% has nowhere to vest.
+    expect(() =>
+      compile(
+        monthly(12, {
+          length: 12,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 4 },
+        }),
+        120_000,
+        startJan2025,
+      ),
+    ).toThrow(/percentage < 1 leaves no occurrence after the cliff date/);
+  });
+
+  it("a zero-spacing grid with a sub-100% cliff throws (nothing after the cliff)", () => {
+    // period 0 stacks every occurrence on the start; a length-0 cliff lands there
+    // too, so no installment is strictly after it. 25% leaves 75% homeless.
+    const template: VestingScheduleTemplate = {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 4,
+          period: 0,
+          period_type: "MONTHS",
+          cliff: {
+            length: 0,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    expect(() => compile(template, 400, startJan2025)).toThrow(
+      /percentage < 1 leaves no occurrence after the cliff date/,
+    );
+  });
+
+  it("a numeric vesting day pulling the cliff before the anchor throws", () => {
+    // Anchor 2025-01-15, a length-0 MONTHS cliff under vesting day 05 snaps to
+    // 2025-01-05 — before the grant began. The two throws read distinctly.
+    const template: VestingScheduleTemplate = {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: DATE_BASE,
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 0,
+            period_type: "MONTHS",
+            percentage: { numerator: 1, denominator: 4 },
+          },
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    };
+    expect(() =>
+      compile(template, 400, {
+        startDate: "2025-01-15",
+        vestingDayOfMonth: "05",
+      }),
+    ).toThrow(/falls before the statement's start/);
+  });
+});
+
 // R2-B23: an over-1 statement percentage is deliberately valid template input
 // (over-allocation is a finding's job, not the validator's). Output stays
 // uncapped at sane sizes; where the quotient would no longer cast exactly, the
