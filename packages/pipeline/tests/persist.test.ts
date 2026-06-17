@@ -22,13 +22,13 @@ const BARE_EVENT_DSL =
 
 function persistOk(input: PersistInput) {
   const r = runPersist(input);
-  if (!r.ok) throw new Error(`expected persist ok, got: ${r.error}`);
+  if (!r.ok) throw new Error(`expected persist ok, got: ${r.error.message}`);
   return r;
 }
 
 function rehydrateOk(input: RehydrateInput) {
   const r = runRehydrate(input);
-  if (!r.ok) throw new Error(`expected rehydrate ok, got: ${r.error}`);
+  if (!r.ok) throw new Error(`expected rehydrate ok, got: ${r.error.message}`);
   return r;
 }
 
@@ -42,7 +42,10 @@ describe("runPersist (AC#4)", () => {
       grant_quantity: 4800,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/unsatisfiable-date-window/);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("persist-not-storable");
+      expect(r.error.message).toMatch(/unsatisfiable-date-window/);
+    }
   });
 
   it("refuses an over-allocating program, naming the over-allocation", () => {
@@ -54,7 +57,10 @@ describe("runPersist (AC#4)", () => {
       grant_quantity: 4800,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/over-allocat/);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("persist-not-storable");
+      expect(r.error.message).toMatch(/over-allocat/);
+    }
   });
 
   it("refuses a non-template resolution, naming the status", () => {
@@ -66,7 +72,10 @@ describe("runPersist (AC#4)", () => {
       grant_quantity: 1000,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("template");
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("persist-not-storable");
+      expect(r.error.message).toContain("template");
+    }
   });
 
   it("returns the artifact plus pending/dead for a pending template (dead is [])", () => {
@@ -115,7 +124,10 @@ describe("runRehydrate (AC#5)", () => {
       grant_quantity: 400,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/grant date/i);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-missing-grant-date");
+      expect(r.error.message).toMatch(/grant date/i);
+    }
   });
 
   it("refuses a corrupt stored definition, naming the event and not leaking parser text", () => {
@@ -141,9 +153,10 @@ describe("runRehydrate (AC#5)", () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.error).toContain("evt_1");
-      expect(r.error).toMatch(/corrupt|unparseable/i);
-      expect(r.error).not.toContain('Expected "DATE"');
+      expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
+      expect(r.error.message).toContain("evt_1");
+      expect(r.error.message).toMatch(/corrupt|unparseable/i);
+      expect(r.error.message).not.toContain('Expected "DATE"');
     }
   });
 
@@ -271,11 +284,12 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;
+    expect(r.error.ruleId).toBe("rehydrate-over-allocation");
     // The formatFinding clause: 125% and the exact fraction.
-    expect(r.error).toContain("125%");
-    expect(r.error).toContain("5/4");
+    expect(r.error.message).toContain("125%");
+    expect(r.error.message).toContain("5/4");
     // Plus the shared damaged-artifact guidance the other refusals carry.
-    expect(r.error).toContain(
+    expect(r.error.message).toContain(
       "The artifact appears to be damaged; supply one built by vestlang_persist.",
     );
   });
@@ -310,7 +324,10 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
       grant_quantity: 1000,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/over-allocat/);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-over-allocation");
+      expect(r.error.message).toMatch(/over-allocat/);
+    }
   });
 
   it("AC#4: an exactly-1 (1/2 + 1/2) artifact still rehydrates, with the full payload", () => {
@@ -403,8 +420,9 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     });
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error).toContain("125%");
-    expect(r.error).toContain("over-allocat");
+    expect(r.error.ruleId).toBe("rehydrate-over-allocation");
+    expect(r.error.message).toContain("125%");
+    expect(r.error.message).toContain("over-allocat");
     expect(r).not.toHaveProperty("projection");
     expect(r).not.toHaveProperty("pending");
   });

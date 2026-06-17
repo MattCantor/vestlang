@@ -619,6 +619,38 @@ describe("mcp-server / persistence tool pair", () => {
     expect(text).toMatch(/grant date/i);
   });
 
+  // Issue #296 — unifying the orchestrators onto a structured PipelineError must
+  // NOT change a single operator-facing byte. persist/rehydrate still surface
+  // their refusal through the MCP `isError` text (now `toolError(error.message)`),
+  // so the message a tool consumer reads is exactly what it was before.
+  it("AC#5: rehydrate's missing-grant-date isError text is byte-stable", async () => {
+    const client = await connectClient();
+    const res = await rehydrateRaw(client, {
+      artifact: {
+        template: { id: "t1", statements: [] },
+        runtime: { startDate: "2025-01-01" },
+      },
+      grant_quantity: 400,
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content?.[0]?.text).toBe(
+      "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
+    );
+  });
+
+  it("AC#5: persist's non-template refusal isError text is byte-stable", async () => {
+    const client = await connectClient();
+    const res = await persist(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content?.[0]?.text).toBe(
+      'Only a template-resolution program is storable as a persisted artifact; this program resolved to "unresolved". Adjust the schedule so it collapses to a single canonical template.',
+    );
+  });
+
   // ---- Issue #230: dead blockers split out of `pending` ----
   //
   // A windowed gate: ipo must fire strictly inside (2026-01-01, 2026-06-01). It's a

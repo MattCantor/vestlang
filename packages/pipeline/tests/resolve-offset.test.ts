@@ -41,10 +41,12 @@ describe("runResolveOffset", () => {
       grant_date: "2025-01-01",
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.error).toMatch(/unresolved/i);
+    if (!r.ok && r.error.ruleId === "offset-unresolved") {
+      expect(r.error.message).toMatch(/unresolved/i);
       // The hold-up names the missing event via blockerToString — "EVENT ipo".
-      expect(r.unresolved).toMatch(/ipo/i);
+      expect(r.error.unresolved).toMatch(/ipo/i);
+    } else {
+      expect.fail("expected an offset-unresolved refusal");
     }
   });
 
@@ -62,7 +64,12 @@ describe("runResolveOffset", () => {
       grant_date: "2025-01-01",
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/parse/i);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("syntax-error");
+      expect(r.error.message).toMatch(/parse/i);
+      // Rewrapped against the synthetic `VEST FROM` prefix, so no source span.
+      expect(r.error).not.toHaveProperty("loc");
+    }
   });
 
   // A day offset large enough to overflow used to leak an internal runtime
@@ -155,9 +162,11 @@ describe("runResolveOffset", () => {
       grant_date: "2025-01-01",
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.unresolved).toMatch(/a/);
-      expect(r.unresolved).toMatch(/b/);
+    if (!r.ok && r.error.ruleId === "offset-unresolved") {
+      expect(r.error.unresolved).toMatch(/a/);
+      expect(r.error.unresolved).toMatch(/b/);
+    } else {
+      expect.fail("expected an offset-unresolved refusal");
     }
   });
 
@@ -171,10 +180,12 @@ describe("runResolveOffset", () => {
       events: { a: "2025-03-01", b: "2025-04-01" },
     });
     expect(r.ok).toBe(false);
-    if (!r.ok)
-      expect(r.error).toMatch(
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("offset-not-single-expression");
+      expect(r.error.message).toMatch(
         /single|one statement|multiple statements|offset expression/i,
       );
+    }
   });
 
   // AC#6 — a THEN tail parses to a head + chained tail. This is the intentional
@@ -186,9 +197,11 @@ describe("runResolveOffset", () => {
       events: { a: "2025-03-01" },
     });
     expect(r.ok).toBe(false);
-    if (!r.ok)
-      expect(r.error).toMatch(
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("offset-not-single-expression");
+      expect(r.error.message).toMatch(
         /single|one statement|multiple statements|offset expression/i,
       );
+    }
   });
 });
