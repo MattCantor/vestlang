@@ -121,6 +121,56 @@
     }
     return false;
   }
+  // True if any BEFORE/AFTER gate hanging off `node` references vestingStart.
+  // On a FROM start this is circular: the gate constrains the very start it
+  // defines, and vestingStart isn't known yet while that start resolves, so the
+  // gate can never settle. We look only at gate *conditions* here — the anchor
+  // base is hasSystemAnchor's territory — which is what keeps a bare
+  // `FROM vestingStart` on the anchor message instead of this one.
+  //
+  // Two mutually-recursive walks over the raw (pre-normalize) parse shape:
+  // nodeGateRefsVestingStart descends node forms to find a gate, and
+  // conditionRefsVestingStart walks a gate's boolean/atom tree. This duplicates
+  // what the `walk` package does on the normalized shape, but the peggy prelude
+  // runs at parse time and can't import it, and the raw shape differs (an atom's
+  // reference lives inline at `constraint.base`). Keep the two in step if the
+  // parse-time Condition shape gains a node type.
+  function nodeGateRefsVestingStart(node) {
+    if (!node || typeof node !== "object") return false;
+    // A plain node carries at most one gate, in `.condition`. The node's own
+    // `.base` is the anchor — not our concern.
+    if (node.type === "NODE") {
+      return node.condition
+        ? conditionRefsVestingStart(node.condition)
+        : false;
+    }
+    // A selector sits at the anchor; each arm is itself a node that can carry
+    // its own gate. Reject if any arm's gate references vestingStart — at parse
+    // time there's no "chosen" arm.
+    if (node.type === "NODE_EARLIER_OF" || node.type === "NODE_LATER_OF") {
+      return Array.isArray(node.items)
+        && node.items.some(nodeGateRefsVestingStart);
+    }
+    return false;
+  }
+  function conditionRefsVestingStart(cond) {
+    if (!cond || typeof cond !== "object") return false;
+    // A leaf comparison: `BEFORE/AFTER <node>`. The compared-against node is the
+    // gate reference, and it can itself carry a nested gate (`a AFTER b AFTER
+    // vestingStart`), so check the base's tag and recurse into its own gate.
+    if (cond.type === "ATOM") {
+      const base = cond.constraint && cond.constraint.base;
+      if (!base || typeof base !== "object") return false;
+      if (base.base && base.base.type === "VESTING_START") return true;
+      return nodeGateRefsVestingStart(base);
+    }
+    // The only boolean tags (see mkBool); nesting like OR(…, AND(…)) is possible.
+    if (cond.type === "AND" || cond.type === "OR") {
+      return Array.isArray(cond.items)
+        && cond.items.some(conditionRefsVestingStart);
+    }
+    return false;
+  }
 }
 
 Start
