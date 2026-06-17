@@ -1,7 +1,6 @@
 import type {
   AtomCondition,
   Blocker,
-  ConstraintTag,
   ImpossibleBlocker,
   ImpossibleNode,
   NodeMeta,
@@ -10,8 +9,7 @@ import type {
   UnresolvedNode,
   VestingNode,
 } from "@vestlang/types";
-import { assertNever } from "@vestlang/utils";
-import { eq, gt, lt } from "@vestlang/core";
+import { satisfiesRelation } from "@vestlang/core";
 import { withBoundary } from "../boundary.js";
 
 /* ------------------------
@@ -24,29 +22,6 @@ const createImpossibleBlocker = (
   type: "IMPOSSIBLE_CONDITION",
   node,
 });
-
-const failByRelation = (
-  relation: ConstraintTag,
-  isStrict: boolean,
-  subject: OCTDate,
-  constraintBase: OCTDate,
-): boolean => {
-  const isBefore = lt(subject, constraintBase);
-  const isEqual = eq(subject, constraintBase);
-  const isAfter = gt(subject, constraintBase);
-
-  if (relation === "BEFORE") {
-    // strict: A < B; non-strict: A <= B
-    return isStrict ? !isBefore : !(isBefore || isEqual);
-  }
-
-  if (relation === "AFTER") {
-    // strict: A > B; non-strict A>=B
-    return isStrict ? !isAfter : !(isAfter || isEqual);
-  }
-
-  return assertNever(relation);
-};
 
 const mergedUnresolved = (
   nodes: (UnresolvedNode | ImpossibleNode)[],
@@ -127,8 +102,9 @@ export function evaluateConstraint(
     return mergedUnresolved(pending, vestingNode, knownDate);
   }
 
-  // Both dates known: run the comparison.
-  if (failByRelation(constraint.type, isStrict, a.date, b.date)) {
+  // Both dates known: run the comparison. A proviso that the two known dates
+  // don't satisfy makes the gate impossible.
+  if (!satisfiesRelation(constraint.type, isStrict, a.date, b.date)) {
     return [createImpossibleBlocker(vestingNode)];
   }
   return undefined;

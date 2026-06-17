@@ -7,6 +7,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@vestlang/core": "workspace:*",
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",

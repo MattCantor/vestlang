@@ -11,7 +11,12 @@
 // All stepping is done in UTC (dates built at UTC midnight, read back in UTC),
 // so day arithmetic never drifts across DST transitions.
 
-import type { OCTDate, PeriodType, VestingDayOfMonth } from "@vestlang/types";
+import type {
+  ConstraintTag,
+  OCTDate,
+  PeriodType,
+  VestingDayOfMonth,
+} from "@vestlang/types";
 import {
   DEFAULT_VESTING_DAY_OF_MONTH,
   isNumericDayOfMonth,
@@ -243,6 +248,36 @@ export const advanceCursor = (
 export const lt = (a: OCTDate, b: OCTDate): boolean => a < b;
 export const gt = (a: OCTDate, b: OCTDate): boolean => a > b;
 export const eq = (a: OCTDate, b: OCTDate): boolean => a === b;
+
+// Does `subject` satisfy a single BEFORE/AFTER bound anchored at `base`? This is
+// the one per-edge rule both the evaluator (deciding a fired/literal proviso) and
+// the linter (deciding whether a date window is empty) lean on, so it lives here
+// rather than being re-derived in each.
+//
+// `strict` is the STRICTLY modifier from the DSL: bare BEFORE/AFTER admit the
+// boundary day, STRICTLY excludes it.
+//   BEFORE         subject <= base   (STRICTLY: subject < base)
+//   AFTER          subject >= base   (STRICTLY: subject > base)
+export const satisfiesRelation = (
+  relation: ConstraintTag,
+  strict: boolean,
+  subject: OCTDate,
+  base: OCTDate,
+): boolean => {
+  switch (relation) {
+    case "BEFORE":
+      return strict
+        ? lt(subject, base)
+        : lt(subject, base) || eq(subject, base);
+    case "AFTER":
+      return strict
+        ? gt(subject, base)
+        : gt(subject, base) || eq(subject, base);
+    default:
+      // A future third relation lands here as a typecheck error, not a silent pass.
+      return assertNever(relation);
+  }
+};
 
 // Whole calendar days from `a` to `b` (negative when `b` precedes `a`). Both
 // dates are UTC midnights via `toDate`, so the millisecond span is an exact
