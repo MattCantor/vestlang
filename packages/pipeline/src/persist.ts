@@ -23,6 +23,7 @@ import {
   rehydratePersisted,
   fromSidecar,
   isRehydrateDefinitionError,
+  templateAllocationFindings,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
 import { errorDiagnostics, lintText } from "@vestlang/linter";
@@ -185,7 +186,8 @@ export interface RehydrateOutput {
 }
 
 // Mirrors PersistResult: a clean success or a refusal carrying a clear message.
-// The only refusal today is a hand-built artifact with no stored grant date.
+// Refusals all signal a damaged artifact: a missing stored grant date, a corrupt
+// event definition, or a template that allocates more than the whole grant.
 export type RehydrateResult =
   | ({ ok: true } & RehydrateOutput)
   | { ok: false; error: string };
@@ -225,6 +227,27 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
       ok: false,
       error:
         "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
+    };
+  }
+
+  // A persisted artifact can also arrive over-allocating — a hand-built or foreign
+  // one whose statement percentages sum past 100% — which would otherwise rehydrate
+  // to a projection that vests more than the whole grant. Re-check the stored
+  // template's allocation up front, mirroring persist's #226 store-time gate, so the
+  // over-vesting stream never materializes. The check reads the template alone
+  // (firing-independent), so it runs before any witness re-resolution. Sharing the
+  // evaluator's primitive keeps this rule and persist's in lockstep.
+  const allocationErrors = errorFindings(
+    templateAllocationFindings(input.artifact.template, input.grant_quantity),
+  );
+  if (allocationErrors.length > 0) {
+    return {
+      ok: false,
+      error: `Cannot rehydrate: ${allocationErrors
+        .map(formatFinding)
+        .join(
+          "; ",
+        )}. The artifact appears to be damaged; supply one built by vestlang_persist.`,
     };
   }
 

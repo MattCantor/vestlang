@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { PersistedArtifact } from "@vestlang/evaluator";
 import {
   runPersist,
   runRehydrate,
@@ -226,6 +227,196 @@ describe("runRehydrate (AC#5)", () => {
     expect(out.firings_to_apply).toEqual([
       { event_id: "ipo", date: "2025-01-31", definition: null },
     ]);
+  });
+});
+
+describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () => {
+  // A persisted artifact can be hand-built, edited in external storage, or come
+  // from a foreign tool — so rehydrate re-checks that its statement percentages
+  // don't sum past the whole grant before it ever compiles a projection.
+
+  // The issue's repro: one DATE-anchored statement claiming 5/4 of the grant, on a
+  // 4800-share grant, would project [1500,1500,1500,1500] = 6000 shares.
+  const overAllocatingDateArtifact = (): PersistedArtifact => ({
+    template: {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: { type: "DATE" },
+          occurrences: 4,
+          period: 3,
+          period_type: "MONTHS",
+          percentage: { numerator: 5, denominator: 4 },
+        },
+      ],
+    },
+    runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+  });
+
+  it("AC#1: refuses the issue repro, with no projection ever materialized", () => {
+    const r = runRehydrate({
+      artifact: overAllocatingDateArtifact(),
+      grant_quantity: 4800,
+    });
+    expect(r.ok).toBe(false);
+    // The over-vesting stream must never be built — not merely flagged.
+    expect(r).not.toHaveProperty("projection");
+  });
+
+  it("AC#2: the refusal names the over-allocation and the damaged-artifact guidance", () => {
+    const r = runRehydrate({
+      artifact: overAllocatingDateArtifact(),
+      grant_quantity: 4800,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    // The formatFinding clause: 125% and the exact fraction.
+    expect(r.error).toContain("125%");
+    expect(r.error).toContain("5/4");
+    // Plus the shared damaged-artifact guidance the other refusals carry.
+    expect(r.error).toContain(
+      "The artifact appears to be damaged; supply one built by vestlang_persist.",
+    );
+  });
+
+  it("AC#3: catches over-allocation summed across multiple statements", () => {
+    // 3/4 + 3/4 = 3/2 — each statement is fine alone, the sum is not.
+    const r = runRehydrate({
+      artifact: {
+        template: {
+          id: "t1",
+          statements: [
+            {
+              order: 1,
+              vesting_base: { type: "DATE" },
+              occurrences: 1,
+              period: 12,
+              period_type: "MONTHS",
+              percentage: { numerator: 3, denominator: 4 },
+            },
+            {
+              order: 2,
+              vesting_base: { type: "DATE" },
+              occurrences: 1,
+              period: 12,
+              period_type: "MONTHS",
+              percentage: { numerator: 3, denominator: 4 },
+            },
+          ],
+        },
+        runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+      },
+      grant_quantity: 1000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/over-allocat/);
+  });
+
+  it("AC#4: an exactly-1 (1/2 + 1/2) artifact still rehydrates, with the full payload", () => {
+    // The over/exact boundary: summing to exactly the whole grant is valid.
+    const out = rehydrateOk({
+      artifact: {
+        template: {
+          id: "t1",
+          statements: [
+            {
+              order: 1,
+              vesting_base: { type: "DATE" },
+              occurrences: 1,
+              period: 12,
+              period_type: "MONTHS",
+              percentage: { numerator: 1, denominator: 2 },
+            },
+            {
+              order: 2,
+              vesting_base: { type: "DATE" },
+              occurrences: 1,
+              period: 12,
+              period_type: "MONTHS",
+              percentage: { numerator: 1, denominator: 2 },
+            },
+          ],
+        },
+        runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+      },
+      grant_quantity: 1000,
+    });
+    expect(out.projection).toBeDefined();
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.pending).toEqual([]);
+    expect(out.dead).toEqual([]);
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(1000);
+  });
+
+  it("AC#4: an under-allocating (1/2) artifact still rehydrates — under is a warning", () => {
+    const out = rehydrateOk({
+      artifact: {
+        template: {
+          id: "t1",
+          statements: [
+            {
+              order: 1,
+              vesting_base: { type: "DATE" },
+              occurrences: 2,
+              period: 6,
+              period_type: "MONTHS",
+              percentage: { numerator: 1, denominator: 2 },
+            },
+          ],
+        },
+        runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+      },
+      grant_quantity: 1000,
+    });
+    expect(out.projection).toBeDefined();
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.pending).toEqual([]);
+    expect(out.dead).toEqual([]);
+    // Only half the grant vests — the rest is legally left unvested.
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(500);
+  });
+
+  it("AC#6: an over-allocating EVENT-anchored artifact is refused before the witness resolves", () => {
+    // The over-allocating statement is anchored to an event that has NOT fired. The
+    // gate reads the template alone (firing-independent), so it pre-empts the
+    // "wait for the witness" path: a refusal, not a pending/empty projection.
+    const r = runRehydrate({
+      artifact: {
+        template: {
+          id: "t1",
+          statements: [
+            {
+              order: 1,
+              vesting_base: { type: "EVENT", event_id: "ipo" },
+              occurrences: 4,
+              period: 3,
+              period_type: "MONTHS",
+              percentage: { numerator: 5, denominator: 4 },
+            },
+          ],
+        },
+        runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+      },
+      grant_quantity: 4800,
+      // ipo intentionally not supplied — the gate must still fire.
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain("125%");
+    expect(r.error).toContain("over-allocat");
+    expect(r).not.toHaveProperty("projection");
+    expect(r).not.toHaveProperty("pending");
+  });
+
+  it("a zero-share grant on an over-allocating template is NOT refused (nothing to allocate)", () => {
+    // The zero guard lives in the shared primitive, so rehydrate inherits persist's
+    // behavior: no shares means no allocation to over-run, hence no refusal.
+    const out = rehydrateOk({
+      artifact: overAllocatingDateArtifact(),
+      grant_quantity: 0,
+    });
+    expect(out.projection).toBeDefined();
   });
 });
 
