@@ -228,14 +228,21 @@ export const rehydrate = (
 
   // The grant's frozen conventions come from the stored runtime, not the caller.
   // Grant date and day-of-month were fixed at issuance, so the witnesses we
-  // re-resolve here must read the same values the projection compiles under —
-  // otherwise an offset synthetic (e.g. `EVENT ipo + 1 month`) could land a day
-  // off the projection grid. The caller still owns world state (events) and
-  // grantQuantity; the matching ctxInput grant-date / day-of-month fields are
-  // deliberately ignored. The grant-date fallback only matters for a
-  // hand-built artifact that omits runtime.grantDate — a persisted one always
-  // carries it. day-of-month is set unconditionally: when the grant used the
-  // default rule lower.ts doesn't store it, so this is undefined and
+  // re-resolve here must read the same values the projection compiles under. The
+  // witness itself is an offset start (`EVENT ipo + 1 month`), so its MONTHS
+  // offset steps *exact* — keep ipo's day, clamping to month-end on a short
+  // month (ipo 2025-01-31 + 1mo → 2025-02-28), never snapping to a stored "15".
+  // The grid then re-snaps to the policy day from that witness, identically on
+  // both sides of the round-trip, so the start no longer sits on the grid day —
+  // that coincidence was a side effect of the offset-snap we removed (#253). The
+  // day-of-month still has to be the stored one because the *grid* reads it; an
+  // offset synthetic resolved under a mismatched policy would re-snap onto a
+  // different grid than the projection compiles. The caller still owns world
+  // state (events) and grantQuantity; the matching ctxInput grant-date /
+  // day-of-month fields are deliberately ignored. The grant-date fallback only
+  // matters for a hand-built artifact that omits runtime.grantDate — a persisted
+  // one always carries it. day-of-month is set unconditionally: when the grant
+  // used the default rule lower.ts doesn't store it, so this is undefined and
   // createEvaluationContext re-applies the same canonical default the projection
   // uses.
   const ctx = createEvaluationContext({

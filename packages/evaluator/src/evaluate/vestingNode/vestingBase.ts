@@ -9,7 +9,7 @@ import type {
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 import { addDays } from "@vestlang/core";
-import { addMonthsRule } from "../time.js";
+import { addMonthsRule, addMonthsExact } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
 // a type tag, not a string; this is purely the word a diagnostic prints. Module-
@@ -34,11 +34,27 @@ export type CliffEvaluationContext = ResolutionContext & {
 export const isVestingStartPlaceholder = (b: Blocker): boolean =>
   b.type === "EVENT_NOT_YET_OCCURRED" && b.event === VESTING_START_LABEL;
 
+// What this node is being resolved *as*. A node played as the schedule's own
+// anchor (a start, or a cliff hanging off the vesting start) is a vesting date;
+// played as a BEFORE/AFTER reference it's a comparison boundary. The distinction
+// decides whether a MONTHS offset snaps to the day-of-month policy: only cadence
+// snaps, and only an anchor can be cadence. A gate is always exact, even when it
+// references the same `vestingStart` anchor a cliff would snap on (the #351
+// construct) — so `base.type` alone can't make the call, and the caller threads
+// its role in. See applyOffsets for the rule.
+export type VestingBaseRole = "anchor" | "gate";
+
 export function evaluateVestingBase(
   node: VestingNode,
   ctx: CliffEvaluationContext,
+  role: VestingBaseRole,
 ): ResolvedNode | UnresolvedNode {
   const base = node.base;
+  // A MONTHS offset snaps to the policy only when this node is the cadence
+  // anchor *and* it hangs off the vesting start (the bare-duration cliff
+  // `CLIFF N months`). Every other case — start anchors, date/event offsets, and
+  // all gate boundaries regardless of anchor — steps an exact duration.
+  const snap = role === "anchor" && base.type === "VESTING_START";
   switch (base.type) {
     // A literal calendar date is a known value, full stop. A date in the future
     // is no less *known* than one in the past — only its position relative to
@@ -46,7 +62,7 @@ export function evaluateVestingBase(
     // never gate it on asOf: whether the schedule has actually reached this date
     // yet is decided later, by comparing installment dates against asOf.
     case "DATE": {
-      const date = applyOffsets(base.value, node.offsets, ctx);
+      const date = applyOffsets(base.value, node.offsets, ctx, snap);
       return { type: "RESOLVED", date };
     }
     // The grant date is always known (a required context field), so this anchor
@@ -55,7 +71,7 @@ export function evaluateVestingBase(
     case "GRANT_DATE":
       return {
         type: "RESOLVED",
-        date: applyOffsets(ctx.grantDate, node.offsets, ctx),
+        date: applyOffsets(ctx.grantDate, node.offsets, ctx, snap),
       };
     // The vesting start is overlaid per-statement while resolving a cliff. If a
     // VESTING_START anchor is evaluated without that overlay, treat it as pending
@@ -64,7 +80,7 @@ export function evaluateVestingBase(
       return ctx.vestingStart
         ? {
             type: "RESOLVED",
-            date: applyOffsets(ctx.vestingStart, node.offsets, ctx),
+            date: applyOffsets(ctx.vestingStart, node.offsets, ctx, snap),
           }
         : {
             type: "UNRESOLVED",
@@ -82,7 +98,10 @@ export function evaluateVestingBase(
         ? ctx.events[base.value]
         : undefined;
       return eventDate
-        ? { type: "RESOLVED", date: applyOffsets(eventDate, node.offsets, ctx) }
+        ? {
+            type: "RESOLVED",
+            date: applyOffsets(eventDate, node.offsets, ctx, snap),
+          }
         : {
             type: "UNRESOLVED",
             blockers: [{ type: "EVENT_NOT_YET_OCCURRED", event: base.value }],
@@ -93,17 +112,27 @@ export function evaluateVestingBase(
   }
 }
 
+// Walk the node's offsets onto its base date. A DAYS offset is the same exact
+// calendar step everywhere. A MONTHS offset diverges: `snap` true makes it
+// cadence (consult the day-of-month policy on the context, so a fixed "15" pulls
+// it to the 15th), `snap` false makes it an exact duration (keep the day, clamp
+// to month-end on a shorter month, never read the policy). Only a cliff's own
+// `vestingStart` anchor passes `snap` true — see `evaluateVestingBase`.
 function applyOffsets(
   base: OCTDate,
   offsets: Offsets,
   ctx: ResolutionContext,
+  snap: boolean,
 ): OCTDate {
   let d = base;
   for (const o of offsets) {
+    const signed = o.sign === "PLUS" ? o.value : -o.value;
     d =
       o.unit === "MONTHS"
-        ? addMonthsRule(d, o.sign === "PLUS" ? o.value : -o.value, ctx)
-        : addDays(d, o.sign === "PLUS" ? o.value : -o.value);
+        ? snap
+          ? addMonthsRule(d, signed, ctx)
+          : addMonthsExact(d, signed)
+        : addDays(d, signed);
   }
   return d;
 }

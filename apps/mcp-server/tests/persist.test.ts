@@ -448,15 +448,17 @@ describe("mcp-server / persistence tool pair", () => {
     expect(out.artifact.template.statements.length).toBeGreaterThan(0);
   });
 
-  // ---- Issue #229: the grant's frozen conventions come from the artifact ----
+  // ---- Issue #229 / #253: the grant's frozen conventions come from the artifact ----
   //
-  // An offset synthetic gated on `ipo`. Persisted under a fixed-day rule, its
-  // witness on rehydrate must follow that stored rule (not the caller's / default),
-  // so the firing date and the projection grid agree.
+  // An offset synthetic gated on `ipo`. The offset witness re-resolves EXACT
+  // (#253) — a displacement keeps its day, clamping on a short month, never
+  // snapping to the stored fixed-day rule. What the stored rule still governs is
+  // the projection GRID, which re-snaps off that witness. So this pins that the
+  // rule lives in the artifact and shows up in the grid, with the witness exact.
   const OFFSET_SYNTHETIC_DSL =
     "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
 
-  it("witness date and projection agree under the stored day-of-month rule", async () => {
+  it("exact witness, projection grid snaps under the stored day-of-month rule", async () => {
     const client = await connectClient();
     // Persist under rule "15" — non-default, so the rule is frozen into the runtime.
     const persisted = await persistOk(client, {
@@ -473,10 +475,12 @@ describe("mcp-server / persistence tool pair", () => {
       events: { ipo: "2025-01-31" },
     });
 
-    // +1 month under rule "15" lands on the 15th, NOT the month-end the default
-    // would give. The witness and the projection grid share that date.
+    // The witness is the EXACT offset (#253): ipo on Jan 31 + 1 month keeps day 31
+    // and clamps to Feb's last day (2025-02-28) — a displacement never consults the
+    // "15" policy. The projection GRID still re-snaps to the 15th off that witness,
+    // so the stored rule shows up there, not in the witness date.
     expect(out.firings_to_apply).toHaveLength(1);
-    expect(out.firings_to_apply[0].date).toBe("2025-02-15");
+    expect(out.firings_to_apply[0].date).toBe("2025-02-28");
     expect(out.projection[0].date).toBe("2025-03-15");
     expect(out.projection).toEqual([
       { date: "2025-03-15", amount: 100 },

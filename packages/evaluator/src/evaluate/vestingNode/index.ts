@@ -27,8 +27,10 @@ export function evaluateVestingNode(
   node: VestingNode,
   ctx: ResolutionContext,
 ): NodeMeta {
-  // Resolve the vesting node base
-  const resBase = evaluateVestingBase(node, ctx);
+  // Resolve the vesting node base as the schedule's own anchor: a MONTHS offset
+  // here snaps to the policy only when the node hangs off the vesting start (the
+  // cadence cliff), which evaluateVestingBase decides from the "anchor" role.
+  const resBase = evaluateVestingBase(node, ctx, "anchor");
 
   // Return the resolved vesting node base if there are no constraints
   if (!node.condition) return resBase;
