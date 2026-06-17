@@ -15,7 +15,9 @@ import { evaluateConstrainedVestingNode } from "./constrainedVestingNode.js";
  * ------------------------ */
 
 // A node is impossible only when every blocker is a contradiction; one merely
-// pending blocker leaves the whole node unresolved.
+// pending blocker leaves the whole node unresolved. The condition combiner already
+// drops moot operands (a pending conjunct beside a dead one, a dead arm beside a live
+// one), so by the time the list arrives here it is clean: all-impossible iff dead.
 const allImpossibleBlockers = (x: Blocker[]): x is ImpossibleBlocker[] =>
   x.every(isImpossibleBlocker);
 
