@@ -201,6 +201,17 @@ describe("System event protections (vestingStart in a FROM gate is circular)", (
     ).toThrowError(/circular/);
   });
 
+  // The helper recurses NODE_EARLIER_OF and NODE_LATER_OF arms alike, so cover
+  // LATER OF too — a copy/paste regression dropping that branch would slip past
+  // the EARLIER-OF-only cases above.
+  it("errors on vestingStart in a LATER OF anchor arm's gate", () => {
+    expect(() =>
+      parse(
+        `100 VEST FROM LATER OF(DATE 2025-01-10 AFTER vesting_start, EVENT y) OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/circular/);
+  });
+
   // AC2c: the deepest path — a constraint base that carries its own nested gate
   // (condition.constraint.base.condition.constraint.base = VESTING_START). A check
   // that inspects only the first constraint.base and forgets to recurse into that
@@ -254,6 +265,13 @@ describe("System event protections (vestingStart in a FROM gate is circular)", (
       `100 VEST FROM EARLIER OF(DATE 2025-01-10 AFTER event a, EVENT y) OVER 12 months EVERY 1 month`,
     );
     expect(stmt.expr.vesting_start.type).toBe("NODE_EARLIER_OF");
+  });
+
+  it("allows a LATER OF arm-carried gate of genuine events (no false positive)", () => {
+    const stmt = first(
+      `100 VEST FROM LATER OF(DATE 2025-01-10 AFTER event a, EVENT y) OVER 12 months EVERY 1 month`,
+    );
+    expect(stmt.expr.vesting_start.type).toBe("NODE_LATER_OF");
   });
 
   // AC6: the anchor and gate messages stay partitioned by position. Assert on a

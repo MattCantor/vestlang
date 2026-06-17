@@ -87,7 +87,7 @@ A `FROM` start or a `CLIFF` is given by an **anchor** — a date, an event, or a
 | Event | `EVENT <name>` | `EVENT ipo` |
 | System ref | `grantDate` / `vestingStart` (bareword or `EVENT`-prefixed) | `grantDate + 12 months` |
 
-Two system events are built in: **`grantDate`** (the grant date) and **`vestingStart`** (the resolved start, so a cliff can refer back to it). `vestingStart` can't be the *anchor* of a `FROM`, and `grantDate` can't be the *anchor* of a `CLIFF` (a bare `CLIFF <duration>` is measured from the resolved vesting start). Either may still appear *inside a condition* — e.g. a cliff gated `BEFORE EVENT grantDate + 84 months`.
+Two system events are built in: **`grantDate`** (the grant date) and **`vestingStart`** (the resolved start, so a cliff can refer back to it). `vestingStart` can't be the *anchor* of a `FROM`, and `grantDate` can't be the *anchor* of a `CLIFF` (a bare `CLIFF <duration>` is measured from the resolved vesting start). Inside a *condition*, `grantDate` may appear anywhere (it's always known), but `vestingStart` may only gate a `CLIFF` — e.g. `CLIFF EVENT acceleration AFTER vestingStart + 6 months` — not a `FROM` start's gate, where it would constrain the very start it defines and never resolve (circular).
 
 ### Offsets
 
