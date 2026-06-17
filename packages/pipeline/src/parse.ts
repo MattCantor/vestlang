@@ -14,12 +14,46 @@ export type Loc = {
   end: { line: number; column: number };
 };
 
-// Discriminated on `ruleId`. A location only makes sense for a syntax error
-// (it points at a span of source), so `loc` lives in that arm — an
-// evaluation-error can't accidentally carry one.
-export type PipelineError =
+// The two error vocabularies every orchestrator in the package shares. Both are
+// discriminated on `ruleId`; a location only makes sense for a syntax error (it
+// points at a span of source), so `loc` lives only in that arm — nothing else can
+// accidentally carry one.
+//
+// `PipelineError` is a single closed union, so a reader can be exhaustive over
+// every refusal the package emits. To keep that union readable as it grows we
+// build it from per-orchestrator sub-unions below; those stay module-private so
+// the public surface is just the one composed type.
+
+// Parse and evaluate failures, raised from the shared parse/evaluate helpers and
+// reused by every orchestrator that parses DSL or runs the engine.
+type SharedError =
   | { ruleId: "syntax-error"; message: string; loc?: Loc }
   | { ruleId: "evaluation-error"; message: string };
+
+// persist's refusals all mean "fix the schedule before it can be stored", so they
+// share one umbrella ruleId; each site is told apart by its message.
+type PersistError = { ruleId: "persist-not-storable"; message: string };
+
+// rehydrate's three damage modes a consumer might remediate differently: a hand-
+// built artifact missing its grant date, one whose template over-allocates the
+// grant, or one whose stored event definition no longer parses.
+type RehydrateError =
+  | { ruleId: "rehydrate-missing-grant-date"; message: string }
+  | { ruleId: "rehydrate-over-allocation"; message: string }
+  | { ruleId: "rehydrate-corrupt-definition"; message: string };
+
+// offset's input-shape refusals (not a single offset expression) and its
+// unresolved arm. The unresolved arm carries the blocking reason as a typed field
+// — resolveVestingStart always produces one, so it's required, not optional.
+type OffsetError =
+  | { ruleId: "offset-not-single-expression"; message: string }
+  | { ruleId: "offset-unresolved"; message: string; unresolved: string };
+
+export type PipelineError =
+  | SharedError
+  | PersistError
+  | RehydrateError
+  | OffsetError;
 
 // A success carries its own named payload (e.g. `{ program }`); a failure
 // carries the error. Callers branch on `ok`.

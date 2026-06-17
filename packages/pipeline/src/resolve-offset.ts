@@ -7,7 +7,7 @@
 
 import { resolveVestingStart } from "@vestlang/evaluator";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
-import { parseToProgram } from "./parse.js";
+import { parseToProgram, type Result } from "./parse.js";
 import { buildContext } from "./context.js";
 
 export interface ResolveOffsetInput {
@@ -17,9 +17,7 @@ export interface ResolveOffsetInput {
   vesting_day_of_month?: VestingDayOfMonth;
 }
 
-export type ResolveOffsetResult =
-  | { ok: true; date: OCTDate }
-  | { ok: false; error: string; unresolved?: string };
+export type ResolveOffsetResult = Result<{ date: OCTDate }>;
 
 /**
  * Resolve an offset expression (e.g. "EVENT ipo + 6 months", "+3 months",
@@ -42,9 +40,16 @@ export function runResolveOffset(
 ): ResolveOffsetResult {
   const parsed = parseToProgram(`VEST FROM ${input.expr}`);
   if (!parsed.ok) {
+    // Rewrap, don't propagate: the parser ran over the synthetic `VEST FROM
+    // <expr>` wrap, so its `loc` is column-shifted by the 10-char prefix and
+    // points at source the user never typed. Keep the message (prefixed for
+    // context) and drop the loc rather than report a misleading span.
     return {
       ok: false,
-      error: `Could not parse expression: ${parsed.error.message}`,
+      error: {
+        ruleId: "syntax-error",
+        message: `Could not parse expression: ${parsed.error.message}`,
+      },
     };
   }
   const program = parsed.program;
@@ -55,10 +60,13 @@ export function runResolveOffset(
   if (program.length !== 1) {
     return {
       ok: false,
-      error:
-        program.length === 0
-          ? "Expression produced no statements"
-          : `Expected a single offset expression, got ${program.length} statements`,
+      error: {
+        ruleId: "offset-not-single-expression",
+        message:
+          program.length === 0
+            ? "Expression produced no statements"
+            : `Expected a single offset expression, got ${program.length} statements`,
+      },
     };
   }
 
@@ -68,7 +76,10 @@ export function runResolveOffset(
   if (stmt.chained || stmt.expr.type !== "SCHEDULE") {
     return {
       ok: false,
-      error: "Expected a single offset expression, got a selector",
+      error: {
+        ruleId: "offset-not-single-expression",
+        message: "Expected a single offset expression, got a selector",
+      },
     };
   }
 
@@ -94,7 +105,10 @@ export function runResolveOffset(
 
   return {
     ok: false,
-    error: `Expression is unresolved: ${result.reason}`,
-    unresolved: result.reason,
+    error: {
+      ruleId: "offset-unresolved",
+      message: `Expression is unresolved: ${result.reason}`,
+      unresolved: result.reason,
+    },
   };
 }

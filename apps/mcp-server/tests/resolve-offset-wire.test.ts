@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createServer } from "../src/server.js";
+
+// Issue #296 — AC#6. vestlang_resolve_offset's handler still does
+// `jsonResult(result)`, so the structured result rides the wire whole, `ok`
+// discriminant and all. Unlike the evaluate-family (which strips `ok` and emits
+// `{ error }`), offset KEEPS `ok` on both arms — reconciling that cross-tool
+// asymmetry is a separate issue, deliberately out of scope here. These pins lock
+// the full failure and success shapes.
+
+type CallResult = {
+  isError?: boolean;
+  content: { type: string; text: string }[];
+  structuredContent?: Record<string, unknown>;
+};
+
+async function connectClient(): Promise<Client> {
+  const server = createServer();
+  const client = new Client({ name: "test-client", version: "0.0.0" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+  return client;
+}
+
+const call = (client: Client, args: Record<string, unknown>) =>
+  client.callTool({
+    name: "vestlang_resolve_offset",
+    arguments: args,
+  }) as Promise<CallResult>;
+
+describe("mcp-server / vestlang_resolve_offset wire shape (AC#6)", () => {
+  it("an unresolved expression returns { ok: false, error: { ruleId, message, unresolved } }", async () => {
+    const client = await connectClient();
+    const res = await call(client, {
+      expr: "EVENT ipo + 6 months",
+      grant_date: "2025-01-01",
+    });
+
+    // Not surfaced as an MCP isError — the structured result is the payload.
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual({
+      ok: false,
+      error: {
+        ruleId: "offset-unresolved",
+        message: "Expression is unresolved: EVENT ipo",
+        unresolved: "EVENT ipo",
+      },
+    });
+  });
+
+  it("a parse failure returns { ok: false, error: { ruleId, message } } with no loc", async () => {
+    const client = await connectClient();
+    const res = await call(client, {
+      expr: "this is not vestlang",
+      grant_date: "2025-01-01",
+    });
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string; loc?: unknown };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("syntax-error");
+    expect(sc.error.message).toMatch(/^Could not parse expression: /);
+    // The rewrap drops the synthetic-wrap span.
+    expect(sc.error).not.toHaveProperty("loc");
+  });
+
+  it("the success path is exactly { ok: true, date } (unchanged)", async () => {
+    const client = await connectClient();
+    const res = await call(client, {
+      expr: "DATE 2025-01-01 + 6 months",
+      grant_date: "2025-01-01",
+    });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual({ ok: true, date: "2025-07-01" });
+  });
+});

@@ -12,10 +12,9 @@
 // produce once fired.
 //
 // The zod schemas that validate wire input into a `PersistedArtifact` stay in the
-// MCP app; only the orchestration moved here. The bespoke
-// `{ ok: true, ... } | { ok: false, error }` result shapes are preserved as-is —
-// unifying onto the pipeline's structured `Result<PipelineError>` is tracked
-// separately (#296).
+// MCP app; only the orchestration moved here. Both orchestrators return the
+// package's shared `Result<T>`, so a refusal carries a structured `PipelineError`
+// (a `ruleId` plus message) the same way the evaluate-family does.
 
 import {
   evaluateProgram,
@@ -34,7 +33,7 @@ import type {
   UnresolvedBlocker,
   VestingRuntime,
 } from "@vestlang/types";
-import { parseToProgram } from "./parse.js";
+import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
 import { buildContext } from "./context.js";
 import { errorFindings, formatFinding } from "./findings.js";
 
@@ -55,18 +54,14 @@ export interface PersistInput {
   vesting_day_of_month?: VestingRuntime["vestingDayOfMonth"];
 }
 
-export type PersistResult =
-  | {
-      ok: true;
-      artifact: PersistedArtifact;
-      // The template arm's blockers, split to match the evaluate/rehydrate shape.
-      // A persistable (template) schedule never pairs with a dead blocker, so
-      // `dead` is always `[]`; a pending template surfaces its waiting witnesses
-      // in `pending`.
-      pending: UnresolvedBlocker[];
-      dead: DeadBlocker[];
-    }
-  | { ok: false; error: string };
+// The success arm's blockers, split to match the evaluate/rehydrate shape. A
+// persistable (template) schedule never pairs with a dead blocker, so `dead` is
+// always `[]`; a pending template surfaces its waiting witnesses in `pending`.
+export type PersistResult = Result<{
+  artifact: PersistedArtifact;
+  pending: UnresolvedBlocker[];
+  dead: DeadBlocker[];
+}>;
 
 // Compile a program down to a storable artifact. Three gates stand in the way, in
 // order. First, lint: a program the linter flags with an error-severity diagnostic
@@ -87,7 +82,10 @@ export type PersistResult =
 export function runPersist(input: PersistInput): PersistResult {
   const parsed = parseToProgram(input.dsl);
   if (!parsed.ok) {
-    return { ok: false, error: parsed.error.message };
+    // Parsed `input.dsl` directly (no synthetic wrap), so the parser's error —
+    // its `syntax-error` ruleId, message, and `loc` span — already points at the
+    // user's own source. Propagate it verbatim.
+    return parsed;
   }
 
   // A program the linter rejects as an error must not become a durable artifact.
@@ -99,9 +97,12 @@ export function runPersist(input: PersistInput): PersistResult {
   if (lintErrors.length > 0) {
     return {
       ok: false,
-      error: `Cannot persist: ${lintErrors
-        .map((d) => `${d.ruleId}: ${d.message}`)
-        .join("; ")}.`,
+      error: {
+        ruleId: "persist-not-storable",
+        message: `Cannot persist: ${lintErrors
+          .map((d) => `${d.ruleId}: ${d.message}`)
+          .join("; ")}.`,
+      },
     };
   }
 
@@ -116,10 +117,7 @@ export function runPersist(input: PersistInput): PersistResult {
   try {
     schedule = evaluateProgram(parsed.program, ctx);
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return { ok: false, error: toEvaluationError(err) };
   }
 
   // Validity comes before shape: when a schedule is both invalid and non-template,
@@ -128,7 +126,10 @@ export function runPersist(input: PersistInput): PersistResult {
   if (errors.length > 0) {
     return {
       ok: false,
-      error: `Cannot persist: ${errors.map(formatFinding).join("; ")}.`,
+      error: {
+        ruleId: "persist-not-storable",
+        message: `Cannot persist: ${errors.map(formatFinding).join("; ")}.`,
+      },
     };
   }
 
@@ -136,7 +137,10 @@ export function runPersist(input: PersistInput): PersistResult {
   if (resolution.status !== "template") {
     return {
       ok: false,
-      error: `Only a template-resolution program is storable as a persisted artifact; this program resolved to "${resolution.status}". Adjust the schedule so it collapses to a single canonical template.`,
+      error: {
+        ruleId: "persist-not-storable",
+        message: `Only a template-resolution program is storable as a persisted artifact; this program resolved to "${resolution.status}". Adjust the schedule so it collapses to a single canonical template.`,
+      },
     };
   }
 
@@ -185,12 +189,11 @@ export interface RehydrateOutput {
   projection: ReturnType<typeof compileToInstallments>;
 }
 
-// Mirrors PersistResult: a clean success or a refusal carrying a clear message.
-// Refusals all signal a damaged artifact: a missing stored grant date, a corrupt
-// event definition, or a template that allocates more than the whole grant.
-export type RehydrateResult =
-  | ({ ok: true } & RehydrateOutput)
-  | { ok: false; error: string };
+// Mirrors PersistResult: a clean success or a structured refusal. Refusals all
+// signal a damaged artifact — a missing stored grant date, a corrupt event
+// definition, or a template that allocates more than the whole grant — each under
+// its own ruleId so a consumer can remediate them differently.
+export type RehydrateResult = Result<RehydrateOutput>;
 
 // The delta: synthetic witnesses present in the rehydrated runtime's eventFirings
 // but absent — or sitting on a different date — versus the input artifact's stored
@@ -225,8 +228,11 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
   if (grantDate === undefined) {
     return {
       ok: false,
-      error:
-        "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
+      error: {
+        ruleId: "rehydrate-missing-grant-date",
+        message:
+          "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
+      },
     };
   }
 
@@ -243,11 +249,14 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
   if (allocationErrors.length > 0) {
     return {
       ok: false,
-      error: `Cannot rehydrate: ${allocationErrors
-        .map(formatFinding)
-        .join(
-          "; ",
-        )}. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+      error: {
+        ruleId: "rehydrate-over-allocation",
+        message: `Cannot rehydrate: ${allocationErrors
+          .map(formatFinding)
+          .join(
+            "; ",
+          )}. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+      },
     };
   }
 
@@ -272,7 +281,10 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     if (isRehydrateDefinitionError(err)) {
       return {
         ok: false,
-        error: `Cannot rehydrate: the stored definition for event "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+        error: {
+          ruleId: "rehydrate-corrupt-definition",
+          message: `Cannot rehydrate: the stored definition for event "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+        },
       };
     }
     throw err;

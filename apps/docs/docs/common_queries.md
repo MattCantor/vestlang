@@ -125,7 +125,9 @@ valid after `VEST FROM` in the DSL:
 - `DATE 2025-01-01 - 2 days`
 - `EARLIER OF (EVENT a, EVENT b)`
 
-Missing events surface as an `unresolved` blocker rather than an error.
+When the expression can't resolve — a referenced event hasn't fired — the call
+returns a structured error (`ruleId: "offset-unresolved"`) whose `unresolved`
+field names the blocking reason.
 
 ### `vestlang_resolve_vesting_day`
 

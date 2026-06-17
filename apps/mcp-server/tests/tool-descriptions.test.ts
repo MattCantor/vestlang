@@ -9,7 +9,7 @@ import { createServer } from "../src/server.js";
 // an event-anchored cliff" when the code (types/evaluation.ts InterchangeVerdict,
 // evaluator/resolve/interchange.ts) has three causes.
 
-async function descriptionOf(toolName: string): Promise<string> {
+async function connectedClient(): Promise<Client> {
   const server = createServer();
   const client = new Client({ name: "test-client", version: "0.0.0" });
   const [clientTransport, serverTransport] =
@@ -18,6 +18,11 @@ async function descriptionOf(toolName: string): Promise<string> {
     server.connect(serverTransport),
     client.connect(clientTransport),
   ]);
+  return client;
+}
+
+async function descriptionOf(toolName: string): Promise<string> {
+  const client = await connectedClient();
   const { tools } = await client.listTools();
   const tool = tools.find((t) => t.name === toolName);
   expect(tool, `tool ${toolName} should be registered`).toBeDefined();
@@ -44,5 +49,20 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
   it("documents the recovered block surfaced on a rescue", async () => {
     const description = await descriptionOf("vestlang_evaluate");
     expect(description).toContain("`recovered`");
+  });
+});
+
+describe("mcp-server / server INSTRUCTIONS error-shape paragraph (#296, AC#8)", () => {
+  it("no longer enumerates only the two syntax/evaluation ruleIds", async () => {
+    const client = await connectedClient();
+    const instructions = client.getInstructions() ?? "";
+    // It still describes the structured { error: { ruleId, message } } shape and
+    // names syntax-error...
+    expect(instructions).toMatch(/ruleId/);
+    expect(instructions).toContain("syntax-error");
+    // ...but it's no longer pinned to exactly those two: the pre-#296 text read
+    // ` or "evaluation-error" for`, framing the two as the whole list. Now other
+    // tool-specific ruleIds (e.g. offset-*) flow through the same shape.
+    expect(instructions).not.toMatch(/or "evaluation-error" for/);
   });
 });

@@ -78,11 +78,12 @@ partial projection, and (when the event was compared against a date) an entry in
 absenceAssumptions. A comparison against an unfired event is pending, never silently
 satisfied or impossible — the event could still be recorded later, even backdated.
 
-When parse/compile/evaluate fail they don't throw — they return a structured
-{ error: { ruleId, message, loc? } }: ruleId is "syntax-error" (carrying loc,
-the source span) for malformed DSL, or "evaluation-error" for a problem hit
-during evaluation (e.g. a schedule too large to materialize). Check for an
-\`error\` field on the result before reading the rest.`;
+When a tool fails it doesn't throw — it returns a structured
+{ error: { ruleId, message, loc? } }. The \`ruleId\` names the failure mode
+("syntax-error" for malformed DSL, carrying \`loc\` — the source span; others such
+as "evaluation-error" or tool-specific codes like "offset-unresolved" for the rest),
+and \`message\` is the human-readable explanation. Always check for an \`error\`
+field on the result before reading the rest.`;
 
 /* ------------------------
  * Shared Zod schemas
@@ -482,7 +483,7 @@ export function createServer(): McpServer {
         events: params.events,
         vesting_day_of_month: params.vesting_day_of_month,
       });
-      if (!result.ok) return toolError(result.error);
+      if (!result.ok) return toolError(result.error.message);
       return jsonResult({
         artifact: result.artifact,
         pending: result.pending,
@@ -528,7 +529,7 @@ export function createServer(): McpServer {
         grant_quantity: params.grant_quantity,
         events: params.events,
       });
-      if (!result.ok) return toolError(result.error);
+      if (!result.ok) return toolError(result.error.message);
       const { ok: _ok, ...output } = result;
       return jsonResult(output);
     },
