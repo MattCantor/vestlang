@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/evaluate/index";
+import { evaluateProgram } from "../src/orchestrate";
 import { evaluateProgramAsOf } from "../src/asof";
 
 describe("claim conservation (R2-B20)", () => {

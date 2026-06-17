@@ -1,9 +1,9 @@
-// Evaluation — the compiler's public API.
+// The evaluator's public API — the orchestration entry points.
 export {
   evaluateStatement,
   evaluateClauseGroups,
   evaluateProgram,
-} from "./evaluate/index.js";
+} from "./orchestrate.js";
 export {
   resolveVestingStart,
   type ResolvedAnchor,

@@ -22,7 +22,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { walk, referencesEvent } from "@vestlang/walk";
-import { evaluateProgram } from "../src/evaluate/index";
+import { evaluateProgram } from "../src/orchestrate";
 import {
   makeSingletonSchedule,
   makeSingletonNode,

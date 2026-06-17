@@ -17,7 +17,7 @@ import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
 } from "@vestlang/core";
-import { evaluateStatement } from "../src/evaluate/index";
+import { evaluateStatement } from "../src/orchestrate";
 import {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,
