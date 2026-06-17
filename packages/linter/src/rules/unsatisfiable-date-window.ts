@@ -1,4 +1,4 @@
-import { daysBetween } from "@vestlang/core";
+import { addDays, lt, satisfiesRelation } from "@vestlang/core";
 import { assertNever } from "@vestlang/utils";
 import type { Condition, OCTDate, VestingNode } from "@vestlang/types";
 import { RuleModule } from "../types.js";
@@ -80,15 +80,24 @@ const intersect = (a: Window, b: Window): Window => {
   return { lower, upper };
 };
 
-// Exact at day granularity. Both bounds present and the span between them too
-// small to hold a satisfiable date: equal non-strict bounds are a one-day window
-// (fine); equal bounds with any strict side, or adjacent days strict on both,
-// leave nothing. A half-line (one edge missing) is never empty.
-const isEmpty = (w: Window): boolean =>
-  w.lower !== undefined &&
-  w.upper !== undefined &&
-  daysBetween(w.lower.date, w.upper.date) <
-    (w.lower.strict ? 1 : 0) + (w.upper.strict ? 1 : 0);
+// Exact at day granularity. A both-bounded window is empty when not even its
+// earliest candidate day satisfies the upper bound: the witness is the lower
+// edge's date (or the day after it, if the lower edge is strict and so excludes
+// its own date), and we ask whether that day still falls within the upper bound
+// via the same per-edge rule the evaluator uses. So equal non-strict bounds hold
+// a one-day window (fine); a strict edge eats its boundary day and equal-or-
+// adjacent bounds collapse to nothing. A half-line (one edge missing) is never
+// empty.
+const isEmpty = (w: Window): boolean => {
+  if (w.lower === undefined || w.upper === undefined) return false;
+  // A strict lower edge that already sits at or past the upper edge leaves no
+  // admissible day — settle that by comparison before stepping, which also keeps
+  // the witness below from stepping a last-representable-day lower edge off the
+  // end of the date range.
+  if (w.lower.strict && !lt(w.lower.date, w.upper.date)) return true;
+  const witness = w.lower.strict ? addDays(w.lower.date, 1) : w.lower.date;
+  return !satisfiesRelation("BEFORE", w.upper.strict, witness, w.upper.date);
+};
 
 // Does a single window admit any date? The inverse of `isEmpty` — pulled out so
 // the sweep and union read declaratively.
@@ -168,11 +177,13 @@ const intersectSets = (a: IntervalSet, b: IntervalSet): IntervalSet => {
   return out;
 };
 
-// Map a constraint to its satisfiable set, matching the evaluator's
-// failByRelation semantics: bare AFTER/BEFORE are non-strict (>=/<=), STRICTLY
-// makes them strict (>/<). AND intersects, OR unions; an anchor we can't
-// statically date contributes the full line `[{}]`, which keeps the rule sound —
-// it can only under-report, never false-positive on something still satisfiable.
+// Map a constraint to its satisfiable set. The per-edge strictness rule (bare
+// AFTER/BEFORE are non-strict, >=/<=; STRICTLY makes them strict, >/<) is core's
+// `satisfiesRelation`, the same primitive the evaluator decides a proviso with —
+// see `isEmpty`, where it does the emptiness check. AND intersects, OR unions; an
+// anchor we can't statically date contributes the full line `[{}]`, which keeps
+// the rule sound: it can only under-report, never false-positive on something
+// still satisfiable.
 const satisfiableSet = (c: Condition): IntervalSet => {
   switch (c.type) {
     case "ATOM": {

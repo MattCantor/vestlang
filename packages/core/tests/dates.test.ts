@@ -9,6 +9,7 @@ import {
   lt,
   gt,
   eq,
+  satisfiesRelation,
 } from "../src/dates";
 
 // Day-of-month + overflow cases mirror evaluator/tests/time.addMonths.test.ts,
@@ -299,6 +300,41 @@ describe("comparisons on ISO dates", () => {
     expect(gt("2024-01-02", "2024-01-01")).toBe(true);
     expect(eq("2024-01-02", "2024-01-02")).toBe(true);
     expect(lt("2024-01-02", "2024-01-01")).toBe(false);
+  });
+});
+
+describe("satisfiesRelation — per-edge BEFORE/AFTER admissibility", () => {
+  const before = "2025-01-01";
+  const same = "2025-06-01";
+  const after = "2025-12-31";
+  const base = same; // subject is compared against this
+
+  describe("BEFORE", () => {
+    it("non-strict admits earlier and the boundary, rejects later", () => {
+      expect(satisfiesRelation("BEFORE", false, before, base)).toBe(true);
+      expect(satisfiesRelation("BEFORE", false, same, base)).toBe(true); // boundary
+      expect(satisfiesRelation("BEFORE", false, after, base)).toBe(false);
+    });
+
+    it("strict rejects the boundary day", () => {
+      expect(satisfiesRelation("BEFORE", true, before, base)).toBe(true);
+      expect(satisfiesRelation("BEFORE", true, same, base)).toBe(false); // boundary
+      expect(satisfiesRelation("BEFORE", true, after, base)).toBe(false);
+    });
+  });
+
+  describe("AFTER", () => {
+    it("non-strict admits later and the boundary, rejects earlier", () => {
+      expect(satisfiesRelation("AFTER", false, after, base)).toBe(true);
+      expect(satisfiesRelation("AFTER", false, same, base)).toBe(true); // boundary
+      expect(satisfiesRelation("AFTER", false, before, base)).toBe(false);
+    });
+
+    it("strict rejects the boundary day", () => {
+      expect(satisfiesRelation("AFTER", true, after, base)).toBe(true);
+      expect(satisfiesRelation("AFTER", true, same, base)).toBe(false); // boundary
+      expect(satisfiesRelation("AFTER", true, before, base)).toBe(false);
+    });
   });
 });
 

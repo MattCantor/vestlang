@@ -582,6 +582,9 @@ importers:
 
   tests/integration:
     dependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
