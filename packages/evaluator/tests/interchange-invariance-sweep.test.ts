@@ -81,6 +81,17 @@ const laterOfDateOrEvent: VestingNodeExpr<"GRANT_DATE"> = {
   ],
 };
 
+// An EARLIER OF start — the #251 commit path. Closed-world this commits to the
+// date arm when ipo is unfired; firing-blind it can't, so the storable verdict must
+// stay identical across all three firing contexts (the property this sweep pins).
+const earlierOfDateOrEvent: VestingNodeExpr<"GRANT_DATE"> = {
+  type: "NODE_EARLIER_OF",
+  items: [
+    makeSingletonNode(makeVestingBaseDate("2026-01-01")),
+    makeSingletonNode(makeVestingBaseEvent("ipo")),
+  ],
+};
+
 const corpus: CorpusEntry[] = [
   {
     // A start anchored to a bare event: nothing fired, the whole grid waits on it.
@@ -177,6 +188,24 @@ const corpus: CorpusEntry[] = [
         expr: {
           type: "SCHEDULE",
           vesting_start: laterOfDateOrEvent,
+          periodicity: monthly48,
+        },
+      },
+    ],
+    events: { ipo: "2026-06-01" },
+  },
+  {
+    // EARLIER OF a date and an event for the start. Closed-world this commits to
+    // the date arm (the #251 commit branch), but the storable verdict ignores
+    // firings and externalizes the combinator as one synthetic event regardless.
+    name: "EARLIER OF date-or-event start",
+    program: [
+      {
+        type: "STATEMENT",
+        amount: portion(1, 1),
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: earlierOfDateOrEvent,
           periodicity: monthly48,
         },
       },

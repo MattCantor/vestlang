@@ -125,6 +125,9 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
     return {
       status: "template",
       template: build.template,
+      // buildTemplate already computed this; carrying it lets a consumer (persist)
+      // build the stored artifact off the firing-invariant verdict.
+      runtime: build.runtime,
       sourceMap: build.sourceMap,
     };
   }

@@ -183,6 +183,20 @@ describe("runResolveOffset", () => {
     }
   });
 
+  // #251 / AC#12 — an EARLIER OF whose date arm has settled commits to that arm
+  // even with an unfired event sibling: the resolved date is a lower bound on the
+  // start (a real firing only lands earlier), so resolveVestingStart returns it as
+  // a guaranteed floor rather than refusing. No `assumptions` field on the reply
+  // (the disclosure of the still-pending sibling is deferred to #325).
+  it("commits an EARLIER OF to its settled date arm with the event unfired", () => {
+    const r = runResolveOffset({
+      expr: "EARLIER OF ( DATE 2024-06-01, EVENT ipo )",
+      grant_date: "2025-01-01",
+    });
+    expect(r).toEqual({ ok: true, date: "2024-06-01" });
+    expect(r).not.toHaveProperty("assumptions");
+  });
+
   // AC#6 — multi-statement input is refused, not truncated to the first head.
   // A PLUS fan-out parses to two independent heads; we used to drop the second and
   // return the first head's date, now we refuse.

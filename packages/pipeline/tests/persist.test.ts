@@ -78,7 +78,7 @@ describe("runPersist (AC#4)", () => {
     }
   });
 
-  it("returns the artifact plus pending/dead for a pending template (dead is [])", () => {
+  it("returns the artifact plus pending/dead for a pending template (dead is []) (AC#6)", () => {
     const r = persistOk({
       dsl: COMBINATOR_DSL,
       grant_date: "2025-01-01",
@@ -86,10 +86,71 @@ describe("runPersist (AC#4)", () => {
     });
     expect(r.artifact.template.statements.length).toBeGreaterThan(0);
     expect(r.artifact.sidecar).toBeDefined();
+    // No genuine event firings baked in — the artifact is the firing-invariant floor.
+    expect(r.artifact.runtime.eventFirings ?? []).toEqual([]);
     // The gate hasn't fired — its witness rides in pending; a storable template
     // never carries a dead blocker.
     expect(r.pending.length).toBeGreaterThan(0);
     expect(r.dead).toEqual([]);
+  });
+
+  it("AC#9: persisting the combinator with ipo ALREADY fired is still firing-blind", () => {
+    // The combinator's date arm is 2027-01-01; ipo fires earlier (2026-06-01), so
+    // the closed-world resolution would commit to ipo. Persist nonetheless stores
+    // the firing-invariant floor: a synthetic gate with no firing, byte-identical to
+    // the unfired persist. Soundness (the same projection once re-supplied) is
+    // checked by the rehydrate AC#7 test below.
+    const fired = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+      events: { ipo: "2026-06-01" },
+    });
+    expect(fired.artifact.sidecar).toBeDefined();
+    expect(fired.artifact.runtime.eventFirings ?? []).toEqual([]);
+    const unfired = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(fired.artifact).toEqual(unfired.artifact);
+  });
+
+  it("AC#10: an EARLIER OF cliff still refuses to persist (interchange unrepresentable)", () => {
+    // The D6-distinguishing guard. After #251 the EARLIER OF cliff's closed-world
+    // resolution commits to a date and reads "template" — so gating storability on
+    // the resolution would silently make this storable. Storability is gated on the
+    // firing-invariant interchange verdict instead, which has no schema home for the
+    // combinator cliff (unrepresentable), so persist refuses, naming that status.
+    const r = runPersist({
+      dsl: "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.ruleId).toBe("persist-not-storable");
+    expect(r.error.message).toContain("unrepresentable");
+    // The prose still mentions a single canonical template.
+    expect(r.error.message).toContain("template");
+  });
+
+  it("AC#8: rehydrating the combinator artifact while ipo is unfired stays pending", () => {
+    const persisted = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 1000,
+      // ipo unfired: the synthetic EARLIER OF gate doesn't settle (rehydrate never
+      // commits a contingent combinator — that would fabricate a firing), so no
+      // witness, an empty projection, and the gate rides in pending.
+    });
+    expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.projection).toHaveLength(0);
+    expect(out.pending.length).toBeGreaterThan(0);
   });
 
   it("returns empty pending/dead for a fully-dated template", () => {

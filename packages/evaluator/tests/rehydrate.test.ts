@@ -33,20 +33,22 @@ import {
 } from "./helpers";
 
 // Build a stored `template` artifact straight from DSL, the way persist does:
-// parse → normalize → evaluate, taking the resolution's frozen template, source
-// map, and runtime. Used by the convention-source tests, which need the runtime
-// lower.ts actually produces (e.g. vestingDayOfMonth stored only when non-default)
-// rather than a hand-assembled one.
+// parse → normalize → evaluate, taking the *interchange* verdict's frozen template,
+// source map, and runtime. The firing-invariant interchange is what persist stores
+// (the closed-world resolution may have committed an EARLIER OF to a concrete date,
+// which is exactly the contingency the stored synthetic must preserve). Used by the
+// convention-source tests, which need the runtime lower.ts actually produces (e.g.
+// vestingDayOfMonth stored only when non-default) rather than a hand-assembled one.
 const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));
   const schedule = evaluateProgram(program, ctx);
-  const { resolution } = schedule;
-  if (resolution.status !== "template")
-    throw new Error(`expected template, got ${resolution.status}`);
+  const { interchange } = schedule;
+  if (interchange.status !== "template")
+    throw new Error(`expected template, got ${interchange.status}`);
   return {
-    template: resolution.template,
-    sourceMap: resolution.sourceMap,
-    runtime: resolution.runtime,
+    template: interchange.template,
+    sourceMap: interchange.sourceMap,
+    runtime: interchange.runtime,
   };
 };
 

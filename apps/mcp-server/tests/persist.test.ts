@@ -293,35 +293,64 @@ describe("mcp-server / persistence tool pair", () => {
     ]);
   });
 
-  it("rehydrating an already-fired bare EVENT without re-supplying it keeps the stored firing", async () => {
+  it("persist is firing-blind: an already-fired bare EVENT is stored without its firing", async () => {
     const client = await connectClient();
-    // Persist WITH the firing, so the stored runtime already carries it.
+    // Persist WITH the firing supplied. The stored artifact is the firing-invariant
+    // floor, so it does NOT bake the firing in — the bare event rides across as an
+    // EVENT statement with no firing, the same artifact a persist with no events
+    // would produce. Rehydrating it without re-supplying ipo therefore leaves the
+    // event pending and the projection empty (the firing has to be re-attested).
     const persisted = await persistOk(client, {
       dsl: BARE_EVENT_DSL,
       grant_date: "2025-01-01",
       grant_quantity: 400,
       events: { ipo: "2025-01-31" },
     });
-    expect(persisted.artifact.runtime.eventFirings).toEqual([
-      { event_id: "ipo", date: "2025-01-31" },
-    ]);
+    expect(persisted.artifact.runtime.eventFirings).toBeUndefined();
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 400,
-      // events omitted — the firing was recorded at persist.
+      // events omitted — there is no stored firing to lean on.
     });
 
-    // The stored firing stands: full projection, nothing pending (the !firings.has
-    // guard — without it the bare loop would spuriously report ipo pending while it
-    // still vests), and no delta since the firing is unchanged.
+    expect(out.projection).toHaveLength(0);
+    expect(out.firings_to_apply).toHaveLength(0);
+    expect(
+      out.pending.some(
+        (b: { type: string; event?: string }) =>
+          b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+
+  it("an already-fired bare EVENT rehydrates to the same projection once re-supplied (AC#9, firing-blind)", async () => {
+    const client = await connectClient();
+    // The companion to the firing-blind store above: supply the same firing at
+    // rehydrate and the projection is exactly what an unfired persist + this firing
+    // produces — proving the persist-time firing was sound to drop.
+    const persisted = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+
     expect(out.projection).toEqual([
       { date: "2025-03-31", amount: 200 },
       { date: "2025-04-30", amount: 100 },
       { date: "2025-05-31", amount: 100 },
     ]);
     expect(out.pending).toHaveLength(0);
-    expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.firings_to_apply).toEqual([
+      { event_id: "ipo", date: "2025-01-31", definition: null },
+    ]);
   });
 
   it("a corrected firing on rehydrate overrides the stored bare EVENT date", async () => {
@@ -650,8 +679,11 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 1000,
     });
     expect(res.isError).toBe(true);
+    // Storability is gated on the firing-invariant interchange verdict; a bare event
+    // cliff is "unrepresentable" there (no schema home), and the refusal names that
+    // status rather than the closed-world resolution's.
     expect(res.content?.[0]?.text).toBe(
-      'Only a template-resolution program is storable as a persisted artifact; this program resolved to "unresolved". Adjust the schedule so it collapses to a single canonical template.',
+      'Only a program storable as a single canonical template can be persisted; this program\'s storable verdict is "unrepresentable". Adjust the schedule so it collapses to a single canonical template.',
     );
   });
 

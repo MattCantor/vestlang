@@ -18,6 +18,19 @@ export interface ResolutionContext {
   events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
   vesting_day_of_month: VestingDayOfMonth;
+  /** May this pass commit a contingent combinator (an EARLIER OF whose date arm
+   *  has settled while an event arm is still pending) to its resolved floor?
+   *
+   *  Off by default. A firing-blind pass (the interchange verdict) and the
+   *  wait-for-a-real-witness pass (rehydration) leave it off, so they keep
+   *  externalizing the combinator as a synthetic event. The closed-world resolve
+   *  paths turn it on: there an EARLIER OF's resolved arm is a *lower* bound on the
+   *  start — any actual firing only moves the anchor earlier, so committing to it
+   *  understates at worst and never over-vests.
+   *
+   *  Not on `ResolutionContextInput`: it's an internal pass-mode switch the live
+   *  resolve entries set, not something a caller supplies. */
+  commitContingent?: boolean;
 }
 
 // A point-in-time query adds the observation date on top of the structure
@@ -316,6 +329,11 @@ export type InterchangeVerdict =
   | {
       status: "template";
       template: VestingScheduleTemplate;
+      // The runtime that compiles this template (startDate, eventFirings,
+      // grantDate, …). Firing-blind like the rest of the verdict, so it carries no
+      // genuine event firings — only the synthetic/structural ones lowering minted.
+      // Persist reads it to build the stored artifact off this verdict.
+      runtime: VestingRuntime;
       sourceMap: SourceMap;
     }
   | {

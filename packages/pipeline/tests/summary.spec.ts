@@ -193,9 +193,11 @@ describe("computeSummary", () => {
     expect(s.cliff_date).toBeNull();
   });
 
-  it("an unresolved selector cliff has no cliff_date", () => {
-    // Closed-world resolution doesn't settle an EARLIER OF cliff even once its
-    // date branch has passed, so the cliff stays unplaceable.
+  it("an EARLIER OF cliff commits to its date arm as a floor (AC#5)", () => {
+    // Closed-world, an EARLIER OF cliff commits to its resolved duration arm: the
+    // +12-month bound is a lower bound on the cliff (an fda firing could only land
+    // it earlier), so it places at grant + 12 months rather than staying unplaceable
+    // while fda is unfired.
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
     for (const asOf of ["2025-06-01", "2026-06-01"]) {
@@ -204,8 +206,24 @@ describe("computeSummary", () => {
         ctx({ grantDate: "2025-01-01", grantQuantity: 4800, events: {}, asOf }),
       );
       const s = computeSummary(result, 4800);
-      expect(s.cliff_date).toBeNull();
+      expect(s.cliff_date).toBe("2026-01-01"); // grant + 12 months
     }
+  });
+
+  it("an EARLIER OF start commits to its date arm and fully vests (#251 repro, AC#1)", () => {
+    // The issue's headline repro: EARLIER OF (DATE 2024-06-01, EVENT ipo) over 12
+    // months, granted 2024-01-01/120, ipo unfired. The date arm guarantees full
+    // vesting by 2025-06-01, so as of 2026-06-01 the summary reads 100% — not the
+    // stuck "0 vested, 120 unresolved" the all-arms-must-resolve rule used to give.
+    const result = run(
+      "VEST FROM EARLIER OF (DATE 2024-06-01, EVENT ipo) OVER 12 months EVERY 1 month",
+      ctx({ grantDate: "2024-01-01", grantQuantity: 120, asOf: "2026-06-01" }),
+    );
+    const s = computeSummary(result, 120);
+    expect(s.total_vested).toBe(120);
+    expect(s.percent_vested).toBe(1); // 0–1 fraction, not 0–100
+    // `unresolved` is on the VestedResult, not the summary roll-up.
+    expect(result.unresolved).toBe(0);
   });
 
   it("percent_vested is 0 when grantQuantity is 0", () => {

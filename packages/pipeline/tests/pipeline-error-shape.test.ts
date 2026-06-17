@@ -92,8 +92,11 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error.ruleId).toBe("persist-not-storable");
+    // Storability is gated on the firing-invariant interchange verdict, so the
+    // refusal names that verdict's status (here "unrepresentable" — a bare event
+    // cliff has no schema home) while keeping the canonical-template prose.
     expect(r.error.message).toContain(
-      "Only a template-resolution program is storable as a persisted artifact",
+      'this program\'s storable verdict is "unrepresentable"',
     );
     expect(r.error.message).toContain(
       "Adjust the schedule so it collapses to a single canonical template.",

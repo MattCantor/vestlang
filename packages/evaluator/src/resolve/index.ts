@@ -53,7 +53,9 @@ export const resolveToCore = (
   // Reject an oversized program before resolving anything (see above).
   assertProgramInstallmentCap(program);
 
-  const ctx = createEvaluationContext(ctxInput);
+  // The live closed-world resolve: it reads firings, so an EARLIER OF whose date
+  // arm has settled may commit to that arm as a guaranteed vesting floor.
+  const ctx = { ...createEvaluationContext(ctxInput), commitContingent: true };
   const totalShares = ctx.grantQuantity;
   const resolutions = resolveStatements(program, ctx);
 

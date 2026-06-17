@@ -41,7 +41,9 @@ export function resolveVestingStart(
   expr: VestingNodeExpr,
   ctxInput: ResolutionContextInput,
 ): ResolvedAnchor {
-  const ctx = createEvaluationContext(ctxInput);
+  // A closed-world resolution of the anchor: it reads firings, so an EARLIER OF
+  // with a settled date arm commits to that arm (a guaranteed-floor lower bound).
+  const ctx = { ...createEvaluationContext(ctxInput), commitContingent: true };
   const res = evaluateVestingNodeExpr(expr, ctx);
 
   if (isPickedResolved(res)) {

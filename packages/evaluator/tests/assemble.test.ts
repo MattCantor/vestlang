@@ -335,12 +335,13 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(100000);
   });
 
-  it("EARLIER OF(DATE future, EVENT ipo) before the cap → template + synthetic event", () => {
-    // The 2030 date arm resolves on its own (a fixed date is always known), but
-    // EARLIER_OF still can't settle: ipo is unfired and could be recorded earlier
-    // than 2030, so the date isn't provably the earliest. The selector stays
-    // pending, and because it names an event the whole thing externalizes as one
-    // synthetic event rather than resolving early to the date.
+  it("EARLIER OF(DATE future, EVENT ipo) commits to the date arm as a floor (AC#4)", () => {
+    // The 2030 date arm resolves on its own; ipo is unfired. Closed-world, the
+    // resolved arm is a lower bound on the start — a real ipo firing can only land
+    // earlier and vest more — so EARLIER_OF commits to the date as a guaranteed
+    // floor rather than waiting on the event. The resolution is a plain DATE
+    // template with a dated projection, and the still-pending ipo is disclosed: as
+    // an absence assumption through the committed date, and on resolution.pending.
     const earlierStmt = {
       type: "STATEMENT",
       amount: portion(1, 1),
@@ -353,13 +354,26 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
     } as Statement;
-    const out = evalStmt(earlierStmt, ctxInput({ asOf: "2025-06-01" }));
+    const schedule = evaluateStatement(
+      earlierStmt,
+      ctxInput({ asOf: "2035-06-01" }),
+    );
+    const out = schedule.resolution;
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
+    // Committed to the date arm: no synthetic event in the resolution.
     const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    expect(Object.keys(out.sourceMap)).toHaveLength(1);
+    expect(base.type).toBe("DATE");
+    expect(Object.keys(out.sourceMap)).toHaveLength(0);
+    // A dated projection — the committed floor's tranches, not symbolic claims.
+    expect(out.installments.length).toBeGreaterThan(0);
+    expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
+    // ipo is disclosed in both channels.
     expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "ipo",
+      through: "2030-01-01",
+    });
   });
 
   it("two portions on the same anchor share one event_id + one source-map entry", () => {

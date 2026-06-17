@@ -88,6 +88,13 @@ export interface StmtResolution {
         // externalizes this as a synthetic event whose definition keeps the
         // offset and whose recorded firing is `date`, true by that definition.
         offsetExpr?: VestingNodeExpr;
+        // Set when this resolved start came from a committed EARLIER OF (its date
+        // arm settled while an event sibling stayed pending): the sibling's
+        // "still waiting on event X" blockers, stamped with the committed date.
+        // buildTemplate pushes them onto the template verdict's blockers so the
+        // assumed-absent event surfaces in the disclosure channels, even though the
+        // start itself reads as fully RESOLVED.
+        disclosures?: Blocker[];
       }
     // An unfired *bare* EVENT start — atomic, ungated, offset-free: canonical
     // holds it as an EVENT statement with no firing, so it lowers into the
@@ -173,6 +180,9 @@ const resolveNonChained = (
         ...(sb.type === "EVENT" && hasOffsets(schedule.vesting_start)
           ? { offsetExpr: schedule.vesting_start }
           : {}),
+        // A committed EARLIER OF carries the pending siblings' stamped blockers;
+        // keep them so buildTemplate can disclose the assumed-absent event.
+        ...(res.disclosures ? { disclosures: res.disclosures } : {}),
       },
       cliff: lowerCliff(
         p.cliff,
@@ -600,6 +610,15 @@ export const buildTemplate = (
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
     const { type, length, occurrences } = r.periodicity;
+
+    // A committed EARLIER OF resolves its start to a date but is still leaning on a
+    // sibling event staying absent; surface that on the template verdict's blockers
+    // so it flows to absenceAssumptions and resolution.pending. The pending-event
+    // states below carry their own blockers, so this only fires for a RESOLVED
+    // start (where the start otherwise contributes none).
+    if (r.start.state === "RESOLVED" && r.start.disclosures) {
+      blockers.push(...r.start.disclosures);
+    }
 
     let vesting_base: VestingStatement["vesting_base"];
     if (r.start.state === "PENDING_EVENT") {

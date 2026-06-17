@@ -134,29 +134,43 @@ export function runPersist(input: PersistInput): PersistResult {
     };
   }
 
-  const resolution = schedule.resolution;
-  if (resolution.status !== "template") {
+  // Storability is the firing-invariant question — "could a record keeper hold
+  // this at all, never mind which events have fired" — so it's gated on the
+  // interchange verdict, not the closed-world resolution. The two genuinely
+  // disagree on an EARLIER OF *cliff*: closed-world it now commits to a date and
+  // resolves to a template, but the interchange still has no schema home for the
+  // combinator's cliff, so it stays unrepresentable. Gating on resolution would
+  // silently let that through; gating on interchange refuses it, as it must.
+  const interchange = schedule.interchange;
+  if (interchange.status !== "template") {
     return {
       ok: false,
       error: {
         ruleId: "persist-not-storable",
-        message: `Only a template-resolution program is storable as a persisted artifact; this program resolved to "${resolution.status}". Adjust the schedule so it collapses to a single canonical template.`,
+        // Name the interchange status (the verdict that actually blocked it) while
+        // keeping "template" in the prose — printing the resolution status here
+        // would nonsensically read "template" for a program we're refusing.
+        message: `Only a program storable as a single canonical template can be persisted; this program's storable verdict is "${interchange.status}". Adjust the schedule so it collapses to a single canonical template.`,
       },
     };
   }
 
+  // The stored artifact is the firing-invariant floor, built off the interchange
+  // verdict so it never bakes in a firing.
   const artifact = toPersisted({
-    template: resolution.template,
-    runtime: resolution.runtime,
-    sourceMap: resolution.sourceMap,
+    template: interchange.template,
+    runtime: interchange.runtime,
+    sourceMap: interchange.sourceMap,
   });
-  // The template arm's blockers are already partitioned by the evaluator; a
-  // template resolution carries only pending witnesses, so `dead` is `[]`.
+  // Pending/dead are blocker vocabulary, which only the closed-world resolution
+  // speaks (the interchange verdict deliberately carries none). The committed
+  // resolution discloses an unfired combinator gate here, so persist still surfaces
+  // it. A storable template never pairs with a contradiction, so `dead` is `[]`.
   return {
     ok: true,
     artifact,
-    pending: resolution.pending,
-    dead: resolution.dead,
+    pending: schedule.resolution.pending,
+    dead: schedule.resolution.dead,
   };
 }
 

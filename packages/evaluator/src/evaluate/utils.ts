@@ -1,4 +1,5 @@
 import type {
+  Blocker,
   ImpossibleNode,
   OCTDate,
   ResolvedNode,
@@ -20,6 +21,13 @@ interface PickedBase<T> {
 
 export interface PickedResolved<T> extends PickedBase<T> {
   meta: ResolvedNode;
+  // Non-occurrences this resolved pick is leaning on. Set only when an EARLIER OF
+  // commits to a settled arm while sibling arms are still pending: those siblings'
+  // "still waiting on event X" blockers, stamped with the committed date as their
+  // absence boundary. They ride the pick so the schedule can disclose them (in
+  // absenceAssumptions and resolution.pending) rather than letting the loser arms
+  // vanish silently when the selector folds to its winner.
+  disclosures?: Blocker[];
 }
 
 export interface PickedPartial<T> extends PickedBase<T> {

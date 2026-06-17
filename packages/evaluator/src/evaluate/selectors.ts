@@ -90,13 +90,24 @@ function reduceBest<T>(
  * ------------------------ */
 
 /**
- * Both EARLIER_OF and LATER_OF only settle once every live arm has resolved.
- * For LATER_OF that's obvious — you can't know the latest until you know them
- * all. For EARLIER_OF it's subtler: a single resolved arm doesn't pin the
- * earliest, because an unfired-event sibling could still be recorded with an
- * earlier date. So neither selector commits while any arm is still pending.
- * They differ only in how they treat a dead (impossible) arm: EARLIER_OF drops
- * it and carries on; LATER_OF lets it sink the whole selector.
+ * LATER_OF only settles once every live arm has resolved — you can't know the
+ * latest until you know them all, and its resolved arm is an *upper* bound the
+ * pending siblings can only push higher, so committing early would overstate.
+ *
+ * EARLIER_OF has two modes:
+ *   - Firing-blind (the storable interchange verdict, `commitContingent` off):
+ *     never commit while any arm is pending. A single resolved arm doesn't pin the
+ *     earliest, because an unfired-event sibling could still be recorded with an
+ *     earlier date, and a firing-invariant answer can't lean on that absence.
+ *   - Closed-world with `commitContingent` on (the live resolve): commit to the
+ *     earliest *resolved* arm as a guaranteed floor. Its date is a *lower* bound on
+ *     the start — any actual firing only moves the anchor earlier, so the committed
+ *     projection can only understate, never over-vest. The still-pending siblings'
+ *     blockers are stamped with that committed date and carried on the pick so the
+ *     assumption stays disclosed.
+ *
+ * The two selectors also differ on a dead (impossible) arm: EARLIER_OF drops it
+ * and carries on; LATER_OF lets it sink the whole selector.
  */
 type SelectorPolicy = {
   selector: SelectorTag;
@@ -139,6 +150,9 @@ function impossibleSelector<T>(
 function handleSelector<T extends Schedule | VestingNode>(
   candidates: PickReturn<T>[],
   policy: SelectorPolicy,
+  // When true, an EARLIER_OF may commit to its earliest resolved arm even with a
+  // sibling still pending (closed-world floor). Off for the firing-blind verdict.
+  commitContingent: boolean,
 ): PickReturn<T> {
   if (allImpossible(candidates)) return impossibleSelector(policy, candidates);
 
@@ -195,6 +209,24 @@ function handleSelector<T extends Schedule | VestingNode>(
     };
   }
 
+  // Closed-world EARLIER_OF commit: at least one arm has settled, others are still
+  // pending. The earliest resolved arm is a lower bound on the start (a real firing
+  // can only land earlier), so committing to it is a guaranteed vesting floor. We
+  // stamp the still-pending arms' blockers with that committed date — the boundary
+  // we're assuming each pending event stayed absent through — and carry them on the
+  // pick so the schedule can disclose the assumption. The stamping has to happen
+  // before reduceBest, which keeps only the winner's meta and drops the losers.
+  if (
+    policy.selector === "EARLIER_OF" &&
+    commitContingent &&
+    hasAnyResolved &&
+    !allResolved
+  ) {
+    const { picked, meta } = reduceBest(resolved, policy.selector);
+    const disclosures = withBoundary(collectBlockers(live), meta.date);
+    return { type: "PICKED", picked, meta, disclosures };
+  }
+
   // Otherwise unresolved (aggregate blockers of non-picked)
   return {
     type: "UNRESOLVED",
@@ -234,6 +266,7 @@ function evaluateSelectorExpr<E extends { type: string }, L extends E & object>(
   expr: E,
   isLeaf: (e: E) => e is L,
   evalLeaf: (leaf: L) => PickReturn<Extract<L, Schedule | VestingNode>>,
+  commitContingent: boolean,
 ): PickReturn<Extract<L, Schedule | VestingNode>> {
   if (isLeaf(expr)) return evalLeaf(expr);
 
@@ -244,16 +277,16 @@ function evaluateSelectorExpr<E extends { type: string }, L extends E & object>(
   // selector tags, so the switch stays exhaustive over real union members.
   const sel = expr as unknown as SelectorOf<E>;
   const candidates = sel.items.map((item) =>
-    evaluateSelectorExpr(item, isLeaf, evalLeaf),
+    evaluateSelectorExpr(item, isLeaf, evalLeaf, commitContingent),
   );
 
   switch (sel.type) {
     case "SCHEDULE_EARLIER_OF":
     case "NODE_EARLIER_OF":
-      return handleSelector(candidates, EARLIER_POLICY);
+      return handleSelector(candidates, EARLIER_POLICY, commitContingent);
     case "SCHEDULE_LATER_OF":
     case "NODE_LATER_OF":
-      return handleSelector(candidates, LATER_POLICY);
+      return handleSelector(candidates, LATER_POLICY, commitContingent);
     default:
       return assertNever(sel.type);
   }
@@ -270,19 +303,38 @@ export function evaluateScheduleExpr(
   expr: ScheduleExpr,
   ctx: ResolutionContext,
 ): PickReturn<Schedule> {
-  return evaluateSelectorExpr(expr, isScheduleLeaf, (leaf) => {
-    const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
-    // Re-wrap a picked vesting start around the schedule leaf. The partial arm
-    // carries a required pivot, so we have to carry it through here too — narrow
-    // first, then re-emit the matching arm.
-    if (isPickedPartial(res)) {
-      return { type: "PICKED", picked: leaf, meta: res.meta, pivot: res.pivot };
-    }
-    if (res.type === "PICKED") {
-      return { type: "PICKED", picked: leaf, meta: res.meta };
-    }
-    return res;
-  });
+  const commit = ctx.commitContingent === true;
+  return evaluateSelectorExpr(
+    expr,
+    isScheduleLeaf,
+    (leaf) => {
+      const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
+      // Re-wrap a picked vesting start around the schedule leaf. The partial arm
+      // carries a required pivot, so we have to carry it through here too — narrow
+      // first, then re-emit the matching arm.
+      if (isPickedPartial(res)) {
+        return {
+          type: "PICKED",
+          picked: leaf,
+          meta: res.meta,
+          pivot: res.pivot,
+        };
+      }
+      if (res.type === "PICKED") {
+        // A resolved pick may be a committed EARLIER OF carrying the still-pending
+        // siblings' stamped blockers; forward them so the schedule lowering can
+        // route them to disclosure (absenceAssumptions + resolution.pending).
+        return {
+          type: "PICKED",
+          picked: leaf,
+          meta: res.meta,
+          ...(res.disclosures ? { disclosures: res.disclosures } : {}),
+        };
+      }
+      return res;
+    },
+    commit,
+  );
 }
 
 const isNodeLeaf = (e: VestingNodeExpr): e is VestingNode => e.type === "NODE";
@@ -291,11 +343,16 @@ export function evaluateVestingNodeExpr(
   expr: VestingNodeExpr,
   ctx: ResolutionContext,
 ): PickReturn<VestingNode> {
-  return evaluateSelectorExpr(expr, isNodeLeaf, (leaf) => {
-    const res = evaluateVestingNode(leaf, ctx);
-    if (res.type === "RESOLVED") {
-      return { type: "PICKED", picked: leaf, meta: res };
-    }
-    return res;
-  });
+  return evaluateSelectorExpr(
+    expr,
+    isNodeLeaf,
+    (leaf) => {
+      const res = evaluateVestingNode(leaf, ctx);
+      if (res.type === "RESOLVED") {
+        return { type: "PICKED", picked: leaf, meta: res };
+      }
+      return res;
+    },
+    ctx.commitContingent === true,
+  );
 }
