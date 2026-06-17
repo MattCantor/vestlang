@@ -22,6 +22,7 @@ import {
   rehydrate,
   reparseDefinition,
   isRehydrateDefinitionError,
+  isSyntheticNamespaceError,
 } from "../src/resolve/index";
 import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
 import {
@@ -192,7 +193,9 @@ describe("rehydrate — parse ∘ stringify fixpoint", () => {
 // A minimal stored artifact: one EVENT-anchored template statement on `eventId`,
 // plus a sidecar entry under the same key carrying `definition`. The event_id MUST
 // match the sidecar key, or the rehydrate loop's templateEventIds guard skips the
-// entry and nothing reparses (a false green).
+// entry and nothing reparses (a false green). The id must be a reserved synthetic
+// (`evt:<n>`): a sidecar entry only ever belongs to a synthetic event, and a
+// non-reserved key would trip the namespace guard before any definition reparses.
 const corruptSidecarArtifact = (
   eventId: string,
   definition: string,
@@ -235,7 +238,7 @@ describe("rehydrate — corrupt sidecar definition (issue #231)", () => {
     "throws the tagged error naming the event_id for a %s definition",
     (_name, definition) => {
       const { template, sourceMap, runtime } = corruptSidecarArtifact(
-        "evt_1",
+        "evt:1",
         definition,
       );
       let thrown: unknown;
@@ -252,7 +255,7 @@ describe("rehydrate — corrupt sidecar definition (issue #231)", () => {
       // Identified by the literal discriminant, not `instanceof`.
       expect(isRehydrateDefinitionError(thrown)).toBe(true);
       if (isRehydrateDefinitionError(thrown)) {
-        expect(thrown.event_id).toBe("evt_1");
+        expect(thrown.event_id).toBe("evt:1");
         expect(thrown.source).toBe("definition");
       }
     },
@@ -372,5 +375,166 @@ describe("rehydrate — grant date sourced from the artifact, not the caller", (
     expect(result.runtime.eventFirings).toEqual([
       { event_id: syntheticId, date: "2026-01-01" },
     ]);
+  });
+});
+
+// ---- Issue #279: reload-path guards against event-id aliasing (hand-built /
+// corrupt input).
+//
+// A persisted artifact is plain JSON a consumer can edit out-of-band. Two boundary
+// holes: a sidecar key OUTSIDE the reserved synthetic namespace aliases a real user
+// event (the namespace violation), and a non-synthetic template event_id that
+// reparses to a valid-but-NON-bare anchor silently shifts or fabricates a witness
+// (the fourth invariant). Both must refuse, each through its own channel.
+
+// A one-statement EVENT-anchored template on `eventId`.
+const eventTemplate = (eventId: string): VestingScheduleTemplate => ({
+  id: "t1",
+  statements: [
+    {
+      order: 1,
+      vesting_base: { type: "EVENT", event_id: eventId },
+      occurrences: 4,
+      period: 1,
+      period_type: "MONTHS",
+      percentage: { numerator: 1, denominator: 1 },
+    },
+  ],
+});
+
+describe("rehydrate — namespace violation: a non-reserved sidecar key (issue #279)", () => {
+  it("throws the tagged SyntheticNamespaceError naming the offending key", () => {
+    // `evt_1` is a legal user Ident, outside the `evt:` namespace. Today this would
+    // silently re-resolve the tampered definition and shadow the user's real `evt_1`.
+    const sourceMap: SourceMap = {
+      evt_1: { definition: "LATER OF(EVENT a, EVENT b)" },
+    };
+    let thrown: unknown;
+    try {
+      rehydrate(
+        eventTemplate("evt_1"),
+        sourceMap,
+        { grantDate: "2026-01-01" },
+        ctxInput({ grantQuantity: 1000 }),
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(isSyntheticNamespaceError(thrown)).toBe(true);
+    if (isSyntheticNamespaceError(thrown)) {
+      expect(thrown.event_id).toBe("evt_1");
+    }
+    // NOT a corrupt-definition error — this path never reparses.
+    expect(isRehydrateDefinitionError(thrown)).toBe(false);
+  });
+
+  it("catches a stray key even with no matching template statement (raw-key scan)", () => {
+    // The stray key `nope` matches no template statement, so the templateEventIds
+    // filter would skip it — but the raw-key scan still catches it (D6).
+    const sourceMap: SourceMap = { nope: { definition: "EVENT ipo" } };
+    let thrown: unknown;
+    try {
+      rehydrate(
+        eventTemplate("ipo"),
+        sourceMap,
+        { grantDate: "2026-01-01" },
+        ctxInput({ grantQuantity: 1000 }),
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(isSyntheticNamespaceError(thrown)).toBe(true);
+    if (isSyntheticNamespaceError(thrown)) {
+      expect(thrown.event_id).toBe("nope");
+    }
+  });
+});
+
+describe("rehydrate — fourth invariant: a template event_id that reparses non-bare (issue #279)", () => {
+  // These reparse SUCCESSFULLY today and silently corrupt the witness — the cases
+  // the round-trip identity check uniquely closes:
+  //   - `"a + 6 months"` → `EVENT a` + a 6-month offset, shifting the date;
+  //   - `"grant_date"` / `"grantDate"` → the GRANT_DATE system anchor, fabricating
+  //     a firing where a genuine floating event would stay pending.
+  const loadBearing: [name: string, eventId: string][] = [
+    ["offset anchor", "a + 6 months"],
+    ["grant-date system anchor (snake)", "grant_date"],
+    ["grant-date system anchor (camel)", "grantDate"],
+  ];
+
+  it.each(loadBearing)(
+    "refuses with the tagged error (source template-event-name): %s",
+    (_name, eventId) => {
+      let thrown: unknown;
+      try {
+        rehydrate(
+          eventTemplate(eventId),
+          {},
+          { grantDate: "2026-01-01" },
+          ctxInput({ grantQuantity: 1000 }),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(isRehydrateDefinitionError(thrown)).toBe(true);
+      if (isRehydrateDefinitionError(thrown)) {
+        expect(thrown.event_id).toBe(eventId);
+        expect(thrown.source).toBe("template-event-name");
+      }
+    },
+  );
+
+  // Regression coverage: these already throw at parse time via the existing reparse
+  // guards (embedded space / leading-digit-then-dash aren't legal bare names), so
+  // they're not the new mechanism's load-bearing cases — but they must keep refusing.
+  const regression: [name: string, eventId: string][] = [
+    ["embedded space", "a b"],
+    ["dash", "a-1"],
+  ];
+
+  it.each(regression)(
+    "still refuses (already caught at parse time): %s",
+    (_name, eventId) => {
+      let thrown: unknown;
+      try {
+        rehydrate(
+          eventTemplate(eventId),
+          {},
+          { grantDate: "2026-01-01" },
+          ctxInput({ grantQuantity: 1000 }),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+      expect(isRehydrateDefinitionError(thrown)).toBe(true);
+      if (isRehydrateDefinitionError(thrown)) {
+        expect(thrown.source).toBe("template-event-name");
+      }
+    },
+  );
+
+  it("a genuine floating `ipo` still stays pending, no witness (unchanged)", () => {
+    const result = rehydrate(
+      eventTemplate("ipo"),
+      {},
+      { grantDate: "2026-01-01" },
+      ctxInput({ grantQuantity: 1000, events: {} }),
+    );
+    expect(result.runtime.eventFirings ?? []).toEqual([]);
+    expect(findsEventNotOccurred(result.pending, "ipo")).toBe(true);
+  });
+});
+
+describe("rehydrate — dropped-sidecar synthetic stays opaque (issue #279)", () => {
+  it("an `evt:1` template statement with no sidecar rehydrates without throwing", () => {
+    // AC7: the reload check does NOT run the masquerade half, so a synthetic whose
+    // sidecar was dropped resolves to no witness rather than refusing.
+    const result = rehydrate(
+      eventTemplate("evt:1"),
+      {},
+      { grantDate: "2026-01-01" },
+      ctxInput({ grantQuantity: 1000 }),
+    );
+    expect(result.runtime.eventFirings ?? []).toEqual([]);
   });
 });

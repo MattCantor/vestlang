@@ -239,6 +239,10 @@ export {
 } from "./rehydrate.js";
 export type { RehydrateResult } from "./rehydrate.js";
 export {
+  SyntheticNamespaceError,
+  isSyntheticNamespaceError,
+} from "./synthetic.js";
+export {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,
   fromSidecar,

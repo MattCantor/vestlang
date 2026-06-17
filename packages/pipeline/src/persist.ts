@@ -22,6 +22,7 @@ import {
   rehydratePersisted,
   fromSidecar,
   isRehydrateDefinitionError,
+  isSyntheticNamespaceError,
   templateAllocationFindings,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
@@ -284,6 +285,18 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
         error: {
           ruleId: "rehydrate-corrupt-definition",
           message: `Cannot rehydrate: the stored definition for event "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+        },
+      };
+    }
+    // A sidecar key outside the reserved synthetic namespace aliases a real user
+    // event — distinct from an unparseable definition (this path never reparses).
+    // Name the offending key; carry no raw parser text.
+    if (isSyntheticNamespaceError(err)) {
+      return {
+        ok: false,
+        error: {
+          ruleId: "rehydrate-namespace-violation",
+          message: `Cannot rehydrate: the sidecar key "${err.event_id}" is outside the reserved synthetic event namespace, so it would alias a real user event. The artifact appears to be damaged; supply one built by vestlang_persist.`,
         },
       };
     }

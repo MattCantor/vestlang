@@ -800,8 +800,10 @@ describe("mcp-server / persistence tool pair", () => {
 
   // A stored artifact whose sidecar `definition` is corrupt. The event_id matches the
   // sidecar key AND a real EVENT-anchored template statement, so rehydrate actually
-  // reparses it (the templateEventIds guard wouldn't otherwise reach it). Every field
-  // is calendar-valid so the schema admits it and the failure surfaces at reparse.
+  // reparses it (the templateEventIds guard wouldn't otherwise reach it). The id is a
+  // reserved synthetic (`evt:<n>`) — a sidecar entry only ever belongs to one, and a
+  // non-reserved key would trip the namespace guard before any reparse. Every field is
+  // calendar-valid so the schema admits it and the failure surfaces at reparse.
   const corruptArtifact = (eventId: string, definition: string) => ({
     template: {
       id: "t1",
@@ -824,14 +826,14 @@ describe("mcp-server / persistence tool pair", () => {
     const client = await connectClient();
 
     const res = await rehydrateRaw(client, {
-      artifact: corruptArtifact("evt_1", "TOTALLY NOT DSL (("),
+      artifact: corruptArtifact("evt:1", "TOTALLY NOT DSL (("),
       grant_quantity: 400,
     });
 
     expect(res.isError).toBe(true);
     const text = res.content?.[0]?.text ?? "";
     // Names the offending event and reads as an intentional corruption refusal.
-    expect(text).toContain("evt_1");
+    expect(text).toContain("evt:1");
     expect(text).toMatch(/corrupt|unparseable/i);
     // The raw peggy dump stays on the error's `cause`, never in the operator message.
     expect(text).not.toContain('Expected "DATE"');

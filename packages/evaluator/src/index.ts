@@ -21,6 +21,8 @@ export { templateAllocationFindings } from "./resolve/index.js";
 export {
   isRehydrateDefinitionError,
   RehydrateDefinitionError,
+  isSyntheticNamespaceError,
+  SyntheticNamespaceError,
   type RehydrateResult,
   VESTLANG_SIDECAR_NAMESPACE,
   fromSidecar,

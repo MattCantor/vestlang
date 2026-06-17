@@ -26,6 +26,7 @@ import type {
 } from "@vestlang/types";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
+import { assertSavePartition } from "./synthetic.js";
 
 /**
  * The interim short namespace key for vestlang's sidecar. The framework rule is
@@ -89,6 +90,10 @@ export const toPersisted = (artifact: {
   runtime: VestingRuntime;
   sourceMap: SourceMap;
 }): PersistedArtifact => {
+  // Tripwire: the synthetic/named partition must hold before this becomes a
+  // durable artifact. A freshly-lowered map can only break it via a lowering bug,
+  // so this throws a plain Error (not a user refusal) and isn't caught downstream.
+  assertSavePartition(artifact.template, artifact.sourceMap);
   const sidecar = toSidecar(artifact.sourceMap);
   return {
     template: artifact.template,

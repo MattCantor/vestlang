@@ -34,13 +34,16 @@ type SharedError =
 // share one umbrella ruleId; each site is told apart by its message.
 type PersistError = { ruleId: "persist-not-storable"; message: string };
 
-// rehydrate's three damage modes a consumer might remediate differently: a hand-
+// rehydrate's four damage modes a consumer might remediate differently: a hand-
 // built artifact missing its grant date, one whose template over-allocates the
-// grant, or one whose stored event definition no longer parses.
+// grant, one whose stored event definition no longer parses, or one whose sidecar
+// key falls outside the reserved synthetic namespace (a tampered key aliasing a
+// real user event).
 type RehydrateError =
   | { ruleId: "rehydrate-missing-grant-date"; message: string }
   | { ruleId: "rehydrate-over-allocation"; message: string }
-  | { ruleId: "rehydrate-corrupt-definition"; message: string };
+  | { ruleId: "rehydrate-corrupt-definition"; message: string }
+  | { ruleId: "rehydrate-namespace-violation"; message: string };
 
 // offset's input-shape refusals (not a single offset expression) and its
 // unresolved arm. The unresolved arm carries the blocking reason as a typed field

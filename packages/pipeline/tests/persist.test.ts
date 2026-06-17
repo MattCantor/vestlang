@@ -131,6 +131,8 @@ describe("runRehydrate (AC#5)", () => {
   });
 
   it("refuses a corrupt stored definition, naming the event and not leaking parser text", () => {
+    // A sidecar entry only ever belongs to a synthetic event, so the key is the
+    // reserved `evt:1` — a non-reserved key would trip the namespace guard first.
     const r = runRehydrate({
       artifact: {
         template: {
@@ -138,7 +140,7 @@ describe("runRehydrate (AC#5)", () => {
           statements: [
             {
               order: 1,
-              vesting_base: { type: "EVENT", event_id: "evt_1" },
+              vesting_base: { type: "EVENT", event_id: "evt:1" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",
@@ -147,14 +149,16 @@ describe("runRehydrate (AC#5)", () => {
           ],
         },
         runtime: { grantDate: "2025-01-01" },
-        sidecar: { vestlang: { evt_1: { definition: "TOTALLY NOT DSL ((" } } },
+        sidecar: {
+          vestlang: { "evt:1": { definition: "TOTALLY NOT DSL ((" } },
+        },
       },
       grant_quantity: 400,
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
-      expect(r.error.message).toContain("evt_1");
+      expect(r.error.message).toContain("evt:1");
       expect(r.error.message).toMatch(/corrupt|unparseable/i);
       expect(r.error.message).not.toContain('Expected "DATE"');
     }
@@ -435,6 +439,101 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
       grant_quantity: 0,
     });
     expect(out.projection).toBeDefined();
+  });
+});
+
+describe("runRehydrate guards event-id aliasing (issue #279)", () => {
+  // A one-statement EVENT-anchored template, the minimal carrier for these guards.
+  const eventArtifact = (
+    eventId: string,
+    sidecar?: PersistedArtifact["sidecar"],
+  ): PersistedArtifact => ({
+    template: {
+      id: "t1",
+      statements: [
+        {
+          order: 1,
+          vesting_base: { type: "EVENT", event_id: eventId },
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          percentage: { numerator: 1, denominator: 1 },
+        },
+      ],
+    },
+    runtime: { grantDate: "2025-01-01" },
+    ...(sidecar ? { sidecar } : {}),
+  });
+
+  it("maps a non-reserved sidecar key to rehydrate-namespace-violation, naming the key", () => {
+    // `evt_1` is a legal user Ident outside the `evt:` namespace — a tampered key
+    // that would otherwise shadow the user's real `evt_1` firing.
+    const r = runRehydrate({
+      artifact: eventArtifact("evt_1", {
+        vestlang: { evt_1: { definition: "LATER OF(EVENT a, EVENT b)" } },
+      }),
+      grant_quantity: 1000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-namespace-violation");
+      expect(r.error.message).toContain("evt_1");
+      // This path never reparses, so it carries no raw parser text.
+      expect(r.error.message).not.toContain('Expected "DATE"');
+    }
+  });
+
+  it("maps an offset template event_id to rehydrate-corrupt-definition", () => {
+    // `"a + 6 months"` reparses to `EVENT a` + offset — refused by the round-trip
+    // identity check, routed through the corrupt-definition refusal.
+    const r = runRehydrate({
+      artifact: eventArtifact("a + 6 months"),
+      grant_quantity: 1000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
+      expect(r.error.message).toContain("a + 6 months");
+    }
+  });
+
+  it.each(["grant_date", "grantDate"])(
+    "maps a grant-date-aliasing template event_id (%s) to rehydrate-corrupt-definition",
+    (eventId) => {
+      // Reparses to the GRANT_DATE *system* anchor — a fabricated firing the
+      // round-trip check catches.
+      const r = runRehydrate({
+        artifact: eventArtifact(eventId),
+        grant_quantity: 1000,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
+        expect(r.error.message).toContain(eventId);
+      }
+    },
+  );
+
+  it("leaves a genuine floating EVENT pending, not refused", () => {
+    const out = rehydrateOk({
+      artifact: eventArtifact("ipo"),
+      grant_quantity: 1000,
+    });
+    expect(out.firings_to_apply).toEqual([]);
+    expect(
+      out.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+  });
+
+  it("rehydrates a dropped-sidecar synthetic (`evt:1`, no sidecar) without refusing", () => {
+    const out = rehydrateOk({
+      artifact: eventArtifact("evt:1"),
+      grant_quantity: 1000,
+    });
+    // Opaque: no witness, no firing — but not a refusal.
+    expect(out.firings_to_apply).toEqual([]);
   });
 });
 
