@@ -158,6 +158,8 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
   // #8 — a corrupt stored event definition. The verbatim message names the event
   // and reads as a corruption refusal, without echoing the raw parser dump.
   it("#8 corrupt definition → rehydrate-corrupt-definition, verbatim", () => {
+    // A sidecar entry only ever belongs to a synthetic event, so the key is the
+    // reserved `evt:1` — a non-reserved key would trip the namespace guard first.
     const r = runRehydrate({
       artifact: {
         template: {
@@ -165,7 +167,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
           statements: [
             {
               order: 1,
-              vesting_base: { type: "EVENT", event_id: "evt_1" },
+              vesting_base: { type: "EVENT", event_id: "evt:1" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",
@@ -174,7 +176,9 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
           ],
         },
         runtime: { grantDate: "2025-01-01" },
-        sidecar: { vestlang: { evt_1: { definition: "TOTALLY NOT DSL ((" } } },
+        sidecar: {
+          vestlang: { "evt:1": { definition: "TOTALLY NOT DSL ((" } },
+        },
       },
       grant_quantity: 400,
     });
@@ -182,7 +186,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
     if (r.ok) return;
     expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
     expect(r.error.message).toBe(
-      'Cannot rehydrate: the stored definition for event "evt_1" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
+      'Cannot rehydrate: the stored definition for event "evt:1" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
     );
     // The raw parser text stays off the operator-facing message.
     expect(r.error.message).not.toContain('Expected "DATE"');

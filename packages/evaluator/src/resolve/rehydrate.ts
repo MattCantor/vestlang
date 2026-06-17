@@ -33,7 +33,7 @@ import { createEvaluationContext } from "../utils.js";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { partitionResolutionBlockers } from "../evaluate/blockerTree.js";
 import { isPickedResolved, type PickReturn } from "../evaluate/utils.js";
-import { isSyntheticEventId } from "./synthetic.js";
+import { isSyntheticEventId, assertReloadKeysReserved } from "./synthetic.js";
 
 export interface RehydrateResult {
   // The stored runtime with newly-resolved synthetic witnesses merged into
@@ -157,6 +157,39 @@ const reparseForEvent = (
   }
 };
 
+// The bare-event loop synthesizes `EVENT <id>` and reparses it, so it must round-
+// trip to *exactly the bare floating event it claims* — nothing more. The existing
+// reparse guards stop multi-statement smuggling, but a single id can still reparse
+// to a valid-but-non-bare anchor and silently shift or fabricate the witness:
+//   - `"a + 6 months"` reparses to `EVENT a` with a +6-month offset, moving the date;
+//   - `"grant_date"` / `"grantDate"` reparses to the GRANT_DATE *system* anchor
+//     (EventRef tries SystemRef before Ident), fabricating a firing where a genuine
+//     floating event would stay pending.
+// So require the reparsed node to be a plain `NODE` on an EVENT base naming this
+// exact id, with no offsets and no gate. Anything else is corruption. This is an
+// identity check, not a lexical one, so it closes the offset case and the whole
+// system-anchor family without enumerating their spellings.
+const assertBareFloatingEvent = (
+  eventId: string,
+  node: VestingNodeExpr,
+): void => {
+  const isBare =
+    node.type === "NODE" &&
+    node.base.type === "EVENT" &&
+    node.base.value === eventId &&
+    node.offsets.length === 0 &&
+    node.condition === undefined;
+  if (isBare) return;
+  throw new RehydrateDefinitionError({
+    event_id: eventId,
+    source: "template-event-name",
+    definition: `EVENT ${eventId}`,
+    cause: new Error(
+      `Template event "${eventId}" does not reparse to a bare floating event.`,
+    ),
+  });
+};
+
 /** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements. */
 const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
   if (res.type === "PICKED") {
@@ -185,6 +218,14 @@ export const rehydrate = (
   runtime: VestingRuntime,
   ctxInput: ResolutionContextInput,
 ): RehydrateResult => {
+  // Before anything else: every present source-map key must be a reserved synthetic
+  // id. A key outside the namespace (e.g. `evt_1`, a legal user Ident) aliases a
+  // real user event — re-resolving its tampered definition would shadow the user's
+  // genuine firing. Scanned over the raw key set so a stray key with no matching
+  // template statement is still caught. A dropped sidecar yields an empty map, so
+  // this never fires on the legitimate opaque-template path.
+  assertReloadKeysReserved(sourceMap);
+
   // The grant's frozen conventions come from the stored runtime, not the caller.
   // Grant date and day-of-month were fixed at issuance, so the witnesses we
   // re-resolve here must read the same values the projection compiles under —
@@ -246,10 +287,15 @@ export const rehydrate = (
     // dropped: deliberately opaque, so it resolves to no witness. Don't reparse it
     // as `EVENT <id>` — its colon isn't a legal bare name and the parser would throw.
     if (isSyntheticEventId(eventId)) continue;
-    const res = evaluateVestingNodeExpr(
-      reparseForEvent(eventId, "template-event-name", `EVENT ${eventId}`),
-      ctx,
+    const node = reparseForEvent(
+      eventId,
+      "template-event-name",
+      `EVENT ${eventId}`,
     );
+    // Even a successful reparse can denote a shifted or fabricated anchor; require
+    // it to be exactly the bare floating event before trusting its witness.
+    assertBareFloatingEvent(eventId, node);
+    const res = evaluateVestingNodeExpr(node, ctx);
     if (isPickedResolved(res)) {
       // A supplied firing overrides any firing seeded from the stored runtime, so a
       // corrected/back-dated date in `events` takes effect.

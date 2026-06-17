@@ -27,6 +27,7 @@ import {
   resolveToCore,
   type PersistedArtifact,
 } from "../src/resolve/index";
+import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
 import {
   makeSingletonNode,
   makeVestingBaseEvent,
@@ -268,6 +269,13 @@ describe("sidecar — a stand-in event and a user `evt_1` stay distinct through 
     expect(Object.keys(fromSidecar(persisted.sidecar))).toEqual(["evt:1"]);
   });
 
+  it("the persisted artifact round-trips through toPersisted with no throw", () => {
+    // AC3: a normally-lowered artifact (synthetic `evt:1` key with a matching
+    // template statement) persists cleanly.
+    const stored = resolveStored();
+    expect(() => toPersisted(stored)).not.toThrow();
+  });
+
   it("reloading does not let the user's `evt_1` firing shadow the pending stand-in", () => {
     const stored = resolveStored();
     const persisted: PersistedArtifact = JSON.parse(
@@ -301,5 +309,89 @@ describe("sidecar — a stand-in event and a user `evt_1` stay distinct through 
       { type: "EVENT", event_id: "evt:1" },
       { type: "EVENT", event_id: "evt_1" },
     ]);
+  });
+});
+
+// The save-path partition tripwire. The source map a normal persist produces always
+// honors the synthetic/named split; a violation can only come from a lowering bug,
+// so `toPersisted` throws a PLAIN Error (not the tagged namespace error, not a
+// structured refusal) that the persist orchestrator doesn't catch. These build the
+// violating artifacts by hand to exercise the tripwire directly.
+describe("toPersisted — save-path partition tripwire", () => {
+  // A one-statement EVENT-anchored template on `eventId`.
+  const templateWithEvent = (eventId: string): VestingScheduleTemplate => ({
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "EVENT", event_id: eventId },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  });
+
+  const runtime = { grantDate: "2026-01-01" };
+
+  it("throws a plain Error naming a source-map key outside the reserved namespace (AC1)", () => {
+    // A key `evt_1` is a legal user Ident, NOT in the `evt:` namespace.
+    const sourceMap: SourceMap = {
+      evt_1: { definition: "LATER OF(EVENT a, EVENT b)" },
+    };
+    let thrown: unknown;
+    try {
+      toPersisted({ template: templateWithEvent("evt_1"), runtime, sourceMap });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    // Plain Error, NOT the tagged namespace error.
+    expect((thrown as Error).name).toBe("Error");
+    expect((thrown as Error).message).toContain(
+      'source-map key "evt_1" is outside the reserved namespace',
+    );
+  });
+
+  it("throws a plain Error, with a distinct message, for a masquerading named event (AC2)", () => {
+    // The template statement claims a reserved-namespace id (`evt:1`) but the
+    // source map carries no matching entry — a named event masquerading as a
+    // synthetic. The source map keys are all reserved, so AC1's half passes.
+    const sourceMap: SourceMap = {};
+    let thrown: unknown;
+    try {
+      toPersisted({ template: templateWithEvent("evt:1"), runtime, sourceMap });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).name).toBe("Error");
+    expect((thrown as Error).message).toContain(
+      'template event "evt:1" in the reserved namespace has no source-map entry',
+    );
+    // AC1 and AC2 are distinguishable by message substring.
+    expect((thrown as Error).message).not.toContain(
+      "outside the reserved namespace",
+    );
+  });
+
+  it("does not throw for a normal synthetic key matched by its template statement (AC3)", () => {
+    const sourceMap: SourceMap = {
+      "evt:1": { definition: "LATER OF(EVENT a, EVENT b)" },
+    };
+    expect(() =>
+      toPersisted({ template: templateWithEvent("evt:1"), runtime, sourceMap }),
+    ).not.toThrow();
+  });
+
+  it("does not throw for a plain template with an empty source map (AC3)", () => {
+    expect(() =>
+      toPersisted({
+        template: templateWithEvent("ipo"),
+        runtime,
+        sourceMap: {},
+      }),
+    ).not.toThrow();
   });
 });
