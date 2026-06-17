@@ -13,7 +13,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
-import { evaluateProgram } from "../src/evaluate/index";
+import { evaluateProgram } from "../src/orchestrate";
 import { evaluateProgramAsOf } from "../src/asof";
 import {
   makeSingletonSchedule,

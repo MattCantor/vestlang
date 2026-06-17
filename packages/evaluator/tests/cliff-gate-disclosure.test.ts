@@ -13,7 +13,7 @@ import { describe, it, expect } from "vitest";
 import type { EvaluatedSchedule, UnresolvedBlocker } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/evaluate/index";
+import { evaluateProgram } from "../src/orchestrate";
 
 const GRANT = "2025-01-01";
 const QTY = 4800;

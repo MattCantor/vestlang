@@ -17,7 +17,7 @@ import { compileToInstallments } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram, evaluateStatement } from "../src/evaluate/index";
+import { evaluateProgram, evaluateStatement } from "../src/orchestrate";
 import {
   rehydrate,
   reparseDefinition,

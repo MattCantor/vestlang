@@ -8,8 +8,8 @@ import {
   resolveToCore,
   resolveInterchange,
   assertProgramInstallmentCap,
-} from "../resolve/index.js";
-import { assemble } from "../resolve/assemble.js";
+} from "./resolve/index.js";
+import { assemble } from "./assemble.js";
 
 /**
  * Evaluate one normalized Statement. We work it out two ways: `resolveToCore`

@@ -20,13 +20,13 @@ import type {
   OCTDate,
 } from "@vestlang/types";
 import { compileToInstallments, gt } from "@vestlang/core";
-import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
+import { makeResolvedInstallment } from "./evaluate/makeTranches.js";
 import {
   foldBlocker,
   partitionResolutionBlockers,
-} from "../evaluate/blockerTree.js";
-import { isVestingStartPlaceholder } from "../evaluate/vestingNode/vestingBase.js";
-import type { ResolveResult } from "./types.js";
+} from "./evaluate/blockerTree.js";
+import { isVestingStartPlaceholder } from "./evaluate/vestingNode/vestingBase.js";
+import type { ResolveResult } from "./resolve/types.js";
 
 /**
  * The non-occurrences this resolution is leaning on. Closed-world resolution reads
