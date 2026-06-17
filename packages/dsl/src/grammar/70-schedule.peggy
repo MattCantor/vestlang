@@ -2,6 +2,14 @@ From = "FROM"i _ a:(VestingNode / GateExpr) {
   if (hasSystemAnchor(a, "VESTING_START")) {
     error('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
   }
+  // vestingStart in this start's gate is circular: the gate would constrain the
+  // very start it defines, which isn't resolved yet. The anchor check above runs
+  // first and owns the anchor position; only a gate-position reference reaches
+  // here. (On a CLIFF the same reference is fine — vestingStart is resolved by
+  // then — so this guard is FROM-only.)
+  if (nodeGateRefsVestingStart(a)) {
+    error('vestingStart is a reserved system event and creates a circular dependency when referenced in a `FROM` start gate: the start would depend on itself. Gate the start on a concrete date or a different event.')
+  }
   return a
 }
 

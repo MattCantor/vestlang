@@ -153,3 +153,132 @@ describe("System event protections (smuggled through selectors)", () => {
     expect(stmt.expr.vesting_start.type).toBe("NODE_EARLIER_OF");
   });
 });
+
+// A FROM start's gate can't reference vestingStart: the gate would constrain the
+// very start it defines, and vestingStart is unresolved while that start
+// resolves, so the gate pins on a placeholder and never settles. The anchor
+// guard above never looks inside the gate condition, so these used to lint clean.
+// The same reference on a CLIFF gate is fine (vestingStart is resolved by then)
+// and is exercised separately below.
+describe("System event protections (vestingStart in a FROM gate is circular)", () => {
+  // catch once, assert on message — keeps the gate/anchor message partition honest
+  const caught = (src: string): Error => {
+    try {
+      parse(src);
+    } catch (e) {
+      return e as Error;
+    }
+    throw new Error(`expected parse to throw for: ${src}`);
+  };
+
+  // AC1: one representative spelling — all SystemRef forms collapse to the same
+  // VESTING_START base before the guard runs, so the rejection is spelling-blind.
+  it("errors on vestingStart in a FROM gate atom", () => {
+    expect(() =>
+      parse(
+        `100 VEST FROM DATE 2025-01-10 AFTER vesting_start + 1 month OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/circular/);
+  });
+
+  // AC2a: the reference rides on one operand of a boolean group
+  // (condition.AND.items[i].constraint.base = VESTING_START).
+  it("errors on vestingStart inside a boolean AND group in a FROM gate", () => {
+    expect(() =>
+      parse(
+        `100 VEST FROM DATE 2025-01-10 AFTER event a AND after vesting_start OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/circular/);
+  });
+
+  // AC2b: the selector sits at the anchor; the gate rides on an arm node. Any arm
+  // referencing vestingStart rejects — there's no "chosen" arm at parse time.
+  it("errors on vestingStart in an anchor-level selector arm's gate", () => {
+    expect(() =>
+      parse(
+        `100 VEST FROM EARLIER OF(DATE 2025-01-10 AFTER vesting_start, EVENT y) OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/circular/);
+  });
+
+  // AC2c: the deepest path — a constraint base that carries its own nested gate
+  // (condition.constraint.base.condition.constraint.base = VESTING_START). A check
+  // that inspects only the first constraint.base and forgets to recurse into that
+  // base's own condition would pass (a)/(b) and still leave this lintable.
+  it("errors on vestingStart in a base-of-base nested gate in a FROM start", () => {
+    expect(() =>
+      parse(
+        `100 VEST FROM DATE 2025-01-10 AFTER EVENT ipo AFTER vesting_start OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/circular/);
+  });
+
+  // AC3: the meaningful cliff case is untouched — the cliff gate references a
+  // VESTING_START node that's already resolved by the time the cliff is computed.
+  it("allows vestingStart in a CLIFF gate (resolved by then, not circular)", () => {
+    const stmt = first(
+      `1000 VEST FROM DATE 2025-01-10 OVER 12 months EVERY 1 month CLIFF EVENT acceleration AFTER vesting_start + 6 months`,
+    );
+    const cliff = stmt.expr.periodicity.cliff as VestingNode;
+    expect(cliff.base).toEqual({ type: "EVENT", value: "acceleration" });
+  });
+
+  // AC4: grantDate always resolves, so a grantDate gate on a FROM start is
+  // resolvable, never circular — guards against over-rejecting on the system tag.
+  it("allows grantDate in a FROM gate (resolvable, not circular)", () => {
+    const stmt = first(
+      `100 VEST FROM DATE 2025-01-10 AFTER grant_date + 1 month OVER 12 months EVERY 1 month`,
+    );
+    const vs = stmt.expr.vesting_start as VestingNode;
+    expect(vs.base).toEqual({ type: "DATE", value: "2025-01-10" });
+  });
+
+  // AC5: no false positives — one success per recursion branch the walk descends,
+  // mirroring AC2, proving the walk doesn't over-reject on a branch it enters.
+  it("allows a nested-base gate of genuine events (no false positive)", () => {
+    const stmt = first(
+      `100 VEST FROM DATE 2025-01-10 AFTER event a BEFORE event b OVER 12 months EVERY 1 month`,
+    );
+    expect(stmt.expr.vesting_start.type).toBe("NODE");
+  });
+
+  it("allows a boolean-group gate of genuine events (no false positive)", () => {
+    const stmt = first(
+      `100 VEST FROM DATE 2025-01-10 AFTER event a AND after event b OVER 12 months EVERY 1 month`,
+    );
+    expect(stmt.expr.vesting_start.condition.type).toBe("AND");
+  });
+
+  it("allows an arm-carried gate of genuine events (no false positive)", () => {
+    const stmt = first(
+      `100 VEST FROM EARLIER OF(DATE 2025-01-10 AFTER event a, EVENT y) OVER 12 months EVERY 1 month`,
+    );
+    expect(stmt.expr.vesting_start.type).toBe("NODE_EARLIER_OF");
+  });
+
+  // AC6: the anchor and gate messages stay partitioned by position. Assert on a
+  // caught error's message (not .not.toThrowError, which also passes when nothing
+  // throws and would mask a silent non-rejection).
+  it("partitions the gate message: reads as circular, never the anchor message", () => {
+    const err = caught(
+      `100 VEST FROM DATE 2025-01-10 AFTER vesting_start + 1 month OVER 12 months EVERY 1 month`,
+    );
+    expect(err.message).toMatch(/vestingStart is a reserved system event/);
+    expect(err.message).toMatch(/circular/);
+    expect(err.message).not.toMatch(/Pick a different event name/);
+  });
+
+  it("partitions the anchor message: keeps the anchor wording, not the circular one", () => {
+    const err = caught(`VEST FROM vestingStart OVER 12 months EVERY 1 month`);
+    expect(err.message).toMatch(/Pick a different event name/);
+    expect(err.message).not.toMatch(/circular/);
+  });
+
+  it("partitions the selector-anchor message the same way", () => {
+    const err = caught(
+      `VEST FROM EARLIER OF(vestingStart, EVENT ipo) OVER 12 months EVERY 1 month`,
+    );
+    expect(err.message).toMatch(/Pick a different event name/);
+    expect(err.message).not.toMatch(/circular/);
+  });
+});

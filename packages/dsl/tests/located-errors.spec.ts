@@ -30,6 +30,10 @@ describe("converted guards now throw located errors", () => {
       "VEST FROM vestingStart OVER 12 months EVERY 1 month",
     ],
     [
+      "vestingStart circular in a FROM gate",
+      "VEST FROM DATE 2025-01-10 AFTER vesting_start + 1 month OVER 12 months EVERY 1 month",
+    ],
+    [
       "grantDate reserved in CLIFF",
       "VEST OVER 48 months EVERY 1 month CLIFF grantDate",
     ],
