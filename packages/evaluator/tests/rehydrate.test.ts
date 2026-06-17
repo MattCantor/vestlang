@@ -309,26 +309,31 @@ describe("rehydrate — twin path: an illegal bare template event name (issue #2
 // projection always reads runtime). A conflicting caller value must NOT leak in.
 
 describe("rehydrate — day-of-month sourced from the artifact, not the caller", () => {
-  // `EVENT ipo + 1 month` carries a month offset, so day-of-month bites and
-  // lower.ts externalizes it as a synthetic. Stored under rule "15", ipo firing on
-  // a month-end: +1 month lands on the 15th of the next month, not its last day.
+  // `EVENT ipo + 1 month` carries a month offset, so lower.ts externalizes the
+  // start as a synthetic. The offset is a displacement, so it steps EXACT (#253):
+  // ipo on Jan 31 + 1 month keeps day 31 and clamps to Feb's last day
+  // (2025-02-28) — it does NOT snap to the stored "15". The *grid* still re-snaps
+  // to the 15th from that witness, identically on both sides of the round-trip.
   const DSL = "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
 
-  it("re-resolves the witness under the stored rule (2025-02-15), ignoring ctxInput", () => {
+  it("re-resolves the witness exact under the stored rule (2025-02-28), ignoring ctxInput", () => {
     const { template, sourceMap, runtime } = storedFromDsl(
       DSL,
       ctxInput({ grantQuantity: 400, vesting_day_of_month: "15" }),
     );
     // The rule is genuinely frozen into the artifact (it's non-default, so
-    // lower.ts stores it).
+    // lower.ts stores it). It's the grid that reads it, not the offset.
     expect(runtime.vestingDayOfMonth).toBe("15");
 
     const result = rehydrate(
       template,
       sourceMap,
       runtime,
-      // A conflicting day-of-month — the canonical default — which would emit
-      // 2025-02-28 if the caller's value were consulted.
+      // A conflicting day-of-month — the canonical default. The witness is exact
+      // regardless of which rule wins, so this case no longer turns on the rule
+      // for the witness date; what it pins is that the stored "15" (not the
+      // caller's default) is the one carried into the runtime the grid compiles
+      // under. Both rules yield the same exact 2025-02-28 witness here.
       ctxInput({
         events: { ipo: "2025-01-31" },
         grantQuantity: 400,
@@ -338,8 +343,95 @@ describe("rehydrate — day-of-month sourced from the artifact, not the caller",
 
     const [syntheticId] = Object.keys(sourceMap);
     expect(result.runtime.eventFirings).toEqual([
-      { event_id: syntheticId, date: "2025-02-15" },
+      { event_id: syntheticId, date: "2025-02-28" },
     ]);
+
+    // What proves the stored "15" (not the caller's default) drove the result is
+    // the GRID, not the witness: the witness is exact under either rule. Compile
+    // from the rehydrated runtime — the grid re-snaps off the 2025-02-28 witness
+    // to the 15th. Under the caller's default it would keep day 28 instead.
+    const installments = compileToInstallments(template, 400, result.runtime);
+    expect(installments).toHaveLength(4);
+    expect(installments.map((i) => i.date)).toEqual([
+      "2025-03-15",
+      "2025-04-15",
+      "2025-05-15",
+      "2025-06-15",
+    ]);
+  });
+});
+
+// ---- Issue #253, AC8: round-trip consistency under the exact offset rule. The
+// persisted witness is exact (keep-day, clamp), the grid re-snaps to the policy
+// day from it, and a persist→rehydrate of the same world reproduces the identical
+// schedule on both sides.
+
+describe("rehydrate — #253 round-trip consistency (exact witness, re-snapped grid)", () => {
+  const DSL = "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
+
+  it("persist→rehydrate reproduces the same exact-witness, 15th-grid schedule", () => {
+    // Evaluate once with the IPO already fired (Jan 31), under rule "15", to get
+    // the schedule the live engine produces. A fired EVENT-anchored start is a
+    // storable `template` whose installments are all RESOLVED.
+    const liveCtx = ctxInput({
+      grantQuantity: 400,
+      vesting_day_of_month: "15",
+      events: { ipo: "2025-01-31" },
+    });
+    const liveProgram = normalizeProgram(parse(DSL));
+    const liveSchedule = evaluateProgram(liveProgram, liveCtx);
+    expect(liveSchedule.resolution.status).toBe("template");
+    const liveDates = liveSchedule.resolution.installments.map((i) =>
+      i.state === "RESOLVED" ? i.date : i.state,
+    );
+    // The live grid snaps to the 15th off the exact 2025-02-28 start.
+    expect(liveDates).toEqual([
+      "2025-03-15",
+      "2025-04-15",
+      "2025-05-15",
+      "2025-06-15",
+    ]);
+
+    // Now the persisted form: build the stored artifact with the IPO STILL unfired
+    // (a template carrying the synthetic), then rehydrate once the IPO fires. The
+    // stored runtime carries the frozen "15".
+    const { template, sourceMap, runtime } = storedFromDsl(
+      DSL,
+      ctxInput({ grantQuantity: 400, vesting_day_of_month: "15" }),
+    );
+    expect(runtime.vestingDayOfMonth).toBe("15");
+
+    const rehydrated = rehydrate(
+      template,
+      sourceMap,
+      runtime,
+      ctxInput({
+        grantQuantity: 400,
+        vesting_day_of_month: "15",
+        events: { ipo: "2025-01-31" },
+      }),
+    );
+
+    // The witness is the exact offset (Jan 31 + 1 month, keep-day clamp), NOT a
+    // snap to the 15th.
+    const [syntheticId] = Object.keys(sourceMap);
+    expect(rehydrated.runtime.eventFirings).toEqual([
+      { event_id: syntheticId, date: "2025-02-28" },
+    ]);
+
+    // The grid re-snaps to the 15th from that witness, identically on both sides.
+    const fromRehydrated = compileToInstallments(
+      template,
+      400,
+      rehydrated.runtime,
+    );
+    expect(fromRehydrated.map((i) => i.date)).toEqual([
+      "2025-03-15",
+      "2025-04-15",
+      "2025-05-15",
+      "2025-06-15",
+    ]);
+    expect(sum(fromRehydrated)).toBe(400);
   });
 });
 

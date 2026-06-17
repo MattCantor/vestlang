@@ -94,15 +94,28 @@ describe("runResolveOffset", () => {
     expect(r).toEqual({ ok: true, date: "2099-07-01" });
   });
 
-  // AC#6 — day-of-month pass-through. An explicit rule "15" lands the +1-month
-  // offset on the 15th, NOT the month-end the input day would otherwise keep.
-  it("applies an explicit vesting_day_of_month rule to the resolved date", () => {
+  // #253 — a displacement offset is exact: it does NOT consult the
+  // vesting_day_of_month policy. So `DATE 2025-01-31 + 1 month` under rule "15"
+  // keeps day 31 and clamps to Feb's last day (2025-02-28); it never snaps to the
+  // 15th. (Pre-#253 this returned 2025-02-15.)
+  it("steps an explicit-rule offset exactly, not onto the policy day", () => {
     const r = runResolveOffset({
       expr: "DATE 2025-01-31 + 1 month",
       grant_date: "2025-01-01",
       vesting_day_of_month: "15",
     });
-    expect(r).toEqual({ ok: true, date: "2025-02-15" });
+    expect(r).toEqual({ ok: true, date: "2025-02-28" });
+  });
+
+  // #253 — and a non-clamping day is kept verbatim under the same rule: the 10th
+  // stays the 10th, not the 15th.
+  it("keeps a non-clamping offset day under an explicit rule (no snap)", () => {
+    const r = runResolveOffset({
+      expr: "DATE 2025-01-10 + 1 month",
+      grant_date: "2025-01-01",
+      vesting_day_of_month: "15",
+    });
+    expect(r).toEqual({ ok: true, date: "2025-02-10" });
   });
 
   // AC#6 — with no rule supplied, the pass-through default must match

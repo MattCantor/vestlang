@@ -20,9 +20,14 @@ export function evaluateConstrainedVestingNode<T extends Condition>(
 ): Blocker[] | undefined {
   switch (condition.type) {
     case "ATOM": {
+      // A constraint base is a BEFORE/AFTER comparison boundary, never a vesting
+      // date — so its MONTHS offsets always step exact, even when it references
+      // the `vestingStart` anchor a cadence cliff would snap on (the #351 case).
+      // That's why the role is fixed "gate" here regardless of the base's anchor.
       const resConstraintBase = evaluateVestingBase(
         condition.constraint.base,
         ctx,
+        "gate",
       );
       const results = evaluateConstraint(
         resSubject,
