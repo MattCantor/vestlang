@@ -55,9 +55,13 @@ export interface PersistInput {
   vesting_day_of_month?: VestingRuntime["vestingDayOfMonth"];
 }
 
-// The success arm's blockers, split to match the evaluate/rehydrate shape. A
-// persistable (template) schedule never pairs with a dead blocker, so `dead` is
-// always `[]`; a pending template surfaces its waiting witnesses in `pending`.
+// The success arm's blockers, split to match the evaluate/rehydrate shape. They
+// come from the closed-world `resolution` (the only verdict with blocker
+// vocabulary): `pending` are witnesses still floating at store time, `dead` are
+// blockers contradicted given the firings recorded so far. `dead` CAN be non-empty
+// here — a schedule storable firing-blind (the interchange gate passed) may still
+// be dead given a firing the system of record has already seen, a revisable
+// disclosure (events are owned by the system of record, not the artifact).
 export type PersistResult = Result<{
   artifact: PersistedArtifact;
   pending: UnresolvedBlocker[];
@@ -70,13 +74,21 @@ export type PersistResult = Result<{
 // naming the diagnostic. Then validity: a program the evaluator flags as invalid —
 // one that allocates more than the whole grant — is refused, naming the
 // over-allocation, since storing it would mint a durable artifact that over-vests on
-// rehydrate. Finally storability: only a `template` resolution fits a single
-// canonical artifact, so any other shape comes back as a clear error naming the
-// status that blocked it. The returned `pending` blockers are the template arm's
-// advisory pending witnesses — what's still floating at store time (e.g. a
-// combinator start whose event hasn't fired), surfaced so the caller knows the
-// artifact isn't yet fully resolved. `dead` is always `[]` here: the classifier
-// never pairs a template resolution with a contradiction.
+// rehydrate. Finally storability: only a `template` *interchange* verdict fits a
+// single canonical artifact, so any other shape comes back as a clear error naming
+// the status that blocked it.
+//
+// The storability gate reads the firing-invariant `interchange` verdict, NOT
+// `resolution`. They can diverge: after the EARLIER_OF commit, an EARLIER_OF cliff
+// resolves to `template` while its interchange stays `unrepresentable` — gating on
+// resolution would silently make an unstorable schedule storable (AC 7). The
+// artifact (template + StoredTerms runtime + sourceMap) is built from interchange
+// too, so it's firing-invariant by construction.
+//
+// The returned `pending`/`dead` come from `resolution` (the verdict that speaks
+// blocker vocabulary): `pending` are witnesses still floating at store time (e.g. a
+// combinator start whose event hasn't fired); `dead` may be non-empty — a schedule
+// storable firing-blind yet dead given the firings recorded so far.
 //
 // Persist resolves the program's storable structure — which canonical template it
 // is — and that doesn't depend on when you look, so no observation date enters.
@@ -134,29 +146,37 @@ export function runPersist(input: PersistInput): PersistResult {
     };
   }
 
-  const resolution = schedule.resolution;
-  if (resolution.status !== "template") {
+  // Gate on the firing-invariant interchange verdict — that's what determines
+  // whether the schedule has a single storable canonical form at all. (Resolution
+  // can read `template` for a schedule whose interchange is unrepresentable, e.g.
+  // an EARLIER_OF cliff that commits its floor; gating on it would store the
+  // unstorable.)
+  const interchange = schedule.interchange;
+  if (interchange.status !== "template") {
     return {
       ok: false,
       error: {
         ruleId: "persist-not-storable",
-        message: `Only a template-resolution program is storable as a persisted artifact; this program resolved to "${resolution.status}". Adjust the schedule so it collapses to a single canonical template.`,
+        message: `Only a single-template program is storable as a persisted artifact; this program's storable form is "${interchange.status}". Adjust the schedule so it collapses to a single canonical template.`,
       },
     };
   }
 
+  // The artifact is built from interchange: its runtime is StoredTerms (firing-
+  // free), so the artifact is firing-invariant by construction.
   const artifact = toPersisted({
-    template: resolution.template,
-    runtime: resolution.runtime,
-    sourceMap: resolution.sourceMap,
+    template: interchange.template,
+    runtime: interchange.runtime,
+    sourceMap: interchange.sourceMap,
   });
-  // The template arm's blockers are already partitioned by the evaluator; a
-  // template resolution carries only pending witnesses, so `dead` is `[]`.
+  // pending/dead come from resolution (the verdict with blocker vocabulary). A
+  // storable schedule may legitimately carry a non-empty `dead` here — see the
+  // PersistResult note above.
   return {
     ok: true,
     artifact,
-    pending: resolution.pending,
-    dead: resolution.dead,
+    pending: schedule.resolution.pending,
+    dead: schedule.resolution.dead,
   };
 }
 

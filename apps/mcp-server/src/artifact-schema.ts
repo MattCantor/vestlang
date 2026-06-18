@@ -62,18 +62,15 @@ const TEMPLATE = z
   })
   .strict();
 
-const EVENT_FIRING = z
-  .object({
-    event_id: z.string().min(1),
-    date: ISO_DATE,
-    realized_fraction: FRACTION.optional(),
-  })
-  .strict();
-
+// The stored runtime is `StoredTerms` — firing-free by construction (eventFirings
+// is unrepresentable on the type). The schema mirrors that: there is no
+// `eventFirings` key, and `.strict()` rejects one if a hand-edited artifact tries
+// to smuggle a baked firing in. Firing-invariance is enforced here on untrusted
+// wire input, not just at the type level. Witnesses are re-derived from the world
+// on every reload (see rehydrate).
 const RUNTIME = z
   .object({
     startDate: ISO_DATE.optional(),
-    eventFirings: z.array(EVENT_FIRING).optional(),
     grantDate: ISO_DATE.optional(),
     vestingDayOfMonth: VESTING_DAY_OF_MONTH.optional(),
   })

@@ -237,7 +237,7 @@ describe("resolveToCore — month-end chain, resolve pre-pass agrees with core",
   it("resolves each tail's start to the sprung-back day, not the clamped one", () => {
     // Reach past resolveToCore to the pre-pass itself, so this checks the
     // resolver's own cursor walk rather than the dates core ends up compiling.
-    const ctx = createEvaluationContext(defaultPolicy);
+    const ctx = createEvaluationContext(defaultPolicy, "resolution");
     const resolutions = resolveStatements(janEnd3, ctx);
     const starts = resolutions.map((r) =>
       r.start.state === "RESOLVED" ? r.start.date : null,

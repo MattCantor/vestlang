@@ -24,18 +24,24 @@ import type { StmtResolution } from "./lower.js";
 
 const EMPTY: InstallmentSet = { installments: [], blockers: [] };
 
+// A start that settled to a concrete date: a plain RESOLVED, or an EARLIER_OF that
+// committed to its floor. Both materialize through the dated path, so every dated-
+// vs-pending split below keys on this rather than on "=== RESOLVED".
+const isDatedStart = (r: StmtResolution): boolean =>
+  r.start.state === "RESOLVED" || r.start.state === "COMMITTED";
+
 // A portion is "void" when nothing can ever vest from it: a contradictory start,
-// or a resolved start whose cliff is contradictory. A pending start is never void
+// or a dated start whose cliff is contradictory. A pending start is never void
 // even with a dead cliff — it waits on the start before the cliff matters.
 export const isVoid = (r: StmtResolution): boolean =>
   r.start.state === "IMPOSSIBLE" ||
-  (r.start.state === "RESOLVED" && r.cliff.state === "IMPOSSIBLE");
+  (isDatedStart(r) && r.cliff.state === "IMPOSSIBLE");
 
 // A statement whose tranches the dated allocator materializes — core.compile in
 // the template arm, resolvedInstallments in the events/unresolved arms. These
 // never render symbolically; their fractions seed the claim basis below.
 const isDated = (r: StmtResolution): boolean =>
-  r.start.state === "RESOLVED" &&
+  isDatedStart(r) &&
   (r.cliff.state === "NONE" ||
     r.cliff.state === "RESOLVED" ||
     r.cliff.state === "EVENT_FIRED");
@@ -121,7 +127,14 @@ export const unresolvedInstallments = (
   // A start with no date yet. A combinator that partially settled (a LATER OF
   // whose later arm we know) keeps its cadence, so its tranches lay out as
   // symbolic start+N steps; everything else is one undated lump for the portion.
-  if (r.start.state !== "RESOLVED") {
+  // IMPOSSIBLE returned above; RESOLVED and COMMITTED both have a date and fall to
+  // the dated path below — so this branch is exactly the three pending arms, listed
+  // explicitly so TS can read their `blockers`.
+  if (
+    r.start.state === "PENDING_EVENT" ||
+    r.start.state === "SYNTHETIC_EVENT" ||
+    r.start.state === "UNRESOLVED"
+  ) {
     const blockers = [...r.start.blockers, ...cliffBlockers];
     if (r.start.state === "SYNTHETIC_EVENT" && r.start.partial) {
       const { type, length, occurrences } = r.periodicity;
@@ -135,9 +148,10 @@ export const unresolvedInstallments = (
     return makeUnresolvedVestingStartSchedule([statementQuantity], blockers);
   }
 
-  // Resolved start: lay the grid from the start date (gridded on the chain origin's
-  // day, the grant's vesting day, not the handoff this tail landed on), fold the
-  // grant-date lump, then read the cliff off the record.
+  // Dated start (RESOLVED or committed floor): lay the grid from the start date
+  // (gridded on the chain origin's day, the grant's vesting day, not the handoff
+  // this tail landed on), fold the grant-date lump, then read the cliff off the
+  // record.
   const start = r.start.date;
   // A RESOLVED start is only ever a head or a dated tail; a head is its own
   // origin, a dated tail carries the chain's first day.

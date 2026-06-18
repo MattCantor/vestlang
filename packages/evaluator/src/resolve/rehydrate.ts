@@ -26,7 +26,11 @@ import type {
   UnresolvedBlocker,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import type {
+  StoredTerms,
+  VestingRuntime,
+  VestingScheduleTemplate,
+} from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
@@ -205,8 +209,9 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
  * @param template  the stored, frozen canonical spec (read-only; supplies which
  *                  synthetic ids are genuinely part of the spec).
  * @param sourceMap the externalized gate definitions (`event_id → { definition }`).
- * @param runtime   the stored runtime; its structural fields (startDate, grantDate,
- *                  …) and any existing firings carry through untouched.
+ * @param runtime   the stored runtime — `StoredTerms`, so it carries no firings by
+ *                  construction. Its structural fields (startDate, grantDate, …)
+ *                  carry through; firings are re-derived from the world below.
  * @param ctxInput  the world: `events` (now including fired named events like
  *                  `ipo`); this is how vestlang learns an event fired. Re-resolving
  *                  a witness reads structural installment state only, so no
@@ -215,7 +220,7 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
 export const rehydrate = (
   template: VestingScheduleTemplate,
   sourceMap: SourceMap,
-  runtime: VestingRuntime,
+  runtime: StoredTerms,
   ctxInput: ResolutionContextInput,
 ): RehydrateResult => {
   // Before anything else: every present source-map key must be a reserved synthetic
@@ -245,11 +250,18 @@ export const rehydrate = (
   // used the default rule lower.ts doesn't store it, so this is undefined and
   // createEvaluationContext re-applies the same canonical default the projection
   // uses.
-  const ctx = createEvaluationContext({
-    ...ctxInput,
-    grantDate: runtime.grantDate ?? ctxInput.grantDate,
-    vesting_day_of_month: runtime.vestingDayOfMonth,
-  });
+  // `rehydrate` mode: read the world's attested firings, but DO NOT commit. An
+  // EARLIER_OF stored gate must stay pending on reload until a real witness fires —
+  // committing it to its date floor here would fabricate a firing the world never
+  // produced (AC 10).
+  const ctx = createEvaluationContext(
+    {
+      ...ctxInput,
+      grantDate: runtime.grantDate ?? ctxInput.grantDate,
+      vesting_day_of_month: runtime.vestingDayOfMonth,
+    },
+    "rehydrate",
+  );
 
   // Only resolve ids that are genuinely EVENT statements in the frozen spec —
   // never fabricate a firing for an id the template doesn't reference.
@@ -259,12 +271,14 @@ export const rehydrate = (
       .map((s) => (s.vesting_base as { event_id: string }).event_id),
   );
 
-  // Seed from the stored firings (preserves order + any non-synthetic firings),
-  // then override/insert each resolved synthetic witness by event_id.
+  // Start from no firings. Stored terms carry none by construction (eventFirings is
+  // unrepresentable on `StoredTerms`), so every witness is re-derived from the
+  // world here — the reverse of the old "seed from the stored firings" path, which
+  // can no longer apply because the artifact never bakes a firing (Decision 7).
   const firings = new Map<
     string,
     NonNullable<VestingRuntime["eventFirings"]>[number]
-  >((runtime.eventFirings ?? []).map((f) => [f.event_id, f]));
+  >();
   const blockers: Blocker[] = [];
 
   for (const [eventId, entry] of Object.entries(sourceMap)) {
@@ -304,14 +318,13 @@ export const rehydrate = (
     assertBareFloatingEvent(eventId, node);
     const res = evaluateVestingNodeExpr(node, ctx);
     if (isPickedResolved(res)) {
-      // A supplied firing overrides any firing seeded from the stored runtime, so a
-      // corrected/back-dated date in `events` takes effect.
+      // The witness is whatever the world's `events` resolves it to; a corrected or
+      // back-dated date in `events` takes effect directly.
       firings.set(eventId, { event_id: eventId, date: res.meta.date });
-    } else if (!firings.has(eventId)) {
-      // Disclose as pending only when no stored firing already carries it. If the
-      // artifact was persisted after the event fired, the stored firing stands and
-      // we don't report it pending — that would say it vests AND waits at once.
-      // (Whether an omitted firing should instead read as a rescission is #284.)
+    } else {
+      // No witness in the world → disclose it as pending. The artifact bakes no
+      // firing (Decision 7), so reload-without-resupply genuinely is pending; the
+      // `firings.has` guard the old seeded path needed is gone with the seed.
       blockers.push(...blockersOf(res));
     }
   }

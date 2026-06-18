@@ -91,10 +91,11 @@ describe("#285 — rehydrate produces the witness for a bare prototype-key event
     const DSL =
       "1/2 VEST FROM EVENT constructor OVER 4 months EVERY 1 month" +
       " PLUS 1/2 VEST FROM EVENT ipo OVER 4 months EVERY 1 month";
-    const { resolution } = evaluateProgram(prog(DSL), ctx());
-    if (resolution.status !== "template")
-      throw new Error(`expected template, got ${resolution.status}`);
-    const { template, sourceMap, runtime } = resolution;
+    // Reload reads the firing-invariant interchange artifact (firing-free runtime).
+    const { interchange } = evaluateProgram(prog(DSL), ctx());
+    if (interchange.status !== "template")
+      throw new Error(`expected template, got ${interchange.status}`);
+    const { template, sourceMap, runtime } = interchange;
 
     const result = rehydrate(
       template,

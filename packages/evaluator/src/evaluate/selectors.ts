@@ -1,6 +1,7 @@
 import type {
+  EvaluationMode,
+  OCTDate,
   ResolutionContext,
-  ResolvedNode,
   Blocker,
   VestingNodeExpr,
   Schedule,
@@ -15,8 +16,10 @@ import type {
 import { assertNever } from "@vestlang/utils";
 import { lt } from "@vestlang/core";
 import {
+  isPickedCommitted,
   isPickedPartial,
   isPickedResolved,
+  type PickedCommitted,
   type PickedResolved,
   type PickReturn,
 } from "./utils.js";
@@ -56,33 +59,49 @@ function collectImpossibleBlockers<T>(x: PickReturn<T>[]): ImpossibleBlocker[] {
  * "Best" chooser (earlier | later)
  * ------------------------ */
 
-function chooseBest(
-  a: ResolvedNode,
-  b: ResolvedNode,
+// A candidate the fold treats as already settled: it has a concrete date. Both a
+// fully RESOLVED pick and an EARLIER_OF that committed to its floor (COMMITTED)
+// qualify — an outer selector folds over the committed inner pick's floor as if it
+// were settled, so a committed inner pick doesn't re-freeze one level up. The
+// committed pick's own disclosures are NOT carried up here (deferred to #325); the
+// floor it contributes is correct.
+type SettledPick<T> = PickedResolved<T> | PickedCommitted<T>;
+
+const isSettled = <T>(x: PickReturn<T>): x is SettledPick<T> =>
+  isPickedResolved(x) || isPickedCommitted(x);
+
+// Pick the better of two dates for the selector: the earlier for EARLIER_OF, the
+// later for LATER_OF.
+const dateIsBetter = (
+  candidate: OCTDate,
+  incumbent: OCTDate,
   selector: SelectorTag,
-): ResolvedNode {
-  const bIsBetter =
-    selector === "EARLIER_OF" ? lt(b.date, a.date) : lt(a.date, b.date);
+): boolean =>
+  selector === "EARLIER_OF"
+    ? lt(candidate, incumbent)
+    : lt(incumbent, candidate);
 
-  return bIsBetter ? b : a;
-}
-
-/** Reduce a non-empty array of resolved picks to the single best pick. */
+/** Reduce a non-empty array of settled picks (RESOLVED or COMMITTED) to the
+ *  single best pick + its date. Both arms of SettledPick carry `meta.date`, so a
+ *  committed inner pick folds on its floor exactly like a resolved one. */
 function reduceBest<T>(
-  resolved: PickedResolved<T>[],
+  settled: SettledPick<T>[],
   selector: SelectorTag,
-): { picked: T; meta: ResolvedNode } {
-  // resolved is non-empty by construction when we call this
-  let best = resolved[0].meta;
-  let picked = resolved[0].picked;
+): { picked: T; date: OCTDate } {
+  // settled is non-empty by construction when we call this; every member carries
+  // a date (RESOLVED or COMMITTED), so `meta.date` is always present.
+  let bestDate = settled[0].meta.date;
+  let picked = settled[0].picked;
 
-  resolved.forEach((r) => {
-    const nextBest = chooseBest(best, r.meta, selector);
-    if (nextBest === r.meta) picked = r.picked;
-    best = nextBest;
-  });
+  for (const r of settled) {
+    const date = r.meta.date;
+    if (dateIsBetter(date, bestDate, selector)) {
+      bestDate = date;
+      picked = r.picked;
+    }
+  }
 
-  return { picked, meta: best };
+  return { picked, date: bestDate };
 }
 
 /* ------------------------
@@ -90,32 +109,45 @@ function reduceBest<T>(
  * ------------------------ */
 
 /**
- * Both EARLIER_OF and LATER_OF only settle once every live arm has resolved.
- * For LATER_OF that's obvious — you can't know the latest until you know them
- * all. For EARLIER_OF it's subtler: a single resolved arm doesn't pin the
- * earliest, because an unfired-event sibling could still be recorded with an
- * earlier date. So neither selector commits while any arm is still pending.
- * They differ only in how they treat a dead (impossible) arm: EARLIER_OF drops
- * it and carries on; LATER_OF lets it sink the whole selector.
+ * Both EARLIER_OF and LATER_OF settle straightforwardly once every live arm is
+ * settled (RESOLVED, or a COMMITTED inner pick the fold reads on its floor). The
+ * interesting case is a *partial* selector — some arms settled, some still pending:
+ *
+ *   - LATER_OF stays open. Its resolved arm is an UPPER bound; a pending sibling
+ *     could land even later, so committing would over-vest. It partial-emits the
+ *     known floor for the projection but keeps the meta UNRESOLVED.
+ *   - EARLIER_OF, in `resolution` mode, COMMITS to its earliest resolved arm.
+ *     That arm is a LOWER bound — the latest the start could possibly be — so
+ *     committing to it is a guaranteed vesting floor: any real firing (future,
+ *     backdated, even earlier than the date) only moves the start earlier, never
+ *     later. It discloses the still-pending siblings as absence assumptions. In
+ *     `interchange`/`rehydrate` mode it does NOT commit (firing-blind storage must
+ *     stay invariant; reload must not fabricate a firing).
+ *
+ * They also differ on a dead (impossible) arm: EARLIER_OF drops it and carries on
+ * (a dead arm can never be first); LATER_OF lets it sink the whole selector.
  */
 type SelectorPolicy = {
   selector: SelectorTag;
-  selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // both: all live arms resolved
-  partialEmit: boolean; // only true for LATER_OF
+  selectorIsSatisfied: (candidates: PickReturn<unknown>[]) => boolean; // all live arms settled
+  partialEmit: boolean; // LATER_OF: emit the known floor while staying open
+  earlierCommits: boolean; // EARLIER_OF: commit to the resolved floor (mode-gated)
   impossibleArmPoisons: boolean; // LATER_OF is universal: one dead arm sinks the whole selector
 };
 
 const EARLIER_POLICY: SelectorPolicy = {
   selector: "EARLIER_OF",
-  selectorIsSatisfied: (c) => c.every(isPickedResolved),
+  selectorIsSatisfied: (c) => c.every(isSettled),
   partialEmit: false,
+  earlierCommits: true,
   impossibleArmPoisons: false,
 };
 
 const LATER_POLICY: SelectorPolicy = {
   selector: "LATER_OF",
-  selectorIsSatisfied: (c) => c.every(isPickedResolved),
+  selectorIsSatisfied: (c) => c.every(isSettled),
   partialEmit: true,
+  earlierCommits: false,
   impossibleArmPoisons: true,
 };
 
@@ -139,6 +171,7 @@ function impossibleSelector<T>(
 function handleSelector<T extends Schedule | VestingNode>(
   candidates: PickReturn<T>[],
   policy: SelectorPolicy,
+  mode: EvaluationMode,
 ): PickReturn<T> {
   if (allImpossible(candidates)) return impossibleSelector(policy, candidates);
 
@@ -154,35 +187,57 @@ function handleSelector<T extends Schedule | VestingNode>(
   // live by the poison check above, so this filter is a no-op there.)
   const live = candidates.filter((c) => c.type !== "IMPOSSIBLE");
 
-  const resolved = live.filter(isPickedResolved);
-  const hasAnyResolved = resolved.length > 0;
-  const allResolved = hasAnyResolved && resolved.length === live.length;
-  const unresolved = live.length - resolved.length;
+  // Settled = RESOLVED or a COMMITTED inner pick; both fold on a concrete date.
+  const settled = live.filter(isSettled);
+  const hasAnySettled = settled.length > 0;
+  const allSettled = hasAnySettled && settled.length === live.length;
+  const pendingCount = live.length - settled.length;
 
-  // Resolve per policy
+  // Every live arm settled → the selector settles to the best of them.
   if (policy.selectorIsSatisfied(live)) {
-    const { picked, meta } = reduceBest(resolved, policy.selector);
-    return { type: "PICKED", picked, meta };
+    const { picked, date } = reduceBest(settled, policy.selector);
+    return { type: "PICKED", picked, meta: { type: "RESOLVED", date } };
   }
 
-  // Partial resolution branch for LATER_OF
-  if (policy.partialEmit && !allResolved && hasAnyResolved) {
-    const best = reduceBest(resolved, policy.selector);
+  // EARLIER_OF commit: ≥1 settled arm, not all settled, and we're in the
+  // closed-world `resolution` mode. The earliest settled arm is a lower bound on
+  // the start (the latest it could be), so committing to it never over-vests; we
+  // disclose every still-pending sibling, stamped `through` the committed date, so
+  // a later/backdated firing of one of them is flagged as the thing that could
+  // move the answer (earlier). Firing-blind (interchange) and reload (rehydrate)
+  // must not commit — see EvaluationMode — so the branch is gated on mode here.
+  if (policy.earlierCommits && hasAnySettled && mode === "resolution") {
+    const { picked, date } = reduceBest(settled, policy.selector);
+    // Flat, not wrapped in an UNRESOLVED_SELECTOR like the partial-LATER_OF branch
+    // below: the selector committed, so the pending arms are absence assumptions on
+    // a settled pick, not evidence that the selector is still unresolved.
+    const disclosures = withBoundary(collectBlockers(live), date);
+    return {
+      type: "PICKED",
+      picked,
+      meta: { type: "COMMITTED", date, disclosures },
+    };
+  }
+
+  // Partial resolution branch for LATER_OF: emit the known floor for the
+  // projection but keep the meta UNRESOLVED (the resolved arm is an upper bound).
+  if (policy.partialEmit && !allSettled && hasAnySettled) {
+    const best = reduceBest(settled, policy.selector);
     // The latest arm settled so far is the answer only as long as the arms we're
     // still waiting on don't land even later. So its date is the boundary we're
     // assuming each of those pending events stays absent through.
-    const stamped = withBoundary(collectBlockers(live), best.meta.date);
+    const stamped = withBoundary(collectBlockers(live), best.date);
     return {
       type: "PICKED",
       picked: best.picked,
       // The latest settled arm's date is the pivot: a lower bound the pending arms
       // can only push later. This is the single origin of that value — the cliff
       // lowering reads it straight off the pick rather than re-deriving it.
-      pivot: best.meta.date,
+      pivot: best.date,
       meta: {
         type: "UNRESOLVED",
         blockers:
-          unresolved > 1
+          pendingCount > 1
             ? [
                 {
                   type: "UNRESOLVED_SELECTOR",
@@ -234,6 +289,7 @@ function evaluateSelectorExpr<E extends { type: string }, L extends E & object>(
   expr: E,
   isLeaf: (e: E) => e is L,
   evalLeaf: (leaf: L) => PickReturn<Extract<L, Schedule | VestingNode>>,
+  mode: EvaluationMode,
 ): PickReturn<Extract<L, Schedule | VestingNode>> {
   if (isLeaf(expr)) return evalLeaf(expr);
 
@@ -244,16 +300,16 @@ function evaluateSelectorExpr<E extends { type: string }, L extends E & object>(
   // selector tags, so the switch stays exhaustive over real union members.
   const sel = expr as unknown as SelectorOf<E>;
   const candidates = sel.items.map((item) =>
-    evaluateSelectorExpr(item, isLeaf, evalLeaf),
+    evaluateSelectorExpr(item, isLeaf, evalLeaf, mode),
   );
 
   switch (sel.type) {
     case "SCHEDULE_EARLIER_OF":
     case "NODE_EARLIER_OF":
-      return handleSelector(candidates, EARLIER_POLICY);
+      return handleSelector(candidates, EARLIER_POLICY, mode);
     case "SCHEDULE_LATER_OF":
     case "NODE_LATER_OF":
-      return handleSelector(candidates, LATER_POLICY);
+      return handleSelector(candidates, LATER_POLICY, mode);
     default:
       return assertNever(sel.type);
   }
@@ -270,19 +326,34 @@ export function evaluateScheduleExpr(
   expr: ScheduleExpr,
   ctx: ResolutionContext,
 ): PickReturn<Schedule> {
-  return evaluateSelectorExpr(expr, isScheduleLeaf, (leaf) => {
-    const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
-    // Re-wrap a picked vesting start around the schedule leaf. The partial arm
-    // carries a required pivot, so we have to carry it through here too — narrow
-    // first, then re-emit the matching arm.
-    if (isPickedPartial(res)) {
-      return { type: "PICKED", picked: leaf, meta: res.meta, pivot: res.pivot };
-    }
-    if (res.type === "PICKED") {
-      return { type: "PICKED", picked: leaf, meta: res.meta };
-    }
-    return res;
-  });
+  return evaluateSelectorExpr(
+    expr,
+    isScheduleLeaf,
+    (leaf) => {
+      const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
+      // Re-wrap a picked vesting start around the schedule leaf, one arm at a time
+      // so each keeps its own concrete meta (and a committed/partial pick stays
+      // distinct on the way up): partial carries its required pivot, committed its
+      // CommittedNode meta, resolved its ResolvedNode meta. The non-PICKED arms
+      // (UNRESOLVED / IMPOSSIBLE) pass straight through.
+      if (isPickedPartial(res)) {
+        return {
+          type: "PICKED",
+          picked: leaf,
+          meta: res.meta,
+          pivot: res.pivot,
+        };
+      }
+      if (isPickedCommitted(res)) {
+        return { type: "PICKED", picked: leaf, meta: res.meta };
+      }
+      if (isPickedResolved(res)) {
+        return { type: "PICKED", picked: leaf, meta: res.meta };
+      }
+      return res;
+    },
+    ctx.mode,
+  );
 }
 
 const isNodeLeaf = (e: VestingNodeExpr): e is VestingNode => e.type === "NODE";
@@ -291,11 +362,16 @@ export function evaluateVestingNodeExpr(
   expr: VestingNodeExpr,
   ctx: ResolutionContext,
 ): PickReturn<VestingNode> {
-  return evaluateSelectorExpr(expr, isNodeLeaf, (leaf) => {
-    const res = evaluateVestingNode(leaf, ctx);
-    if (res.type === "RESOLVED") {
-      return { type: "PICKED", picked: leaf, meta: res };
-    }
-    return res;
-  });
+  return evaluateSelectorExpr(
+    expr,
+    isNodeLeaf,
+    (leaf) => {
+      const res = evaluateVestingNode(leaf, ctx);
+      if (res.type === "RESOLVED") {
+        return { type: "PICKED", picked: leaf, meta: res };
+      }
+      return res;
+    },
+    ctx.mode,
+  );
 }

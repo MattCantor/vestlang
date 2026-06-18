@@ -35,7 +35,7 @@ import { advanceCursor, eq } from "@vestlang/core";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { amountToFraction } from "../claims.js";
-import { isPickedResolved } from "../evaluate/utils.js";
+import { isPickedCommitted, isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import { syntheticEventId } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";
@@ -88,6 +88,20 @@ export interface StmtResolution {
         // externalizes this as a synthetic event whose definition keeps the
         // offset and whose recorded firing is `date`, true by that definition.
         offsetExpr?: VestingNodeExpr;
+      }
+    // An EARLIER_OF start that committed to its resolved floor (resolution mode).
+    // Structurally a RESOLVED start — the winning arm's `base` lowers exactly the
+    // same way (DATE hoist/cursor or fired EVENT) — plus the required
+    // `disclosures`: the still-pending siblings' blockers, stamped `through` the
+    // committed date, which buildTemplate pushes onto `build.blockers` so they
+    // reach `absenceAssumptions` and `resolution.pending`. Kept distinct from
+    // RESOLVED so the disclosures can't be silently dropped.
+    | {
+        state: "COMMITTED";
+        date: OCTDate;
+        base: { type: "DATE" } | { type: "EVENT"; eventId: string };
+        offsetExpr?: VestingNodeExpr;
+        disclosures: Blocker[];
       }
     // An unfired *bare* EVENT start — atomic, ungated, offset-free: canonical
     // holds it as an EVENT statement with no firing, so it lowers into the
@@ -151,7 +165,11 @@ const resolveNonChained = (
   const percentage = amountToFraction(stmt.amount, ctx.grantQuantity);
   const res = evaluateScheduleExpr(stmt.expr, ctx);
 
-  if (isPickedResolved(res)) {
+  // A resolved OR committed start both settle to a concrete date and lower the
+  // same way — the only difference is that a committed EARLIER_OF carries the
+  // still-pending siblings' disclosures, which ride onto the start record so
+  // buildTemplate can push them onto `build.blockers`.
+  if (isPickedResolved(res) || isPickedCommitted(res)) {
     const schedule = res.picked;
     const p = schedule.periodicity;
     const periodicity = {
@@ -160,28 +178,27 @@ const resolveNonChained = (
       occurrences: p.occurrences,
     };
     const sb = startBase(schedule.vesting_start);
+    const date = res.meta.date;
+    // A fired event anchor with offsets resolved to firing+offset; keep the
+    // expression so buildTemplate externalizes it rather than recording a firing
+    // date the event never fired at.
+    const offsetExpr =
+      sb.type === "EVENT" && hasOffsets(schedule.vesting_start)
+        ? { offsetExpr: schedule.vesting_start }
+        : {};
     return {
       percentage,
       periodicity,
-      start: {
-        state: "RESOLVED",
-        date: res.meta.date,
-        base: sb,
-        // A fired event anchor with offsets resolved to firing+offset; keep the
-        // expression so buildTemplate externalizes it rather than recording a
-        // firing date the event never fired at.
-        ...(sb.type === "EVENT" && hasOffsets(schedule.vesting_start)
-          ? { offsetExpr: schedule.vesting_start }
-          : {}),
-      },
-      cliff: lowerCliff(
-        p.cliff,
-        res.meta.date,
-        p.type,
-        p.length,
-        p.occurrences,
-        ctx,
-      ),
+      start: isPickedCommitted(res)
+        ? {
+            state: "COMMITTED",
+            date,
+            base: sb,
+            ...offsetExpr,
+            disclosures: res.meta.disclosures,
+          }
+        : { state: "RESOLVED", date, base: sb, ...offsetExpr },
+      cliff: lowerCliff(p.cliff, date, p.type, p.length, p.occurrences, ctx),
       chain: { role: "head" },
     };
   }
@@ -335,7 +352,9 @@ const anchorAfter = (
   dom: ResolutionContext["vesting_day_of_month"],
 ): ChainAnchor => {
   const { occurrences, length, type } = r.periodicity;
-  if (r.start.state === "RESOLVED") {
+  // A committed start is a concrete date too, so a chain hands off from it exactly
+  // as from a RESOLVED one.
+  if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
     // This statement heads the chain, so it is its own origin. Passing its start
     // as the origin makes this first handoff a step from the vesting day onto
     // itself (no effect); the origin only bites on later handoffs, once the cursor
@@ -600,6 +619,13 @@ export const buildTemplate = (
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
     const { type, length, occurrences } = r.periodicity;
+
+    // A committed EARLIER_OF carries the still-pending siblings' disclosures.
+    // Push them onto the template arm's blockers (mirroring PENDING_EVENT /
+    // SYNTHETIC_EVENT below), so they reach `resolution.pending` and feed the
+    // absence-assumption disclosure — the start itself lowers as a plain dated
+    // anchor (its `base` is the winning arm's).
+    if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
 
     let vesting_base: VestingStatement["vesting_base"];
     if (r.start.state === "PENDING_EVENT") {

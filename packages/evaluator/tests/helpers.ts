@@ -30,6 +30,10 @@ export const baseCtx = (
   events: {},
   vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
   grantQuantity: 100,
+  // The selector layer reads mode off the context; default to the closed-world
+  // reading (where an EARLIER_OF commits) since that's the common case under test.
+  // Tests that need firing-blindness or reload pass `{ mode: ... }` as an override.
+  mode: "resolution",
   ...overrides,
 });
 

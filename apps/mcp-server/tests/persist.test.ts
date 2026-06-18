@@ -116,7 +116,9 @@ describe("mcp-server / persistence tool pair", () => {
     expect(ids).toHaveLength(1);
     expect(sourceMap[ids[0]].definition).toContain("ipo");
     // The gate hasn't fired, so the store-time blockers advise it's still pending —
-    // surfaced under `pending`; a storable template never carries a dead blocker.
+    // surfaced under `pending`; nothing is dead here (no firing has contradicted
+    // it). `dead` can be non-empty for a storable schedule once a recorded firing
+    // dies a gate, but this combinator is clean.
     expect(out.pending.length).toBeGreaterThan(0);
     expect(out.dead).toEqual([]);
     // No synthetic witness yet — nothing has resolved.
@@ -124,9 +126,11 @@ describe("mcp-server / persistence tool pair", () => {
   });
 
   // AC#8 — vestlang_persist's output is reshaped to pending/dead (no flat
-  // `blockers`). For a persistable (template) schedule `dead` is always [], and a
-  // pending template surfaces its waiting witnesses in `pending`.
-  it("AC#8: persist returns pending/dead (no flat blockers); dead is [] for a template", async () => {
+  // `blockers`). Both these schedules are clean (no firing has died a gate), so
+  // `dead` is []; a pending template surfaces its waiting witnesses in `pending`.
+  // (`dead` is not universally [] for a storable schedule — a recorded firing can
+  // die a gate — but these two cases carry none.)
+  it("AC#8: persist returns pending/dead (no flat blockers); dead is [] for these clean templates", async () => {
     const client = await connectClient();
 
     // A pending template (combinator gate unfired): witnesses ride in `pending`.
@@ -293,35 +297,56 @@ describe("mcp-server / persistence tool pair", () => {
     ]);
   });
 
-  it("rehydrating an already-fired bare EVENT without re-supplying it keeps the stored firing", async () => {
+  it("AC#8: persist is firing-invariant — a firing supplied at persist is NOT baked; reload without resupply is pending", async () => {
     const client = await connectClient();
-    // Persist WITH the firing, so the stored runtime already carries it.
-    const persisted = await persistOk(client, {
+    // Persist WITH the firing. The artifact is built from the firing-invariant
+    // interchange, so the firing is NOT stored (Decision 7 reversal): the runtime
+    // carries no eventFirings, byte-identical to persisting without the firing.
+    const withFiring = await persistOk(client, {
       dsl: BARE_EVENT_DSL,
       grant_date: "2025-01-01",
       grant_quantity: 400,
       events: { ipo: "2025-01-31" },
     });
-    expect(persisted.artifact.runtime.eventFirings).toEqual([
-      { event_id: "ipo", date: "2025-01-31" },
-    ]);
+    expect(withFiring.artifact.runtime.eventFirings ?? []).toHaveLength(0);
 
-    const out = await rehydrate(client, {
-      artifact: persisted.artifact,
+    const withoutFiring = await persistOk(client, {
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
       grant_quantity: 400,
-      // events omitted — the firing was recorded at persist.
     });
+    // Same artifact either way — firing-invariant by construction.
+    expect(withFiring.artifact).toEqual(withoutFiring.artifact);
 
-    // The stored firing stands: full projection, nothing pending (the !firings.has
-    // guard — without it the bare loop would spuriously report ipo pending while it
-    // still vests), and no delta since the firing is unchanged.
-    expect(out.projection).toEqual([
+    // Reload WITHOUT re-supplying ipo → it reports pending (the firing was never
+    // baked, so there is nothing to stand on).
+    const reloadBlind = await rehydrate(client, {
+      artifact: withFiring.artifact,
+      grant_quantity: 400,
+      // events omitted.
+    });
+    expect(reloadBlind.projection).toHaveLength(0);
+    expect(
+      reloadBlind.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+
+    // Re-supplying ipo re-derives the witness from the world → full projection.
+    const reloadFired = await rehydrate(client, {
+      artifact: withFiring.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" },
+    });
+    expect(reloadFired.projection).toEqual([
       { date: "2025-03-31", amount: 200 },
       { date: "2025-04-30", amount: 100 },
       { date: "2025-05-31", amount: 100 },
     ]);
-    expect(out.pending).toHaveLength(0);
-    expect(out.firings_to_apply).toHaveLength(0);
+    expect(reloadFired.pending).toHaveLength(0);
+    expect(reloadFired.firings_to_apply).toEqual([
+      { event_id: "ipo", date: "2025-01-31", definition: null },
+    ]);
   });
 
   it("a corrected firing on rehydrate overrides the stored bare EVENT date", async () => {
@@ -651,7 +676,7 @@ describe("mcp-server / persistence tool pair", () => {
     });
     expect(res.isError).toBe(true);
     expect(res.content?.[0]?.text).toBe(
-      'Only a template-resolution program is storable as a persisted artifact; this program resolved to "unresolved". Adjust the schedule so it collapses to a single canonical template.',
+      'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "unrepresentable". Adjust the schedule so it collapses to a single canonical template.',
     );
   });
 
@@ -844,9 +869,9 @@ describe("mcp-server / persistence tool pair", () => {
   });
 
   // The artifact schema's date fields must get the same real-calendar check the live
-  // tool inputs already enforce — single-sourced from one ISO_DATE. Pin all THREE
-  // stored date sites so a partial swap can't pass: a regex-only schema would accept
-  // these lexically-shaped impossibles and only die deep inside core.
+  // tool inputs already enforce — single-sourced from one ISO_DATE. Pin both stored
+  // runtime date sites so a partial swap can't pass: a regex-only schema would
+  // accept these lexically-shaped impossibles and only die deep inside core.
   it("rejects an impossible runtime.grantDate at the schema boundary", async () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
@@ -871,14 +896,18 @@ describe("mcp-server / persistence tool pair", () => {
     expect(res.isError).toBe(true);
   });
 
-  it("rejects an impossible eventFirings[].date at the schema boundary", async () => {
+  // AC#15: firing-invariance is enforced on the wire. A stored runtime is
+  // StoredTerms — eventFirings is unrepresentable — so the strict RUNTIME schema
+  // rejects an artifact that tries to bake a firing in (a hand-edit smuggling one),
+  // not merely at the type level.
+  it("rejects a runtime carrying eventFirings at the schema boundary", async () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
         template: { id: "t1", statements: [] },
         runtime: {
           grantDate: "2025-01-01",
-          eventFirings: [{ event_id: "ipo", date: "2025-02-31" }],
+          eventFirings: [{ event_id: "ipo", date: "2025-01-31" }],
         },
       },
       grant_quantity: 400,

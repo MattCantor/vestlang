@@ -1,5 +1,6 @@
 import {
   DEFAULT_VESTING_DAY_OF_MONTH,
+  EvaluationMode,
   OCTDate,
   ResolutionContext,
   ResolutionContextInput,
@@ -12,12 +13,23 @@ import { isValidCalendarDate } from "@vestlang/utils";
 // and you get a `ResolutionContext` back; hand it an as-of input and the `asOf`
 // rides through to an `AsOfContext`. Either way it does the two jobs every entry
 // relies on — police the share count and default the day-of-month rule.
-export function createEvaluationContext(input: AsOfContextInput): AsOfContext;
+//
+// `mode` is the second argument, not a field on the input: callers supply the
+// world (events, grant, quantity) but never get to choose which engine config
+// runs, so each entry point stamps its own mode here per the Decision-2 table
+// (resolveToCore/resolveVestingStart → "resolution", resolveInterchange →
+// "interchange", rehydrate → "rehydrate").
+export function createEvaluationContext(
+  input: AsOfContextInput,
+  mode: EvaluationMode,
+): AsOfContext;
 export function createEvaluationContext(
   input: ResolutionContextInput,
+  mode: EvaluationMode,
 ): ResolutionContext;
 export function createEvaluationContext(
   input: ResolutionContextInput,
+  mode: EvaluationMode,
 ): ResolutionContext {
   // Every evaluator entry funnels through here, so this is where the grant's
   // share count gets policed — the same safe-integer rule core's compile
@@ -85,5 +97,6 @@ export function createEvaluationContext(
     events,
     vesting_day_of_month:
       input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
+    mode,
   };
 }

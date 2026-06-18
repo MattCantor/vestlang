@@ -7,6 +7,7 @@ const ctx = (v: VestingDayOfMonth): ResolutionContext => ({
   events: {},
   vesting_day_of_month: v,
   grantQuantity: 100,
+  mode: "resolution",
 });
 
 const applyTest = (x: {

@@ -53,7 +53,9 @@ export const resolveToCore = (
   // Reject an oversized program before resolving anything (see above).
   assertProgramInstallmentCap(program);
 
-  const ctx = createEvaluationContext(ctxInput);
+  // The closed-world, here-and-now reading: read real firings AND let a partial
+  // EARLIER_OF commit to its resolved floor.
+  const ctx = createEvaluationContext(ctxInput, "resolution");
   const totalShares = ctx.grantQuantity;
   const resolutions = resolveStatements(program, ctx);
 
@@ -136,7 +138,10 @@ const statementCliffDate = (
   dom: VestingDayOfMonth,
 ): OCTDate | undefined => {
   if (r.cliff.state === "EVENT_FIRED") return r.cliff.effectiveAt;
-  if (r.cliff.state === "RESOLVED" && r.start.state === "RESOLVED")
+  if (
+    r.cliff.state === "RESOLVED" &&
+    (r.start.state === "RESOLVED" || r.start.state === "COMMITTED")
+  )
     return addPeriod(
       r.start.date,
       r.cliff.cliff.length,

@@ -89,14 +89,23 @@ export function evaluateVestingBase(
             ],
           };
     case "EVENT": {
+      // The single firing read in the engine, and the one place mode decides what
+      // a named event "is". In `interchange` the verdict is firing-invariant, so
+      // every named event reads as not-fired here regardless of what the world
+      // recorded — that firing-blindness is the mode's job, not a blanked events
+      // map upstream. In `resolution`/`rehydrate` we read the real firing.
+      //
       // Read through `Object.hasOwn` so an id that collides with an
       // `Object.prototype` key (`constructor`, `toString`, …) can't read back the
       // inherited value off a plain events map. Keep the truthiness check after it:
       // a named-but-unfired event is present with value `undefined`, and that must
       // stay pending, not resolve to a `undefined` date.
-      const eventDate = Object.hasOwn(ctx.events, base.value)
-        ? ctx.events[base.value]
-        : undefined;
+      const eventDate =
+        ctx.mode === "interchange"
+          ? undefined
+          : Object.hasOwn(ctx.events, base.value)
+            ? ctx.events[base.value]
+            : undefined;
       return eventDate
         ? {
             type: "RESOLVED",

@@ -1,16 +1,15 @@
 // Resolve a bare anchor expression straight to its date — no allocation, no
-// installments, no grant-date fold. This is the same operation rehydration runs
-// per stored event (createEvaluationContext + evaluateVestingNodeExpr +
-// isPickedResolved), exposed as one focused entry so a caller that only wants the
-// resolved start needn't reach into the selector layer or hand-build a context.
+// installments, no grant-date fold. This runs in `resolution` mode, so it reads
+// real firings and lets a partial EARLIER_OF commit to its floor (the same
+// closed-world reading evaluate uses, and what AC 11 relies on for resolve_offset).
 //
-// The three result arms `evaluateVestingNodeExpr` can return are all reachable for
-// a bare anchor and each collapses to one of two outcomes:
+// The result arms `evaluateVestingNodeExpr` can return collapse to two outcomes:
 //   - PICKED + RESOLVED meta            → resolved, with the date
+//   - PICKED + COMMITTED meta           → resolved, with the committed floor date
 //   - PICKED + UNRESOLVED meta          → not resolved (a partial LATER OF)
 //   - top-level UNRESOLVED / IMPOSSIBLE → not resolved (e.g. a contradictory gate)
-// The not-resolved arms gather their blockers and render a reason via
-// blockerToString — this is now its sole consumer.
+// A resolved/committed pick yields its date via `pickedDate`; the rest gather their
+// blockers and render a reason via blockerToString.
 
 import type {
   Blocker,
@@ -20,7 +19,7 @@ import type {
 } from "@vestlang/types";
 import { createEvaluationContext } from "../utils.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
-import { isPickedResolved, type PickReturn } from "./utils.js";
+import { pickedDate, type PickReturn } from "./utils.js";
 import { blockerToString } from "./blockerToString.js";
 
 export type ResolvedAnchor =
@@ -29,7 +28,7 @@ export type ResolvedAnchor =
 
 // Blockers of a non-resolved pick — same extraction rehydrate's blockersOf does:
 // a PICKED-unresolved carries them on its meta, every other non-PICKED arm on the
-// result itself.
+// result itself. (A committed pick is resolved, so it never reaches here.)
 const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
   if (res.type === "PICKED") {
     return res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
@@ -41,11 +40,15 @@ export function resolveVestingStart(
   expr: VestingNodeExpr,
   ctxInput: ResolutionContextInput,
 ): ResolvedAnchor {
-  const ctx = createEvaluationContext(ctxInput);
+  const ctx = createEvaluationContext(ctxInput, "resolution");
   const res = evaluateVestingNodeExpr(expr, ctx);
 
-  if (isPickedResolved(res)) {
-    return { resolved: true, date: res.meta.date };
+  // A resolved OR committed pick both carry a concrete date — a partial EARLIER_OF
+  // commits to its floor here (AC 11: resolve_offset over `EARLIER OF (DATE d,
+  // EVENT e)` with e unfired now returns `d` instead of offset-unresolved).
+  const date = pickedDate(res);
+  if (date !== undefined) {
+    return { resolved: true, date };
   }
 
   const blockers = blockersOf(res);

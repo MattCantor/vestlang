@@ -24,7 +24,7 @@ import {
   fromSidecar,
   toPersisted,
   rehydratePersisted,
-  resolveToCore,
+  resolveInterchange,
   type PersistedArtifact,
 } from "../src/resolve/index";
 import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
@@ -74,19 +74,20 @@ const stageAStmt = (): Statement => ({
   },
 });
 
-// The stored artifact (IPO unfired): a `template` arm with the synthetic EVENT
-// statement, an empty runtime (no witness), and the source map.
+// The stored artifact (IPO unfired): the firing-invariant `interchange` `template`
+// arm — the synthetic EVENT statement, a firing-free StoredTerms runtime, and the
+// source map — which is what persist actually stores.
 const storedArtifact = () => {
-  const { resolution } = evaluateStatement(
+  const { interchange } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (resolution.status !== "template")
-    throw new Error(`expected template, got ${resolution.status}`);
+  if (interchange.status !== "template")
+    throw new Error(`expected template, got ${interchange.status}`);
   return {
-    template: resolution.template,
-    sourceMap: resolution.sourceMap,
-    runtime: resolution.runtime,
+    template: interchange.template,
+    sourceMap: interchange.sourceMap,
+    runtime: interchange.runtime,
   };
 };
 
@@ -193,16 +194,16 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
 
 describe("sidecar — a template with no synthetic events emits no sidecar", () => {
   it("toSidecar({}) is undefined and toPersisted omits the field", () => {
-    const { resolution } = evaluateStatement(
+    const { interchange } = evaluateStatement(
       plainStmt(),
       ctxInput({ grantQuantity: 4800 }),
     );
-    if (resolution.status !== "template")
-      throw new Error(`expected template, got ${resolution.status}`);
-    expect(resolution.sourceMap).toEqual({});
+    if (interchange.status !== "template")
+      throw new Error(`expected template, got ${interchange.status}`);
+    expect(interchange.sourceMap).toEqual({});
 
-    expect(toSidecar(resolution.sourceMap)).toBeUndefined();
-    const persisted = toPersisted(resolution);
+    expect(toSidecar(interchange.sourceMap)).toBeUndefined();
+    const persisted = toPersisted(interchange);
     expect("sidecar" in persisted).toBe(false);
   });
 });
@@ -241,15 +242,16 @@ describe("sidecar — a stand-in event and a user `evt_1` stay distinct through 
     },
   ];
 
-  // Resolve with a, b unfired (the user's evt_1 firing is irrelevant to lowering;
-  // a bare EVENT base stores its own id and waits for a runtime firing).
+  // The stored (firing-invariant interchange) artifact, with a, b unfired (the
+  // user's evt_1 firing is irrelevant to lowering; a bare EVENT base stores its own
+  // id and waits for a runtime firing).
   const resolveStored = () => {
-    const result = resolveToCore(
+    const result = resolveInterchange(
       collisionProgram(),
       ctxInput({ grantDate: "2026-01-01", grantQuantity: 1000 }),
     );
-    if (result.kind !== "template")
-      throw new Error(`expected template, got ${result.kind}`);
+    if (result.status !== "template")
+      throw new Error(`expected template, got ${result.status}`);
     return result;
   };
 
