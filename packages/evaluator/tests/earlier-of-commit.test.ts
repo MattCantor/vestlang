@@ -235,6 +235,34 @@ describe("#251 AC16 — LATER OF unregressed", () => {
   });
 });
 
+describe("#251 — a committed disclosure survives the unresolved routing arm", () => {
+  // A committed EARLIER OF rides into whichever arm the program routes to with its
+  // pending siblings' disclosures attached. The events and template arms surface
+  // them; the unresolved arm is the third path and must too. Here portion 2's
+  // partial LATER OF cliff stays unresolved (waiting on `x`), which forces the
+  // whole program down the unresolved arm — and portion 1's committed `e`
+  // disclosure must not be lost on the way.
+  const dsl =
+    "1/2 VEST FROM EARLIER OF (DATE 2024-06-01, EVENT e) OVER 12 months EVERY 1 month " +
+    "PLUS 1/2 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 month CLIFF LATER OF (+6 months, EVENT x)";
+
+  it("discloses `e` through the commit date even though `x` routes it through the unresolved arm", () => {
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    // Portion 1's EARLIER OF committed to its 2024-06-01 floor, so `e` is assumed
+    // absent through that date.
+    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+      through: "2024-06-01",
+    });
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "e",
+      through: "2024-06-01",
+    });
+    // Sanity: portion 2's own pending cliff event is disclosed too — `e` rides
+    // alongside it, it doesn't displace it.
+    expect(findUnfired(schedule.resolution.pending, "x")).toBeDefined();
+  });
+});
+
 describe("#251 AC17 — schedule-level EARLIER START OF behaves as the node-level case", () => {
   it("EARLIER START OF commits to the date floor and discloses ipo", () => {
     const dsl =

@@ -208,6 +208,9 @@ function handleSelector<T extends Schedule | VestingNode>(
   // must not commit — see EvaluationMode — so the branch is gated on mode here.
   if (policy.earlierCommits && hasAnySettled && mode === "resolution") {
     const { picked, date } = reduceBest(settled, policy.selector);
+    // Flat, not wrapped in an UNRESOLVED_SELECTOR like the partial-LATER_OF branch
+    // below: the selector committed, so the pending arms are absence assumptions on
+    // a settled pick, not evidence that the selector is still unresolved.
     const disclosures = withBoundary(collectBlockers(live), date);
     return {
       type: "PICKED",

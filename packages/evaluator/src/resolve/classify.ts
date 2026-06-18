@@ -184,6 +184,14 @@ const unresolvedArm = (
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     const ev = unresolvedInstallments(r, ctx, claims[i]);
+    // A committed EARLIER_OF rode in with its still-pending siblings' disclosures.
+    // unresolvedInstallments reads the cliff, not the committed start's absence
+    // assumptions, so surface them here — the unresolved-arm mirror of the events-
+    // and template-arm pushes — or they'd vanish from resolution.pending and the
+    // absence-assumption disclosure. (Moot in the all-void rollup below, which
+    // ignores `blockers`; that's the safe direction — a wholly-dead program has no
+    // live floor to disclose for.)
+    if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
     // are dropped there; collect the resolution so the resolved producer can
     // materialize them. (A vacuous 0-occurrence statement is also empty — treating

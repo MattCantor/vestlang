@@ -262,6 +262,9 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
       program,
       ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
     );
+    // The two discriminants differ by design: an InterchangeVerdict (from
+    // resolveInterchange) keys on `status`, a ResolveResult (from resolveToCore)
+    // on `kind` — different result shapes, narrowed together here.
     if (before.status !== "template" || after.kind !== "template")
       throw new Error("expected templates");
     const { runtime } = rehydrate(
