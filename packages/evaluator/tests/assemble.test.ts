@@ -335,12 +335,12 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(100000);
   });
 
-  it("EARLIER OF(DATE future, EVENT ipo) before the cap → template + synthetic event", () => {
-    // The 2030 date arm resolves on its own (a fixed date is always known), but
-    // EARLIER_OF still can't settle: ipo is unfired and could be recorded earlier
-    // than 2030, so the date isn't provably the earliest. The selector stays
-    // pending, and because it names an event the whole thing externalizes as one
-    // synthetic event rather than resolving early to the date.
+  it("EARLIER OF(DATE future, EVENT ipo), ipo unfired → resolution commits to the date floor, discloses ipo (#251)", () => {
+    // The 2030 date arm resolves on its own; ipo is unfired. The date arm is a
+    // LOWER bound on the start (the latest it could possibly be), so closed-world
+    // `resolution` COMMITS to it — a guaranteed vesting floor that any real ipo
+    // firing only moves earlier — and discloses ipo as still-absent through 2030.
+    // (Pre-#251 this stayed pending forever and externalized as a synthetic event.)
     const earlierStmt = {
       type: "STATEMENT",
       amount: portion(1, 1),
@@ -353,13 +353,34 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
         periodicity: { type: "MONTHS", length: 1, occurrences: 48 },
       },
     } as Statement;
-    const out = evalStmt(earlierStmt, ctxInput({ asOf: "2025-06-01" }));
-    if (out.status !== "template")
-      throw new Error(`expected template, got ${out.status}`);
-    const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    expect(Object.keys(out.sourceMap)).toHaveLength(1);
-    expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
+    const schedule = evaluateStatement(
+      earlierStmt,
+      ctxInput({ asOf: "2025-06-01" }),
+    );
+
+    // Resolution: a DATE template hoisted to the committed floor — no synthetic
+    // event, the grid lands off 2030-01-01.
+    const res = schedule.resolution;
+    if (res.status !== "template")
+      throw new Error(`expected template, got ${res.status}`);
+    expect(res.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(res.runtime.startDate).toBe("2030-01-01");
+    expect(Object.keys(res.sourceMap)).toHaveLength(0);
+    // The committed-arm disclosure: ipo assumed absent, surfaced in pending and as
+    // an absence assumption stamped through the committed date.
+    expect(findsEventNotOccurred(res.pending, "ipo")).toBe(true);
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "ipo",
+      through: "2030-01-01",
+    });
+
+    // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still
+    // externalizes the gate as a synthetic event template.
+    const ix = schedule.interchange;
+    if (ix.status !== "template")
+      throw new Error(`expected interchange template, got ${ix.status}`);
+    expect(ix.template.statements[0].vesting_base.type).toBe("EVENT");
+    expect(Object.keys(ix.sourceMap)).toHaveLength(1);
   });
 
   it("two portions on the same anchor share one event_id + one source-map entry", () => {

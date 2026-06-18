@@ -15,6 +15,7 @@ export type {
   TemplateVestingBaseEvent,
   Fraction,
   Cliff,
+  StoredTerms,
   VestingRuntime,
 } from "./canonical.js";
 export type { TwoOrMore, SelectorTag, Selector, OCTDate } from "./helpers.js";
@@ -77,6 +78,7 @@ export {
   RawProgram,
 } from "./ast.js";
 export {
+  EvaluationMode,
   ResolutionContext,
   ResolutionContextInput,
   AsOfContext,
@@ -90,6 +92,7 @@ export {
   ResolvedNode,
   UnresolvedNode,
   ImpossibleNode,
+  CommittedNode,
   NodeMeta,
   ImpossibleInstallment,
   UnresolvedInstallment,

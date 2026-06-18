@@ -8,7 +8,11 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { rehydrate, resolveToCore } from "../src/resolve/index";
+import {
+  rehydrate,
+  resolveInterchange,
+  resolveToCore,
+} from "../src/resolve/index";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -193,11 +197,13 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
   });
 
   it("rehydrating the stored artifact with the true firing derives the offset date", () => {
-    const stored = resolveToCore(
+    // The stored artifact is the firing-invariant interchange one (firing-free
+    // runtime), the same thing persist would store.
+    const stored = resolveInterchange(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
     );
-    if (stored.kind !== "template") throw new Error("expected template");
+    if (stored.status !== "template") throw new Error("expected template");
     const { runtime } = rehydrate(
       stored.template,
       stored.sourceMap,
@@ -211,7 +217,7 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     expect(runtime.eventFirings).toEqual([
       { event_id: "evt:1", date: "2024-04-01" },
     ]);
-    const events = compile(stored.template, stored.totalShares, runtime);
+    const events = compile(stored.template, 100000, runtime);
     expect(events.map((e) => e.date)).toEqual(["2024-05-01", "2024-06-01"]);
   });
 
@@ -245,7 +251,10 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
   });
 
   it("lowering after the firing equals lowering before it plus rehydration", () => {
-    const before = resolveToCore(
+    // `before` is the stored (firing-invariant) interchange artifact; `after` is
+    // the live resolution once ipo fired. Rehydrating `before` against the firing
+    // must reproduce `after`'s template, source map, and witness-bearing runtime.
+    const before = resolveInterchange(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
     );
@@ -253,7 +262,7 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
       program,
       ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
     );
-    if (before.kind !== "template" || after.kind !== "template")
+    if (before.status !== "template" || after.kind !== "template")
       throw new Error("expected templates");
     const { runtime } = rehydrate(
       before.template,

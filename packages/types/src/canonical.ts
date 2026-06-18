@@ -74,11 +74,9 @@ export interface Cliff {
   percentage: Fraction; // share of the statement that vests at the cliff
 }
 
-// Per-grant runtime data the engine substitutes into a template:
+// The firing-free part of the per-grant runtime the engine substitutes into a
+// template:
 //   - startDate    — the hoisted vesting start; the DATE cursor's origin.
-//   - eventFirings — zero or more named-event firings. A single firing fans out
-//                    to every EVENT statement sharing its event_id. The optional
-//                    realized_fraction scales that firing's contribution.
 //   - grantDate    — when provided, scheduled amounts dated before grantDate are
 //                    held back and emitted as a single aggregate on grantDate
 //                    (an implicit cliff at grant date).
@@ -86,13 +84,34 @@ export interface Cliff {
 //                    canonical default (VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
 //                    Allocation is always CUMULATIVE_ROUND_DOWN — the interchange
 //                    has no allocation field.
-export interface VestingRuntime {
+interface RuntimeBase {
   startDate?: OCTDate;
-  eventFirings?: Array<{
-    event_id: string;
-    date: OCTDate;
-    realized_fraction?: Fraction;
-  }>;
   grantDate?: OCTDate;
   vestingDayOfMonth?: VestingDayOfMonth;
+}
+
+// One named-event firing. A single firing fans out to every EVENT statement
+// sharing its event_id; the optional realized_fraction scales its contribution.
+interface EventFiring {
+  event_id: string;
+  date: OCTDate;
+  realized_fraction?: Fraction;
+}
+
+// What a *stored* artifact's runtime holds. A persisted artifact is firing-
+// invariant by construction (the interchange is firing-blind), so it can carry no
+// witnesses — and `eventFirings?: never` makes that unrepresentable at the type
+// level, not merely an empty array a future edit could populate. Witnesses are
+// re-derived from the world on every reload (see resolve/rehydrate.ts), never
+// baked in.
+export interface StoredTerms extends RuntimeBase {
+  eventFirings?: never;
+}
+
+// The firings-carrying runtime: evaluated/rehydrated state. Keeps the original
+// name so the compile/validate/resolve consumers that substitute it into a
+// template need no edits. `rehydrate` widens a `StoredTerms` into one of these by
+// adding the re-derived firings.
+export interface VestingRuntime extends RuntimeBase {
+  eventFirings?: EventFiring[];
 }

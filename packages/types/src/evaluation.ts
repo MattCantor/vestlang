@@ -1,9 +1,29 @@
-import type { VestingRuntime, VestingScheduleTemplate } from "./canonical.js";
+import type {
+  StoredTerms,
+  VestingRuntime,
+  VestingScheduleTemplate,
+} from "./canonical.js";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
 import { OCTDate, SelectorTag } from "./helpers.js";
 import { VestingDayOfMonth } from "./oct_types.js";
 import type { Finding } from "./diagnostic.js";
+
+// Which engine configuration a resolution is running under. Three legitimate
+// configs that a boolean can't tell apart:
+//   - "resolution"  — the closed-world, here-and-now reading. Reads real firings
+//                     AND lets an EARLIER_OF commit to its resolved floor (its
+//                     resolved arm is a lower bound, so committing to it is the
+//                     latest-possible anchor — a guaranteed vesting floor).
+//   - "interchange" — the firing-invariant storable floor. Reads every named
+//                     event as "not fired" and never commits.
+//   - "rehydrate"   — reload from a stored artifact. Reads the world's attested
+//                     firings, but must NOT commit: committing would resolve a
+//                     stored gate to its date floor on every reload, fabricating
+//                     a firing the world never produced.
+// `rehydrate` is why a boolean is insufficient — it shares "reads firings" with
+// `resolution` but "does not commit" with `interchange`.
+export type EvaluationMode = "resolution" | "interchange" | "rehydrate";
 
 // The context every engine operation needs to resolve a schedule's structure:
 // the grant anchor, fired events, share count, and the day-of-month rule. It
@@ -18,6 +38,11 @@ export interface ResolutionContext {
   events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
   vesting_day_of_month: VestingDayOfMonth;
+  /** Which engine config this resolution runs under (see EvaluationMode). Stamped
+   *  by each entry point, never by a caller — that's why `*Input` Omits it. It
+   *  governs both the firing read (firing-blind in `interchange`) and whether a
+   *  partial EARLIER_OF commits (only in `resolution`). */
+  mode: EvaluationMode;
 }
 
 // A point-in-time query adds the observation date on top of the structure
@@ -28,10 +53,12 @@ export type AsOfContext = ResolutionContext & {
   asOf: OCTDate;
 };
 
-// Callers supply everything but the day-of-month rule (the evaluator defaults it).
+// Callers supply everything but the day-of-month rule (the evaluator defaults it)
+// and the `mode` (each entry point stamps its own — a caller can't override which
+// engine config a resolution runs under, so `mode` is Omitted here entirely).
 export type ResolutionContextInput = Omit<
   ResolutionContext,
-  "vesting_day_of_month"
+  "vesting_day_of_month" | "mode"
 > &
   Partial<Pick<ResolutionContext, "vesting_day_of_month">>;
 
@@ -126,7 +153,28 @@ export type ImpossibleNode = {
   blockers: ImpossibleBlocker[];
 };
 
-export type NodeMeta = ResolvedNode | UnresolvedNode | ImpossibleNode;
+// An EARLIER_OF that committed to its resolved floor in `resolution` mode: it has
+// a date (the earliest resolved arm) AND carries the still-pending siblings'
+// blockers, stamped `through` the committed date. Distinct from RESOLVED so the
+// disclosures can't be dropped — a date-read site that only handles RESOLVED has
+// to be taught COMMITTED too (a build break, not a silent miss). The mirror of a
+// partial LATER_OF, except this one settles to a date instead of staying pending:
+// an EARLIER_OF's resolved arm is a *lower* bound, so committing to it never
+// over-vests, whereas LATER_OF's is an *upper* bound and must stay open.
+export type CommittedNode = {
+  type: "COMMITTED";
+  date: OCTDate;
+  // Required: the committed pick exists precisely to carry these. Each is a
+  // still-pending sibling's blocker, already stamped `through` the committed date,
+  // so it flows to `absenceAssumptions` and `resolution.pending`.
+  disclosures: Blocker[];
+};
+
+export type NodeMeta =
+  | ResolvedNode
+  | UnresolvedNode
+  | ImpossibleNode
+  | CommittedNode;
 
 /* ------------------------
  * Installments
@@ -316,6 +364,10 @@ export type InterchangeVerdict =
   | {
       status: "template";
       template: VestingScheduleTemplate;
+      // Firing-invariant by construction: the interchange path is firing-blind, so
+      // its runtime can carry no firings at all. `StoredTerms` makes that
+      // unrepresentable rather than merely empty — eventFirings is `?: never`.
+      runtime: StoredTerms;
       sourceMap: SourceMap;
     }
   | {

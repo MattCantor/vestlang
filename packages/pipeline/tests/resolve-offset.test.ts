@@ -217,4 +217,17 @@ describe("runResolveOffset", () => {
       );
     }
   });
+
+  // #251 AC#11 — an EARLIER OF whose date arm is resolved and event arm is unfired
+  // now COMMITS to the date floor (the latest the start could be), instead of
+  // returning offset-unresolved. resolveVestingStart runs in resolution mode, so
+  // the commit flows straight through this entry — no edit to resolve-offset.ts.
+  it("EARLIER OF (DATE d, EVENT e), e unfired → resolves to d (was offset-unresolved)", () => {
+    const r = runResolveOffset({
+      expr: "EARLIER OF (DATE 2024-06-01, EVENT ipo)",
+      grant_date: "2024-01-01",
+      // ipo intentionally unfired.
+    });
+    expect(r).toEqual({ ok: true, date: "2024-06-01" });
+  });
 });

@@ -45,7 +45,8 @@ const expandResolution = (
   order: number,
   ctx: ResolutionContext,
 ): RawEvent[] => {
-  if (r.start.state !== "RESOLVED") return [];
+  // RESOLVED or a committed EARLIER_OF floor — both carry a date to grid from.
+  if (r.start.state !== "RESOLVED" && r.start.state !== "COMMITTED") return [];
   const anchor = r.start.date;
   // For a chain tail, `anchor` is the handoff the previous segment ended on (Feb 28
   // off a Jan 31 head, or mid-month off a DAYS run) while `origin` keeps the chain's
@@ -132,13 +133,19 @@ const eventsArm = (
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   const dated: StmtResolution[] = [];
-  // RESOLVED starts in this arm always have a dated cliff — buildTemplate routes
-  // unfired event cliffs and dead cliffs to the unresolved arm first — so the
-  // dated set here and isDated's definition agree.
+  // Dated starts in this arm (RESOLVED or a committed floor) always have a dated
+  // cliff — buildTemplate routes unfired event cliffs and dead cliffs to the
+  // unresolved arm first — so the dated set here and isDated's definition agree.
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
-    if (r.start.state === "RESOLVED") {
+    if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
       dated.push(r);
+      // A committed EARLIER_OF rode in with its still-pending siblings'
+      // disclosures. The dated path never runs unresolvedInstallments (where
+      // blockers are otherwise gathered), so surface them here — the events-arm
+      // mirror of buildTemplate's template-arm push — or they'd vanish from
+      // resolution.pending and the absence-assumption disclosure.
+      if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
       return;
     }
     // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE starts to the

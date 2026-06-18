@@ -33,20 +33,22 @@ import {
 } from "./helpers";
 
 // Build a stored `template` artifact straight from DSL, the way persist does:
-// parse → normalize → evaluate, taking the resolution's frozen template, source
-// map, and runtime. Used by the convention-source tests, which need the runtime
+// parse → normalize → evaluate, taking the firing-invariant INTERCHANGE verdict's
+// frozen template, source map, and (StoredTerms) runtime. Persist gates on and
+// builds from interchange, so the artifact under reload is firing-free — what
+// rehydrate now takes. Used by the convention-source tests, which need the runtime
 // lower.ts actually produces (e.g. vestingDayOfMonth stored only when non-default)
 // rather than a hand-assembled one.
 const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));
   const schedule = evaluateProgram(program, ctx);
-  const { resolution } = schedule;
-  if (resolution.status !== "template")
-    throw new Error(`expected template, got ${resolution.status}`);
+  const { interchange } = schedule;
+  if (interchange.status !== "template")
+    throw new Error(`expected template, got ${interchange.status}`);
   return {
-    template: resolution.template,
-    sourceMap: resolution.sourceMap,
-    runtime: resolution.runtime,
+    template: interchange.template,
+    sourceMap: interchange.sourceMap,
+    runtime: interchange.runtime,
   };
 };
 
@@ -101,19 +103,20 @@ const stageAStmt = (): Statement => ({
   },
 });
 
-// Build the stored artifact (IPO unfired): a `template` arm carrying the
-// synthetic EVENT statement, an empty runtime (no witness), and the source map.
+// Build the stored artifact (IPO unfired): the firing-invariant `interchange`
+// `template` arm carrying the synthetic EVENT statement, a firing-free StoredTerms
+// runtime, and the source map — exactly what persist stores.
 const storedArtifact = () => {
-  const { resolution } = evaluateStatement(
+  const { interchange } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (resolution.status !== "template")
-    throw new Error(`expected template, got ${resolution.status}`);
+  if (interchange.status !== "template")
+    throw new Error(`expected template, got ${interchange.status}`);
   return {
-    template: resolution.template,
-    sourceMap: resolution.sourceMap,
-    runtime: resolution.runtime,
+    template: interchange.template,
+    sourceMap: interchange.sourceMap,
+    runtime: interchange.runtime,
   };
 };
 

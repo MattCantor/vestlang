@@ -4,18 +4,21 @@
 // The trick is that we already have a function that lowers a program to a single
 // canonical template — `buildTemplate`. The only reason its usual output depends
 // on fired events is that the statements are resolved against `ctx.events` first.
-// So to get the firing-invariant answer we run the exact same machinery against a
-// context with the events map emptied out: every named event then reads as "not
-// fired", an event-anchored start rides across as a deferred/synthetic event, and
-// a future calendar date still resolves on its own. Re-run it after any event
-// fires and you get the same verdict — which is what makes it safe to store.
+// So to get the firing-invariant answer we resolve in `interchange` mode: the
+// single EVENT read (in evaluate/vestingNode/vestingBase.ts) returns "not fired"
+// regardless of what the world recorded, an event-anchored start rides across as a
+// deferred/synthetic event, and a future calendar date still resolves on its own.
+// An EARLIER_OF never commits here either (the commit is gated on `resolution`
+// mode), so a settled date arm doesn't collapse the gate. Re-run it after any
+// event fires and you get the same verdict — which is what makes it safe to store.
 
 import type {
   ResolutionContextInput,
   InterchangeVerdict,
   NonTemplateReason,
-  OCTDate,
   Program,
+  StoredTerms,
+  VestingRuntime,
 } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
@@ -110,6 +113,17 @@ const pendingHeadEvent = (
   return undefined;
 };
 
+// Keep only the firing-free structural fields of a runtime. A firing-blind build
+// leaves eventFirings unset, so this is the type-narrow that lets the interchange
+// template carry a `StoredTerms` runtime.
+const toStoredTerms = (runtime: VestingRuntime): StoredTerms => ({
+  ...(runtime.startDate !== undefined ? { startDate: runtime.startDate } : {}),
+  ...(runtime.grantDate !== undefined ? { grantDate: runtime.grantDate } : {}),
+  ...(runtime.vestingDayOfMonth !== undefined
+    ? { vestingDayOfMonth: runtime.vestingDayOfMonth }
+    : {}),
+});
+
 /**
  * Translate a template-build outcome into the storable-floor verdict.
  *
@@ -125,6 +139,11 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
     return {
       status: "template",
       template: build.template,
+      // The interchange path is firing-blind, so its build never populates
+      // eventFirings; project the runtime onto StoredTerms (where eventFirings is
+      // unrepresentable) by keeping only the structural fields. A type-narrow, not
+      // a drop — the seam where firing-invariance becomes a type guarantee.
+      runtime: toStoredTerms(build.runtime),
       sourceMap: build.sourceMap,
     };
   }
@@ -173,18 +192,10 @@ export const resolveInterchange = (
   program: Program,
   ctxInput: ResolutionContextInput,
 ): InterchangeVerdict => {
-  const ctx = createEvaluationContext(ctxInput);
-  // grantDate and vestingStart are their own context fields, so blanking `events`
-  // drops only the genuine named firings, not the system anchors a start needs.
-  // Null-proto so an EVENT atom named after a `Object.prototype` key still reads
-  // "not fired" here rather than the inherited value (the firing-blind path).
-  const interchangeCtx = {
-    ...ctx,
-    events: Object.create(null) as Record<string, OCTDate | undefined>,
-  };
-  const build = buildTemplate(
-    resolveStatements(program, interchangeCtx),
-    interchangeCtx,
-  );
+  // `interchange` mode makes the EVENT read firing-blind at the source (every
+  // named event reads "not fired"), so there is no longer a blanked `events` map
+  // to maintain here — firing-blindness is the mode's job, not a context surgery.
+  const ctx = createEvaluationContext(ctxInput, "interchange");
+  const build = buildTemplate(resolveStatements(program, ctx), ctx);
   return mapTemplateBuild(build);
 };

@@ -24,7 +24,7 @@ import type {
   SourceMap,
   SourceMapEntry,
 } from "@vestlang/types";
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import type { StoredTerms, VestingScheduleTemplate } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 import { assertSavePartition } from "./synthetic.js";
 
@@ -50,10 +50,15 @@ export interface Sidecar {
  * out-of-band `sidecar`. The sidecar is optional by design. A consumer may drop
  * it, leaving a valid-but-opaque template; the synthetic events then become
  * un-evaluatable milestones, a deliberate tradeoff of the out-of-band scheme.
+ *
+ * `runtime` is `StoredTerms`, not `VestingRuntime`: a persisted artifact is
+ * firing-invariant by construction, so it cannot carry `eventFirings` (the type
+ * makes that unrepresentable). Witnesses are re-derived from the world on every
+ * reload via `rehydrate`, never baked into the stored artifact.
  */
 export interface PersistedArtifact {
   template: VestingScheduleTemplate;
-  runtime: VestingRuntime;
+  runtime: StoredTerms;
   sidecar?: Sidecar;
 }
 
@@ -87,7 +92,7 @@ export const fromSidecar = (sidecar?: Sidecar): SourceMap =>
  */
 export const toPersisted = (artifact: {
   template: VestingScheduleTemplate;
-  runtime: VestingRuntime;
+  runtime: StoredTerms;
   sourceMap: SourceMap;
 }): PersistedArtifact => {
   // Tripwire: the synthetic/named partition must hold before this becomes a

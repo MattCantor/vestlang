@@ -81,9 +81,10 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
     expect(r.error.message).toContain("over-allocat");
   });
 
-  // #5 — a non-template resolution shares the ruleId but is witnessed by its
-  // distinct verbatim message.
-  it("#5 non-template resolution → persist-not-storable, exact wording", () => {
+  // #5 — a non-template *interchange* shape shares the ruleId but is witnessed by
+  // its distinct verbatim message. An event-anchored cliff is unrepresentable in
+  // the storable interchange (the gate persist now reads).
+  it("#5 non-template storable shape → persist-not-storable, exact wording", () => {
     const r = runPersist({
       dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
       grant_date: "2025-01-01",
@@ -93,7 +94,10 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
     if (r.ok) return;
     expect(r.error.ruleId).toBe("persist-not-storable");
     expect(r.error.message).toContain(
-      "Only a template-resolution program is storable as a persisted artifact",
+      "Only a single-template program is storable as a persisted artifact",
+    );
+    expect(r.error.message).toContain(
+      'this program\'s storable form is "unrepresentable"',
     );
     expect(r.error.message).toContain(
       "Adjust the schedule so it collapses to a single canonical template.",

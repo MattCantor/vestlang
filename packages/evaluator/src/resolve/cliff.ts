@@ -28,7 +28,11 @@ import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { isPickedPartial, isPickedResolved } from "../evaluate/utils.js";
+import {
+  isPickedPartial,
+  isPickedResolved,
+  pickedDate,
+} from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
 import {
   isVestingStartPlaceholder,
@@ -260,15 +264,16 @@ export const lowerCliff = (
   if (res.type === "IMPOSSIBLE")
     return { state: "IMPOSSIBLE", blockers: res.blockers };
 
-  // A cliff date is known only when the expression fully resolves. A partial
-  // LATER_OF (e.g. `LATER OF(+12 months, EVENT ipo)` with ipo unfired) must not
-  // collapse to its resolved branch: that branch is only a lower bound, so the
-  // pending event can only push the cliff later. Reporting the floor as RESOLVED
-  // would over-vest a still-contingent grant, so leave it UNRESOLVED, mirroring
-  // the start path's partial-knowledge handling.
-  const cliffDate: OCTDate | undefined = isPickedResolved(res)
-    ? res.meta.date
-    : undefined;
+  // A cliff date is known when the expression fully resolves OR an EARLIER_OF cliff
+  // committed to its floor (`pickedDate` covers both). A partial LATER_OF (e.g.
+  // `LATER OF(+12 months, EVENT ipo)` with ipo unfired) does NOT yield a date here:
+  // its resolved branch is an upper bound the pending event could push later, so
+  // reporting it as RESOLVED would over-vest — it stays UNRESOLVED below. An
+  // EARLIER_OF commit is the mirror: its branch is a lower bound (the latest the
+  // cliff could land), so committing to it is the safe floor. The commit is silent
+  // here — a resolved cliff has no absence-note slot (#325) — but the floor and
+  // projection are correct.
+  const cliffDate: OCTDate | undefined = pickedDate(res);
 
   if (!cliffDate) {
     // Pending cliff. The grid is placeable from the resolved start, so the render

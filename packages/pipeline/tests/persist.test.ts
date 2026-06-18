@@ -86,8 +86,9 @@ describe("runPersist (AC#4)", () => {
     });
     expect(r.artifact.template.statements.length).toBeGreaterThan(0);
     expect(r.artifact.sidecar).toBeDefined();
-    // The gate hasn't fired — its witness rides in pending; a storable template
-    // never carries a dead blocker.
+    // The gate hasn't fired — its witness rides in `pending`, and nothing is dead
+    // here (no firing has contradicted it yet). `dead` CAN be non-empty for a
+    // storable schedule once a recorded firing dies a gate, but this one is clean.
     expect(r.pending.length).toBeGreaterThan(0);
     expect(r.dead).toEqual([]);
   });
@@ -589,5 +590,101 @@ describe("persist/rehydrate are clock-independent", () => {
       { date: "2025-04-30", amount: 100 },
       { date: "2025-05-31", amount: 100 },
     ]);
+  });
+});
+
+describe("#251 — persist gates on interchange; rehydrate never commits", () => {
+  // AC#7 — an EARLIER OF cliff resolves to `template` (it commits its floor) but its
+  // interchange is `unrepresentable` (an event arm can't be a duration cliff). Persist
+  // gates on interchange, so it must REFUSE — gating on resolution would store the
+  // unstorable.
+  it("AC#7: persist refuses an EARLIER OF cliff even though its resolution is a template", () => {
+    const r = runPersist({
+      dsl: "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("persist-not-storable");
+      expect(r.error.message).toMatch(/unrepresentable/);
+    }
+  });
+
+  // AC#8 — persist is firing-invariant by construction. The combinator gate is
+  // storable firing-blind; supplying ipo at persist does NOT bake a firing, and the
+  // artifact is byte-identical to persisting blind. Reload without resupply stays
+  // pending; resupplying re-derives it.
+  it("AC#8: a firing supplied at persist is not stored; reload without resupply is pending", () => {
+    const withFiring = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+      events: { ipo: "2026-06-01" },
+    });
+    const blind = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(withFiring.artifact).toEqual(blind.artifact);
+    expect(withFiring.artifact.runtime.eventFirings ?? []).toHaveLength(0);
+
+    const reload = rehydrateOk({
+      artifact: withFiring.artifact,
+      grant_quantity: 1000,
+      // ipo not resupplied.
+    });
+    expect(reload.firings_to_apply).toHaveLength(0);
+    expect(reload.pending.length).toBeGreaterThan(0);
+
+    const resupplied = rehydrateOk({
+      artifact: withFiring.artifact,
+      grant_quantity: 1000,
+      events: { ipo: "2026-06-01" },
+    });
+    expect(resupplied.firings_to_apply).toHaveLength(1);
+    expect(resupplied.pending).toHaveLength(0);
+  });
+
+  // AC#9 — persist may surface a non-empty `dead`. A windowed gate is storable
+  // firing-blind (interchange template), yet a firing recorded OUTSIDE its window at
+  // persist time dies the gate in the closed-world resolution. So persist returns
+  // ok:true WITH a non-empty `dead` (a revisable disclosure — events are the system
+  // of record's, not the artifact's).
+  it("AC#9: persist returns ok:true with a non-empty dead when a recorded firing dies the gate", () => {
+    const r = runPersist({
+      dsl: "VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2026-06-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+      events: { ipo: "2027-01-01" }, // fired past the BEFORE bound → dead
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.dead.length).toBeGreaterThan(0);
+      // Still firing-invariant: the artifact bakes no firing.
+      expect(r.artifact.runtime.eventFirings ?? []).toHaveLength(0);
+    }
+  });
+
+  // AC#10 — rehydrate does not commit. A stored EARLIER OF gate reloaded with NO real
+  // firing must stay pending — it must not resolve to its date floor on reload (which
+  // would fabricate a firing the world never produced).
+  it("AC#10: a stored EARLIER OF gate reloaded with no firing stays pending (no commit)", () => {
+    const persisted = persistOk({
+      dsl: COMBINATOR_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 1000,
+      // ipo unfired — the only world the gate could read.
+    });
+    // No witness resolved (it did NOT commit to the 2027 date floor), and the
+    // projection is empty: still pending.
+    expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.projection).toHaveLength(0);
+    expect(out.pending.length).toBeGreaterThan(0);
   });
 });

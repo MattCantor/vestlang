@@ -193,9 +193,11 @@ describe("computeSummary", () => {
     expect(s.cliff_date).toBeNull();
   });
 
-  it("an unresolved selector cliff has no cliff_date", () => {
-    // Closed-world resolution doesn't settle an EARLIER OF cliff even once its
-    // date branch has passed, so the cliff stays unplaceable.
+  it("an EARLIER OF cliff commits to its date floor and places a cliff_date (#251)", () => {
+    // Closed-world resolution now commits an EARLIER OF cliff to its resolved arm:
+    // `+12 months` off the 2025-01-01 start is the floor (the latest the cliff
+    // could land), so the lump is placeable at 2026-01-01 regardless of the as-of —
+    // pre-#251 this stayed unresolved and froze the whole grid.
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
     for (const asOf of ["2025-06-01", "2026-06-01"]) {
@@ -204,7 +206,7 @@ describe("computeSummary", () => {
         ctx({ grantDate: "2025-01-01", grantQuantity: 4800, events: {}, asOf }),
       );
       const s = computeSummary(result, 4800);
-      expect(s.cliff_date).toBeNull();
+      expect(s.cliff_date).toBe("2026-01-01");
     }
   });
 

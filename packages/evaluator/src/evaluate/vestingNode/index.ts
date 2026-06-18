@@ -1,5 +1,6 @@
 import type {
   Blocker,
+  CommittedNode,
   ConstrainedVestingNode,
   ResolutionContext,
   ImpossibleBlocker,
@@ -25,10 +26,14 @@ const allImpossibleBlockers = (x: Blocker[]): x is ImpossibleBlocker[] =>
  * Public API
  * ------------------------ */
 
+// A leaf node resolves to a date, stays pending, or is dead — it never commits a
+// floor (only a selector does, in selectors.ts), so COMMITTED is excluded from the
+// return. That exclusion is what lets the picker re-emit a non-RESOLVED leaf
+// straight through as a `PickReturn` (which has no bare COMMITTED arm).
 export function evaluateVestingNode(
   node: VestingNode,
   ctx: ResolutionContext,
-): NodeMeta {
+): Exclude<NodeMeta, CommittedNode> {
   // Resolve the vesting node base as the schedule's own anchor: a MONTHS offset
   // here snaps to the policy only when the node hangs off the vesting start (the
   // cadence cliff), which evaluateVestingBase decides from the "anchor" role.
