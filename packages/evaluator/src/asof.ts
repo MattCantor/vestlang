@@ -5,8 +5,6 @@ import {
   Installment,
 } from "@vestlang/types";
 import { evaluateProgram } from "./orchestrate.js";
-import { assertProgramInstallmentCap } from "./resolve/index.js";
-import { assertEvaluableProgram } from "./guard.js";
 import { createEvaluationContext } from "./utils.js";
 import { amountToFraction, claimAllocator } from "./claims.js";
 
@@ -68,10 +66,10 @@ export function evaluateProgramAsOf(
   program: Program,
   ctx_input: AsOfContextInput,
 ): VestedResult {
-  assertEvaluableProgram(program);
-  assertProgramInstallmentCap(program);
-  // This local context only reads grantQuantity/asOf for the partition below;
-  // `"resolution"` matches the mode evaluateProgram itself resolves under.
+  // No boundary guard here: evaluateProgram (below) vets the program and enforces
+  // the installment cap once. This local context only reads grantQuantity/asOf for
+  // the partition; `"resolution"` matches the mode evaluateProgram resolves under,
+  // and the reduce afterward reads amounts off an already-vetted program.
   const ctx = createEvaluationContext(ctx_input, "resolution");
   const schedule = evaluateProgram(program, ctx_input);
   // If nothing got scheduled, every share the program allocates is still

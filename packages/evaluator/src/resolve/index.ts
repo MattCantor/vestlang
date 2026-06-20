@@ -23,7 +23,6 @@ import {
 import { programInstallmentTotal } from "@vestlang/walk";
 import { classifyAllocation, fracSum } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
-import { assertEvaluableProgram } from "../guard.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
@@ -51,9 +50,10 @@ export const resolveToCore = (
   program: Program,
   ctxInput: ResolutionContextInput,
 ): ResolveResult => {
-  // Reject a malformed or circular-start-gated hand-built program before we read
-  // any value off it (#335 / #355), then reject an oversized one (see above).
-  assertEvaluableProgram(program);
+  // Reject an oversized program before resolving anything (see above): the cap has
+  // to run before resolution here, and it also backs this function's own direct
+  // callers (the resolve tests). The structural / circular-start-gate guard
+  // (#335 / #355) is enforced once at each public entry, so it isn't repeated here.
   assertProgramInstallmentCap(program);
 
   // The closed-world, here-and-now reading: read real firings AND let a partial

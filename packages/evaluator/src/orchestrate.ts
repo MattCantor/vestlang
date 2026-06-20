@@ -22,10 +22,10 @@ export function evaluateStatement(
   stmt: Statement,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule {
-  // Guard here explicitly rather than leaning on resolveToCore (the left assemble
-  // arg) running before resolveInterchange — resolveInterchange carries no guard
-  // of its own, so an argument-order change shouldn't be able to slip a hand-built
-  // program past it. The re-check inside resolveToCore is idempotent and cheap.
+  // The one structural / circular-gate guard for this path: resolveToCore enforces
+  // only the installment cap now, so the hand-built program is vetted here, once,
+  // before either assemble arm reads it (resolveInterchange carries no guard of its
+  // own, so this can't lean on argument-evaluation order).
   assertEvaluableProgram([stmt]);
   return assemble(
     resolveToCore([stmt], ctx_input),
@@ -87,9 +87,9 @@ export function evaluateProgram(
   stmts: Program,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule {
-  // Explicit guard at the entry (see evaluateStatement): don't rely on
-  // resolveToCore being evaluated before resolveInterchange to catch a hand-built
-  // program.
+  // Vet the (possibly hand-built) program once at the entry — resolveToCore caps
+  // but no longer repeats this structural / circular-gate guard (see
+  // evaluateStatement).
   assertEvaluableProgram(stmts);
   return assemble(
     resolveToCore(stmts, ctx_input),
