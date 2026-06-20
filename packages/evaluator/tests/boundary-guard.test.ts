@@ -201,7 +201,12 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
   });
 
   // AC6: the error is distinguishable from the installment-cap error and a kernel
-  // RangeError — only the boundary guard carries the eval-voiced prefix.
+  // RangeError — only the boundary guard carries the eval-voiced prefix. We assert
+  // the cap half directly; the kernel-RangeError half is unconstructible through
+  // the public surface now, because the structural collector rejects any
+  // non-calendar date BEFORE it can reach core.toDate (AC1 covers that it throws
+  // the calendar-validity message, not a kernel RangeError). So the cap case
+  // stands in for "some other error doesn't wear our prefix."
   it("the cap error does NOT carry the eval-guard prefix", () => {
     // A schedule that expands past the cap throws the cap message, not ours.
     const big = prog(`1000 VEST OVER 100000 months EVERY 1 month`);
@@ -325,6 +330,44 @@ describe("#355 — runtime circular-start-gate backstop", () => {
       ],
     };
     expect(() => resolveVestingStart(inArm, ctx())).toThrow(/circular/);
+  });
+
+  // AC10 via the Program path (not just the bare-node path): a selector start whose
+  // arm hides the circular gate exercises startsOfExpr's arm recursion through
+  // evaluateProgram, the entry the AC foregrounds.
+  it("rejects a circular gate hidden in a selector arm via the Program path", () => {
+    const p = validProgram();
+    const sched = p[0].expr;
+    if (sched.type === "SCHEDULE") {
+      sched.vesting_start = {
+        type: "NODE_EARLIER_OF",
+        items: [
+          { type: "NODE", base: { type: "GRANT_DATE" }, offsets: [] },
+          startGatedOnVestingStart(),
+        ],
+      };
+    }
+    expect(() => evaluateProgram(p, ctx())).toThrow(/circular/);
+  });
+
+  // The misplaced-anchor case, kept distinct from the circular-gate one (mirroring
+  // the parser's two #354 messages). A hand-built start anchored DIRECTLY on
+  // vestingStart — no gate at all — is rejected as a misplaced reserved anchor, not
+  // reported as a phantom gate. The structural collector accepts a VESTING_START
+  // base regardless of slot, so this guard is the sole rejection.
+  it("rejects vestingStart as the start's own anchor with the anchor-position message", () => {
+    const anchoredOnVestingStart: VestingNodeExpr = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [],
+    };
+    expect(() => resolveVestingStart(anchoredOnVestingStart, ctx())).toThrow(
+      /anchors on vestingStart/,
+    );
+    // It must NOT be mislabelled as a gate.
+    expect(() =>
+      resolveVestingStart(anchoredOnVestingStart, ctx()),
+    ).not.toThrow(/gate references/);
   });
 
   // AC11: the backstop does NOT reject the legal cases.

@@ -11,12 +11,13 @@
 //      eval-flavored message over the shared error list rather than render's
 //      "Cannot stringify…" one.
 //
-//   2. The positional gate rule (#355): a *start*'s gate may not reference
-//      VESTING_START — that is circular, the gate constraining the very start it
-//      defines. The type model already forbids this at compile time; this is its
-//      runtime analogue, for callers the compiler can't reach. The parser closes
-//      the same door at parse time (#354) with a matching "circular dependency"
-//      message.
+//   2. The positional vestingStart rules (#355 / #354): within a *start*,
+//      vestingStart may sit in neither the anchor position (a reserved system
+//      event can't anchor a start) nor a gate (circular — the gate would
+//      constrain the very start it defines). The type model forbids both at
+//      compile time; this is the runtime analogue for callers the compiler can't
+//      reach, and it splits the two into distinct diagnostics the way the parser
+//      does (#354) rather than reporting a misplaced anchor as a phantom gate.
 //
 // Order matters: the structural check runs FIRST. Only once it passes is the AST
 // known to be on-union, which is what makes @vestlang/walk safe to use for the
@@ -29,9 +30,15 @@ import type {
   Program,
   ScheduleExpr,
   Statement,
+  VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
-import { collectAstErrors, collectNodeExprErrors } from "@vestlang/render";
+import {
+  collectAstErrors,
+  collectNodeExprErrors,
+  formatAstErrors,
+  type AstError,
+} from "@vestlang/render";
 import { some } from "@vestlang/walk";
 
 const EVAL_PREFIX = "Cannot evaluate program:";
@@ -40,28 +47,80 @@ const EVAL_PREFIX = "Cannot evaluate program:";
 // kernel RangeError messages, so a caller (and a test) can tell the boundary
 // guard's rejection apart from those. Mirrors createEvaluationContext's
 // "Invalid evaluation context:" framing for the sibling context-date guard.
-const formatStructuralError = (
-  errors: { path: string; message: string }[],
-): string =>
-  `${EVAL_PREFIX} it is not a well-formed normalized vestlang program.\n${errors
-    .map((e) => `  - ${e.path || "(root)"}: ${e.message}`)
-    .join("\n")}`;
+const formatStructuralError = (errors: AstError[]): string =>
+  `${EVAL_PREFIX} it is not a well-formed normalized vestlang program.\n${formatAstErrors(
+    errors,
+  )}`;
 
-// True when `start` (a vesting-start subtree) carries a gate that references the
-// VESTING_START anchor. A start node's own base is never VESTING_START — the
-// positional invariant, already checked structurally above — so the only place a
-// VESTING_START node can surface within a *start* subtree is as a BEFORE/AFTER
-// gate reference, which is exactly the circular case. `some` descends every edge
-// (the condition, its constraint, the reference base, and any nested gate on that
-// base), so a vestingStart reference can't hide at depth or inside a selector arm.
-const startGateRefsVestingStart = (start: VestingNodeExpr): boolean =>
-  some(start, (n) => n.type === "VESTING_START");
+// Visit each node on a start's anchor spine — the node itself, and each arm of a
+// selector — WITHOUT descending into gates. A node's own `base` is an anchor
+// position; its `condition` is gate territory, walked separately below.
+function forEachAnchorNode(
+  expr: VestingNodeExpr,
+  visit: (node: VestingNode) => void,
+): void {
+  switch (expr.type) {
+    case "NODE":
+      visit(expr);
+      return;
+    case "NODE_EARLIER_OF":
+    case "NODE_LATER_OF":
+      for (const arm of expr.items) forEachAnchorNode(arm, visit);
+      return;
+  }
+}
 
-// The shared tail of the circular-start-gate message, paralleling the parser's
-// #354 wording. Both variants name the circular dependency and the fix.
-const CIRCULAR_TAIL =
-  "references vestingStart, which is circular — the gate would constrain the " +
-  "very start it defines. Gate the start on a concrete date or a different event.";
+// The two distinct ways a start can illegally involve vestingStart, kept apart so
+// each gets its own diagnostic the way the parser does (#354) — reporting a
+// misplaced anchor as a circular gate would point the reader at the wrong fix:
+//   "anchor" — vestingStart sits in the start's own anchor position. A reserved
+//              system event can't anchor a start, and the structural collector
+//              does NOT catch this (it accepts any system-anchor base regardless
+//              of slot), so this guard is the one rejection a hand-built program
+//              of this shape hits.
+//   "gate"   — vestingStart appears inside the start's gate: circular, the gate
+//              constraining the very start it defines. `some` over the condition
+//              subtree finds it at any depth — a gate reference's own base, or a
+//              further nested gate.
+// Returns the first violation found (anchor takes precedence within a node, as in
+// the parser, which checks the anchor position first), or null.
+type StartViolation = "anchor" | "gate";
+
+function startVestingStartViolation(
+  start: VestingNodeExpr,
+): StartViolation | null {
+  let found: StartViolation | null = null;
+  forEachAnchorNode(start, (node) => {
+    if (found) return;
+    if (node.base.type === "VESTING_START") {
+      found = "anchor";
+    } else if (
+      node.condition &&
+      some(node.condition, (n) => n.type === "VESTING_START")
+    ) {
+      found = "gate";
+    }
+  });
+  return found;
+}
+
+// Throw the violation's message, localized to the offending start (`where` is
+// "statement[2]'s start" on the Program path, "the start" for a bare node). Both
+// parallel the parser's two #354 errors: the anchor message points at the
+// misplaced reserved anchor, the gate message at the circular dependency.
+function throwStartViolation(kind: StartViolation, where: string): never {
+  if (kind === "anchor") {
+    throw new Error(
+      `${EVAL_PREFIX} ${where} anchors on vestingStart, a reserved system event ` +
+        `that cannot anchor a start. Pick a different event name.`,
+    );
+  }
+  throw new Error(
+    `${EVAL_PREFIX} ${where} gate references vestingStart, which is circular — ` +
+      `the gate would constrain the very start it defines. Gate the start on a ` +
+      `concrete date or a different event.`,
+  );
+}
 
 // Pull each schedule's own start node out of a statement's expression. A
 // ScheduleExpr may be a selector over schedules, so a single statement can carry
@@ -99,11 +158,8 @@ export function assertEvaluableProgram(program: Program): void {
   // Structural pass cleared the AST as on-union, so walk is safe now.
   program.forEach((stmt, i) => {
     for (const start of startsOfStatement(stmt)) {
-      if (startGateRefsVestingStart(start)) {
-        throw new Error(
-          `${EVAL_PREFIX} statement[${i}]'s start gate ${CIRCULAR_TAIL}`,
-        );
-      }
+      const violation = startVestingStartViolation(start);
+      if (violation) throwStartViolation(violation, `statement[${i}]'s start`);
     }
   });
 }
@@ -115,7 +171,6 @@ export function assertEvaluableNode(expr: VestingNodeExpr): void {
   const errors = collectNodeExprErrors(expr);
   if (errors.length > 0) throw new Error(formatStructuralError(errors));
 
-  if (startGateRefsVestingStart(expr)) {
-    throw new Error(`${EVAL_PREFIX} the start gate ${CIRCULAR_TAIL}`);
-  }
+  const violation = startVestingStartViolation(expr);
+  if (violation) throwStartViolation(violation, "the start");
 }

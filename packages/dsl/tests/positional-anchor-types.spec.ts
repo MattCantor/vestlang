@@ -215,4 +215,36 @@ describe("gate-base positional rule (type level, #355)", () => {
     };
     expect(inAndArm.type).toBe("AND");
   });
+
+  it("the start forbiddance reaches a gate inside a SELECTOR arm", () => {
+    // The start is itself an EARLIER OF; one arm carries a gate whose reference
+    // base is vestingStart. Because `A` threads through the selector arms, that
+    // arm's gate inherits the start's forbiddance — the circular base can't hide
+    // behind the selector.
+    const inSelectorArmGate: VestingNodeExpr<"GRANT_DATE"> = {
+      type: "NODE_EARLIER_OF",
+      items: [
+        { type: "NODE", base: { type: "GRANT_DATE" }, offsets: [] },
+        {
+          type: "NODE",
+          base: { type: "DATE", value: "2025-01-01" },
+          offsets: [],
+          condition: {
+            type: "ATOM",
+            constraint: {
+              type: "AFTER",
+              base: {
+                type: "NODE",
+                // @ts-expect-error — vestingStart can't hide in a selector arm's gate on a start
+                base: { type: "VESTING_START" },
+                offsets: [],
+              },
+              strict: false,
+            },
+          },
+        },
+      ],
+    };
+    expect(inSelectorArmGate.type).toBe("NODE_EARLIER_OF");
+  });
 });
