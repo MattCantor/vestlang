@@ -90,10 +90,13 @@ export function evaluateVestingBase(
           };
     case "EVENT": {
       // The single firing read in the engine, and the one place mode decides what
-      // a named event "is". In `interchange` the verdict is firing-invariant, so
-      // every named event reads as not-fired here regardless of what the world
-      // recorded — that firing-blindness is the mode's job, not a blanked events
-      // map upstream. In `resolution`/`rehydrate` we read the real firing.
+      // a named event "is". The `mode === "interchange"` test narrows the context
+      // to the firing-blind DU arm, which carries no `events` field at all (#320) —
+      // so every named event reads as not-fired, and the `ctx.events` read in the
+      // other branch only typechecks *because* we've narrowed away interchange
+      // first. Firing-invariance is the type's guarantee now, not a convention a
+      // future read could forget. In `resolution`/`rehydrate` we read the real
+      // firing off the map the events-bearing arm carries.
       //
       // Read through `Object.hasOwn` so an id that collides with an
       // `Object.prototype` key (`constructor`, `toString`, …) can't read back the

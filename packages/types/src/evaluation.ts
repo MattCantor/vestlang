@@ -25,42 +25,65 @@ import type { Finding } from "./diagnostic.js";
 // `resolution` but "does not commit" with `interchange`.
 export type EvaluationMode = "resolution" | "interchange" | "rehydrate";
 
-// The context every engine operation needs to resolve a schedule's structure:
-// the grant anchor, fired events, share count, and the day-of-month rule. It
-// carries no observation time — structure resolution is the same whether you
-// ask "today" or "in a decade", so a `ResolutionContext` simply can't express
-// one.
-export interface ResolutionContext {
+// Fields every engine operation needs to resolve a schedule's structure,
+// independent of which mode it runs under: the grant anchor, share count, and the
+// day-of-month rule. The firing map (`events`) is *not* here — whether the built
+// context carries one is exactly what `mode` discriminates (below). No observation
+// time either: structure resolution is the same whether you ask "today" or "in a
+// decade", so a `ResolutionContext` simply can't express one.
+interface ResolutionContextBase {
   /** The grant-date system anchor. A runtime input, not a fired milestone, so it
    *  is its own field (mirroring VestingRuntime) rather than an `events` entry. */
   grantDate: OCTDate;
-  /** Genuine fired named events only (`ipo`, `milestone`) — no system anchors. */
-  events: Record<string, OCTDate | undefined>;
   grantQuantity: number;
   vesting_day_of_month: VestingDayOfMonth;
-  /** Which engine config this resolution runs under (see EvaluationMode). Stamped
-   *  by each entry point, never by a caller — that's why `*Input` Omits it. It
-   *  governs both the firing read (firing-blind in `interchange`) and whether a
-   *  partial EARLIER_OF commits (only in `resolution`). */
-  mode: EvaluationMode;
 }
 
+// The built context, discriminated on `mode` so firing-invariance is carried by
+// the type rather than by a runtime convention. The `interchange` arm omits
+// `events` outright — a firing read on it is a compile error (#320), not a
+// disciplined `mode === "interchange"` check the next read site might forget.
+// `resolution` and `rehydrate` both read real firings, so they carry the map.
+//
+// `mode` is stamped by each entry point, never by a caller — that's why `*Input`
+// drops it (and why the input type is defined independently below, not Omitted off
+// this union). It governs both the firing read (firing-blind in `interchange`) and
+// whether a partial EARLIER_OF commits (only in `resolution`); see EvaluationMode.
+export type ResolutionContext =
+  | (ResolutionContextBase & {
+      mode: "interchange";
+    })
+  | (ResolutionContextBase & {
+      mode: "resolution" | "rehydrate";
+      /** Genuine fired named events only (`ipo`, `milestone`) — no system anchors. */
+      events: Record<string, OCTDate | undefined>;
+    });
+
 // A point-in-time query adds the observation date on top of the structure
-// context. `AsOfContext` IS-A `ResolutionContext` (the extra field only widens
-// it), so an as-of entry can hand its context straight down to the structure
-// evaluators that ignore `asOf` — that assignability is the point of the split.
-export type AsOfContext = ResolutionContext & {
+// context. As-of only ever runs in `resolution` mode (asof.ts), so it's pinned to
+// the events-bearing arm — NOT `ResolutionContext & { asOf }`, which would
+// distribute over the union and re-introduce an `interchange + asOf` arm. The
+// firings-bearing arm is still a `ResolutionContext`, so an as-of entry can hand
+// its context straight down to the structure evaluators that ignore `asOf`.
+export type AsOfContext = Extract<
+  ResolutionContext,
+  { mode: "resolution" | "rehydrate" }
+> & {
   asOf: OCTDate;
 };
 
 // Callers supply everything but the day-of-month rule (the evaluator defaults it)
 // and the `mode` (each entry point stamps its own — a caller can't override which
-// engine config a resolution runs under, so `mode` is Omitted here entirely).
-export type ResolutionContextInput = Omit<
-  ResolutionContext,
-  "vesting_day_of_month" | "mode"
-> &
-  Partial<Pick<ResolutionContext, "vesting_day_of_month">>;
+// engine config a resolution runs under). Defined independently of the built
+// `ResolutionContext` DU rather than derived from it: the input is uniform — it
+// always carries `events` regardless of which mode will later be stamped — so it
+// can't be the `mode`-less projection of a union whose arms disagree on `events`.
+export interface ResolutionContextInput {
+  grantDate: OCTDate;
+  events: Record<string, OCTDate | undefined>;
+  grantQuantity: number;
+  vesting_day_of_month?: VestingDayOfMonth;
+}
 
 export type AsOfContextInput = ResolutionContextInput & {
   asOf: OCTDate;

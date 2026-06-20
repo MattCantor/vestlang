@@ -5,12 +5,15 @@
 // canonical template — `buildTemplate`. The only reason its usual output depends
 // on fired events is that the statements are resolved against `ctx.events` first.
 // So to get the firing-invariant answer we resolve in `interchange` mode: the
-// single EVENT read (in evaluate/vestingNode/vestingBase.ts) returns "not fired"
-// regardless of what the world recorded, an event-anchored start rides across as a
+// built context for that mode carries no `events` field at all (#320), so the
+// single EVENT read (in evaluate/vestingNode/vestingBase.ts) has nothing to read
+// and returns "not fired" — an event-anchored start rides across as a
 // deferred/synthetic event, and a future calendar date still resolves on its own.
 // An EARLIER_OF never commits here either (the commit is gated on `resolution`
 // mode), so a settled date arm doesn't collapse the gate. Re-run it after any
 // event fires and you get the same verdict — which is what makes it safe to store.
+// Firing-invariance is enforced by the context type now, not just by the mode
+// check: a firing read on an interchange-typed context is a compile error.
 
 import type {
   ResolutionContextInput,
@@ -192,9 +195,11 @@ export const resolveInterchange = (
   program: Program,
   ctxInput: ResolutionContextInput,
 ): InterchangeVerdict => {
-  // `interchange` mode makes the EVENT read firing-blind at the source (every
-  // named event reads "not fired"), so there is no longer a blanked `events` map
-  // to maintain here — firing-blindness is the mode's job, not a context surgery.
+  // Building under `interchange` mode yields a context with no `events` field at
+  // all (the builder omits it on this branch, #320), so the EVENT read is
+  // firing-blind by type — every named event reads "not fired", and a firing read
+  // anywhere on this context wouldn't compile. The input still carries `events`
+  // (it's validated either way); the build is just where the map stops here.
   const ctx = createEvaluationContext(ctxInput, "interchange");
   const build = buildTemplate(resolveStatements(program, ctx), ctx);
   return mapTemplateBuild(build);
