@@ -100,7 +100,9 @@ export function assertEvaluableProgram(program: Program): void {
   program.forEach((stmt, i) => {
     for (const start of startsOfStatement(stmt)) {
       if (startGateRefsVestingStart(start)) {
-        throw new Error(`${EVAL_PREFIX} statement[${i}]'s start gate ${CIRCULAR_TAIL}`);
+        throw new Error(
+          `${EVAL_PREFIX} statement[${i}]'s start gate ${CIRCULAR_TAIL}`,
+        );
       }
     }
   });

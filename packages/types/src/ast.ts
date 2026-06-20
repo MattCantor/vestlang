@@ -97,15 +97,17 @@ export type VestingBaseSystem = VestingBaseGrantDate | VestingBaseVestingStart;
 export type SystemAnchorTag = VestingBaseSystem["type"];
 
 // The system base(s) a node on anchor(s) `A` may carry. A *distributive*
-// conditional over the naked `A` — so it maps each tag in the union to its base
-// and reunites them (`"GRANT_DATE" | "VESTING_START"` → both bases). This is
-// `Extract<VestingBaseSystem, { type: A }>` by another spelling, chosen because
-// the distributive form is one TS measures *covariantly* in `A`: `Extract`'s
-// matcher position makes `A` read as invariant, and once `VestingNode` recurses
-// through its own gate (`condition`) that invariance would block the narrow→wide
-// assignment every construction site relies on (a `VestingNode<"GRANT_DATE">`
-// start flowing into a wide `VestingNode`).
-export type SystemBaseFor<A extends SystemAnchorTag> = A extends "GRANT_DATE"
+// conditional over the naked `A`, mapping each tag in the union to its base and
+// reuniting them (`"GRANT_DATE" | "VESTING_START"` → both bases). Same set as
+// `Extract<VestingBaseSystem, { type: A }>` would give, but the distributive form
+// keeps `A` covariantly-measurable: once `VestingNode` also threads `A` through
+// its gate (`condition`, for the #355 rule), `Extract`'s invariant matcher would
+// drive the whole node to invariant and block the narrow→wide assignment the
+// normalizer's construction sites depend on. The positional rule itself is still
+// enforced at every *literal* construction site — a `VESTING_START` base in a
+// start slot, or a `VESTING_START` gate base on a start, is a type error there,
+// which is the path every front-end and real builder takes.
+type SystemBaseFor<A extends SystemAnchorTag> = A extends "GRANT_DATE"
   ? VestingBaseGrantDate
   : A extends "VESTING_START"
     ? VestingBaseVestingStart

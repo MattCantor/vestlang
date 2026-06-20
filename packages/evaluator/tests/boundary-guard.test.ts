@@ -37,14 +37,13 @@ const asOfCtx = () => ({ ...ctx(), asOf: "2026-06-01" });
 
 // A minimal valid one-statement program we then mutate to inject a bad value,
 // so each test changes exactly the field under examination.
-const validProgram = (): Program => prog("1000 VEST OVER 12 months EVERY 1 month");
+const validProgram = (): Program =>
+  prog("1000 VEST OVER 12 months EVERY 1 month");
 
-// Reach into the (typed-but-mutable for the test) AST and overwrite the start's
-// base with an impossible DATE literal. `as` is the point of the test: a JS caller
-// can hand the evaluator a value the types forbid, and the runtime must still catch
-// it. Returns a fresh program each call.
-// Overwrite a DATE base's value in place. Throws if the navigation misses, so a
-// test can't silently pass on an un-mutated program.
+// Overwrite a DATE base's value in place with an impossible literal — the very
+// thing a JS caller can hand the evaluator that the types forbid, and the runtime
+// must still catch. Throws if the navigation misses a DATE, so a test can't
+// silently pass on an un-mutated (still-valid) program.
 const setDateValue = (base: unknown, bad: string): void => {
   const b = base as { type?: string; value?: string };
   if (b.type !== "DATE") throw new Error(`expected a DATE base, got ${b.type}`);
@@ -91,7 +90,9 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
     if (sched.type !== "SCHEDULE" || sched.periodicity.cliff?.type !== "NODE")
       throw new Error("fixture drift: expected a DATE cliff node");
     setDateValue(sched.periodicity.cliff.base, IMPOSSIBLE);
-    expect(() => evaluateProgram(p, ctx())).toThrow(/not a valid calendar date/);
+    expect(() => evaluateProgram(p, ctx())).toThrow(
+      /not a valid calendar date/,
+    );
   });
 
   it("rejects an impossible DATE in a gate-reference base (… AFTER 2025-02-31)", () => {
@@ -104,7 +105,9 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
       throw new Error("fixture drift: expected a gated DATE start");
     // constraint.base is the gate's reference NODE; its .base is the VestingBase.
     setDateValue(start.condition.constraint.base.base, IMPOSSIBLE);
-    expect(() => evaluateProgram(p, ctx())).toThrow(/not a valid calendar date/);
+    expect(() => evaluateProgram(p, ctx())).toThrow(
+      /not a valid calendar date/,
+    );
   });
 
   it("rejects an impossible DATE in a selector arm (EARLIER OF (…, 2025-02-31))", () => {
@@ -116,7 +119,9 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
     if (start?.type !== "NODE_EARLIER_OF" || start.items[1].type !== "NODE")
       throw new Error("fixture drift: expected an EARLIER OF start");
     setDateValue(start.items[1].base, IMPOSSIBLE);
-    expect(() => evaluateProgram(p, ctx())).toThrow(/not a valid calendar date/);
+    expect(() => evaluateProgram(p, ctx())).toThrow(
+      /not a valid calendar date/,
+    );
   });
 
   // AC3: the guard fires on every public AST entry.
@@ -140,7 +145,8 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
 
   it("fires on resolveVestingStart (node-level variant)", () => {
     const p = programWithBadStartDate(IMPOSSIBLE);
-    const start = (p[0].expr as { vesting_start: VestingNodeExpr }).vesting_start;
+    const start = (p[0].expr as { vesting_start: VestingNodeExpr })
+      .vesting_start;
     expect(() => resolveVestingStart(start, ctx())).toThrow(
       /Cannot evaluate program:/,
     );
