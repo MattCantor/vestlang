@@ -196,9 +196,27 @@ export const unresolvedInstallments = (
       const { shape, blockers } = r.cliff;
       switch (shape.kind) {
         case "symbolic":
-          // No placeable grid — the cliff is fully symbolic, so the tranches are
-          // start-relative.
-          return makeStartPlusSchedule(amounts, type, length, blockers);
+          // Unreachable by construction. A "symbolic" cliff (one with no
+          // placeable grid) is only ever produced for a start that has no date
+          // yet — and those starts return far above this point, through the
+          // pending-start arms. By the time we get here the start has a concrete
+          // date, and a dated start always lowers its cliff to a "dated" or
+          // "dated-floor" shape, never "symbolic". So this pairing — dated start,
+          // symbolic cliff — can't be built from any real schedule.
+          //
+          // We throw rather than render because the inputs here are already
+          // folded onto the grant date, and the symbolic builder would re-derive
+          // each tranche's step from its array position. Once a leading tranche
+          // has been folded away, those positions no longer match the true
+          // occurrence numbers, so it would emit silently wrong step counts.
+          // Failing loudly turns that latent drift into an obvious upstream bug.
+          throw new Error(
+            "unresolved renderer: a dated start produced a symbolic cliff shape, " +
+              "which is impossible by construction (symbolic cliffs only pair with " +
+              "pending starts, handled earlier). An upstream change has broken the " +
+              "start/cliff-shape pairing; fix that rather than rendering here, " +
+              "since the folded amounts would drift the start-relative step numbers.",
+          );
         case "dated":
           return makeUnresolvedCliffSchedule(dates, amounts, blockers);
         case "dated-floor": {
