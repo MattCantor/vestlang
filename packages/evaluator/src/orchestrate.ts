@@ -9,6 +9,7 @@ import {
   resolveInterchange,
   assertProgramInstallmentCap,
 } from "./resolve/index.js";
+import { assertEvaluableProgram } from "./guard.js";
 import { assemble } from "./assemble.js";
 
 /**
@@ -21,6 +22,11 @@ export function evaluateStatement(
   stmt: Statement,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule {
+  // The one structural / circular-gate guard for this path: resolveToCore enforces
+  // only the installment cap now, so the hand-built program is vetted here, once,
+  // before either assemble arm reads it (resolveInterchange carries no guard of its
+  // own, so this can't lean on argument-evaluation order).
+  assertEvaluableProgram([stmt]);
   return assemble(
     resolveToCore([stmt], ctx_input),
     resolveInterchange([stmt], ctx_input),
@@ -63,6 +69,7 @@ export function evaluateClauseGroups(
   program: Program,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule[] {
+  assertEvaluableProgram(program);
   assertProgramInstallmentCap(program);
   return chainGroups(program).map((chain) =>
     assemble(
@@ -80,6 +87,10 @@ export function evaluateProgram(
   stmts: Program,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule {
+  // Vet the (possibly hand-built) program once at the entry — resolveToCore caps
+  // but no longer repeats this structural / circular-gate guard (see
+  // evaluateStatement).
+  assertEvaluableProgram(stmts);
   return assemble(
     resolveToCore(stmts, ctx_input),
     resolveInterchange(stmts, ctx_input),

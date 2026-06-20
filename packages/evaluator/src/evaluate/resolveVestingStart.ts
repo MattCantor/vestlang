@@ -19,6 +19,7 @@ import type {
   VestingNodeExpr,
 } from "@vestlang/types";
 import { createEvaluationContext } from "../utils.js";
+import { assertEvaluableNode } from "../guard.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
 import { isPickedCommitted, pickedDate, type PickReturn } from "./utils.js";
 import { collectAbsences } from "./absences.js";
@@ -47,6 +48,10 @@ export function resolveVestingStart(
   expr: VestingNodeExpr,
   ctxInput: ResolutionContextInput,
 ): ResolvedAnchor {
+  // This path takes a bare node (no Program, no installment cap), so it carries
+  // its own structural + circular-start-gate guard (#335 / #355). The node is
+  // treated as a start anchor, so a vestingStart gate reference on it is circular.
+  assertEvaluableNode(expr);
   const ctx = createEvaluationContext(ctxInput, "resolution");
   const res = evaluateVestingNodeExpr(expr, ctx);
 

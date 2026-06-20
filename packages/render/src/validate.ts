@@ -35,7 +35,11 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 
-interface AstError {
+// One structured complaint about a node somewhere in the tree: the dotted/indexed
+// `path` to it, and what's wrong. Exported so a caller outside render (the
+// evaluator boundary guard) can collect the same errors and voice its own message
+// over them, instead of re-walking the AST with a second copy of these rules.
+export interface AstError {
   path: string;
   message: string;
 }
@@ -355,8 +359,34 @@ function validateStatement(
   validateScheduleExpr(s.expr, `${path}.expr`, errors);
 }
 
-const formatErrors = (errors: AstError[]): string =>
+export const formatAstErrors = (errors: AstError[]): string =>
   errors.map((e) => `  - ${e.path || "(root)"}: ${e.message}`).join("\n");
+
+// Collect every structural / value complaint about a whole normalized program or
+// a single statement, without throwing. This is the layer-neutral core: it knows
+// the AST's shape and the grammar's value rules, but voices no message of its own
+// — the caller decides what to do with a non-empty result. render throws its
+// "Cannot stringify…" error over it (see assertPrintable); the evaluator boundary
+// throws an eval-voiced one. Both share this single traversal so the two layers
+// can't drift on what "well-formed" means.
+export function collectAstErrors(node: Statement | Program): AstError[] {
+  const errors: AstError[] = [];
+  if (Array.isArray(node)) {
+    node.forEach((s, i) => validateStatement(s, `[${i}]`, errors));
+  } else {
+    validateStatement(node, "", errors);
+  }
+  return errors;
+}
+
+// The node-level entry, for a caller holding a bare vesting-node expression rather
+// than a statement (the evaluator's `resolveVestingStart` path takes one directly).
+// Same value rules, scoped to one node subtree.
+export function collectNodeExprErrors(node: VestingNodeExpr): AstError[] {
+  const errors: AstError[] = [];
+  validateVestingNodeExpr(node, "", errors);
+  return errors;
+}
 
 /**
  * Throw a single, readable Error when `node` is not a printable normalized AST.
@@ -364,15 +394,10 @@ const formatErrors = (errors: AstError[]): string =>
  * ever sees a node whose values the grammar would accept back.
  */
 export function assertPrintable(node: Statement | Program): void {
-  const errors: AstError[] = [];
-  if (Array.isArray(node)) {
-    node.forEach((s, i) => validateStatement(s, `[${i}]`, errors));
-  } else {
-    validateStatement(node, "", errors);
-  }
+  const errors = collectAstErrors(node);
   if (errors.length > 0) {
     throw new Error(
-      `Cannot stringify AST: it is not a well-formed normalized vestlang program.\n${formatErrors(
+      `Cannot stringify AST: it is not a well-formed normalized vestlang program.\n${formatAstErrors(
         errors,
       )}`,
     );

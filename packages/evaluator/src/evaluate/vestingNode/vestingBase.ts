@@ -40,8 +40,9 @@ export const isVestingStartPlaceholder = (b: Blocker): boolean =>
 // decides whether a MONTHS offset snaps to the day-of-month policy: only cadence
 // snaps, and only an anchor can be cadence. A gate is always exact, even when it
 // references the same `vestingStart` anchor a cliff would snap on (the #351
-// construct) — so `base.type` alone can't make the call, and the caller threads
-// its role in. See applyOffsets for the rule.
+// construct — a vestingStart gate reference is legal only on a cliff; on a start
+// it is circular and rejected earlier) — so `base.type` alone can't make the
+// call, and the caller threads its role in. See applyOffsets for the rule.
 export type VestingBaseRole = "anchor" | "gate";
 
 export function evaluateVestingBase(

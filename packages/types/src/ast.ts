@@ -96,6 +96,23 @@ export type VestingBaseSystem = VestingBaseGrantDate | VestingBaseVestingStart;
 /** The tag of one of the two system anchors: "GRANT_DATE" | "VESTING_START". */
 export type SystemAnchorTag = VestingBaseSystem["type"];
 
+// The system base(s) a node on anchor(s) `A` may carry. A *distributive*
+// conditional over the naked `A`, mapping each tag in the union to its base and
+// reuniting them (`"GRANT_DATE" | "VESTING_START"` → both bases). Same set as
+// `Extract<VestingBaseSystem, { type: A }>` would give, but the distributive form
+// keeps `A` covariantly-measurable: once `VestingNode` also threads `A` through
+// its gate (`condition`, for the #355 rule), `Extract`'s invariant matcher would
+// drive the whole node to invariant and block the narrow→wide assignment the
+// normalizer's construction sites depend on. The positional rule itself is still
+// enforced at every *literal* construction site — a `VESTING_START` base in a
+// start slot, or a `VESTING_START` gate base on a start, is a type error there,
+// which is the path every front-end and real builder takes.
+type SystemBaseFor<A extends SystemAnchorTag> = A extends "GRANT_DATE"
+  ? VestingBaseGrantDate
+  : A extends "VESTING_START"
+    ? VestingBaseVestingStart
+    : never;
+
 /* ------------------------
  * Vesting Node
  * ------------------------ */
@@ -103,31 +120,30 @@ export type SystemAnchorTag = VestingBaseSystem["type"];
 // A node's structural slot decides which system anchor it may carry: a start
 // anchors on GRANT_DATE, a cliff on VESTING_START, never the other way round
 // (the positional invariant). The `A` parameter names the *permitted* system
-// anchor, so the base excludes the other one — `Extract` keeps only the matching
-// system base, alongside the always-legal DATE and EVENT. `A` defaults to both
-// tags (the wide union), so an unparameterized `VestingNode` still means "any
-// anchor" and a narrowed node assigns into a wide one (its base is a subset).
+// anchor, so the base excludes the other one — `SystemBaseFor` keeps only the
+// matching system base, alongside the always-legal DATE and EVENT. `A` defaults
+// to both tags (the wide union), so an unparameterized `VestingNode` still means
+// "any anchor" and a narrowed node assigns into a wide one (its base is a subset).
 // DATE/EVENT bases are anchor-agnostic, so a DATE-anchored node fits either slot.
 //
 // primitives/types/vestlang/VestingNode.schema.json
 export interface VestingNode<A extends SystemAnchorTag = SystemAnchorTag> {
   type: "NODE";
-  base:
-    | VestingBaseDate
-    | VestingBaseEvent
-    | Extract<VestingBaseSystem, { type: A }>;
+  base: VestingBaseDate | VestingBaseEvent | SystemBaseFor<A>;
   offsets: Offsets;
-  // Deliberately NOT parameterized by `A`: a BEFORE/AFTER reference anchor (the
-  // node inside this condition's Constraint) is positionally unrelated to this
-  // node's own slot and may be any anchor. Threading `A` here would wrongly
-  // forbid a grant-date reference on a cliff's constraint — e.g. the enforced
-  // `CLIFF EVENT x AFTER grantDate + 1 year` (#113): the cliff slot is
-  // VESTING_START, but the gate legitimately references GRANT_DATE.
-  condition?: Condition;
+  // A node's gate inherits its slot: a start's gate (`A = "GRANT_DATE"`) must not
+  // reference VESTING_START — that would be circular, the gate constraining the
+  // very start it defines — while a cliff's gate (`A = "VESTING_START"`) may. The
+  // condition carries the same `A`, and the gate-base rule below widens it to
+  // `GRANT_DATE | A` so a grant-date reference stays legal in either slot (the
+  // enforced `CLIFF … AFTER grantDate + 1 year`, #113). See Constraint.
+  condition?: Condition<A>;
 }
 
-export type ConstrainedVestingNode = VestingNode & {
-  condition: Condition;
+export type ConstrainedVestingNode<
+  A extends SystemAnchorTag = SystemAnchorTag,
+> = VestingNode<A> & {
+  condition: Condition<A>;
 };
 
 export type LaterOfVestingNode<A extends SystemAnchorTag = SystemAnchorTag> =
@@ -160,24 +176,34 @@ interface BaseCondition {
   mixedInfix?: SourceLocation;
 }
 
-export interface AtomCondition extends BaseCondition {
+// `A` is the *enclosing node's* positional anchor (start = "GRANT_DATE", cliff =
+// "VESTING_START"), threaded down so the gate base can be held to its slot. It
+// defaults wide, so an unparameterized `Condition` still means "any anchor" and
+// internal code that doesn't narrow is unaffected.
+export interface AtomCondition<A extends SystemAnchorTag = SystemAnchorTag>
+  extends BaseCondition {
   type: "ATOM";
-  constraint: Constraint;
+  constraint: Constraint<A>;
 }
 
-export interface AndCondition extends BaseCondition {
+export interface AndCondition<A extends SystemAnchorTag = SystemAnchorTag>
+  extends BaseCondition {
   type: "AND";
-  items: TwoOrMore<Condition>;
+  items: TwoOrMore<Condition<A>>;
 }
 
-export interface OrCondition extends BaseCondition {
+export interface OrCondition<A extends SystemAnchorTag = SystemAnchorTag>
+  extends BaseCondition {
   type: "OR";
-  items: TwoOrMore<Condition>;
+  items: TwoOrMore<Condition<A>>;
 }
 
-export type Condition = AtomCondition | AndCondition | OrCondition;
+export type Condition<A extends SystemAnchorTag = SystemAnchorTag> =
+  | AtomCondition<A>
+  | AndCondition<A>
+  | OrCondition<A>;
 
-export interface Constraint {
+export interface Constraint<A extends SystemAnchorTag = SystemAnchorTag> {
   type: ConstraintTag;
   // The reference anchor is a single VestingNode, never a VestingNodeExpr. A
   // BEFORE/AFTER relation needs one comparison point, so selectors
@@ -185,7 +211,16 @@ export interface Constraint {
   // here. Keeping it a plain node also bounds the evaluator: a node carries a
   // condition and a condition references a node, so admitting a selector here
   // would deepen that recursion.
-  base: VestingNode;
+  //
+  // The gate base may anchor on `GRANT_DATE | A` (plus the always-legal DATE /
+  // EVENT carried by VestingNode). Two slots fall out of that:
+  //   - start (A = "GRANT_DATE") → "GRANT_DATE", forbidding VESTING_START — the
+  //     circular case (#354), where the gate would constrain its own start.
+  //   - cliff (A = "VESTING_START") → "GRANT_DATE" | "VESTING_START", both legal:
+  //     a grant-date reference (#113) and the vesting-start reference (#351).
+  // The base node carries `A = "GRANT_DATE" | A` itself, so its own nested gate
+  // inherits the same permission and the forbiddance holds at every depth.
+  base: VestingNode<"GRANT_DATE" | A>;
   strict: boolean;
 }
 

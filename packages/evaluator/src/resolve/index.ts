@@ -50,7 +50,10 @@ export const resolveToCore = (
   program: Program,
   ctxInput: ResolutionContextInput,
 ): ResolveResult => {
-  // Reject an oversized program before resolving anything (see above).
+  // Reject an oversized program before resolving anything (see above): the cap has
+  // to run before resolution here, and it also backs this function's own direct
+  // callers (the resolve tests). The structural / circular-start-gate guard
+  // (#335 / #355) is enforced once at each public entry, so it isn't repeated here.
   assertProgramInstallmentCap(program);
 
   // The closed-world, here-and-now reading: read real firings AND let a partial

@@ -37,10 +37,11 @@ const dates = (installments: Installment[]) =>
 const allResolved = (installments: Installment[]) =>
   installments.every((i) => i.state === "RESOLVED");
 
-// ---- AC4: the gate boundary is exact (the #351 construct). A
+// ---- AC4: the gate boundary is exact (the #351 construct). A cliff's
 // `vesting_start + 6 months` gate is a comparison boundary, not a vesting date,
 // so it never snaps — even though it references the same `vesting_start` anchor a
-// cadence cliff would snap on. The grid still snaps, so the amounts legitimately
+// cadence cliff would snap on. (A vestingStart gate is legal only on a cliff; on a
+// start it would be circular.) The grid still snaps, so the amounts legitimately
 // differ by policy; the gate's verdict does not.
 
 describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", () => {

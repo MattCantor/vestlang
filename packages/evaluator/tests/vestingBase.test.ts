@@ -214,8 +214,9 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   });
 
   // Same vestingStart anchor, but referenced as a GATE: exact, not snapped (the
-  // #351 construct — `… AFTER vesting_start + 1 month`). This is the trap the
-  // role discriminator exists to avoid: keying on base.type alone would snap it.
+  // #351 construct — `CLIFF … AFTER vesting_start + 1 month`, a vestingStart gate
+  // only ever legal on a cliff). This is the trap the role discriminator exists to
+  // avoid: keying on base.type alone would snap it.
   it("a vestingStart GATE base + 1 month is exact (the #351 case): 2025-02-10", () => {
     const ctx: CliffEvaluationContext = {
       ...baseCtx({ vesting_day_of_month: "15" }),

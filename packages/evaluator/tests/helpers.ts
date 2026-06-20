@@ -138,8 +138,8 @@ export const makeConstrainedNodeWithAtomCondition = (
 // for an event-anchored cliff gated against, say, grantDate + 12 months. Carries
 // the base's exact type the way makeSingletonNode does, so an EVENT-anchored
 // gated node still slots into a cliff (`VestingNodeExpr<"VESTING_START">`). The
-// constraint's reference node stays a plain VestingNode — Constraint.base is
-// positionally unparameterized, so a grant-date reference is legal there.
+// constraint's reference node is a plain (wide) VestingNode — a grant-date
+// reference is legal on either slot's gate (`GRANT_DATE | A`, #113).
 export const makeGatedNode = <B extends VestingBase>(
   base: B,
   constraintTag: ConstraintTag,

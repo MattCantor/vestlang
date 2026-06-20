@@ -149,30 +149,22 @@ function normalizeNode(
 // rejects the forbidden anchor — VESTING_START in a FROM, GRANT_DATE in a CLIFF —
 // at any selector depth (#110), and normalizeNode mints the correct system anchor
 // for bare durations while preserving the parsed base otherwise. So the result
-// carries only DATE / EVENT / the slot's own anchor; the cast asserts what the
-// types can't derive from the runtime guard. This is the single checked point per
-// slot — everything downstream is structurally unable to re-introduce the mistake.
+// carries only DATE / EVENT / the slot's own anchor; pinning the return type here
+// is the single annotated point per slot — everything downstream is structurally
+// unable to re-introduce the mistake.
 
 function normalizeVestingStart(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr<"GRANT_DATE"> {
-  return normalizeNode(
-    c,
-    "GRANT_DATE",
-    report,
-  ) as VestingNodeExpr<"GRANT_DATE">;
+  return normalizeNode(c, "GRANT_DATE", report);
 }
 
 function normalizeCliff(
   c: Duration | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr<"VESTING_START"> {
-  return normalizeNode(
-    c,
-    "VESTING_START",
-    report,
-  ) as VestingNodeExpr<"VESTING_START">;
+  return normalizeNode(c, "VESTING_START", report);
 }
 
 /**
