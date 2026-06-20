@@ -271,7 +271,9 @@ export const lowerCliff = (
   // reporting it as RESOLVED would over-vest — it stays UNRESOLVED below. An
   // EARLIER_OF commit is the mirror: its branch is a lower bound (the latest the
   // cliff could land), so committing to it is the safe floor. The commit is silent
-  // here — a resolved cliff has no absence-note slot (#325) — but the floor and
+  // here by design: a cliff is date/duration-only, with no slot to hold an event,
+  // so an EARLIER_OF *cliff* carries no absence disclosure (the #251 AC6 carve-out).
+  // The start-anchor disclosure (#325) does not extend to the cliff; the floor and
   // projection are correct.
   const cliffDate: OCTDate | undefined = pickedDate(res);
 

@@ -23,10 +23,37 @@ const ctxInput = (
 });
 
 describe("resolveVestingStart", () => {
-  it("resolves a flat DATE to itself", () => {
+  it("resolves a flat DATE to itself, with an empty assumptions list", () => {
     const expr = makeSingletonNode(makeVestingBaseDate("2024-03-15"));
     const res = resolveVestingStart(expr, ctxInput());
-    expect(res).toEqual({ resolved: true, date: "2024-03-15" });
+    // The resolved arm always carries `assumptions`; a fully-resolved anchor has
+    // nothing to disclose, so it's `[]` (not absent).
+    expect(res).toEqual({
+      resolved: true,
+      date: "2024-03-15",
+      assumptions: [],
+    });
+  });
+
+  // #325 — a committed EARLIER OF (date arm resolved, event arm unfired) settles to
+  // its floor AND surfaces the assumption it leans on: `ipo` stayed absent through
+  // the floor date. The assumption is the bare { eventId, through } pair; the
+  // pipeline layer adds the rendered message.
+  it("surfaces the absence assumption on a committed EARLIER OF", () => {
+    const expr: VestingNodeExpr = {
+      type: "NODE_EARLIER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseDate("2024-06-01")),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+      ],
+    };
+    // ipo intentionally absent from the events map.
+    const res = resolveVestingStart(expr, ctxInput());
+    expect(res).toEqual({
+      resolved: true,
+      date: "2024-06-01",
+      assumptions: [{ eventId: "ipo", through: "2024-06-01" }],
+    });
   });
 
   // A date strictly before grant_date stays put — the allocation path's grant-date

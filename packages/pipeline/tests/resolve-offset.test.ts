@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { runResolveOffset } from "../src/resolve-offset.js";
+import { runEvaluate } from "../src/run.js";
 
 // runResolveOffset owns the `VEST FROM <expr>` resolution that the MCP
 // resolve_offset tool calls. It reads the zero-length schedule's structural
@@ -221,13 +222,82 @@ describe("runResolveOffset", () => {
   // #251 AC#11 — an EARLIER OF whose date arm is resolved and event arm is unfired
   // now COMMITS to the date floor (the latest the start could be), instead of
   // returning offset-unresolved. resolveVestingStart runs in resolution mode, so
-  // the commit flows straight through this entry — no edit to resolve-offset.ts.
-  it("EARLIER OF (DATE d, EVENT e), e unfired → resolves to d (was offset-unresolved)", () => {
+  // the commit flows straight through this entry.
+  //
+  // #325 — and the commit no longer hides the assumption it leans on: the reply
+  // discloses that the date floor assumes `ipo` stayed absent through it, as an
+  // `absenceAssumptions` entry carrying the rendered message (the same wording the
+  // full `evaluate` tool emits).
+  it("EARLIER OF (DATE d, EVENT e), e unfired → resolves to d with the absence disclosure", () => {
     const r = runResolveOffset({
       expr: "EARLIER OF (DATE 2024-06-01, EVENT ipo)",
       grant_date: "2024-01-01",
       // ipo intentionally unfired.
     });
-    expect(r).toEqual({ ok: true, date: "2024-06-01" });
+    expect(r).toEqual({
+      ok: true,
+      date: "2024-06-01",
+      absenceAssumptions: [
+        {
+          eventId: "ipo",
+          through: "2024-06-01",
+          message: "ipo did not occur on/before 2024-06-01",
+        },
+      ],
+    });
+  });
+
+  // #325 — AC#5. An all-event EARLIER OF with nothing fired can't commit (no date
+  // arm to fall to), so it stays offset-unresolved — and crucially carries no
+  // absenceAssumptions: there's no commit, so there's no assumption to disclose.
+  it("EARLIER OF (EVENT a, EVENT b), both unfired → offset-unresolved, no disclosure", () => {
+    const r = runResolveOffset({
+      expr: "EARLIER OF (EVENT a, EVENT b)",
+      grant_date: "2025-01-01",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("offset-unresolved");
+    }
+    // The failure arm has no success payload, so there's nowhere for a disclosure
+    // to ride — assert it explicitly so a future regression can't sneak one on.
+    expect(r).not.toHaveProperty("absenceAssumptions");
+  });
+
+  // #325 — AC#6. Cross-tool consistency: the bare { eventId, through } pairs that
+  // resolve_offset surfaces for the committed EARLIER OF must match what the full
+  // `evaluate` path reports for the SAME anchor (driven through a real schedule).
+  // This asserts the two tools speak one disclosure vocabulary on the top-level
+  // case; it is NOT a completeness guard for nested commits (#363) — a nested-commit
+  // assertion would pass vacuously here, since both paths report an empty list there.
+  it("the disclosure matches the full evaluate path on the same anchor", () => {
+    const anchor = "EARLIER OF (DATE 2024-06-01, EVENT ipo)";
+
+    const offset = runResolveOffset({
+      expr: anchor,
+      grant_date: "2024-01-01",
+      // ipo intentionally unfired.
+    });
+    expect(offset.ok).toBe(true);
+
+    const evaluated = runEvaluate(
+      `VEST FROM ${anchor} OVER 12 months EVERY 1 month`,
+      { grant_date: "2024-01-01", grant_quantity: 1200 },
+    );
+    expect(evaluated.ok).toBe(true);
+
+    if (offset.ok && evaluated.ok) {
+      // Strip the rendered message down to the structural pair on both sides, then
+      // compare — the message wording is the same formatter, but the pairs are the
+      // load-bearing claim.
+      const offsetPairs = (offset.absenceAssumptions ?? []).map(
+        ({ eventId, through }) => ({ eventId, through }),
+      );
+      const evaluatePairs = evaluated.view.absenceAssumptions.map(
+        ({ eventId, through }) => ({ eventId, through }),
+      );
+      expect(offsetPairs).toEqual([{ eventId: "ipo", through: "2024-06-01" }]);
+      expect(offsetPairs).toEqual(evaluatePairs);
+    }
   });
 });

@@ -12,57 +12,15 @@
 //                   "impossible".
 
 import type {
-  AbsenceAssumption,
-  Blocker,
   EvaluatedSchedule,
   EvaluatedScheduleVerdict,
   InterchangeVerdict,
-  OCTDate,
 } from "@vestlang/types";
-import { compileToInstallments, gt } from "@vestlang/core";
+import { compileToInstallments } from "@vestlang/core";
 import { makeResolvedInstallment } from "./evaluate/makeTranches.js";
-import {
-  foldBlocker,
-  partitionResolutionBlockers,
-} from "./evaluate/blockerTree.js";
-import { isVestingStartPlaceholder } from "./evaluate/vestingNode/vestingBase.js";
+import { partitionResolutionBlockers } from "./evaluate/blockerTree.js";
+import { collectAbsences } from "./evaluate/absences.js";
 import type { ResolveResult } from "./resolve/types.js";
-
-/**
- * The non-occurrences this resolution is leaning on. Closed-world resolution reads
- * "no firing on record" as "hasn't happened" — so reading a schedule as, say,
- * vested can quietly depend on some event still being absent. We surface each such
- * dependency from the blockers the resolution left behind: every "still waiting on
- * event X" blocker that got measured against a known date carries that date, and
- * the date is exactly how far we're assuming X stayed absent. A bare wait with no
- * date to compare against isn't a dated assumption, so it's left to the blocker
- * list rather than disclosed here; the vesting-start placeholder isn't a real event
- * and is never disclosed. When one event was held against several dates, the latest
- * wins — assuming absence through the later date is the stronger, safe claim.
- */
-const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
-  const latest = new Map<string, OCTDate>();
-
-  for (const top of blockers) {
-    foldBlocker<void>(top, (node) => {
-      if (
-        node.type === "EVENT_NOT_YET_OCCURRED" &&
-        node.through !== undefined &&
-        !isVestingStartPlaceholder(node)
-      ) {
-        const prior = latest.get(node.event);
-        if (prior === undefined || gt(node.through, prior))
-          latest.set(node.event, node.through);
-      }
-    });
-  }
-
-  return [...latest.entries()]
-    .map(([eventId, through]) => ({ eventId, through }))
-    .sort((x, y) =>
-      x.eventId < y.eventId ? -1 : x.eventId > y.eventId ? 1 : 0,
-    );
-};
 
 /** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet).
  *  The resolver hands back a flat blocker list per arm; the partition into

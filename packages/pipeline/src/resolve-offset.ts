@@ -6,9 +6,14 @@
 // evaluate-backed resolution moved here.
 
 import { resolveVestingStart } from "@vestlang/evaluator";
-import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
+import type {
+  AbsenceAssumption,
+  OCTDate,
+  VestingDayOfMonth,
+} from "@vestlang/types";
 import { parseToProgram, type Result } from "./parse.js";
 import { buildContext } from "./context.js";
+import { formatAbsenceAssumption } from "./absence.js";
 
 export interface ResolveOffsetInput {
   expr: string;
@@ -17,7 +22,20 @@ export interface ResolveOffsetInput {
   vesting_day_of_month?: VestingDayOfMonth;
 }
 
-export type ResolveOffsetResult = Result<{ date: OCTDate }>;
+// A disclosed absence on the wire, message-enriched the same way `view.ts` enriches
+// `evaluate`'s — so a caller using both tools reads one disclosure vocabulary.
+type RenderedAbsenceAssumption = AbsenceAssumption & { message: string };
+
+// The success payload carries the resolved date and, ONLY when the commit leaned on
+// an unfired event, the disclosure that the answer assumes that event stayed absent
+// through the date. A plain resolve (a fired event, a flat DATE + offset) omits the
+// key entirely, keeping the historical `{ ok: true, date }` shape. This is the one
+// intentional divergence from `evaluate`, which always emits the array — justified
+// by `resolve_offset`'s single-date contract.
+export type ResolveOffsetResult = Result<{
+  date: OCTDate;
+  absenceAssumptions?: RenderedAbsenceAssumption[];
+}>;
 
 /**
  * Resolve an offset expression (e.g. "EVENT ipo + 6 months", "+3 months",
@@ -100,7 +118,20 @@ export function runResolveOffset(
   // `+100000000 days`) must propagate and throw, the same as everywhere else.
   const result = resolveVestingStart(stmt.expr.vesting_start, ctx);
   if (result.resolved) {
-    return { ok: true, date: result.date };
+    // Render each bare { eventId, through } into a sentence (same wording the
+    // evaluate path uses), but only put the key on the wire when there's something
+    // to disclose — a fully-resolved anchor keeps the plain { ok: true, date }.
+    if (result.assumptions.length === 0) {
+      return { ok: true, date: result.date };
+    }
+    return {
+      ok: true,
+      date: result.date,
+      absenceAssumptions: result.assumptions.map((a) => ({
+        ...a,
+        message: formatAbsenceAssumption(a),
+      })),
+    };
   }
 
   return {
