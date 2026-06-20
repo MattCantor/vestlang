@@ -13,6 +13,9 @@ import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "../src/orchestrate";
+import { unresolvedInstallments } from "../src/resolve/unresolved.js";
+import { baseCtx } from "./helpers";
+import type { StmtResolution } from "../src/resolve/lower.js";
 
 const DSL =
   "VEST FROM LATER OF(grantDate + 12 months, EVENT ipo) " +
@@ -101,5 +104,67 @@ describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () =>
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
+  });
+});
+
+// Reachability pin for the dated-start path: a known start with a *pending*
+// cliff must render dated installments (UNRESOLVED_CLIFF), never the
+// start-relative START_PLUS form. Here the start is a plain grant-date anchor
+// (so it resolves) but the cliff waits on an unfired gated event, so the whole
+// grid stays pending. The cliff being event-gated routes it through the
+// deferred-shape machinery, which for a *resolved* start still yields a dated
+// shape — proving the symbolic-cliff arm in the renderer stays unreachable.
+describe("resolved start with a pending gated-event cliff renders dated, not START_PLUS", () => {
+  const DSL =
+    "VEST FROM grantDate OVER 4 months EVERY 1 month " +
+    "CLIFF EVENT board BEFORE DATE 2030-01-01";
+
+  it("renders every installment as UNRESOLVED_CLIFF and none as START_PLUS", () => {
+    const program = normalizeProgram(parse(DSL));
+    const { resolution } = evaluateProgram(program, {
+      grantDate: "2025-01-01",
+      events: {}, // board unfired → the cliff stays pending
+      grantQuantity: 400,
+    });
+
+    expect(resolution.status).toBe("unresolved");
+    if (resolution.status !== "unresolved") return;
+
+    expect(resolution.installments.length).toBeGreaterThan(0);
+    expect(
+      resolution.installments.every(
+        (i) =>
+          i.state === "UNRESOLVED" &&
+          i.symbolicDate.type === "UNRESOLVED_CLIFF",
+      ),
+    ).toBe(true);
+    expect(
+      resolution.installments.some(
+        (i) => i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS",
+      ),
+    ).toBe(false);
+  });
+});
+
+// White-box guard for the impossible dated-start + symbolic-cliff pairing. The
+// real pipeline can't construct this record (a symbolic cliff only pairs with a
+// pending start), so we hand-build one and call the renderer directly to prove
+// it throws — and throws the *invariant* error, not some unrelated one from the
+// fold/grid block that runs first. A coherent record (concrete date, head role,
+// non-zero cadence) keeps that earlier block harmless, so the only thing left to
+// blow up is the guarded arm.
+describe("unresolvedInstallments rejects a dated start with a symbolic cliff", () => {
+  it("throws naming the broken start/cliff-shape invariant", () => {
+    const r: StmtResolution = {
+      percentage: { numerator: 1, denominator: 1 },
+      periodicity: { type: "MONTHS", length: 1, occurrences: 12 },
+      start: { state: "RESOLVED", date: "2025-01-01", base: { type: "DATE" } },
+      chain: { role: "head" },
+      cliff: { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } },
+    };
+
+    expect(() => unresolvedInstallments(r, baseCtx(), 100)).toThrow(
+      /symbolic/i,
+    );
   });
 });
