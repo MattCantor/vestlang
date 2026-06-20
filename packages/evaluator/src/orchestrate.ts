@@ -9,6 +9,7 @@ import {
   resolveInterchange,
   assertProgramInstallmentCap,
 } from "./resolve/index.js";
+import { assertEvaluableProgram } from "./guard.js";
 import { assemble } from "./assemble.js";
 
 /**
@@ -63,6 +64,7 @@ export function evaluateClauseGroups(
   program: Program,
   ctx_input: ResolutionContextInput,
 ): EvaluatedSchedule[] {
+  assertEvaluableProgram(program);
   assertProgramInstallmentCap(program);
   return chainGroups(program).map((chain) =>
     assemble(

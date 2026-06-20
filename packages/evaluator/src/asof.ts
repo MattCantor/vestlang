@@ -6,6 +6,7 @@ import {
 } from "@vestlang/types";
 import { evaluateProgram } from "./orchestrate.js";
 import { assertProgramInstallmentCap } from "./resolve/index.js";
+import { assertEvaluableProgram } from "./guard.js";
 import { createEvaluationContext } from "./utils.js";
 import { amountToFraction, claimAllocator } from "./claims.js";
 
@@ -67,6 +68,7 @@ export function evaluateProgramAsOf(
   program: Program,
   ctx_input: AsOfContextInput,
 ): VestedResult {
+  assertEvaluableProgram(program);
   assertProgramInstallmentCap(program);
   // This local context only reads grantQuantity/asOf for the partition below;
   // `"resolution"` matches the mode evaluateProgram itself resolves under.
