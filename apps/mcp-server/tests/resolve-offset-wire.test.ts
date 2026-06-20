@@ -81,4 +81,28 @@ describe("mcp-server / vestlang_resolve_offset wire shape (AC#6)", () => {
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).toEqual({ ok: true, date: "2025-07-01" });
   });
+
+  // #325 — AC#2. A committed EARLIER OF (date arm resolved, event arm unfired) puts
+  // the date AND the absence disclosure on structuredContent, message and all, so
+  // an MCP caller sees that the answer assumes `ipo` stayed absent through the date.
+  it("a committed EARLIER OF carries the absence disclosure on structuredContent", async () => {
+    const client = await connectClient();
+    const res = await call(client, {
+      expr: "EARLIER OF (DATE 2024-06-01, EVENT ipo)",
+      grant_date: "2024-01-01",
+      // ipo intentionally unfired.
+    });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual({
+      ok: true,
+      date: "2024-06-01",
+      absenceAssumptions: [
+        {
+          eventId: "ipo",
+          through: "2024-06-01",
+          message: "ipo did not occur on/before 2024-06-01",
+        },
+      ],
+    });
+  });
 });

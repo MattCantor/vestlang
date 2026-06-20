@@ -63,8 +63,10 @@ function collectImpossibleBlockers<T>(x: PickReturn<T>[]): ImpossibleBlocker[] {
 // fully RESOLVED pick and an EARLIER_OF that committed to its floor (COMMITTED)
 // qualify — an outer selector folds over the committed inner pick's floor as if it
 // were settled, so a committed inner pick doesn't re-freeze one level up. The
-// committed pick's own disclosures are NOT carried up here (deferred to #325); the
-// floor it contributes is correct.
+// committed pick's own disclosures are NOT carried up here — a nested committed
+// EARLIER_OF consumed by an outer fold drops them, which the full `evaluate` path
+// hits identically. That gap is live and tracked as #363 (#325 fixed only the
+// top-level narrow-path case); the floor this contributes is correct regardless.
 type SettledPick<T> = PickedResolved<T> | PickedCommitted<T>;
 
 const isSettled = <T>(x: PickReturn<T>): x is SettledPick<T> =>

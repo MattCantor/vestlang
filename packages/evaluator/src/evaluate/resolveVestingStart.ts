@@ -12,6 +12,7 @@
 // blockers and render a reason via blockerToString.
 
 import type {
+  AbsenceAssumption,
   Blocker,
   OCTDate,
   ResolutionContextInput,
@@ -19,11 +20,17 @@ import type {
 } from "@vestlang/types";
 import { createEvaluationContext } from "../utils.js";
 import { evaluateVestingNodeExpr } from "./selectors.js";
-import { pickedDate, type PickReturn } from "./utils.js";
+import { isPickedCommitted, pickedDate, type PickReturn } from "./utils.js";
+import { collectAbsences } from "./absences.js";
 import { blockerToString } from "./blockerToString.js";
 
+// The resolved arm ALWAYS carries `assumptions` — `[]` for a fully-resolved anchor,
+// and the disclosed non-occurrences for a committed EARLIER_OF (which settled to its
+// floor while some sibling event stayed unfired). Keeping the field uniform (rather
+// than optional) means a read-site can't quietly skip the committed case, mirroring
+// why `pickedDate` routes both RESOLVED and COMMITTED through one accessor.
 export type ResolvedAnchor =
-  | { resolved: true; date: OCTDate }
+  | { resolved: true; date: OCTDate; assumptions: AbsenceAssumption[] }
   | { resolved: false; blockers: Blocker[]; reason: string };
 
 // Blockers of a non-resolved pick — same extraction rehydrate's blockersOf does:
@@ -48,7 +55,17 @@ export function resolveVestingStart(
   // EVENT e)` with e unfired now returns `d` instead of offset-unresolved).
   const date = pickedDate(res);
   if (date !== undefined) {
-    return { resolved: true, date };
+    // A COMMITTED pick reached its floor while a sibling event stayed unfired —
+    // its `meta.disclosures` are exactly the "assumes e absent through d" notes the
+    // commit leans on. A plain RESOLVED pick has nothing to disclose, hence `[]`.
+    // `pickedDate` alone can't see this: it returns the date off both arms and
+    // erases the COMMITTED meta, so we read the disclosures off the committed pick
+    // directly. (#325 — restores on this narrow path the disclosure `evaluate`
+    // already surfaces.)
+    const assumptions = isPickedCommitted(res)
+      ? collectAbsences(res.meta.disclosures)
+      : [];
+    return { resolved: true, date, assumptions };
   }
 
   const blockers = blockersOf(res);

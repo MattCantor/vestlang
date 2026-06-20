@@ -15,7 +15,12 @@ import type {
   RehydrateOutput,
 } from "../src/index.js";
 import type { PersistedArtifact } from "@vestlang/evaluator";
-import type { OCTDate, UnresolvedBlocker, DeadBlocker } from "@vestlang/types";
+import type {
+  AbsenceAssumption,
+  OCTDate,
+  UnresolvedBlocker,
+  DeadBlocker,
+} from "@vestlang/types";
 import type { compileToInstallments } from "@vestlang/core";
 
 type PersistOk = {
@@ -23,7 +28,13 @@ type PersistOk = {
   pending: UnresolvedBlocker[];
   dead: DeadBlocker[];
 };
-type OffsetOk = { date: OCTDate };
+// The offset success payload carries the resolved date and, only when a commit
+// leaned on an unfired event, the message-enriched absence disclosure (#325). The
+// field is optional — omitted on a plain resolve — so it sits as `?` here.
+type OffsetOk = {
+  date: OCTDate;
+  absenceAssumptions?: (AbsenceAssumption & { message: string })[];
+};
 
 describe("the three orchestrator results are Result<T> (AC#1)", () => {
   it("PersistResult is exactly Result over its success payload", () => {

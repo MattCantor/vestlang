@@ -606,7 +606,7 @@ export function createServer(): McpServer {
     {
       title: "Resolve an offset expression to a date",
       description:
-        "Resolve a vestlang offset expression (e.g. 'EVENT ipo + 6 months', '+3 months', 'DATE 2025-01-01 - 2 days', 'EARLIER OF (EVENT a, EVENT b)') to a concrete date. Requires grant_date (used for expressions that reference the grant anchor). Named events used in the expression must be in the events map.",
+        "Resolve a vestlang offset expression (e.g. 'EVENT ipo + 6 months', '+3 months', 'DATE 2025-01-01 - 2 days', 'EARLIER OF (EVENT a, EVENT b)') to a concrete date. Requires grant_date (used for expressions that reference the grant anchor). Named events used in the expression must be in the events map. When the date is committed against an unfired event (e.g. 'EARLIER OF (DATE d, EVENT e)' with e absent), the reply also carries an absenceAssumptions array disclosing that the answer assumes that event stayed absent through the date — a later or backdated firing could move the start earlier.",
       inputSchema: z
         .object({
           expr: z
