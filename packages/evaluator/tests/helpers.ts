@@ -23,8 +23,15 @@ import {
   VestingPeriod,
 } from "@vestlang/types";
 
+// `overrides` is pinned to the events-bearing arm of the `ResolutionContext` DU
+// (#320): the base fixture builds a `resolution`-mode context, and no current test
+// overrides it to `interchange` (the firing-blind arm drops `events`, so a
+// `Partial<ResolutionContext>` would distribute and widen `mode` to neither arm).
+// A test that needs an interchange-arm context builds one directly.
 export const baseCtx = (
-  overrides: Partial<ResolutionContext> = {},
+  overrides: Partial<
+    Extract<ResolutionContext, { mode: "resolution" | "rehydrate" }>
+  > = {},
 ): ResolutionContext => ({
   grantDate: "2025-01-01",
   events: {},
@@ -32,7 +39,7 @@ export const baseCtx = (
   grantQuantity: 100,
   // The selector layer reads mode off the context; default to the closed-world
   // reading (where an EARLIER_OF commits) since that's the common case under test.
-  // Tests that need firing-blindness or reload pass `{ mode: ... }` as an override.
+  // Tests that need reload pass `{ mode: "rehydrate" }` as an override.
   mode: "resolution",
   ...overrides,
 });

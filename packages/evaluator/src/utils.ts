@@ -19,9 +19,13 @@ import { isValidCalendarDate } from "@vestlang/utils";
 // runs, so each entry point stamps its own mode here per the Decision-2 table
 // (resolveToCore/resolveVestingStart → "resolution", resolveInterchange →
 // "interchange", rehydrate → "rehydrate").
+// The as-of overload's `mode` is narrowed to the firing-reading modes: `AsOfContext`
+// is pinned to the events-bearing arm (an interchange + as-of context doesn't exist),
+// so an `"interchange"` mode could never build into the return type. As-of only ever
+// runs under `"resolution"` (asof.ts), so this loses nothing.
 export function createEvaluationContext(
   input: AsOfContextInput,
-  mode: EvaluationMode,
+  mode: "resolution" | "rehydrate",
 ): AsOfContext;
 export function createEvaluationContext(
   input: ResolutionContextInput,
@@ -82,6 +86,24 @@ export function createEvaluationContext(
     );
   }
 
+  const vesting_day_of_month =
+    input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH;
+
+  // The interchange arm carries no `events` at all (#320): firing-invariance is the
+  // type's job now, so dropping the map here is what makes a downstream firing read
+  // a compile error rather than a convention. `events` is still validated above
+  // regardless of mode — the input always carries it, the check is cheap — only
+  // whether it rides into the built context changes. The branch narrows `mode` to a
+  // literal because the wide `EvaluationMode` is assignable to neither DU arm.
+  if (mode === "interchange") {
+    return {
+      grantDate: input.grantDate,
+      grantQuantity: input.grantQuantity,
+      vesting_day_of_month,
+      mode,
+    };
+  }
+
   // Rebuild `events` on a null prototype. An event id can legally be a
   // `Object.prototype` key (`constructor`, `toString`, `__proto__`, …); on a
   // plain object an unfired such id reads back the inherited value, so the EVENT
@@ -92,11 +114,13 @@ export function createEvaluationContext(
     input.events,
   );
 
+  // The events-bearing arm. `asOf`, when the as-of overload supplied one, rides
+  // through structurally — it's not on `ResolutionContextInput`, but spreading
+  // `input` preserves it onto the `AsOfContext` return.
   return {
     ...input,
     events,
-    vesting_day_of_month:
-      input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH,
+    vesting_day_of_month,
     mode,
   };
 }
