@@ -32,6 +32,7 @@ import {
   isVoid,
   symbolicClaims,
 } from "./unresolved.js";
+import { disclosuresOf } from "./lower.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { ClassifiedVerdict } from "./types.js";
 
@@ -140,12 +141,11 @@ const eventsArm = (
   resolutions.forEach((r, i) => {
     if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
       dated.push(r);
-      // A committed EARLIER_OF rode in with its still-pending siblings'
-      // disclosures. The dated path never runs unresolvedInstallments (where
-      // blockers are otherwise gathered), so surface them here — the events-arm
-      // mirror of buildTemplate's template-arm push — or they'd vanish from
+      // The dated path never runs unresolvedInstallments (where blockers are
+      // otherwise gathered), so a committed floor's disclosures (via
+      // `disclosuresOf`) have to be surfaced here or they'd vanish from
       // resolution.pending and the absence-assumption disclosure.
-      if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
+      blockers.push(...disclosuresOf(r.start));
       return;
     }
     // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE starts to the
@@ -184,14 +184,12 @@ const unresolvedArm = (
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     const ev = unresolvedInstallments(r, ctx, claims[i]);
-    // A committed EARLIER_OF rode in with its still-pending siblings' disclosures.
     // unresolvedInstallments reads the cliff, not the committed start's absence
-    // assumptions, so surface them here — the unresolved-arm mirror of the events-
-    // and template-arm pushes — or they'd vanish from resolution.pending and the
+    // assumptions, so a committed floor's disclosures (via `disclosuresOf`) have
+    // to be surfaced here or they'd vanish from resolution.pending and the
     // absence-assumption disclosure. (Moot in the all-void rollup below, which
-    // ignores `blockers`; that's the safe direction — a wholly-dead program has no
-    // live floor to disclose for.)
-    if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
+    // ignores `blockers` — a wholly-dead program has no live floor to disclose for.)
+    blockers.push(...disclosuresOf(r.start));
     // EMPTY only comes back from the fully-resolved paths. Those RESOLVED tranches
     // are dropped there; collect the resolution so the resolved producer can
     // materialize them. (A vacuous 0-occurrence statement is also empty — treating

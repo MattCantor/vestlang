@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
 import type {
   Amount,
+  Blocker,
   ResolutionContextInput,
   Finding,
   OCTDate,
@@ -13,9 +14,12 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
+import { classify } from "../src/resolve/classify";
+import type { StmtResolution } from "../src/resolve/lower";
 import { evaluateProgram } from "../src/orchestrate";
 import { evaluateProgramAsOf } from "../src/asof";
 import {
+  baseCtx,
   makeSingletonSchedule,
   makeSingletonNode,
   makeVestingBaseDate,
@@ -981,6 +985,56 @@ describe("resolveToCore — events arm carries its pending siblings (#148)", () 
     });
     expect(sum(result.vested)).toBe(3600);
     expect(result.unresolved).toBe(1200);
+  });
+});
+
+describe("classify — the events arm surfaces a committed floor's disclosures (#368)", () => {
+  // The events arm's COMMITTED branch is only reachable when a committed EARLIER_OF
+  // floor rides in beside a sibling that forced events-only — the single headline
+  // DSL resolves to `template`, never here. Drive `classify` with a hand-built
+  // `events` build: a COMMITTED start carrying a pending sibling's disclosure, next
+  // to a RESOLVED start on an independent grid (the thing that forced this arm). The
+  // disclosure must reach the verdict's blockers.
+  const ipoBlocker: Blocker = {
+    type: "EVENT_NOT_YET_OCCURRED",
+    event: "ipo",
+    through: "2024-06-01",
+  };
+
+  const monthly2 = { type: "MONTHS" as const, length: 1, occurrences: 2 };
+  const headHead = { role: "head" as const };
+
+  const committed: StmtResolution = {
+    percentage: { numerator: 1, denominator: 2 },
+    periodicity: monthly2,
+    start: {
+      state: "COMMITTED",
+      date: "2024-06-01",
+      base: { type: "DATE" },
+      disclosures: [ipoBlocker],
+    },
+    cliff: { state: "NONE" },
+    chain: headHead,
+  };
+
+  const resolvedSibling: StmtResolution = {
+    percentage: { numerator: 1, denominator: 2 },
+    periodicity: monthly2,
+    start: { state: "RESOLVED", date: "2024-01-01", base: { type: "DATE" } },
+    cliff: { state: "NONE" },
+    chain: headHead,
+  };
+
+  it("the committed start's disclosure reaches the events verdict's blockers", () => {
+    const verdict = classify({
+      ok: false,
+      why: "events",
+      reason: { kind: "OVERLAPPING_ABSOLUTE_STARTS" },
+      resolutions: [committed, resolvedSibling],
+      ctx: baseCtx({ grantDate: "2024-01-01", grantQuantity: 4800 }),
+    });
+    expect(verdict.kind).toBe("events");
+    expect(verdict.blockers).toContainEqual(ipoBlocker);
   });
 });
 

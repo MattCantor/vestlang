@@ -154,6 +154,12 @@ export interface StmtResolution {
     | { role: "pending-tail" };
 }
 
+// The disclosures a start hands to the blocker set: a committed EARLIER_OF floor's
+// still-pending siblings, nothing otherwise. One read shared by the three
+// blocker-gathering arms, so they can't drift on what a COMMITTED start owes.
+export const disclosuresOf = (start: StmtResolution["start"]): Blocker[] =>
+  start.state === "COMMITTED" ? start.disclosures : [];
+
 /** Resolve one ordinary (non-chained) statement: its start comes from its own
  *  `FROM` expression, resolved through the normal selector path. This is the body
  *  that used to be the whole of `resolveStatements`; the chaining walk below now
@@ -620,12 +626,10 @@ export const buildTemplate = (
     const r = resolutions[i];
     const { type, length, occurrences } = r.periodicity;
 
-    // A committed EARLIER_OF carries the still-pending siblings' disclosures.
-    // Push them onto the template arm's blockers (mirroring PENDING_EVENT /
-    // SYNTHETIC_EVENT below), so they reach `resolution.pending` and feed the
-    // absence-assumption disclosure — the start itself lowers as a plain dated
-    // anchor (its `base` is the winning arm's).
-    if (r.start.state === "COMMITTED") blockers.push(...r.start.disclosures);
+    // A committed EARLIER_OF's pending-sibling disclosures (via `disclosuresOf`),
+    // so they reach `resolution.pending` and the absence-assumption disclosure —
+    // the start itself still lowers as a plain dated anchor below.
+    blockers.push(...disclosuresOf(r.start));
 
     let vesting_base: VestingStatement["vesting_base"];
     if (r.start.state === "PENDING_EVENT") {
