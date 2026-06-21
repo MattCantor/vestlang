@@ -66,3 +66,22 @@ describe("mcp-server / server INSTRUCTIONS error-shape paragraph (#296, AC#8)", 
     expect(instructions).not.toMatch(/or "evaluation-error" for/);
   });
 });
+
+describe("mcp-server / server INSTRUCTIONS unified envelope (#345, AC#7)", () => {
+  it("names the `ok` success/refusal discriminant", async () => {
+    const client = await connectedClient();
+    const instructions = client.getInstructions() ?? "";
+    // The two arms of the envelope are spelled out, keyed on `ok`.
+    expect(instructions).toContain("ok: true");
+    expect(instructions).toContain("ok: false");
+  });
+
+  it("references the `isError` exception boundary as distinct from `ok`", async () => {
+    const client = await connectedClient();
+    const instructions = client.getInstructions() ?? "";
+    // The two-tier model: isError is the exception channel, separate from the
+    // structured-refusal envelope.
+    expect(instructions).toContain("isError");
+    expect(instructions).toMatch(/isError[\s\S]*exception/i);
+  });
+});

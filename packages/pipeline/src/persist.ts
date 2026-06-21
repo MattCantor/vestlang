@@ -199,7 +199,7 @@ export interface RehydrateInput {
   events?: Record<string, OCTDate>;
 }
 
-// The success payload, also the shape the server returns once it strips `ok`. The
+// The success payload; the server returns the Result whole, `ok` and all. The
 // evaluator already partitions its blockers into the two operator readings:
 // `pending` is still-waiting (the gating event hasn't fired), `dead` can never
 // resolve given the firings we now know (the event fired outside its window).

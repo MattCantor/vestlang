@@ -7,20 +7,55 @@ from tool output rather than model arithmetic.
 
 ## Error responses
 
-The evaluate/parse tools (`vestlang_parse`, `vestlang_compile`,
-`vestlang_evaluate`, `vestlang_evaluate_as_of`, `vestlang_vested_between`) don't
-fail with an exception — a failure comes back as a single structured shape, so
-check for an `error` field before reading the rest:
+Every tool result is tagged with a top-level `ok` boolean — one envelope across
+all tools. On success the result is `{ "ok": true, … }`; a **structured refusal**
+(the tool ran fine and its answer is the refusal) comes back as:
 
 ```json
-{ "error": { "ruleId": "syntax-error", "message": "…", "loc": { "start": { "line": 1, "column": 1 }, "end": { "line": 1, "column": 5 } } } }
+{ "ok": false, "error": { "ruleId": "syntax-error", "message": "…", "loc": { "start": { "line": 1, "column": 1 }, "end": { "line": 1, "column": 5 } } } }
 ```
 
-- **`ruleId: "syntax-error"`** — the DSL didn't parse. Carries `loc`, the source
-  span (line/column) of the offending token.
-- **`ruleId: "evaluation-error"`** — the DSL parsed but evaluation couldn't
-  proceed (e.g. a schedule too large to materialize, or a `from` after `to` on a
-  window query). No `loc` — these aren't tied to a source position.
+Branch on `ok` — a false `ok` is data to read, not a thrown error. The `error`
+object always carries a machine-readable `ruleId` and a human `message`; some
+ruleIds carry extra typed fields (`loc`, `unresolved`). This shape is uniform
+across every refusal-capable tool:
+
+- **`vestlang_parse` / `vestlang_compile` / `vestlang_evaluate` /
+  `vestlang_evaluate_as_of` / `vestlang_vested_between`** —
+  `ruleId: "syntax-error"` when the DSL didn't parse (carries `loc`, the source
+  span of the offending token), or `ruleId: "evaluation-error"` when it parsed
+  but evaluation couldn't proceed (e.g. a schedule too large to materialize, or a
+  `from` after `to` on a window query; no `loc` — not tied to a source position).
+- **`vestlang_persist`** — `ruleId: "persist-not-storable"` when the program
+  isn't storable as a single template (lint-error, over-allocation, or a
+  non-template shape; the `message` names which).
+- **`vestlang_rehydrate`** — `ruleId: "rehydrate-missing-grant-date"`,
+  `"rehydrate-over-allocation"`, `"rehydrate-corrupt-definition"`, or
+  `"rehydrate-namespace-violation"` for a damaged or hand-built artifact.
+- **`vestlang_resolve_offset`** — `ruleId: "offset-unresolved"` (carries
+  `unresolved`, the blocking reason) when a referenced event hasn't fired, or
+  `"offset-not-single-expression"` when the input isn't one offset expression.
+
+### The `isError` boundary (exceptions, not refusals)
+
+A structured refusal (`ok: false`) is distinct from MCP's `isError` flag.
+`isError: true` marks a **genuine unstructured exception** — there is no `ruleId`
+to expose and no `ok` on the result:
+
+- a bad-input throw from `vestlang_stringify` (a malformed AST) or
+  `vestlang_infer_schedule` (un-inferrable input);
+- a date-math overflow past the representable range (`vestlang_add_period` /
+  `vestlang_resolve_offset` on a huge offset);
+- an input-schema (zod) rejection (e.g. a `grant_quantity` past
+  `MAX_SAFE_INTEGER`, an impossible calendar date).
+
+A robust consumer checks `isError` first (protocol/exception failure), then `ok`
+(structured refusal vs. success).
+
+Note `ok` is the envelope flag, separate from any domain field inside a success:
+`vestlang_evaluate`'s `valid` (false ⇔ the schedule over-allocates) and
+`vestlang_lint`'s `errorFree` (false ⇔ error-severity diagnostics) both live
+inside an `{ ok: true, … }` result.
 
 ## Verdicts and flags on the `vestlang_evaluate` response
 
@@ -126,8 +161,8 @@ valid after `VEST FROM` in the DSL:
 - `EARLIER OF (EVENT a, EVENT b)`
 
 When the expression can't resolve — a referenced event hasn't fired — the call
-returns a structured error (`ruleId: "offset-unresolved"`) whose `unresolved`
-field names the blocking reason.
+returns `{ ok: false, error: { ruleId: "offset-unresolved", … } }` whose
+`unresolved` field names the blocking reason.
 
 ### `vestlang_resolve_vesting_day`
 

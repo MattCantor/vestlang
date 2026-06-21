@@ -385,9 +385,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 1000,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
-    expect(text).toContain("template");
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("persist-not-storable");
+    expect(sc.error.message).toContain("template");
   });
 
   it("refuses an over-allocating single template, naming the over-allocation", async () => {
@@ -402,9 +407,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 4800,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
-    expect(text).toMatch(/over-allocat/);
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("persist-not-storable");
+    expect(sc.error.message).toMatch(/over-allocat/);
   });
 
   it("still persists an under-allocating program", async () => {
@@ -434,9 +444,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 1000,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
-    expect(text).toMatch(/over-allocat/);
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("persist-not-storable");
+    expect(sc.error.message).toMatch(/over-allocat/);
   });
 
   it("refuses a statically-dead date window the linter calls an error", async () => {
@@ -452,9 +467,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 4800,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
-    expect(text).toMatch(/unsatisfiable-date-window/);
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("persist-not-storable");
+    expect(sc.error.message).toMatch(/unsatisfiable-date-window/);
   });
 
   it("persists a warning-only program (a warning does not block storage)", async () => {
@@ -643,16 +663,23 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 400,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
-    expect(text).toMatch(/grant date/i);
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("rehydrate-missing-grant-date");
+    expect(sc.error.message).toMatch(/grant date/i);
   });
 
-  // Issue #296 — unifying the orchestrators onto a structured PipelineError must
-  // NOT change a single operator-facing byte. persist/rehydrate still surface
-  // their refusal through the MCP `isError` text (now `toolError(error.message)`),
-  // so the message a tool consumer reads is exactly what it was before.
-  it("AC#5: rehydrate's missing-grant-date isError text is byte-stable", async () => {
+  // Issue #296 / #345 — unifying the orchestrators onto a structured
+  // PipelineError, and now the wire envelope, must NOT change a single
+  // operator-facing byte. Under #345 persist/rehydrate refusals ride the wire as
+  // { ok: false, error } (no longer the MCP `isError` channel), so the message a
+  // tool consumer reads is on `structuredContent.error.message` — and it is
+  // exactly what it was before. The baselines below are frozen literal strings.
+  it("AC#5/#345: rehydrate's missing-grant-date refusal message is byte-stable", async () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
@@ -661,21 +688,33 @@ describe("mcp-server / persistence tool pair", () => {
       },
       grant_quantity: 400,
     });
-    expect(res.isError).toBe(true);
-    expect(res.content?.[0]?.text).toBe(
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("rehydrate-missing-grant-date");
+    expect(sc.error.message).toBe(
       "Cannot rehydrate: the artifact's runtime is missing its stored grant date (runtime.grantDate). A persisted artifact always carries it; supply one built by vestlang_persist.",
     );
   });
 
-  it("AC#5: persist's non-template refusal isError text is byte-stable", async () => {
+  it("AC#5/#345: persist's non-template refusal message is byte-stable", async () => {
     const client = await connectClient();
     const res = await persist(client, {
       dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });
-    expect(res.isError).toBe(true);
-    expect(res.content?.[0]?.text).toBe(
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("persist-not-storable");
+    expect(sc.error.message).toBe(
       'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "unrepresentable". Adjust the schedule so it collapses to a single canonical template.',
     );
   });
@@ -859,8 +898,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 400,
     });
 
-    expect(res.isError).toBe(true);
-    const text = res.content?.[0]?.text ?? "";
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      ok: boolean;
+      error: { ruleId: string; message: string };
+    };
+    expect(sc.ok).toBe(false);
+    expect(sc.error.ruleId).toBe("rehydrate-corrupt-definition");
+    const text = sc.error.message;
     // Names the offending event and reads as an intentional corruption refusal.
     expect(text).toContain("evt:1");
     expect(text).toMatch(/corrupt|unparseable/i);
