@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
+import type { ResolutionContextInput } from "@vestlang/types";
+import { parse } from "@vestlang/dsl";
+import { normalizeProgram } from "@vestlang/normalizer";
 import { blockerToString } from "../src/evaluate/blockerToString.js";
+import { evaluateProgram } from "../src/index.js";
 import {
   makeDuration,
   makeImpossibleConditionBlocker,
@@ -37,5 +41,34 @@ describe("blockerToString", () => {
       ]),
     );
     expect(s).toBe("DATE 2025-01-01 +1 month");
+  });
+
+  // #287 — a jointly-empty date gate (its windows don't overlap) has no single atom
+  // to blame, so its IMPOSSIBLE_CONDITION blocker carries the *whole* gated node.
+  // End-to-end: evaluate the dead gate, then render the blocker the evaluator
+  // actually produced — it must show the full gate, not a stripped conjunct. Catches
+  // both a node that drops the gate and a printer that drops the condition.
+  it("renders a jointly-empty gate blocker as the whole gate (#287)", () => {
+    const ctx: ResolutionContextInput = {
+      grantDate: "2025-01-01",
+      events: {},
+      grantQuantity: 4800,
+    };
+    const schedule = evaluateProgram(
+      normalizeProgram(
+        parse(
+          "VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+        ),
+      ),
+      ctx,
+    );
+    const blocker = schedule.resolution.dead.find(
+      (b) => b.type === "IMPOSSIBLE_CONDITION",
+    );
+    expect(blocker).toBeDefined();
+    const s = blockerToString(blocker!);
+    expect(s).toContain("EVENT ipo");
+    expect(s).toContain("AFTER DATE 2026-01-01");
+    expect(s).toContain("BEFORE DATE 2025-01-01");
   });
 });

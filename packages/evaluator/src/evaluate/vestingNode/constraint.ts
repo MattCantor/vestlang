@@ -23,6 +23,17 @@ const createImpossibleBlocker = (
   node,
 });
 
+// The whole-gate variant: a gate whose date constraints are *jointly* empty (their
+// windows don't overlap) has no single atom to blame, so the blocker carries the
+// entire gated node. Stringification renders the full gate (AND/OR and all),
+// rather than one conjunct of it.
+export const createGateImpossibleBlocker = (
+  node: VestingNode,
+): ImpossibleBlocker => ({
+  type: "IMPOSSIBLE_CONDITION",
+  node,
+});
+
 const mergedUnresolved = (
   nodes: (UnresolvedNode | ImpossibleNode)[],
   node: VestingNode,
