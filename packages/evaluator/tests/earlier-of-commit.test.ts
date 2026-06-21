@@ -218,6 +218,119 @@ describe("#251 AC14 — nested commit settles (outer fold consumes the committed
   });
 });
 
+// #363 — a committed inner pick consumed by an outer combinator of the OTHER type
+// keeps disclosing its assumed-absent siblings. The inner EARLIER OF commits to its
+// floor and leans on `e` staying absent; the outer LATER OF reads only the inner's
+// floor date and used to drop that assumption. The fix harvests the committed arm's
+// disclosures one level up (re-stamped through the outer fold's date, Decision 2),
+// so the assumption survives to `absenceAssumptions` and `resolution.pending`.
+describe("#363 — committed-pick disclosures carry up through an outer fold", () => {
+  it("AC-1: material outer LATER OF — start moves with the event, `e` disclosed through the outer date", () => {
+    // EARLIER OF (DATE 2024-09-01, EVENT e) commits to its 2024-09-01 floor; the
+    // outer LATER OF takes max(2024-09-01, 2024-06-01) = 2024-09-01. A firing of `e`
+    // ≤ 2024-09-01 would move the inner floor earlier, so `e` is material here — and
+    // it is disclosed `through` the resolved start.
+    const dsl =
+      "VEST FROM LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    if (schedule.resolution.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    expect(schedule.absenceAssumptions).toEqual([
+      { eventId: "e", through: "2024-09-01" },
+    ]);
+    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+      through: "2024-09-01",
+    });
+  });
+
+  it("AC-2: vacuous-but-disclosed (issue headline) — `e` can't move the answer, disclosed anyway through the outer date", () => {
+    // EARLIER OF (DATE 2024-06-01, EVENT e) commits to 2024-06-01; the outer LATER OF
+    // takes max(2024-06-01, 2024-09-01) = 2024-09-01. `e` could only pull the inner
+    // floor earlier, which the outer date already swamps — so `e` is immaterial to
+    // the final date. Per Decision 1 it is disclosed anyway, stamped `through` the
+    // outer fold's 2024-09-01 (Decision 2), not the inner 2024-06-01.
+    const dsl =
+      "VEST FROM LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    if (schedule.resolution.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    expect(schedule.absenceAssumptions).toEqual([
+      { eventId: "e", through: "2024-09-01" },
+    ]);
+  });
+
+  it("AC-5: partial LATER OF carries the inner disclosure alongside its own pending arm", () => {
+    // EARLIER OF (DATE 2024-06-01, EVENT e) commits to 2024-06-01; the outer LATER OF
+    // has a still-pending bare-event arm `f`, so it stays open (the partial branch,
+    // which already routes through collectBlockers). `e`'s assumption must ride
+    // alongside `f` rather than vanishing — this exercises the collectBlockers half
+    // of the fix.
+    const dsl =
+      "VEST FROM LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), EVENT f) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    // Both the committed inner's `e` and the pending outer's `f` surface.
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "e",
+      through: "2024-06-01",
+    });
+    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+      through: "2024-06-01",
+    });
+    expect(findUnfired(schedule.resolution.pending, "f")).toBeDefined();
+  });
+});
+
+// #363 AC-6 — the single-level and same-selector-flattened cases must still
+// disclose `e` exactly once. "Exactly once" is asserted against the deduped
+// `absenceAssumptions` array (dedup lives in collectAbsences); the raw blocker tree
+// isn't deduped, so a count there wouldn't be a meaningful guard.
+describe("#363 AC-6 — no regression on single-level / flattened cases", () => {
+  it("bare committed EARLIER OF discloses `e` once through 2024-06-01", () => {
+    const dsl =
+      "VEST FROM EARLIER OF (DATE 2024-06-01, EVENT e) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    expect(schedule.absenceAssumptions).toEqual([
+      { eventId: "e", through: "2024-06-01" },
+    ]);
+  });
+
+  it("flattened same-selector EARLIER OF (EARLIER OF ..., DATE) discloses `e` once through 2024-06-01", () => {
+    // Same-selector nesting flattens at compile time to a single 3-arm EARLIER_OF,
+    // so it never hits a nested fold — and dedup keeps `e` to a single entry.
+    const dsl =
+      "VEST FROM EARLIER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(prog(dsl), ctx());
+    expect(schedule.absenceAssumptions).toEqual([
+      { eventId: "e", through: "2024-06-01" },
+    ]);
+  });
+});
+
+// #363 AC-7 — the cliff carve-out is unaffected. A nested combinator IS expressible
+// in cliff position at the DSL surface (CLIFF LATER OF (EARLIER OF (...), DATE)
+// parses and evaluates), so the all-settled branch now yields a COMMITTED cliff
+// node too. But cliff.ts reads the date via pickedDate and deliberately discards
+// cliff disclosures (the #251/AC6 carve-out: an EARLIER_OF cliff carries no absence
+// note). So the SAME nested combinator that surfaces `e` in start position (AC-1)
+// must surface nothing in cliff position. This locks that the start-position change
+// does not leak disclosures into cliffs.
+describe("#363 AC-7 — nested combinator in cliff position discloses nothing", () => {
+  it("CLIFF LATER OF (EARLIER OF (DATE, EVENT e), DATE) places its cliff but discloses no `e`", () => {
+    const dsl =
+      "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)";
+    const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
+    if (schedule.resolution.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    // The cliff lands at the committed-then-folded floor (max of the two date arms).
+    expect(schedule.cliffDate).toBe("2024-09-01");
+    // Carve-out: no absence note for `e`, on either surface.
+    expect(schedule.absenceAssumptions).toEqual([]);
+    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
+});
+
 describe("#251 AC16 — LATER OF unregressed", () => {
   it("LATER OF (DATE future, EVENT ipo), ipo unfired → still pending (upper bound, no commit)", () => {
     const dsl =
