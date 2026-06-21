@@ -39,6 +39,13 @@ const evaluate = (client: Client, dsl: string) =>
 const errorOf = (res: CallResult) =>
   (res.structuredContent as { error?: { message?: string } })?.error;
 
+// A cap refusal rides the #345 envelope: a falsy isError and `ok: false` on the
+// structured content, with the error riding under `error`.
+const expectRefusal = (res: CallResult) => {
+  expect(res.isError).toBeFalsy();
+  expect((res.structuredContent as { ok?: boolean }).ok).toBe(false);
+};
+
 describe("mcp-server / installment cap", () => {
   it("rejects a schedule that expands past the cap instead of crashing", async () => {
     const client = await connectClient();
@@ -49,6 +56,7 @@ describe("mcp-server / installment cap", () => {
       client,
       "VEST OVER 1000000 months EVERY 1 month",
     );
+    expectRefusal(res);
     const message = errorOf(res)?.message;
     expect(message).toMatch(/exceeds the limit/);
     expect(message).not.toMatch(/representable range/);
@@ -61,6 +69,7 @@ describe("mcp-server / installment cap", () => {
       client,
       "VEST OVER 6000 days EVERY 1 day PLUS VEST OVER 6000 days EVERY 1 day",
     );
+    expectRefusal(res);
     const error = (res.structuredContent as { error?: { message?: string } })
       ?.error;
     expect(error?.message).toMatch(/exceeds the limit/);
@@ -72,6 +81,7 @@ describe("mcp-server / installment cap", () => {
     // problem. The cap doesn't mask it; it surfaces cleanly (no crash).
     const client = await connectClient();
     const res = await evaluate(client, "VEST OVER 10000 years EVERY 1 year");
+    expectRefusal(res);
     expect(errorOf(res)?.message).toMatch(/representable range/);
   });
 
@@ -83,6 +93,7 @@ describe("mcp-server / installment cap", () => {
       client,
       "VEST FROM EVENT ipo OVER 1000000 months EVERY 1 month",
     );
+    expectRefusal(res);
     expect(errorOf(res)?.message).toMatch(/exceeds the limit/);
   });
 
@@ -90,9 +101,11 @@ describe("mcp-server / installment cap", () => {
     const client = await connectClient();
     const res = await evaluate(client, "VEST OVER 48 months EVERY 1 month");
     const sc = res.structuredContent as {
+      ok?: boolean;
       installments?: unknown[];
       error?: unknown;
     };
+    expect(sc.ok).toBe(true);
     expect(sc.error).toBeUndefined();
     expect(sc.installments).toHaveLength(48);
   });

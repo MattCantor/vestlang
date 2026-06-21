@@ -3,12 +3,11 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server.js";
 
-// Issue #296 — AC#6. vestlang_resolve_offset's handler still does
-// `jsonResult(result)`, so the structured result rides the wire whole, `ok`
-// discriminant and all. Unlike the evaluate-family (which strips `ok` and emits
-// `{ error }`), offset KEEPS `ok` on both arms — reconciling that cross-tool
-// asymmetry is a separate issue, deliberately out of scope here. These pins lock
-// the full failure and success shapes.
+// vestlang_resolve_offset's handler does `jsonResult(result)`, so the structured
+// result rides the wire whole, `ok` discriminant and all. Under #345 this is now
+// the reference shape every tool emits — the evaluate family and persist/rehydrate
+// were brought into line with it. These pins lock offset's full failure and
+// success shapes.
 
 type CallResult = {
   isError?: boolean;

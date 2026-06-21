@@ -3,10 +3,12 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
-// vestlang_lint reports two flags: `ok` gates on error severity (valid/storable,
-// matching vestlang_persist), `clean` is true only with no diagnostics at all. A
-// warning leaves `ok: true`, `clean: false` — it's advisory. This guards that
-// split against the any-diagnostic gating the tool used to carry (issue #331).
+// vestlang_lint reports the domain flag `errorFree` (gates on error severity —
+// valid/storable, matching vestlang_persist) and `clean` (true only with no
+// diagnostics at all). A warning leaves `errorFree: true`, `clean: false` — it's
+// advisory. This guards that split against the any-diagnostic gating the tool
+// used to carry (issue #331). The top-level `ok` is the universal envelope flag
+// (#345): always true here, since lint never refuses — distinct from `errorFree`.
 
 type CallResult = {
   isError?: boolean;
@@ -15,7 +17,12 @@ type CallResult = {
 };
 
 type Diagnostic = { ruleId: string; severity: string; message: string };
-type LintResult = { ok: boolean; clean: boolean; diagnostics: Diagnostic[] };
+type LintResult = {
+  ok: boolean;
+  errorFree: boolean;
+  clean: boolean;
+  diagnostics: Diagnostic[];
+};
 
 async function connectClient(): Promise<Client> {
   const server = createServer();
@@ -39,29 +46,32 @@ async function lint(dsl: string): Promise<LintResult> {
   return res.structuredContent as LintResult;
 }
 
-describe("mcp-server / vestlang_lint ok+clean gating (#331)", () => {
-  it("a clean program is ok and clean with no diagnostics", async () => {
+describe("mcp-server / vestlang_lint errorFree+clean gating (#331, #345)", () => {
+  it("a clean program is errorFree and clean with no diagnostics", async () => {
     const sc = await lint(
       "VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month",
     );
-    expect(sc.ok).toBe(true);
+    expect(sc.ok).toBe(true); // envelope: the call answered
+    expect(sc.errorFree).toBe(true);
     expect(sc.clean).toBe(true);
     expect(sc.diagnostics).toHaveLength(0);
   });
 
-  it("a warning-only program is ok but not clean (advisory)", async () => {
+  it("a warning-only program is errorFree but not clean (advisory)", async () => {
     const sc = await lint("1/2 VEST OVER 12 months EVERY 1 month");
-    expect(sc.ok).toBe(true);
+    expect(sc.ok).toBe(true); // envelope: the call answered
+    expect(sc.errorFree).toBe(true);
     expect(sc.clean).toBe(false);
     expect(sc.diagnostics).toHaveLength(1);
     expect(sc.diagnostics[0].ruleId).toBe("portion-allocation");
   });
 
-  it("an error program is neither ok nor clean", async () => {
+  it("an error program is neither errorFree nor clean (but the call still answers)", async () => {
     const sc = await lint(
       "VEST FROM EVENT x AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 48 months EVERY 1 month",
     );
-    expect(sc.ok).toBe(false);
+    expect(sc.ok).toBe(true); // envelope: lint never refuses
+    expect(sc.errorFree).toBe(false);
     expect(sc.clean).toBe(false);
     expect(sc.diagnostics).toHaveLength(1);
     expect(sc.diagnostics[0].ruleId).toBe("unsatisfiable-date-window");

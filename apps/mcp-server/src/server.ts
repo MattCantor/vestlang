@@ -78,12 +78,27 @@ partial projection, and (when the event was compared against a date) an entry in
 absenceAssumptions. A comparison against an unfired event is pending, never silently
 satisfied or impossible — the event could still be recorded later, even backdated.
 
-When a tool fails it doesn't throw — it returns a structured
-{ error: { ruleId, message, loc? } }. The \`ruleId\` names the failure mode
-("syntax-error" for malformed DSL, carrying \`loc\` — the source span; others such
-as "evaluation-error" or tool-specific codes like "offset-unresolved" for the rest),
-and \`message\` is the human-readable explanation. Always check for an \`error\`
-field on the result before reading the rest.`;
+Every tool result is tagged with a top-level \`ok\` boolean — one envelope across
+all tools, success or refusal. On success: { ok: true, ...payload }. On a
+structured refusal the tool still ran fine and its answer is the refusal:
+{ ok: false, error: { ruleId, message, loc?, unresolved? } }. The \`ruleId\` is the
+machine-readable failure code, present on every refusing tool ("syntax-error" for
+malformed DSL, carrying \`loc\` — the source span; "evaluation-error"; tool-specific
+codes such as "persist-not-storable", "rehydrate-missing-grant-date",
+"offset-unresolved"). \`message\` is the human-readable explanation. Branch on
+\`ok\` — a false \`ok\` is data to read, not a thrown error.
+
+That envelope is separate from MCP's \`isError\` flag. \`isError: true\` marks a
+genuine unstructured exception (a bad-input throw from vestlang_stringify or
+vestlang_infer_schedule, a date-math overflow past the representable range, or an
+input-schema rejection) — there is no \`ruleId\` to expose and no \`ok\` on the
+result. A robust consumer checks \`isError\` first (protocol/exception failure),
+then \`ok\` (structured refusal vs. success).
+
+Note \`ok\` is the envelope flag, distinct from any domain field inside a success:
+vestlang_evaluate's \`valid\` (false ⇔ the schedule over-allocates the grant) and
+vestlang_lint's \`errorFree\` (false ⇔ there are error-severity diagnostics) both
+live inside an { ok: true, ... } result.`;
 
 /* ------------------------
  * Shared Zod schemas
@@ -152,6 +167,14 @@ function jsonResult<T>(output: T) {
   };
 }
 
+// Tags a success payload with the envelope's `ok: true`. Used where the wire
+// intentionally spreads/renames fields (the evaluate family, the pure tools,
+// lint) rather than passing a `Result` through whole. A `Result`'s own success
+// arm already carries `ok: true`, so those go straight to `jsonResult(result)`.
+function okResult<T extends Record<string, unknown>>(payload: T) {
+  return jsonResult({ ok: true as const, ...payload });
+}
+
 /* ------------------------
  * Server
  * ------------------------ */
@@ -170,7 +193,7 @@ export function createServer(): McpServer {
     {
       title: "Parse vestlang",
       description:
-        "Parse vestlang DSL text into a raw AST (RawProgram). Errors return a structured syntax diagnostic with source location.",
+        "Parse vestlang DSL text into a raw AST (RawProgram). On success returns { ok: true, ast }. A syntax error returns { ok: false, error } with the diagnostic ruleId and source location.",
       inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
       annotations: {
         readOnlyHint: true,
@@ -180,9 +203,9 @@ export function createServer(): McpServer {
       },
     },
     async ({ dsl }) => {
-      const result = parseRaw(dsl);
-      if (!result.ok) return jsonResult({ error: result.error });
-      return jsonResult({ ast: result.ast });
+      // The Result already carries the `ok` discriminant on both arms, so it
+      // rides the wire whole — no per-handler reshaping.
+      return jsonResult(parseRaw(dsl));
     },
   );
 
@@ -202,9 +225,8 @@ export function createServer(): McpServer {
       },
     },
     async ({ dsl }) => {
-      const result = parseToProgram(dsl);
-      if (!result.ok) return jsonResult({ error: result.error });
-      return jsonResult({ program: result.program });
+      // Pass the Result through whole — its `ok` discriminant is the envelope.
+      return jsonResult(parseToProgram(dsl));
     },
   );
 
@@ -241,7 +263,7 @@ export function createServer(): McpServer {
             ? (JSON.parse(ast) as Statement | Program)
             : (ast as Statement | Program);
         const text = stringify(node);
-        return jsonResult({ dsl: text });
+        return okResult({ dsl: text });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         return toolError(
@@ -298,7 +320,7 @@ export function createServer(): McpServer {
           })),
           grantDate: grant_date,
         });
-        return jsonResult(result);
+        return okResult({ ...result });
       } catch (err: unknown) {
         // Input-contract violations carry a clean domain message; anything else
         // is an internal error from a deeper layer and must not leak its text.
@@ -334,11 +356,11 @@ export function createServer(): McpServer {
     },
     async (params) => {
       const result = runEvaluate(params.dsl, toGrant(params));
-      if (!result.ok) return jsonResult({ error: result.error });
+      if (!result.ok) return jsonResult({ ok: false, error: result.error });
       // The view carries the verdicts and published fields; the breakdown rides
       // alongside, and on a rescue so does the recovered block (events-only
       // reason + inferred DSL).
-      return jsonResult({
+      return okResult({
         ...result.view,
         breakdown: result.breakdown,
         ...(result.recovered ? { recovered: result.recovered } : {}),
@@ -371,8 +393,8 @@ export function createServer(): McpServer {
     },
     async (params) => {
       const result = runAsOf(params.dsl, toGrant(params), params.as_of);
-      if (!result.ok) return jsonResult({ error: result.error });
-      return jsonResult({
+      if (!result.ok) return jsonResult({ ok: false, error: result.error });
+      return okResult({
         as_of: result.asOf,
         vested: result.vested,
         unvested: result.unvested,
@@ -412,8 +434,8 @@ export function createServer(): McpServer {
         params.from,
         params.to,
       );
-      if (!result.ok) return jsonResult({ error: result.error });
-      return jsonResult({
+      if (!result.ok) return jsonResult({ ok: false, error: result.error });
+      return okResult({
         from: result.from,
         to: result.to,
         vested_in_window: result.vested_in_window,
@@ -429,7 +451,7 @@ export function createServer(): McpServer {
     {
       title: "Lint vestlang",
       description:
-        "Run vestlang's syntax and semantic linter against DSL text. Returns `ok` (true when there are no error-severity diagnostics — valid/storable, matching vestlang_persist), `clean` (true when there are no diagnostics at all), and the `diagnostics` list, each with ruleId, severity, message, and (when available) source location. Non-error diagnostics (warnings, info) are advisory: they appear in `diagnostics` and set `clean` false but do NOT flip `ok`.",
+        "Run vestlang's syntax and semantic linter against DSL text. The call always answers (envelope `ok: true`); the lint verdict is `errorFree` (true when there are no error-severity diagnostics — valid/storable, matching vestlang_persist), alongside `clean` (true when there are no diagnostics at all) and the `diagnostics` list, each with ruleId, severity, message, and (when available) source location. Non-error diagnostics (warnings, info) are advisory: they appear in `diagnostics` and set `clean` false but do NOT flip `errorFree`.",
       inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
       annotations: {
         readOnlyHint: true,
@@ -440,11 +462,13 @@ export function createServer(): McpServer {
     },
     async ({ dsl }) => {
       const { diagnostics } = lintText(dsl);
-      return jsonResult({
-        // `ok` ⇔ storable/valid: gates on error severity only, matching
-        // vestlang_persist. `clean` ⇔ spotless: no diagnostics of any severity.
-        // A warning leaves `ok: true`, `clean: false`.
-        ok: errorDiagnostics(diagnostics).length === 0,
+      // `errorFree` ⇔ storable/valid: gates on error severity only, matching
+      // vestlang_persist. `clean` ⇔ spotless: no diagnostics of any severity.
+      // A warning leaves `errorFree: true`, `clean: false`. (The envelope's own
+      // `ok: true`, supplied by okResult, means the lint call answered — lint
+      // never refuses — and is distinct from this domain `errorFree` verdict.)
+      return okResult({
+        errorFree: errorDiagnostics(diagnostics).length === 0,
         clean: diagnostics.length === 0,
         diagnostics,
       });
@@ -483,8 +507,12 @@ export function createServer(): McpServer {
         events: params.events,
         vesting_day_of_month: params.vesting_day_of_month,
       });
-      if (!result.ok) return toolError(result.error.message);
-      return jsonResult({
+      // A structured refusal (`persist-not-storable`) rides the envelope as
+      // { ok: false, error } so its ruleId reaches the wire — it is data, not an
+      // MCP exception. (A genuine internal throw still surfaces as isError via
+      // the SDK.)
+      if (!result.ok) return jsonResult({ ok: false, error: result.error });
+      return okResult({
         artifact: result.artifact,
         pending: result.pending,
         dead: result.dead,
@@ -529,9 +557,10 @@ export function createServer(): McpServer {
         grant_quantity: params.grant_quantity,
         events: params.events,
       });
-      if (!result.ok) return toolError(result.error.message);
-      const { ok: _ok, ...output } = result;
-      return jsonResult(output);
+      // The Result rides the wire whole on both arms: a structured refusal
+      // (`rehydrate-*`) keeps its ruleId under { ok: false, error }, and the
+      // success arm already carries `ok: true` next to its payload — no strip.
+      return jsonResult(result);
     },
   );
 
@@ -571,7 +600,7 @@ export function createServer(): McpServer {
         unit,
         rule ?? DEFAULT_VESTING_DAY_OF_MONTH,
       );
-      return jsonResult({ date: result });
+      return okResult({ date: result });
     },
   );
 
@@ -597,7 +626,7 @@ export function createServer(): McpServer {
     },
     async ({ from, to, unit }) => {
       const result = dateDiff(from, to, unit);
-      return jsonResult(result);
+      return okResult({ ...result });
     },
   );
 
@@ -663,7 +692,7 @@ export function createServer(): McpServer {
     },
     async ({ date, rule }) => {
       const result = resolveVestingDay(date, rule);
-      return jsonResult({ date: result });
+      return okResult({ date: result });
     },
   );
 
