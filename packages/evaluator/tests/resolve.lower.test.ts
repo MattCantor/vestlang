@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
 import type {
   Amount,
+  Blocker,
   ResolutionContextInput,
   OCTDate,
   Program,
@@ -13,6 +14,7 @@ import {
   resolveInterchange,
   resolveToCore,
 } from "../src/resolve/index";
+import { disclosuresOf } from "../src/resolve/lower";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -317,5 +319,47 @@ describe("resolveToCore — QUANTITY amount lowers to a portion of the grant", (
       denominator: 1,
     });
     expect(result.findings).toEqual([]);
+  });
+});
+
+describe("disclosuresOf — the shared committed-disclosure read (#368)", () => {
+  const ipoBlocker: Blocker = {
+    type: "EVENT_NOT_YET_OCCURRED",
+    event: "ipo",
+    through: "2024-06-01",
+  };
+
+  it("a COMMITTED start passes its disclosures straight through", () => {
+    // The committed EARLIER_OF floor: a concrete date plus the pending sibling's
+    // blocker the three arms must surface. No compiler in the loop — the accessor
+    // is the unit under test.
+    expect(
+      disclosuresOf({
+        state: "COMMITTED",
+        date: "2024-06-01",
+        base: { type: "DATE" },
+        disclosures: [ipoBlocker],
+      }),
+    ).toEqual([ipoBlocker]);
+  });
+
+  it("a RESOLVED start has nothing to disclose → []", () => {
+    expect(
+      disclosuresOf({
+        state: "RESOLVED",
+        date: "2024-06-01",
+        base: { type: "DATE" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("a pending (PENDING_EVENT) start discloses nothing through this read → []", () => {
+    expect(
+      disclosuresOf({
+        state: "PENDING_EVENT",
+        eventId: "ipo",
+        blockers: [ipoBlocker],
+      }),
+    ).toEqual([]);
   });
 });
