@@ -7,7 +7,9 @@ import type {
   NodeMeta,
   VestingNode,
 } from "@vestlang/types";
+import { isEmptySatisfiableSet } from "@vestlang/core";
 import { isImpossibleBlocker } from "../blockerTree.js";
+import { createGateImpossibleBlocker } from "./constraint.js";
 import { evaluateVestingBase } from "./vestingBase.js";
 import { evaluateConstrainedVestingNode } from "./constrainedVestingNode.js";
 
@@ -41,6 +43,24 @@ export function evaluateVestingNode(
 
   // Return the resolved vesting node base if there are no constraints
   if (!node.condition) return resBase;
+
+  // A gate whose date constraints are *jointly* empty — their windows don't
+  // overlap (`EVENT ipo AFTER 2026-01-01 AND BEFORE 2025-01-01`) — can never be
+  // satisfied by any firing on any date. The per-operand combiner below can't see
+  // that: each conjunct is individually a satisfiable "wait, bounded on one side",
+  // so it reads the node as merely pending. Only the joint interval analysis sees
+  // the emptiness, and it's firing-invariant, so run it once here on the whole
+  // condition (this entry sees it exactly once) and short-circuit to a single
+  // impossible blocker carrying the whole gate. Replacing the combiner's output —
+  // not appending to it — is what makes the node classify IMPOSSIBLE: a mixed list
+  // of one impossible plus the pending EVENT_NOT_YET_OCCURRED blockers would read
+  // UNRESOLVED instead.
+  if (isEmptySatisfiableSet(node.condition)) {
+    return {
+      type: "IMPOSSIBLE",
+      blockers: [createGateImpossibleBlocker(node)],
+    };
+  }
 
   // Resolve constraints
   const blockers = evaluateConstrainedVestingNode(

@@ -175,20 +175,26 @@ describe("present/view — pending vs dead split", () => {
 //   - OR needs only one arm, so while any arm is still waiting the dead arms are moot;
 //     only when every arm is dead is the OR itself a contradiction.
 describe("moot-operand collapse in AND / OR starts", () => {
-  // The boundary case that must NOT collapse: both conjuncts gate on the same unfired
-  // event, so firing-blind neither reads as a contradiction — they're both waiting.
-  // The combiner leaves them alone and the statement stays a storable template.
-  it("an event-subject AND with two waiting conjuncts is unchanged (no collapse)", () => {
+  // #287: an event-subject AND whose two conjuncts pin the date to a JOINTLY-empty
+  // window (after 2026, before 2025) is dead, not waiting. Per-operand neither
+  // conjunct is a contradiction — each is a satisfiable "wait, bounded on one side"
+  // — so the combiner alone reads it as a storable template. The joint interval
+  // analysis at the gated-node entry sees the windows don't overlap and classifies
+  // the node impossible. Empty-window is firing-invariant, so both verdicts flip.
+  it("an event-subject AND with a jointly-empty date window is impossible (#287)", () => {
     const s = evalDsl(
       `VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS`,
     );
 
-    expect(s.interchange.status).toBe("template");
-    expect(s.resolution.status).toBe("template");
-    expect(s.resolution.dead).toEqual([]);
+    expect(s.interchange.status).toBe("impossible");
+    expect(s.resolution.status).toBe("impossible");
+    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+      "IMPOSSIBLE_CONDITION",
+    ]);
 
     const p = presentSchedule(s);
-    expect(p.dead).toBe(false);
+    expect(p.dead).toBe(true);
+    expect(p.representable).toBe(false);
   });
 
   // A conjunct that's dead only because of a known firing (an event fired past its
