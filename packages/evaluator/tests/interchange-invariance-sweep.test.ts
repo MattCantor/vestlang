@@ -81,6 +81,30 @@ const laterOfDateOrEvent: VestingNodeExpr<"GRANT_DATE"> = {
   ],
 };
 
+// A nested mixed combinator: an outer LATER OF folding over an inner EARLIER OF that
+// has a date arm and an event arm. Closed-world, the inner EARLIER OF commits to its
+// date floor (leaning on `ipo` staying absent) and the outer LATER OF reads that
+// floor — the #363 path. Firing-blind, no commit happens, so the storable verdict
+// must be invariant to `ipo`. Two date orderings: one where the inner floor is the
+// later of the two (the event is material), one where the outer date swamps it (the
+// event is immaterial but still disclosed closed-world).
+const nestedLaterOverEarlier = (
+  innerDate: string,
+  outerDate: string,
+): VestingNodeExpr<"GRANT_DATE"> => ({
+  type: "NODE_LATER_OF",
+  items: [
+    {
+      type: "NODE_EARLIER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseDate(innerDate)),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+      ],
+    },
+    makeSingletonNode(makeVestingBaseDate(outerDate)),
+  ],
+});
+
 const corpus: CorpusEntry[] = [
   {
     // A start anchored to a bare event: nothing fired, the whole grid waits on it.
@@ -182,6 +206,42 @@ const corpus: CorpusEntry[] = [
       },
     ],
     events: { ipo: "2026-06-01" },
+  },
+  {
+    // #363 — nested LATER OF (EARLIER OF (DATE, EVENT), DATE), inner floor material
+    // (the inner date is the later of the two, so a firing of ipo could pull the
+    // start earlier closed-world). Firing-blind the storable verdict ignores ipo.
+    name: "nested LATER OF over committed EARLIER OF (material)",
+    program: [
+      {
+        type: "STATEMENT",
+        amount: portion(1, 1),
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: nestedLaterOverEarlier("2026-09-01", "2026-06-01"),
+          periodicity: monthly48,
+        },
+      },
+    ],
+    events: { ipo: "2026-03-01" },
+  },
+  {
+    // #363 — same nesting, inner floor immaterial (the outer date swamps it). The
+    // closed-world reading still discloses ipo, but the storable verdict stays
+    // firing-invariant — the property this sweep pins.
+    name: "nested LATER OF over committed EARLIER OF (vacuous)",
+    program: [
+      {
+        type: "STATEMENT",
+        amount: portion(1, 1),
+        expr: {
+          type: "SCHEDULE",
+          vesting_start: nestedLaterOverEarlier("2026-06-01", "2026-09-01"),
+          periodicity: monthly48,
+        },
+      },
+    ],
+    events: { ipo: "2026-03-01" },
   },
   {
     // A THEN chain whose head waits on an unfired event: the tail can't be dated
@@ -367,6 +427,34 @@ describe("interchange — firing-invariance across a corpus of shapes", () => {
 
       expect(none).toEqual(own);
       expect(fired).toEqual(own);
+    });
+  }
+});
+
+// #363 AC-4(a) — the COMMITTED arm that carries the nested disclosure arises only
+// in `resolution` mode (the commit branch is mode-gated), so the firing-blind
+// interchange read never commits and surfaces no absence assumption. The schedule's
+// `absenceAssumptions` is the closed-world (resolution) read, so we assert the
+// firing-blind verdict is a stable EVENT template — the storable floor — rather than
+// anything that could have leaned on a firing.
+describe("interchange — nested committed disclosures do not reach the storable verdict", () => {
+  const nested363 = corpus.filter((e) => e.name.includes("EARLIER OF"));
+
+  it("the nested LATER-over-EARLIER shapes are in the corpus", () => {
+    expect(nested363.length).toBe(2);
+  });
+
+  for (const { name, program } of nested363) {
+    it(`${name}: interchange is a firing-blind EVENT template (no commitment)`, () => {
+      const out = evaluateProgram(program, ctxWith({}));
+      if (out.interchange.status !== "template")
+        throw new Error(`expected interchange template for ${name}`);
+      // The storable start is the synthetic event, not a committed date — the
+      // firing-blind path never commits, so nothing absence-disclosure-shaped rode
+      // up into the storable verdict.
+      expect(out.interchange.template.statements[0].vesting_base.type).toBe(
+        "EVENT",
+      );
     });
   }
 });

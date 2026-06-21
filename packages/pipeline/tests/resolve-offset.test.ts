@@ -300,4 +300,28 @@ describe("runResolveOffset", () => {
       expect(offsetPairs).toEqual(evaluatePairs);
     }
   });
+
+  // #363 — a committed inner EARLIER OF consumed by an outer LATER OF used to drop
+  // its disclosure on the way up. The narrow resolve_offset surface must carry it
+  // too: the inner commits to 2024-09-01, the outer LATER OF folds it against
+  // 2024-06-01 (so the date stays 2024-09-01), and `e` is disclosed `through` that
+  // outer-fold date (Decision 2), rendered with the same message wording.
+  it("LATER OF (EARLIER OF (DATE, EVENT e), DATE), e unfired → resolves with the nested-commit disclosure", () => {
+    const r = runResolveOffset({
+      expr: "LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)",
+      grant_date: "2024-01-01",
+      events: {},
+    });
+    expect(r).toEqual({
+      ok: true,
+      date: "2024-09-01",
+      absenceAssumptions: [
+        {
+          eventId: "e",
+          through: "2024-09-01",
+          message: "e did not occur on/before 2024-09-01",
+        },
+      ],
+    });
+  });
 });

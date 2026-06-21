@@ -41,6 +41,15 @@ function anyImpossible<T>(x: PickReturn<T>[]) {
 function collectBlockers<T>(x: PickReturn<T>[]): Blocker[] {
   const blockers: Blocker[] = [];
   for (const r of x) {
+    // A committed inner pick (an EARLIER_OF that settled to its floor) carries the
+    // absence assumptions its commit leaned on. An outer fold of the other type
+    // reads only this arm's floor date, so without harvesting these here the
+    // assumptions would vanish one level up (#363). A RESOLVED or partial pick has
+    // no assumption to contribute, so it's skipped.
+    if (isPickedCommitted(r)) {
+      blockers.push(...r.meta.disclosures);
+      continue;
+    }
     if (r.type === "PICKED") continue;
     blockers.push(...r.blockers);
   }
@@ -63,10 +72,10 @@ function collectImpossibleBlockers<T>(x: PickReturn<T>[]): ImpossibleBlocker[] {
 // fully RESOLVED pick and an EARLIER_OF that committed to its floor (COMMITTED)
 // qualify — an outer selector folds over the committed inner pick's floor as if it
 // were settled, so a committed inner pick doesn't re-freeze one level up. The
-// committed pick's own disclosures are NOT carried up here — a nested committed
-// EARLIER_OF consumed by an outer fold drops them, which the full `evaluate` path
-// hits identically. That gap is live and tracked as #363 (#325 fixed only the
-// top-level narrow-path case); the floor this contributes is correct regardless.
+// committed pick's own disclosures don't ride along on this date: they're harvested
+// separately by `collectBlockers` (which reads a COMMITTED arm's `meta.disclosures`)
+// and stamped through the outer fold's date, so a nested committed EARLIER_OF
+// consumed by an outer fold still discloses its assumed-absent siblings.
 type SettledPick<T> = PickedResolved<T> | PickedCommitted<T>;
 
 const isSettled = <T>(x: PickReturn<T>): x is SettledPick<T> =>
@@ -195,9 +204,22 @@ function handleSelector<T extends Schedule | VestingNode>(
   const allSettled = hasAnySettled && settled.length === live.length;
   const pendingCount = live.length - settled.length;
 
-  // Every live arm settled → the selector settles to the best of them.
+  // Every live arm settled → the selector settles to the best of them. If any arm
+  // was a committed inner pick (an EARLIER_OF that leaned on assumed-absent
+  // siblings), those assumptions are harvested by `collectBlockers` and re-stamped
+  // through this fold's date. With assumptions in hand we settle to COMMITTED so
+  // they're carried up (#363); with none — the common case, e.g. all arms plain
+  // RESOLVED — we settle to RESOLVED exactly as before. (Firing-blind modes never
+  // commit, so the harvest is empty there and this stays RESOLVED.)
   if (policy.selectorIsSatisfied(live)) {
     const { picked, date } = reduceBest(settled, policy.selector);
+    const disclosures = withBoundary(collectBlockers(live), date);
+    if (disclosures.length > 0)
+      return {
+        type: "PICKED",
+        picked,
+        meta: { type: "COMMITTED", date, disclosures },
+      };
     return { type: "PICKED", picked, meta: { type: "RESOLVED", date } };
   }
 
