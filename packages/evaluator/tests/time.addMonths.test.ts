@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addMonthsRule } from "../src/evaluate/time.js";
+import { addMonthsRule } from "../src/interpret/time.js";
 import { ResolutionContext, OCTDate, VestingDayOfMonth } from "@vestlang/types";
 
 const ctx = (v: VestingDayOfMonth): ResolutionContext => ({

@@ -4,7 +4,7 @@ import {
   Program,
   Installment,
 } from "@vestlang/types";
-import { evaluateProgram } from "./orchestrate.js";
+import { evaluateProgram } from "./evaluate.js";
 import { createEvaluationContext } from "./utils.js";
 import { amountToFraction, claimAllocator } from "./claims.js";
 

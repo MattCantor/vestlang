@@ -27,7 +27,7 @@ import {
   type GridCliff,
   type RawEvent,
 } from "@vestlang/core";
-import { makeResolvedInstallment } from "../evaluate/makeTranches.js";
+import { makeResolvedInstallment } from "../interpret/makeTranches.js";
 import {
   unresolvedInstallments,
   isVoid,

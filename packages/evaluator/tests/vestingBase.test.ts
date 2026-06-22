@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   evaluateVestingBase,
   type CliffEvaluationContext,
-} from "../src/evaluate/vestingNode/vestingBase.js";
+} from "../src/interpret/vestingNode/vestingBase.js";
 import type { ResolvedNode } from "@vestlang/types";
 import {
   baseCtx,

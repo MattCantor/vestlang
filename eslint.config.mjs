@@ -96,25 +96,25 @@ export default tseslint.config(
           selector:
             'TSAsExpression > TSTypeReference[typeName.name="DeadBlocker"]',
           message:
-            "Brand casts to DeadBlocker are confined to packages/evaluator/src/evaluate/blockerTree.ts (partitionResolutionBlockers).",
+            "Brand casts to DeadBlocker are confined to packages/evaluator/src/interpret/blockerTree.ts (partitionResolutionBlockers).",
         },
         {
           selector:
             'TSAsExpression > TSTypeReference[typeName.name="StaticImpossibleBlocker"]',
           message:
-            "Brand casts to StaticImpossibleBlocker are confined to packages/evaluator/src/evaluate/blockerTree.ts (brandStatic).",
+            "Brand casts to StaticImpossibleBlocker are confined to packages/evaluator/src/interpret/blockerTree.ts (brandStatic).",
         },
         {
           selector:
             'TSAsExpression > TSArrayType > TSTypeReference[typeName.name="DeadBlocker"]',
           message:
-            "Brand casts to DeadBlocker[] are confined to packages/evaluator/src/evaluate/blockerTree.ts (partitionResolutionBlockers).",
+            "Brand casts to DeadBlocker[] are confined to packages/evaluator/src/interpret/blockerTree.ts (partitionResolutionBlockers).",
         },
         {
           selector:
             'TSAsExpression > TSArrayType > TSTypeReference[typeName.name="StaticImpossibleBlocker"]',
           message:
-            "Brand casts to StaticImpossibleBlocker[] are confined to packages/evaluator/src/evaluate/blockerTree.ts (brandStatic).",
+            "Brand casts to StaticImpossibleBlocker[] are confined to packages/evaluator/src/interpret/blockerTree.ts (brandStatic).",
         },
         // Also the generic spelling `as Array<DeadBlocker>` / `as Array<StaticImpossibleBlocker>`,
         // so the `[]` ban above can't be sidestepped by switching array syntax.
@@ -122,13 +122,13 @@ export default tseslint.config(
           selector:
             'TSAsExpression > TSTypeReference[typeName.name="Array"] > TSTypeParameterInstantiation > TSTypeReference[typeName.name="DeadBlocker"]',
           message:
-            "Brand casts to Array<DeadBlocker> are confined to packages/evaluator/src/evaluate/blockerTree.ts (partitionResolutionBlockers).",
+            "Brand casts to Array<DeadBlocker> are confined to packages/evaluator/src/interpret/blockerTree.ts (partitionResolutionBlockers).",
         },
         {
           selector:
             'TSAsExpression > TSTypeReference[typeName.name="Array"] > TSTypeParameterInstantiation > TSTypeReference[typeName.name="StaticImpossibleBlocker"]',
           message:
-            "Brand casts to Array<StaticImpossibleBlocker> are confined to packages/evaluator/src/evaluate/blockerTree.ts (brandStatic).",
+            "Brand casts to Array<StaticImpossibleBlocker> are confined to packages/evaluator/src/interpret/blockerTree.ts (brandStatic).",
         },
       ],
     },
@@ -137,7 +137,7 @@ export default tseslint.config(
   // The one sanctioned home for the brand casts: blockerTree.ts mints both
   // per-space brands, so the ban above is lifted here only.
   {
-    files: ["packages/evaluator/src/evaluate/blockerTree.ts"],
+    files: ["packages/evaluator/src/interpret/blockerTree.ts"],
     rules: {
       "no-restricted-syntax": "off",
     },

@@ -1,6 +1,6 @@
 // Policy-aware, DST-safe date math over canonical ISO dates (YYYY-MM-DD).
 //
-// Ported from vestlang's evaluate/time.ts. Two adaptations for core:
+// Ported from vestlang's interpret/time.ts. Two adaptations for core:
 //   - the day-of-month policy is passed directly as a VestingDayOfMonth value
 //     (core has no evaluator context to read it off); it defaults to the
 //     canonical default, VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.

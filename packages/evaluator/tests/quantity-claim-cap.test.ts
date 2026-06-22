@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 
 describe("QUANTITY claim capped at the grant", () => {

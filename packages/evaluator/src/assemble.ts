@@ -17,9 +17,9 @@ import type {
   InterchangeVerdict,
 } from "@vestlang/types";
 import { compileToInstallments } from "@vestlang/core";
-import { makeResolvedInstallment } from "./evaluate/makeTranches.js";
-import { partitionResolutionBlockers } from "./evaluate/blockerTree.js";
-import { collectAbsences } from "./evaluate/absences.js";
+import { makeResolvedInstallment } from "./interpret/makeTranches.js";
+import { partitionResolutionBlockers } from "./interpret/blockerTree.js";
+import { collectAbsences } from "./interpret/absences.js";
 import type { ResolveResult } from "./resolve/types.js";
 
 /** Map a resolve verdict to its published EvaluatedSchedule arm (no findings yet).

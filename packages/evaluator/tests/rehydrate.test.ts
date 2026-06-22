@@ -21,7 +21,7 @@ import {
 import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram, evaluateStatement } from "../src/orchestrate";
+import { evaluateProgram, evaluateStatement } from "../src/evaluate";
 import {
   rehydrate,
   reparseDefinition,

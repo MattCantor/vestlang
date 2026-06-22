@@ -15,7 +15,7 @@ import {
   isPickedResolved,
   isPickedCommitted,
   pickedDate,
-} from "../src/evaluate/utils.js";
+} from "../src/interpret/utils.js";
 
 type PersistedArtifactRuntime = PersistedArtifact["runtime"];
 

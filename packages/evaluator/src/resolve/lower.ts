@@ -33,9 +33,9 @@ import type {
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { advanceCursor, eq, CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
-import { evaluateScheduleExpr } from "../evaluate/selectors.js";
+import { evaluateScheduleExpr } from "../interpret/selectors.js";
 import { amountToFraction } from "../claims.js";
-import { isPickedCommitted, isPickedResolved } from "../evaluate/utils.js";
+import { isPickedCommitted, isPickedResolved } from "../interpret/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
 import { SYNTHETIC_START_EVENT_ID, syntheticEventId } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";

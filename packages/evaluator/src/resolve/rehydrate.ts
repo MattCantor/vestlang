@@ -40,9 +40,9 @@ import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
-import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { partitionResolutionBlockers } from "../evaluate/blockerTree.js";
-import { isPickedResolved, type PickReturn } from "../evaluate/utils.js";
+import { evaluateVestingNodeExpr } from "../interpret/selectors.js";
+import { partitionResolutionBlockers } from "../interpret/blockerTree.js";
+import { isPickedResolved, type PickReturn } from "../interpret/utils.js";
 import {
   assertReloadKeysReserved,
   isSyntheticEventId,
