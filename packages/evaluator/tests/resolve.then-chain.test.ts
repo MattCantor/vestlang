@@ -923,9 +923,9 @@ describe("resolveToCore — pending-head chain, tail gated event cliff (R2-B14)"
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(
-      result.template.statements[1].event_condition?.event_id,
-    ).toMatch(/^evt:\d+$/);
+    expect(result.template.statements[1].event_condition?.event_id).toMatch(
+      /^evt:\d+$/,
+    );
     expect(result.pendingInstallments.reduce((s, i) => s + i.amount, 0)).toBe(
       100000,
     );

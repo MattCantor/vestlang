@@ -327,9 +327,7 @@ describe("kernel oracle — a schedule held by its event_condition lays out the 
     expect(held.kind).toBe("template");
     if (held.kind !== "template") return;
     // Unfired event_condition → the held template releases nothing.
-    expect(
-      compile(held.template, held.totalShares, held.runtime),
-    ).toEqual([]);
+    expect(compile(held.template, held.totalShares, held.runtime)).toEqual([]);
 
     // Fire both events before the start so the synthetic fold has no lump effect:
     // the grid then lays out evenly on the clamped month-ends, the same walk.

@@ -48,7 +48,7 @@ import {
 //                  mints one `evt:<n>` for it (deduped by rendered recipe) and
 //                  stores the rendered `expr` in the sidecar so a reload
 //                  re-resolves it (→ max of the event arms, the gated date, …).
-export type EventSide =
+type EventSide =
   | { kind: "bare"; eventId: string }
   | { kind: "synthetic"; expr: VestingNodeExpr<"VESTING_START"> };
 
@@ -221,8 +221,7 @@ const laterOfArms = (
 // non-event cliff is no, trivially.
 const decomposesToEventCondition = (
   expr: VestingNodeExpr<"VESTING_START">,
-): boolean =>
-  expr.type !== "NODE_EARLIER_OF" && referencesEvent(expr);
+): boolean => expr.type !== "NODE_EARLIER_OF" && referencesEvent(expr);
 
 // Wrap one or more arms back into a single expression: a lone arm stands on its
 // own, several become a `LATER OF` (max of them). Used to rebuild the time side
@@ -232,11 +231,14 @@ const joinLaterOf = (
 ): VestingNodeExpr<"VESTING_START"> =>
   arms.length === 1
     ? arms[0]
-    : { type: "NODE_LATER_OF", items: arms as [
-        VestingNodeExpr<"VESTING_START">,
-        VestingNodeExpr<"VESTING_START">,
-        ...VestingNodeExpr<"VESTING_START">[],
-      ] };
+    : {
+        type: "NODE_LATER_OF",
+        items: arms as [
+          VestingNodeExpr<"VESTING_START">,
+          VestingNodeExpr<"VESTING_START">,
+          ...VestingNodeExpr<"VESTING_START">[],
+        ],
+      };
 
 // The event side of a held cliff, classified for `event_condition`. A single bare
 // `EVENT e` (leaf node, no offsets, no gate) keeps its real id; anything richer —
@@ -358,9 +360,7 @@ const lowerEventCliff = (
   // Partition a top-level LATER OF into event-referencing arms and time/date arms.
   // A bare event cliff (or a gated/offset single event) isn't a LATER OF, so it's
   // the whole expression as the single event arm with no time side.
-  const eventArms = arms
-    ? arms.filter((a) => referencesEvent(a))
-    : [cliffExpr];
+  const eventArms = arms ? arms.filter((a) => referencesEvent(a)) : [cliffExpr];
   const timeArms = arms ? arms.filter((a) => !referencesEvent(a)) : [];
 
   // The time baseline: lower the time arms as their own cliff (max of them). Its

@@ -617,7 +617,11 @@ describe("resolveToCore — an event-held cliff stores as a template, held until
     expect(result.template.statements[0].cliff).toBeUndefined();
     // Held: compiling the template against the firing-free interchange runtime
     // releases nothing (AC 5/7).
-    const compiled = compile(result.template, result.totalShares, result.runtime);
+    const compiled = compile(
+      result.template,
+      result.totalShares,
+      result.runtime,
+    );
     expect(compiled).toEqual([]);
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
@@ -805,22 +809,29 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
   it.each([
     ["before the start", "2025-02-01"],
     ["after the start, before the first installment", "2025-06-15"],
-  ])("fda fires %s → a template; the grid vests evenly (empty lump drops)", (_label, fda) => {
-    const ctx = ctxInput({ fda }, 120000);
-    const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("template");
+  ])(
+    "fda fires %s → a template; the grid vests evenly (empty lump drops)",
+    (_label, fda) => {
+      const ctx = ctxInput({ fda }, 120000);
+      const result = resolveToCore(program, ctx);
+      expect(result.kind).toBe("template");
 
-    const out = evaluateProgram(program, ctx);
-    expect(out.resolution.status).toBe("template");
-    // Both verdicts store the event hold now — they agree.
-    expect(out.interchange.status).toBe("template");
+      const out = evaluateProgram(program, ctx);
+      expect(out.resolution.status).toBe("template");
+      // Both verdicts store the event hold now — they agree.
+      expect(out.interchange.status).toBe("template");
 
-    if (result.kind !== "template") return;
-    const compiled = compile(result.template, result.totalShares, result.runtime);
-    expect(compiled).toEqual(
-      evenGrid.map((e) => ({ date: e.date, amount: String(e.amount) })),
-    );
-  });
+      if (result.kind !== "template") return;
+      const compiled = compile(
+        result.template,
+        result.totalShares,
+        result.runtime,
+      );
+      expect(compiled).toEqual(
+        evenGrid.map((e) => ({ date: e.date, amount: String(e.amount) })),
+      );
+    },
+  );
 
   it("fda fires on the first installment → a real cliff (the lump stands)", () => {
     // The effective date equals the first grid date, so one installment (10,000)
@@ -842,7 +853,11 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
     const result = resolveToCore(program, ctxInput({}, 120000));
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    const compiled = compile(result.template, result.totalShares, result.runtime);
+    const compiled = compile(
+      result.template,
+      result.totalShares,
+      result.runtime,
+    );
     expect(compiled).toEqual([]);
     expect(result.cliffDate).toBeNull();
     expect(result.blockers).toEqual([

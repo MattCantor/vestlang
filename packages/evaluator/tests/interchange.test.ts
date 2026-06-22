@@ -421,9 +421,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     expect(out.resolution.status).toBe("template");
     if (out.resolution.status !== "template") return;
     // Held to nothing while the start is pending.
-    expect(out.resolution.installments.every((i) => i.state !== "RESOLVED")).toBe(
-      true,
-    );
+    expect(
+      out.resolution.installments.every((i) => i.state !== "RESOLVED"),
+    ).toBe(true);
     expect(out.resolution.dead).toHaveLength(0);
     // Both contingencies are disclosed as pending.
     const pendingEvents = out.resolution.pending.flatMap((b) =>
@@ -486,9 +486,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     expect(fired).toEqual(unfired);
     expect(unfired.status).toBe("template");
     if (unfired.status !== "template") return;
-    expect(
-      unfired.template.statements[0].event_condition?.event_id,
-    ).toMatch(/^evt:\d+$/);
+    expect(unfired.template.statements[0].event_condition?.event_id).toMatch(
+      /^evt:\d+$/,
+    );
   });
 });
 
