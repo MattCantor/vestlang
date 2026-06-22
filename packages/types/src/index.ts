@@ -12,7 +12,6 @@ export type {
   VestingStatement,
   TemplateVestingBase,
   TemplateVestingBaseDate,
-  TemplateVestingBaseEvent,
   Fraction,
   Cliff,
   StoredTerms,

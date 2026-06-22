@@ -1,19 +1,34 @@
-import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
+import type {
+  SourceMap,
+  StoredTerms,
+  VestingScheduleTemplate,
+} from "@vestlang/types";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 
-// The reserved namespace for synthetic ("stand-in") event ids. The colon is the
+// The reserved namespace for synthetic ("stand-in") sidecar ids. The colon is the
 // load-bearing part: the DSL Ident rule (packages/dsl/src/grammar/40-anchors.peggy)
 // excludes it, so a user-authored event name can never equal a synthetic id. The
 // character lives here alone, so swapping it later is a one-line change.
 const SYNTHETIC_EVENT_ID_PREFIX = "evt:";
 
-export const syntheticEventId = (ordinal: number): string =>
-  `${SYNTHETIC_EVENT_ID_PREFIX}${ordinal}`;
+// The single reserved key a contingent vesting start externalizes its recipe
+// under. There is exactly one per template (canonical hoists one start), so it's
+// a fixed name rather than a numbered scheme.
+export const SYNTHETIC_START_EVENT_ID = `${SYNTHETIC_EVENT_ID_PREFIX}start`;
 
-// A synthetic id carries the reserved prefix; a user-authored event name never
-// can (the Ident rule excludes the colon). Rehydration uses this to tell a
-// dropped-sidecar synthetic — which stays opaque — apart from a bare named event.
-export const isSyntheticEventId = (id: string): boolean =>
-  id.startsWith(SYNTHETIC_EVENT_ID_PREFIX);
+// A synthetic id is one of the reserved forms: the start key `evt:start`, or a
+// numbered `evt:<n>` (a digits-only suffix). A user-authored event name never
+// matches (the Ident rule excludes the colon), and — closing AC 8 — neither does
+// a stray `evt:<garbage>` whose suffix is neither `start` nor a run of digits, so
+// a hand-edited artifact can't smuggle a tampered key past the namespace guard.
+// (`evt:<n>` is no longer minted — starts route through `evt:start` — but the
+// guard still recognizes it so an artifact carrying one stays loadable.) Module-
+// local: the only consumer is the partition scan below.
+const isSyntheticEventId = (id: string): boolean => {
+  if (!id.startsWith(SYNTHETIC_EVENT_ID_PREFIX)) return false;
+  const suffix = id.slice(SYNTHETIC_EVENT_ID_PREFIX.length);
+  return suffix === "start" || /^[0-9]+$/.test(suffix);
+};
 
 // Raised when a persisted artifact's sidecar carries a source-map key outside the
 // reserved synthetic namespace. Such a key aliases a real user event: on reload it
@@ -49,23 +64,30 @@ export const isSyntheticNamespaceError = (
 const firstNonReservedKey = (sourceMap: SourceMap): string | undefined =>
   Object.keys(sourceMap).find((key) => !isSyntheticEventId(key));
 
-// Save-path tripwire: assert the namespace partition holds before persisting.
+// Save-path tripwire: assert the partition + the contingent-start marker invariant
+// hold before persisting.
 //
-// Two halves, both checkable only on save, where the source map is complete by
-// construction (lower.ts just produced it):
+// Two halves, both checkable only on save, where the source map and runtime are
+// complete by construction (lower.ts just produced them):
 //   (a) every source-map key is a reserved synthetic id;
-//   (b) no template EVENT statement claims a reserved id without a matching
-//       source-map entry (a named event masquerading as a synthetic).
+//   (b) the contingent-start marker is consistent: a CONTINGENT_START_SENTINEL
+//       startDate has a matching `evt:start` recipe, and an `evt:start` recipe has
+//       the sentinel startDate. One without the other is a damaged artifact (the
+//       sentinel would project nothing / the recipe could never be applied).
 //
-// A freshly-lowered source map can only violate this through a vestlang lowering
-// regression — no user DSL can trigger it (Ident excludes the colon; synthetics
-// always mint `evt:<n>`). So a violation is a programmer error: this throws a plain
-// `Error` (NOT the tagged namespace error), which the persist orchestrator does not
-// catch — it propagates as the bug it is rather than dressing up as a user refusal.
-// The two halves carry distinct, stable message substrings so a caller can tell
-// them apart.
+// (Half (b) replaces the old "no template EVENT statement masquerades as a
+// synthetic" check, dead now that the canonical base is DATE-only.)
+//
+// A freshly-lowered artifact can only violate this through a vestlang lowering
+// regression — no user DSL can trigger it (Ident excludes the colon; the start
+// recipe always mints `evt:start`). So a violation is a programmer error: this
+// throws a plain `Error` (NOT the tagged namespace error), which the persist
+// orchestrator does not catch — it propagates as the bug it is rather than
+// dressing up as a user refusal. The two halves carry distinct, stable message
+// substrings so a caller can tell them apart.
 export const assertSavePartition = (
-  template: VestingScheduleTemplate,
+  _template: VestingScheduleTemplate,
+  runtime: StoredTerms,
   sourceMap: SourceMap,
 ): void => {
   const stray = firstNonReservedKey(sourceMap);
@@ -75,14 +97,14 @@ export const assertSavePartition = (
     );
   }
 
-  for (const stmt of template.statements) {
-    if (stmt.vesting_base.type !== "EVENT") continue;
-    const eventId = stmt.vesting_base.event_id;
-    if (isSyntheticEventId(eventId) && !Object.hasOwn(sourceMap, eventId)) {
-      throw new Error(
-        `Persist invariant violated: template event "${eventId}" in the reserved namespace has no source-map entry.`,
-      );
-    }
+  const hasSentinelStart = runtime.startDate === CONTINGENT_START_SENTINEL;
+  const hasStartRecipe = Object.hasOwn(sourceMap, SYNTHETIC_START_EVENT_ID);
+  if (hasSentinelStart !== hasStartRecipe) {
+    throw new Error(
+      hasSentinelStart
+        ? `Persist invariant violated: the contingent-start sentinel is present but the "${SYNTHETIC_START_EVENT_ID}" recipe is missing.`
+        : `Persist invariant violated: an "${SYNTHETIC_START_EVENT_ID}" recipe is present but the startDate is not the contingent-start sentinel.`,
+    );
   }
 };
 

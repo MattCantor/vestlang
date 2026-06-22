@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compile } from "@vestlang/core";
+import { compile, CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type {
   Amount,
   Blocker,
@@ -192,8 +192,8 @@ describe("resolveToCore — events (resolves but doesn't fit one template)", () 
   });
 });
 
-describe("resolveToCore — atomic unfired EVENT → template", () => {
-  it("unfired atomic EVENT start → template (no firing) + EVENT_NOT_YET_OCCURRED blocker", () => {
+describe("resolveToCore — atomic unfired EVENT → contingent template", () => {
+  it("unfired atomic EVENT start → contingent template (sentinel + evt:start) + blocker", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -204,12 +204,14 @@ describe("resolveToCore — atomic unfired EVENT → template", () => {
     const result = resolveToCore(program, ctxInput()); // ipo not fired
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    // EVENT statement lowered with its event_id; runtime has no witness for it.
+    // A DATE statement on the contingent-start sentinel; the recipe to re-derive the
+    // real start lives under the reserved `evt:start` key.
     expect(result.template.statements).toHaveLength(1);
     expect(result.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "ipo",
+      type: "DATE",
     });
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.sourceMap["evt:start"].definition).toContain("ipo");
     expect(result.runtime.eventFirings ?? []).toEqual([]);
     expect(
       result.blockers.some(
@@ -470,9 +472,10 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "ipo",
+      type: "DATE",
     });
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.sourceMap["evt:start"].definition).toContain("ipo");
     expect(result.template.statements[0].cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
@@ -532,14 +535,17 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     const result = resolveToCore(program, ctx21());
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base.type).toBe("EVENT");
+    expect(result.template.statements[0].vesting_base).toEqual({
+      type: "DATE",
+    });
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.template.statements[0].cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: { numerator: 1, denominator: 4 },
     });
-    // The combinator gate is externalized as one synthetic event.
-    expect(Object.keys(result.sourceMap)).toHaveLength(1);
+    // The combinator gate is externalized as the one reserved evt:start recipe.
+    expect(Object.keys(result.sourceMap)).toEqual(["evt:start"]);
     expect(result.blockers.length).toBeGreaterThan(0);
   });
 
@@ -956,7 +962,8 @@ describe("resolveToCore — events arm carries its pending siblings (#148)", () 
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
-    expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
+    // Two dated grids plus a contingent event start = more than one start origin.
+    expect(result.reason.kind).toBe("MULTIPLE_START_ORIGINS");
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);

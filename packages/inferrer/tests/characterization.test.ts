@@ -22,6 +22,8 @@ const renderReason = (r: NonTemplateReason): string => {
       return (
         r.detail ?? "Two independent absolute-date vesting grids on one grant."
       );
+    case "MULTIPLE_START_ORIGINS":
+      return r.detail ?? "More than one distinct start origin on one grant.";
     case "EVENT_CLIFF":
       return (
         r.detail ??

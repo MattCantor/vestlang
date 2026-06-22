@@ -193,7 +193,10 @@ describe("presentSchedule — end-to-end hybrid", () => {
     grantQuantity: 4800,
   });
 
-  it("75% MONTHLY + 25% unfired EVENT → template that is representable-but-pending", () => {
+  it("75% MONTHLY + 25% unfired EVENT → events-only (two origins) that is representable-but-pending", () => {
+    // A fixed dated start beside a contingent event start is two start origins, so
+    // it's events-only rather than one template — but events-only is still
+    // representable, and the unfired event keeps it pending.
     const program: Program = [
       stmt(
         portion(3, 4),
@@ -211,7 +214,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       }),
     ];
     const out = evaluateProgram(program, ctxInput()); // ipo unfired
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolution.status).toBe("events-only");
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true,
@@ -259,18 +262,20 @@ describe("presentSchedule — end-to-end hybrid", () => {
     });
     // The two verdicts come apart here, which is the whole point of splitting
     // them. Closed-world, with `a` fired late, the gated half is dead and the
-    // program resolves to `unresolved`. But what's *storable* doesn't depend on
-    // when `a` fired: a date grid plus a guarded event start is a perfectly good
-    // template, so the storable verdict (and therefore `representable`) is true. A
-    // different firing of `a` would resolve it.
+    // program resolves to `unresolved`. Firing-blind, the gated event start is a
+    // contingent origin beside the fixed dated grid — two distinct origins — so the
+    // storable verdict is events-only (still representable). A different firing of
+    // `a` would resolve it.
     expect(out.resolution.status).toBe("unresolved");
-    expect(out.interchange.status).toBe("template");
+    expect(out.interchange.status).toBe("events-only");
+    if (out.interchange.status === "events-only") {
+      expect(out.interchange.reason.kind).toBe("MULTIPLE_START_ORIGINS");
+    }
     // The void half carries an IMPOSSIBLE_CONDITION blocker — dead, not pending.
     // This is the present.ts fix (AC#3): a dead arm beside a live one reads
-    // `dead: true`, `pending: false`, not the reverse. Pre-fix this said
-    // `pending: true`.
+    // `dead: true`, `pending: false`, not the reverse.
     expect(presentSchedule(out)).toEqual({
-      representable: true, // storable as a template, independent of a's firing
+      representable: true, // storable (events-only), independent of a's firing
       pending: false, // nothing is merely waiting — the void half is dead
       dead: true, // the void half's IMPOSSIBLE_CONDITION surfaces here
       projected: true, // the resolved half's dated tranches are now surfaced

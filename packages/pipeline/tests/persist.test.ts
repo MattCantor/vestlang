@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { PersistedArtifact } from "@vestlang/evaluator";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import {
   runPersist,
   runRehydrate,
@@ -131,9 +132,9 @@ describe("runRehydrate (AC#5)", () => {
     }
   });
 
-  it("refuses a corrupt stored definition, naming the event and not leaking parser text", () => {
-    // A sidecar entry only ever belongs to a synthetic event, so the key is the
-    // reserved `evt:1` — a non-reserved key would trip the namespace guard first.
+  it("refuses a corrupt stored start recipe, naming evt:start and not leaking parser text", () => {
+    // A contingent placeholder (sentinel startDate) whose `evt:start` recipe is
+    // corrupt: the start can't be re-derived, so reload refuses.
     const r = runRehydrate({
       artifact: {
         template: {
@@ -141,7 +142,7 @@ describe("runRehydrate (AC#5)", () => {
           statements: [
             {
               order: 1,
-              vesting_base: { type: "EVENT", event_id: "evt:1" },
+              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",
@@ -149,9 +150,12 @@ describe("runRehydrate (AC#5)", () => {
             },
           ],
         },
-        runtime: { grantDate: "2025-01-01" },
+        runtime: {
+          grantDate: "2025-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
         sidecar: {
-          vestlang: { "evt:1": { definition: "TOTALLY NOT DSL ((" } },
+          vestlang: { "evt:start": { definition: "TOTALLY NOT DSL ((" } },
         },
       },
       grant_quantity: 400,
@@ -159,13 +163,13 @@ describe("runRehydrate (AC#5)", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
-      expect(r.error.message).toContain("evt:1");
+      expect(r.error.message).toContain("evt:start");
       expect(r.error.message).toMatch(/corrupt|unparseable/i);
       expect(r.error.message).not.toContain('Expected "DATE"');
     }
   });
 
-  it("computes the firing delta, projection, and pending split after the event fires", () => {
+  it("re-derives the contingent start, projection, and pending split after the event fires", () => {
     const persisted = persistOk({
       dsl: COMBINATOR_DSL,
       grant_date: "2025-01-01",
@@ -176,11 +180,10 @@ describe("runRehydrate (AC#5)", () => {
       grant_quantity: 1000,
       events: { ipo: "2026-06-01" },
     });
-    // The synthetic id resolves to ipo (before the 2027 date); the delta carries it
-    // with the sidecar definition.
-    expect(out.firings_to_apply).toHaveLength(1);
-    expect(out.firings_to_apply[0].date).toBe("2026-06-01");
-    expect(out.firings_to_apply[0].definition).toContain("ipo");
+    // The evt:start recipe resolves to ipo (before the 2027 date). It surfaces as
+    // start_to_apply (distinct from firings_to_apply, which stays empty).
+    expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.start_to_apply).toEqual({ date: "2026-06-01" });
     expect(out.pending).toHaveLength(0);
     expect(out.dead).toHaveLength(0);
     expect(out.projection).toHaveLength(48);
@@ -199,6 +202,7 @@ describe("runRehydrate (AC#5)", () => {
       grant_quantity: 400,
     });
     expect(out.firings_to_apply).toHaveLength(0);
+    expect(out.start_to_apply).toBeNull();
     expect(out.projection).toHaveLength(0);
     expect(
       out.pending.some(
@@ -242,9 +246,9 @@ describe("runRehydrate (AC#5)", () => {
       { date: "2025-04-30", amount: 100 },
       { date: "2025-05-31", amount: 100 },
     ]);
-    expect(out.firings_to_apply).toEqual([
-      { event_id: "ipo", date: "2025-01-31", definition: null },
-    ]);
+    // The bare EVENT start re-derives to its firing as the contingent start.
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toEqual({ date: "2025-01-31" });
   });
 });
 
@@ -399,10 +403,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(500);
   });
 
-  it("AC#6: an over-allocating EVENT-anchored artifact is refused before the witness resolves", () => {
-    // The over-allocating statement is anchored to an event that has NOT fired. The
-    // gate reads the template alone (firing-independent), so it pre-empts the
-    // "wait for the witness" path: a refusal, not a pending/empty projection.
+  it("AC#6: an over-allocating contingent-start artifact is refused before the start resolves", () => {
+    // The over-allocating statement is a contingent start whose event has NOT fired
+    // (sentinel startDate + an evt:start recipe). The gate reads the template alone
+    // (firing-independent), so it pre-empts the "re-derive the start" path: a
+    // refusal, not a pending/empty projection.
     const r = runRehydrate({
       artifact: {
         template: {
@@ -410,7 +415,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              vesting_base: { type: "EVENT", event_id: "ipo" },
+              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 3,
               period_type: "MONTHS",
@@ -418,7 +423,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
             },
           ],
         },
-        runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+        runtime: {
+          grantDate: "2025-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
+        sidecar: { vestlang: { "evt:start": { definition: "EVENT ipo" } } },
       },
       grant_quantity: 4800,
       // ipo intentionally not supplied — the gate must still fire.
@@ -443,10 +452,9 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
   });
 });
 
-describe("runRehydrate guards event-id aliasing (issue #279)", () => {
-  // A one-statement EVENT-anchored template, the minimal carrier for these guards.
-  const eventArtifact = (
-    eventId: string,
+describe("runRehydrate guards the reserved namespace + the contingency marker", () => {
+  // A contingent placeholder: a DATE statement on the sentinel startDate.
+  const contingentArtifact = (
     sidecar?: PersistedArtifact["sidecar"],
   ): PersistedArtifact => ({
     template: {
@@ -454,7 +462,7 @@ describe("runRehydrate guards event-id aliasing (issue #279)", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "EVENT", event_id: eventId },
+          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -462,16 +470,18 @@ describe("runRehydrate guards event-id aliasing (issue #279)", () => {
         },
       ],
     },
-    runtime: { grantDate: "2025-01-01" },
+    runtime: { grantDate: "2025-01-01", startDate: CONTINGENT_START_SENTINEL },
     ...(sidecar ? { sidecar } : {}),
   });
 
   it("maps a non-reserved sidecar key to rehydrate-namespace-violation, naming the key", () => {
-    // `evt_1` is a legal user Ident outside the `evt:` namespace — a tampered key
-    // that would otherwise shadow the user's real `evt_1` firing.
+    // `evt_1` is a legal user Ident outside the `evt:` namespace — a tampered key.
     const r = runRehydrate({
-      artifact: eventArtifact("evt_1", {
-        vestlang: { evt_1: { definition: "LATER OF(EVENT a, EVENT b)" } },
+      artifact: contingentArtifact({
+        vestlang: {
+          "evt:start": { definition: "EVENT ipo" },
+          evt_1: { definition: "LATER OF(EVENT a, EVENT b)" },
+        },
       }),
       grant_quantity: 1000,
     });
@@ -484,57 +494,48 @@ describe("runRehydrate guards event-id aliasing (issue #279)", () => {
     }
   });
 
-  it("maps an offset template event_id to rehydrate-corrupt-definition", () => {
-    // `"a + 6 months"` reparses to `EVENT a` + offset — refused by the round-trip
-    // identity check, routed through the corrupt-definition refusal.
+  it("rejects a stray evt:<garbage> key (neither evt:start nor numbered) (AC 8)", () => {
     const r = runRehydrate({
-      artifact: eventArtifact("a + 6 months"),
+      artifact: contingentArtifact({
+        vestlang: { "evt:bogus": { definition: "EVENT ipo" } },
+      }),
       grant_quantity: 1000,
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
-      expect(r.error.message).toContain("a + 6 months");
+      expect(r.error.ruleId).toBe("rehydrate-namespace-violation");
+      expect(r.error.message).toContain("evt:bogus");
     }
   });
 
-  it.each(["grant_date", "grantDate"])(
-    "maps a grant-date-aliasing template event_id (%s) to rehydrate-corrupt-definition",
-    (eventId) => {
-      // Reparses to the GRANT_DATE *system* anchor — a fabricated firing the
-      // round-trip check catches.
-      const r = runRehydrate({
-        artifact: eventArtifact(eventId),
-        grant_quantity: 1000,
-      });
-      expect(r.ok).toBe(false);
-      if (!r.ok) {
-        expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
-        expect(r.error.message).toContain(eventId);
-      }
-    },
-  );
+  it("refuses a damaged artifact: sentinel start with no evt:start recipe", () => {
+    const r = runRehydrate({
+      artifact: contingentArtifact(),
+      grant_quantity: 1000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-missing-start-marker");
+      expect(r.error.message).toContain(
+        "The artifact appears to be damaged; supply one built by vestlang_persist.",
+      );
+    }
+  });
 
-  it("leaves a genuine floating EVENT pending, not refused", () => {
+  it("leaves a contingent start pending when its event is unfired, not refused", () => {
     const out = rehydrateOk({
-      artifact: eventArtifact("ipo"),
+      artifact: contingentArtifact({
+        vestlang: { "evt:start": { definition: "EVENT ipo" } },
+      }),
       grant_quantity: 1000,
     });
     expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toBeNull();
     expect(
       out.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
-  });
-
-  it("rehydrates a dropped-sidecar synthetic (`evt:1`, no sidecar) without refusing", () => {
-    const out = rehydrateOk({
-      artifact: eventArtifact("evt:1"),
-      grant_quantity: 1000,
-    });
-    // Opaque: no witness, no firing — but not a refusal.
-    expect(out.firings_to_apply).toEqual([]);
   });
 });
 
@@ -635,7 +636,7 @@ describe("#251 — persist gates on interchange; rehydrate never commits", () =>
       grant_quantity: 1000,
       // ipo not resupplied.
     });
-    expect(reload.firings_to_apply).toHaveLength(0);
+    expect(reload.start_to_apply).toBeNull();
     expect(reload.pending.length).toBeGreaterThan(0);
 
     const resupplied = rehydrateOk({
@@ -643,7 +644,7 @@ describe("#251 — persist gates on interchange; rehydrate never commits", () =>
       grant_quantity: 1000,
       events: { ipo: "2026-06-01" },
     });
-    expect(resupplied.firings_to_apply).toHaveLength(1);
+    expect(resupplied.start_to_apply).toEqual({ date: "2026-06-01" });
     expect(resupplied.pending).toHaveLength(0);
   });
 

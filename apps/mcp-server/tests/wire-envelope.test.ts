@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
@@ -54,15 +55,18 @@ async function persistBareEvent(client: Client): Promise<unknown> {
 
 const GRANT = { grant_date: "2025-01-01", grant_quantity: 1000 };
 
-// Mirrors the helper in persist.test.ts: a hand-built artifact whose sidecar maps
-// `eventId` to a definition, with a matching EVENT-anchored template statement.
+// Mirrors the helper in persist.test.ts: a hand-built contingent-start artifact —
+// DATE-base on the contingent-start sentinel — whose sidecar maps `eventId` to a
+// start recipe. With `eventId` the reserved `evt:start` key, rehydrate reparses the
+// recipe; with a stray key, the namespace guard turns it away first. An extra valid
+// `evt:start` recipe is always present so a stray key is what trips the guard.
 const corruptArtifact = (eventId: string, definition: string) => ({
   template: {
     id: "t1",
     statements: [
       {
         order: 1,
-        vesting_base: { type: "EVENT", event_id: eventId },
+        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -70,8 +74,13 @@ const corruptArtifact = (eventId: string, definition: string) => ({
       },
     ],
   },
-  runtime: { grantDate: "2025-01-01" },
-  sidecar: { vestlang: { [eventId]: { definition } } },
+  runtime: { grantDate: "2025-01-01", startDate: CONTINGENT_START_SENTINEL },
+  sidecar: {
+    vestlang: {
+      "evt:start": { definition: "EVENT ipo" },
+      [eventId]: { definition },
+    },
+  },
 });
 
 /* ====================================================================
@@ -299,12 +308,12 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
       expect(sc(res).error?.ruleId).toBe("rehydrate-over-allocation");
     });
 
-    it("rehydrate-corrupt-definition — a reserved-id sidecar entry that no longer parses", async () => {
+    it("rehydrate-corrupt-definition — the reserved evt:start recipe no longer parses", async () => {
       const client = await connectClient();
-      // The event_id is the reserved synthetic `evt:1`, matching both the sidecar
-      // key and an EVENT-anchored statement, so rehydrate reparses the corrupt def.
+      // The reserved `evt:start` recipe is garbage, so rehydrate reparses it and the
+      // reparse throws (the helper's computed key overwrites the valid placeholder).
       const res = await call(client, "vestlang_rehydrate", {
-        artifact: corruptArtifact("evt:1", "TOTALLY NOT DSL (("),
+        artifact: corruptArtifact("evt:start", "TOTALLY NOT DSL (("),
         grant_quantity: 400,
       });
       expect(res.isError).toBeFalsy();
@@ -316,6 +325,7 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
       const client = await connectClient();
       // `evt_1` is a legal user Ident, NOT the reserved `evt:` prefix, so it would
       // alias a real user event — the namespace guard turns it away before reparse.
+      // It sits alongside a valid `evt:start` recipe, so the stray key is what trips.
       const res = await call(client, "vestlang_rehydrate", {
         artifact: corruptArtifact("evt_1", "DATE 2025-01-01"),
         grant_quantity: 400,
@@ -521,12 +531,12 @@ describe("#345 AC#6 — refusal message bytes are unchanged", () => {
   it("rehydrate-corrupt-definition message is frozen", async () => {
     const client = await connectClient();
     const res = await call(client, "vestlang_rehydrate", {
-      artifact: corruptArtifact("evt:1", "TOTALLY NOT DSL (("),
+      artifact: corruptArtifact("evt:start", "TOTALLY NOT DSL (("),
       grant_quantity: 400,
     });
     expect(sc(res).error?.ruleId).toBe("rehydrate-corrupt-definition");
     expect(sc(res).error?.message).toBe(
-      'Cannot rehydrate: the stored definition for event "evt:1" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
+      'Cannot rehydrate: the stored recipe for "evt:start" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
     );
   });
 });

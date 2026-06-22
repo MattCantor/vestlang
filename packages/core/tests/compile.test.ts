@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
+import { addPeriod, CONTINGENT_START_SENTINEL } from "../src/dates";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 
 // Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).
@@ -693,251 +694,75 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
   });
 });
 
-describe("compile — EVENT-anchored statements", () => {
-  it("single-event instantaneous vest of full grant", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
-        },
-      ],
-    };
-    expect(
-      compile(template, 100_000, {
-        eventFirings: [{ event_id: "ipo", date: "2026-04-01" }],
-      }),
-    ).toEqual([{ date: "2026-04-01", amount: "100000" }]);
-  });
-
-  it("partial firing with realized_fraction scales the vested amount", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "milestone" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
-        },
-      ],
-    };
-    expect(
-      compile(template, 100_000, {
-        eventFirings: [
-          {
-            event_id: "milestone",
-            date: "2026-04-01",
-            realized_fraction: { numerator: 3, denominator: 10 },
-          },
-        ],
-      }),
-    ).toEqual([{ date: "2026-04-01", amount: "30000" }]);
-  });
-
-  it("post-event monthly schedule (occurrences > 1) vests from firing date", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
-        },
-      ],
-    };
-    const events = compile(template, 1200, {
-      eventFirings: [{ event_id: "ipo", date: "2026-04-01" }],
-    });
-    expect(events).toHaveLength(12);
-    expect(events[0].date).toBe("2026-05-01");
-    expect(events[events.length - 1].date).toBe("2027-04-01");
-    expect(sumAmounts(events)).toBe(1200);
-  });
-
-  it("two statements referencing the same event_id both fire on a single firing", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
+// The canonical base is DATE-only now; a contingent start is a DATE statement on
+// the CONTINGENT_START_SENTINEL placeholder, re-derived to a real date on reload. A
+// real run off year 9999 overflows the date math, so the compiler must recognize
+// the sentinel and emit NO dated tranches (AC 10). A resolved contingent start
+// reaches the compiler with a real startDate substituted in (the projection-only
+// runtime rehydrate builds), so the grid is ordinary then.
+describe("compile — contingent-start sentinel skip (AC 10)", () => {
+  const monthly48: VestingScheduleTemplate = {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: DATE_BASE,
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 12,
           period_type: "MONTHS",
           percentage: { numerator: 1, denominator: 4 },
         },
-        {
-          order: 2,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 3, denominator: 4 },
-        },
-      ],
-    };
-    expect(
-      compile(template, 100_000, {
-        eventFirings: [{ event_id: "ipo", date: "2026-04-01" }],
+        percentage: { numerator: 1, denominator: 1 },
+      },
+    ],
+  };
+
+  it("an unresolved placeholder (startDate = sentinel) projects to nothing, no throw", () => {
+    expect(() =>
+      compile(monthly48, 100_000, {
+        startDate: CONTINGENT_START_SENTINEL,
+        grantDate: "2025-01-01",
       }),
-    ).toEqual([
-      { date: "2026-04-01", amount: "25000" },
-      { date: "2026-04-01", amount: "75000" },
-    ]);
+    ).not.toThrow();
+    expect(
+      compile(monthly48, 100_000, {
+        startDate: CONTINGENT_START_SENTINEL,
+        grantDate: "2025-01-01",
+      }),
+    ).toEqual([]);
   });
 
-  it("EVENT statement with no matching firing is silently skipped", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
-        },
-      ],
-    };
-    expect(compile(template, 100_000, { eventFirings: [] })).toEqual([]);
+  it("the sentinel never reaches the date grid (it would overflow addPeriod)", () => {
+    // A real run off year 9999 overflows the date math, so a non-empty projection
+    // here would mean the sentinel leaked onto the grid. The empty result is the
+    // proof it was skipped before any stepping.
+    expect(
+      compileToInstallments(monthly48, 100_000, {
+        startDate: CONTINGENT_START_SENTINEL,
+        grantDate: "2025-01-01",
+      }),
+    ).toEqual([]);
+    // Direct guard, pinned beside the skip: stepping the sentinel forward by even
+    // one period throws, so the empty projection above is the skip working — not a
+    // coincidence that survives if the date-range overflow guard is ever loosened.
+    expect(() => addPeriod(CONTINGENT_START_SENTINEL, 1, "MONTHS")).toThrow(
+      /range/,
+    );
   });
 
-  it("all EVENT statements unfired emits zero events with no error", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
-        },
-        {
-          order: 2,
-          vesting_base: { type: "EVENT", event_id: "acquisition" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
-        },
-      ],
-    };
-    expect(compile(template, 100_000, {})).toEqual([]);
-  });
-});
-
-describe("compile — hybrid DATE + EVENT templates", () => {
-  it("DATE statement chains through; EVENT statement adds a chronological event", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: DATE_BASE,
-          occurrences: 48,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 12,
-            period_type: "MONTHS",
-            percentage: { numerator: 1, denominator: 4 },
-          },
-          percentage: { numerator: 9, denominator: 10 },
-        },
-        {
-          order: 2,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 10 },
-        },
-      ],
-    };
-    const events = compile(template, 100_000, {
+  it("a real start substituted in compiles the ordinary grid", () => {
+    // What rehydrate hands the compiler once the contingent start resolves: the
+    // sentinel is gone, replaced by the re-derived date, so the grid is normal.
+    const events = compile(monthly48, 100_000, {
       startDate: "2025-01-01",
-      eventFirings: [{ event_id: "ipo", date: "2027-06-15" }],
+      grantDate: "2025-01-01",
     });
+    expect(events).toHaveLength(37); // 12-month cliff lump + 36 monthly
+    expect(events[0]).toEqual({ date: "2026-01-01", amount: "25000" });
     expect(sumAmounts(events)).toBe(100_000);
-    expect(events[0]).toEqual({ date: "2026-01-01", amount: "22500" });
-    const ipoEvent = events.find((e) => e.date === "2027-06-15");
-    expect(ipoEvent).toBeDefined();
-    expect(ipoEvent!.amount).toBe("10000");
-    for (let i = 1; i < events.length; i++) {
-      expect(events[i].date >= events[i - 1].date).toBe(true);
-    }
-  });
-
-  it("EVENT firing before grant_date is aggregated onto grant_date", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "early" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
-        },
-        {
-          order: 2,
-          vesting_base: { type: "EVENT", event_id: "late" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
-        },
-      ],
-    };
-    expect(
-      compile(template, 100_000, {
-        eventFirings: [
-          { event_id: "early", date: "2025-03-01" },
-          { event_id: "late", date: "2025-09-01" },
-        ],
-        grantDate: "2025-06-01",
-      }),
-    ).toEqual([
-      { date: "2025-06-01", amount: "50000" },
-      { date: "2025-09-01", amount: "50000" },
-    ]);
-  });
-
-  it("EVENT firing on grant_date emits normally without held-back aggregation", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
-        },
-      ],
-    };
-    expect(
-      compile(template, 100_000, {
-        eventFirings: [{ event_id: "ipo", date: "2026-04-01" }],
-        grantDate: "2026-04-01",
-      }),
-    ).toEqual([{ date: "2026-04-01", amount: "100000" }]);
   });
 });
 

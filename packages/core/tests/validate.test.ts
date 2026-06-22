@@ -6,10 +6,11 @@ import {
   assertValidVestingRuntime,
   MAX_INSTALLMENTS,
 } from "../src/validate";
+import { CONTINGENT_START_SENTINEL } from "../src/dates";
 import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
-// A well-formed graded template: two chained DATE statements + one EVENT
-// statement, with an on-grid cliff on the first.
+// A well-formed graded template: two chained DATE statements, with an on-grid
+// cliff on the first. (The canonical base is DATE-only now.)
 const validTemplate: VestingScheduleTemplate = {
   id: "tmpl-1",
   statements: [
@@ -28,7 +29,7 @@ const validTemplate: VestingScheduleTemplate = {
     },
     {
       order: 2,
-      vesting_base: { type: "EVENT", event_id: "ipo" },
+      vesting_base: { type: "DATE" },
       occurrences: 1,
       period: 0,
       period_type: "MONTHS",
@@ -232,14 +233,14 @@ describe("validateVestingScheduleTemplate", () => {
     expect(pathsOf(result.errors)).toContain("statements[0].period_type");
   });
 
-  it("rejects an EVENT base with a missing event_id", () => {
+  it("rejects an EVENT base (the canonical base is DATE-only)", () => {
     const result = validateVestingScheduleTemplate({
       id: "x",
       statements: [
         {
           order: 1,
-          // @ts-expect-error — EVENT base missing its required event_id
-          vesting_base: { type: "EVENT" },
+          // @ts-expect-error — an EVENT base no longer exists on TemplateVestingBase
+          vesting_base: { type: "EVENT", event_id: "ipo" },
           occurrences: 1,
           period: 0,
           period_type: "MONTHS",
@@ -248,9 +249,7 @@ describe("validateVestingScheduleTemplate", () => {
       ],
     });
     expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain(
-      "statements[0].vesting_base.event_id",
-    );
+    expect(pathsOf(result.errors)).toContain("statements[0].vesting_base.type");
   });
 
   it("assertValidVestingScheduleTemplate throws on invalid input", () => {
@@ -261,18 +260,29 @@ describe("validateVestingScheduleTemplate", () => {
 });
 
 describe("validateVestingRuntime", () => {
-  it("accepts a valid runtime for a DATE+EVENT template", () => {
+  it("accepts a valid runtime for a DATE template", () => {
     const runtime: VestingRuntime = {
       startDate: "2024-01-01",
       grantDate: "2024-01-01",
-      eventFirings: [{ event_id: "ipo", date: "2026-01-01" }],
     };
     const result = validateVestingRuntime(runtime, validTemplate);
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
-  it("requires startDate when a DATE statement exists", () => {
+  it("accepts the contingent-start sentinel as the startDate", () => {
+    // A persisted contingent placeholder carries the sentinel here; it is a real
+    // calendar date, so it passes the format check and the compiler's sentinel-skip
+    // handles it (it never reaches the date grid).
+    const result = validateVestingRuntime(
+      { startDate: CONTINGENT_START_SENTINEL, grantDate: "2024-01-01" },
+      validTemplate,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("requires startDate when a statement exists", () => {
     const result = validateVestingRuntime({}, validTemplate);
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("startDate");
@@ -285,18 +295,6 @@ describe("validateVestingRuntime", () => {
     );
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("startDate");
-  });
-
-  it("rejects an event firing that matches no EVENT statement", () => {
-    const result = validateVestingRuntime(
-      {
-        startDate: "2024-01-01",
-        eventFirings: [{ event_id: "acquisition", date: "2026-01-01" }],
-      },
-      validTemplate,
-    );
-    expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain("eventFirings[0].event_id");
   });
 
   it("rejects a non-ISO firing date", () => {

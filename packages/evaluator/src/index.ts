@@ -21,6 +21,8 @@ export { templateAllocationFindings } from "./resolve/index.js";
 export {
   isRehydrateDefinitionError,
   RehydrateDefinitionError,
+  isRehydrateMissingStartMarkerError,
+  RehydrateMissingStartMarkerError,
   isSyntheticNamespaceError,
   SyntheticNamespaceError,
   type RehydrateResult,

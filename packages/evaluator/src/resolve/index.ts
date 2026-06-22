@@ -68,31 +68,32 @@ export const resolveToCore = (
   if (build.ok) {
     assertValidVestingScheduleTemplate(build.template);
 
-    // Collect symbolic installments for statements whose start is still pending
-    // (unfired atomic event or unsettled synthetic combinator). core.compile skips
-    // these — no firing means no dated tranches — so their share claims would
-    // otherwise vanish from the stream.
+    // Collect symbolic installments for statements whose start is still pending —
+    // a contingent-start head (unfired atomic event / unsettled combinator) AND the
+    // pending-tails chained behind it. core.compile skips the whole contingent
+    // template (the sentinel-skip), so without this the tails' share claims would
+    // vanish from the stream — the conservation bug a single-event-head THEN chain
+    // would otherwise hit, now that such a chain is a `template` rather than
+    // `unresolved`.
     //
     // Lump amounts come from the program-wide claim cursor, so pending claims +
     // compiled tranches telescope to the same total the allocator will deliver.
     //
     // Notes on what we discard from the producer:
-    //  - Blockers: buildTemplate already gathered each pending start's blockers
+    //  - Blockers: buildTemplate already gathered the contingent head's blockers
     //    onto build.blockers, and under a template-ok build every cliff is NONE
-    //    or RESOLVED, so the producer would return the same r.start.blockers
-    //    again — pushing them would duplicate every pending blocker.
-    //  - The inst.state check is type narrowing, not filtering: a non-RESOLVED
-    //    start produces only UNRESOLVED installments (one whole-portion lump, or
-    //    start+N steps for a partially-settled combinator).
-    //  - PENDING_EVENT / SYNTHETIC_EVENT starts are never chained tails (a THEN
-    //    tail's injected start is RESOLVED or UNRESOLVED), so no chained-tail
-    //    rendering happens through this channel.
+    //    or RESOLVED, so the producer would return the same blockers again —
+    //    pushing them would duplicate every pending blocker.
+    //  - The inst.state check is type narrowing, not filtering: a pending start
+    //    produces only UNRESOLVED installments (one whole-portion lump, or
+    //    start+N steps for a partially-settled combinator / a pending-tail).
     const claims = symbolicClaims(resolutions, totalShares);
     const pendingInstallments: UnresolvedInstallment[] = [];
     resolutions.forEach((r, i) => {
       if (
         r.start.state === "PENDING_EVENT" ||
-        r.start.state === "SYNTHETIC_EVENT"
+        r.start.state === "SYNTHETIC_EVENT" ||
+        r.chain.role === "pending-tail"
       ) {
         for (const inst of unresolvedInstallments(r, ctx, claims[i])
           .installments) {
@@ -244,6 +245,8 @@ export {
   reparseDefinition,
   RehydrateDefinitionError,
   isRehydrateDefinitionError,
+  RehydrateMissingStartMarkerError,
+  isRehydrateMissingStartMarkerError,
 } from "./rehydrate.js";
 export type { RehydrateResult } from "./rehydrate.js";
 export {

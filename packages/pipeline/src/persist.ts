@@ -22,6 +22,7 @@ import {
   rehydratePersisted,
   fromSidecar,
   isRehydrateDefinitionError,
+  isRehydrateMissingStartMarkerError,
   isSyntheticNamespaceError,
   templateAllocationFindings,
   type PersistedArtifact,
@@ -199,12 +200,23 @@ export interface RehydrateInput {
   events?: Record<string, OCTDate>;
 }
 
+// The contingent start re-derived on this reload: the real date a stored
+// `evt:start` recipe resolved to. Distinct from `firings_to_apply` (a runtime
+// witness channel) — this is the grant's hoisted vesting start. Re-emitted on
+// every reload where the start resolves (the artifact stays contingent — Decision
+// 8 — so it's idempotent), and null when the start is unresolved (event not fired)
+// or there's no contingent start.
+interface StartToApply {
+  date: OCTDate;
+}
+
 // The success payload; the server returns the Result whole, `ok` and all. The
 // evaluator already partitions its blockers into the two operator readings:
 // `pending` is still-waiting (the gating event hasn't fired), `dead` can never
 // resolve given the firings we now know (the event fired outside its window).
 export interface RehydrateOutput {
   firings_to_apply: FiringToApply[];
+  start_to_apply: StartToApply | null;
   pending: UnresolvedBlocker[];
   dead: DeadBlocker[];
   projection: ReturnType<typeof compileToInstallments>;
@@ -287,14 +299,14 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     grant_quantity: input.grant_quantity,
   });
 
-  // A persisted artifact can be edited in external storage, so a stored event
-  // definition may arrive corrupt — unparseable, or smuggling in a second statement
-  // that would otherwise be silently dropped. The evaluator throws a tagged
-  // RehydrateDefinitionError on that path; we turn it into the same structured
-  // refusal as the missing-grant-date case, naming the offending event but NOT
-  // echoing the raw parser text (that stays on the error's `cause`, for logs). Any
-  // other throw is unexpected — re-throw it, matching runPersist's split (it catches
-  // only evaluateProgram and lets the rest propagate).
+  // A persisted artifact can be edited in external storage, so a stored start
+  // recipe may arrive corrupt — unparseable, or smuggling in a second statement
+  // that would otherwise be silently dropped — or the contingency marker can be
+  // dropped entirely (sentinel startDate, no `evt:start` recipe). The evaluator
+  // throws a tagged error on each path; we turn each into a structured refusal
+  // under its own ruleId, NOT echoing the raw parser text (that stays on the
+  // error's `cause`, for logs). Any other throw is unexpected — re-throw it,
+  // matching runPersist's split (it catches only evaluateProgram).
   let result;
   try {
     result = rehydratePersisted(input.artifact, ctx);
@@ -304,13 +316,25 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
         ok: false,
         error: {
           ruleId: "rehydrate-corrupt-definition",
-          message: `Cannot rehydrate: the stored definition for event "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+          message: `Cannot rehydrate: the stored recipe for "${err.event_id}" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.`,
+        },
+      };
+    }
+    // The contingent-start sentinel is present but the `evt:start` recipe to
+    // re-derive the real date was dropped — the artifact is corrupt.
+    if (isRehydrateMissingStartMarkerError(err)) {
+      return {
+        ok: false,
+        error: {
+          ruleId: "rehydrate-missing-start-marker",
+          message:
+            "Cannot rehydrate: the artifact's startDate is the contingent-start sentinel but it carries no start recipe to re-derive the real start. The artifact appears to be damaged; supply one built by vestlang_persist.",
         },
       };
     }
     // A sidecar key outside the reserved synthetic namespace aliases a real user
-    // event — distinct from an unparseable definition (this path never reparses).
-    // Name the offending key; carry no raw parser text.
+    // event — distinct from an unparseable recipe (this path never reparses). Name
+    // the offending key; carry no raw parser text.
     if (isSyntheticNamespaceError(err)) {
       return {
         ok: false,
@@ -323,34 +347,41 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
     throw err;
   }
 
-  // Look the definition up from the sidecar's source map, so the operator sees the
-  // gate behind each newly-resolved synthetic id rather than a bare `evt:n`.
+  // Look the recipe up from the sidecar's source map, so the operator sees the gate
+  // behind a newly-resolved synthetic id rather than a bare key.
   const sourceMap = fromSidecar(input.artifact.sidecar);
   const definitionFor = (eventId: string): string | null =>
     sourceMap[eventId]?.definition ?? null;
 
+  // The dormant runtime witness channel (no canonical statement is event-anchored
+  // anymore, so this is empty in practice — see canonical.ts), kept distinct from
+  // the contingent-start action below.
   const firings_to_apply = computeDelta(
     input.artifact.runtime.eventFirings ?? [],
     result.runtime.eventFirings ?? [],
     definitionFor,
   );
 
-  // What the system of record will show once those firings are applied: the frozen
-  // template compiled against the witness-updated runtime, with the supplied grant
-  // quantity as the total to allocate.
+  // What the system of record will show once the start is applied: the frozen
+  // template compiled against the projection-only runtime (a resolved contingent
+  // start already substituted into startDate; an unresolved one keeps the sentinel,
+  // so the compiler's sentinel-skip yields an empty projection), with the supplied
+  // grant quantity as the total to allocate.
   const projection = compileToInstallments(
     input.artifact.template,
     input.grant_quantity,
     result.runtime,
   );
 
-  // The evaluator already split its blockers by verdict: contradictions (the gate's
-  // event fired outside its window) in `dead` — stop waiting; the genuinely
+  // The evaluator already split its blockers by verdict: contradictions (the start
+  // gate's event fired outside its window) in `dead` — stop waiting; the genuinely
   // still-waiting ones in `pending`. Both are always present ([] when empty), so the
-  // caller never has to probe for the field.
+  // caller never has to probe for the field. `start_to_apply` carries the re-derived
+  // contingent start when its recipe resolved on this reload.
   return {
     ok: true,
     firings_to_apply,
+    start_to_apply: result.startToApply,
     pending: result.pending,
     dead: result.dead,
     projection,

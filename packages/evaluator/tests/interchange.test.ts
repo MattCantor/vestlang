@@ -5,6 +5,7 @@
 // closed-world verdict exactly where the canonical schema can't hold something.
 
 import { describe, it, expect } from "vitest";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type {
   Amount,
   ResolutionContextInput,
@@ -259,10 +260,12 @@ describe("interchange — where the two verdicts diverge", () => {
 });
 
 describe("interchange — distinguishing why an unresolved build is unstorable", () => {
-  // A THEN tail behind an unfired event head, with no cliff anywhere. The whole
-  // chain waits on `ipo`, so firing-blind it's unresolved — but the cause is the
-  // pending event head, not a cliff. It used to be mislabeled DEFERRED_CLIFF.
-  it("a no-cliff chained tail behind a pending event head is EVENT_CHAINED_TAIL", () => {
+  // A THEN tail behind an unfired event head, with no cliff anywhere. The chain is
+  // headed on ONE event — a single contingent origin — so it now stores as a
+  // contingent-start `template` (sentinel + `evt:start` recipe), with both segments
+  // re-anchoring off the resolved start on reload. (It was EVENT_CHAINED_TAIL /
+  // unrepresentable before the contingent-start model.)
+  it("a no-cliff chained tail behind a single pending event head is a contingent template", () => {
     const monthly2: VestingPeriod = {
       type: "MONTHS",
       length: 1,
@@ -286,12 +289,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     ];
 
     const out = evaluateProgram(program, ctxInput());
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CHAINED_TAIL",
-      eventId: "ipo",
-    });
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.template.statements).toHaveLength(2);
+    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
   });
 
   // A cliff that genuinely can't be placed until a firing is known — a
@@ -624,10 +626,12 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     expect(fired).toEqual(unfired);
   });
 
-  // A grid-unit duration cliff lowers anchor-free to a storable time-based
-  // cliff (6/12 regardless of when ipo fires), so the undated tail stays the
-  // obstacle.
-  it("a grid-unit duration cliff on the tail keeps EVENT_CHAINED_TAIL", () => {
+  // A grid-unit duration cliff lowers anchor-free to a storable time-based cliff
+  // (6/12 regardless of when ipo fires), and the chain is headed on ONE event — a
+  // single contingent origin — so the whole thing now stores as a contingent-start
+  // template (sentinel + `evt:start`), tail cliff and all. (It was
+  // EVENT_CHAINED_TAIL / unrepresentable before the contingent-start model.)
+  it("a grid-unit duration cliff on the tail keeps it a contingent template", () => {
     const out = evaluateProgram(
       chain({
         ...monthly12,
@@ -637,12 +641,12 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CHAINED_TAIL",
-      eventId: "ipo",
-    });
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+    // The tail's grid-unit duration cliff survives onto the second statement.
+    expect(out.interchange.template.statements[1].cliff).toBeDefined();
   });
 
   // A months cliff over a days grid can't be placed until the firing is known —

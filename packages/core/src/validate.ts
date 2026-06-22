@@ -98,28 +98,25 @@ const validateVestingBase = (
     errors.push({ path, message: "is required and must be an object" });
     return;
   }
-  if (base.type !== "DATE" && base.type !== "EVENT") {
+  // The canonical base is DATE-only: every statement anchors on the one hoisted
+  // per-grant start (a contingent start is a DATE base on the sentinel). An EVENT
+  // base — or any other type — has no home, so it's rejected. Read `type`
+  // structurally: the input is untrusted (hand-built / foreign artifacts), so it
+  // can carry a value the static type says is impossible.
+  const baseType = (base as { type?: unknown }).type;
+  if (baseType !== "DATE") {
     errors.push({
       path: `${path}.type`,
-      message: 'must be "DATE" or "EVENT"',
+      message: 'must be "DATE"',
     });
     return;
   }
-  if (base.type === "EVENT") {
-    if (typeof base.event_id !== "string" || base.event_id.length === 0) {
-      errors.push({
-        path: `${path}.event_id`,
-        message: "must be a non-empty string",
-      });
-    }
-  } else {
-    // DATE — no extra fields permitted; specifically, stray event_id is wrong.
-    if ("event_id" in base) {
-      errors.push({
-        path: `${path}.event_id`,
-        message: 'must not be present on a vesting_base with type "DATE"',
-      });
-    }
+  // No extra fields permitted; specifically, a stray event_id is wrong.
+  if ("event_id" in base) {
+    errors.push({
+      path: `${path}.event_id`,
+      message: 'must not be present on a vesting_base with type "DATE"',
+    });
   }
 };
 
@@ -231,11 +228,16 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
 /**
  * Validates the per-grant runtime data passed to the compiler against the
  * template. Catches mismatches that the static template validator cannot:
- *   - startDate required when any DATE-anchored statement exists
- *   - eventFirings must reference event_ids that exist on EVENT statements
+ *   - startDate required when the template has any statement (all DATE-anchored);
+ *     a contingent start's CONTINGENT_START_SENTINEL is a real calendar date, so
+ *     it passes the format check and the compiler's sentinel-skip handles it.
  *   - no duplicate event_id in eventFirings (single firing per event_id)
  *   - dates must be real calendar dates (2025-02-31 is rejected, not rolled)
  *   - realized_fraction (if present) must be a valid Fraction in [0, 1]
+ *
+ * The canonical base is DATE-only now, so eventFirings references no template
+ * statement — the field is a dormant runtime channel (see canonical.ts). Its
+ * entries are still shape-checked, but there is no template-event cross-check.
  */
 export const validateVestingRuntime = (
   runtime: VestingRuntime,
@@ -243,16 +245,17 @@ export const validateVestingRuntime = (
 ): ValidationResult => {
   const errors: ValidationError[] = [];
 
-  const dateAnchoredExists = Array.isArray(template.statements)
-    ? template.statements.some((s) => s?.vesting_base?.type === "DATE")
-    : false;
+  // Every canonical statement is DATE-anchored, so a non-empty template needs a
+  // startDate. (A contingent placeholder carries the sentinel here, which is a
+  // valid calendar date.)
+  const hasStatements =
+    Array.isArray(template.statements) && template.statements.length > 0;
 
-  if (dateAnchoredExists) {
+  if (hasStatements) {
     if (typeof runtime.startDate !== "string") {
       errors.push({
         path: "startDate",
-        message:
-          "is required when the template contains any DATE-anchored statement",
+        message: "is required when the template contains any statement",
       });
     } else if (!isValidCalendarDate(runtime.startDate)) {
       errors.push({
@@ -287,11 +290,6 @@ export const validateVestingRuntime = (
     if (!Array.isArray(runtime.eventFirings)) {
       errors.push({ path: "eventFirings", message: "must be an array" });
     } else {
-      const templateEventIds = new Set(
-        (template.statements ?? [])
-          .filter((s) => s?.vesting_base?.type === "EVENT")
-          .map((s) => (s.vesting_base as { event_id: string }).event_id),
-      );
       const seen = new Map<string, number[]>();
 
       runtime.eventFirings.forEach((firing, i) => {
@@ -308,12 +306,6 @@ export const validateVestingRuntime = (
           const indices = seen.get(firing.event_id) ?? [];
           indices.push(i);
           seen.set(firing.event_id, indices);
-          if (!templateEventIds.has(firing.event_id)) {
-            errors.push({
-              path: `${path}.event_id`,
-              message: `"${firing.event_id}" does not match any EVENT-anchored statement in the template`,
-            });
-          }
         }
         if (
           typeof firing?.date !== "string" ||

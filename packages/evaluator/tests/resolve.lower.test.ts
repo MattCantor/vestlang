@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compile } from "@vestlang/core";
+import { compile, CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type {
   Amount,
   Blocker,
@@ -132,7 +132,7 @@ describe("resolveToCore — graded 5/15/40/40 chained over 4 years", () => {
   });
 });
 
-describe("resolveToCore — EVENT-anchored portion", () => {
+describe("resolveToCore — EVENT-anchored portion (fired → a dated start)", () => {
   const program: Program = [
     stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
       type: "MONTHS",
@@ -141,18 +141,17 @@ describe("resolveToCore — EVENT-anchored portion", () => {
     }),
   ];
 
-  it("lowers to a floating EVENT statement + firing", () => {
+  it("a fired event start lowers to a plain DATE template at the firing date", () => {
+    // With ipo fired, resolution dates the start, so it's an ordinary dated
+    // template — no event base (it no longer exists), no sidecar.
     const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" }));
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "ipo",
+      type: "DATE",
     });
-    expect(result.runtime.eventFirings).toEqual([
-      { event_id: "ipo", date: "2026-04-01" },
-    ]);
-    expect(result.runtime.startDate).toBeUndefined();
+    expect(result.runtime.startDate).toBe("2026-04-01");
+    expect(result.sourceMap).toEqual({});
   });
 
   it("round-trips through core.compile", () => {
@@ -164,10 +163,9 @@ describe("resolveToCore — EVENT-anchored portion", () => {
 });
 
 describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)", () => {
-  // A bare EVENT statement can't hold the offset: storing `ipo` and anchoring
-  // the grid at its raw firing would land everything a month early, and storing
-  // the shifted date as ipo's firing would falsify the record. So the anchor
-  // externalizes as a synthetic event whose definition keeps the offset.
+  // Unfired, this is a contingent start: the offset rides in the `evt:start`
+  // recipe. Fired, the resolved date already folds in the offset, so it's a plain
+  // dated start. Either way the projection reproduces firing+offset.
   const program: Program = [
     stmt(
       portion(1, 1),
@@ -178,7 +176,7 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     ),
   ];
 
-  it("unfired → template anchored on a synthetic event, offset in the sourceMap", () => {
+  it("unfired → contingent template (sentinel + evt:start), offset in the recipe", () => {
     const result = resolveToCore(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
@@ -186,12 +184,11 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "evt:1",
+      type: "DATE",
     });
-    expect(result.sourceMap["evt:1"].definition).toMatch(/ipo/);
-    expect(result.sourceMap["evt:1"].definition).toMatch(/\+1 month/);
-    expect(result.runtime.eventFirings).toBeUndefined();
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.sourceMap["evt:start"].definition).toMatch(/ipo/);
+    expect(result.sourceMap["evt:start"].definition).toMatch(/\+1 month/);
     expect(result.blockers).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "ipo",
@@ -199,14 +196,15 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
   });
 
   it("rehydrating the stored artifact with the true firing derives the offset date", () => {
-    // The stored artifact is the firing-invariant interchange one (firing-free
-    // runtime), the same thing persist would store.
+    // The stored artifact is the firing-invariant interchange one (sentinel start),
+    // the same thing persist would store. Rehydrate substitutes the re-derived
+    // start (firing + offset) into a projection-only runtime.
     const stored = resolveInterchange(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
     );
     if (stored.status !== "template") throw new Error("expected template");
-    const { runtime } = rehydrate(
+    const { runtime, startToApply } = rehydrate(
       stored.template,
       stored.sourceMap,
       stored.runtime,
@@ -216,14 +214,13 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
         grantQuantity: 100000,
       },
     );
-    expect(runtime.eventFirings).toEqual([
-      { event_id: "evt:1", date: "2024-04-01" },
-    ]);
+    expect(startToApply).toEqual({ date: "2024-04-01" });
+    expect(runtime.startDate).toBe("2024-04-01");
     const events = compile(stored.template, 100000, runtime);
     expect(events.map((e) => e.date)).toEqual(["2024-05-01", "2024-06-01"]);
   });
 
-  it("fired → the recorded firing is the synthetic event's, never a shifted ipo", () => {
+  it("fired → a plain dated start at firing + offset, no sidecar", () => {
     const result = resolveToCore(
       program,
       ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
@@ -231,14 +228,10 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "evt:1",
+      type: "DATE",
     });
-    // The one record is the synthetic event at its derived date — resolving its
-    // definition against the true firing. Nothing asserts ipo fired 2024-04-01.
-    expect(result.runtime.eventFirings).toEqual([
-      { event_id: "evt:1", date: "2024-04-01" },
-    ]);
+    expect(result.runtime.startDate).toBe("2024-04-01");
+    expect(result.sourceMap).toEqual({});
   });
 
   it("fired projection lands at firing + offset", () => {
@@ -252,10 +245,11 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     expect(sum(events)).toBe(100000);
   });
 
-  it("lowering after the firing equals lowering before it plus rehydration", () => {
+  it("the stored interchange template + rehydration reproduce the fired projection", () => {
     // `before` is the stored (firing-invariant) interchange artifact; `after` is
     // the live resolution once ipo fired. Rehydrating `before` against the firing
-    // must reproduce `after`'s template, source map, and witness-bearing runtime.
+    // must reproduce `after`'s projection (the read-only artifact is never mutated;
+    // the start substitution is projection-only).
     const before = resolveInterchange(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
@@ -264,9 +258,6 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
       program,
       ctxInput({ grantDate: "2024-01-01", ipo: "2024-03-01" }),
     );
-    // The two discriminants differ by design: an InterchangeVerdict (from
-    // resolveInterchange) keys on `status`, a ResolveResult (from resolveToCore)
-    // on `kind` — different result shapes, narrowed together here.
     if (before.status !== "template" || after.kind !== "template")
       throw new Error("expected templates");
     const { runtime } = rehydrate(
@@ -279,9 +270,14 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
         grantQuantity: 100000,
       },
     );
-    expect(after.template).toEqual(before.template);
-    expect(after.sourceMap).toEqual(before.sourceMap);
-    expect(after.runtime).toEqual(runtime);
+    // The frozen template is the same statement shape on both sides; the rehydrated
+    // (projection-only) runtime reproduces the live resolution's dated projection.
+    expect(after.template.statements[0].period_type).toBe(
+      before.template.statements[0].period_type,
+    );
+    expect(compile(before.template, 100000, runtime)).toEqual(
+      compile(after.template, 100000, after.runtime),
+    );
   });
 });
 
@@ -358,6 +354,7 @@ describe("disclosuresOf — the shared committed-disclosure read (#368)", () => 
       disclosuresOf({
         state: "PENDING_EVENT",
         eventId: "ipo",
+        expr: makeSingletonNode(makeVestingBaseEvent("ipo")),
         blockers: [ipoBlocker],
       }),
     ).toEqual([]);

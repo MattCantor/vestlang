@@ -4,6 +4,7 @@
 // commits. These crystallize the issue's numbered acceptance criteria.
 
 import { describe, it, expect } from "vitest";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type { AsOfContextInput, Blocker } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
@@ -133,19 +134,21 @@ describe("#251 AC4 — all-pending lower edge (no spurious commit)", () => {
 });
 
 describe("#251 AC5 — interchange unchanged for the start case", () => {
-  it("the headline's interchange is still a synthetic-event template, invariant to ipo", () => {
+  it("the headline's interchange is still a contingent-start template, invariant to ipo", () => {
     const blind = evaluateProgram(prog(HEADLINE), ctx());
     const fired = evaluateProgram(
       prog(HEADLINE),
       ctx({ events: { ipo: "2024-03-01" } }),
     );
-    // Firing-blind: a synthetic-event template with one source-map entry.
+    // Firing-blind: a contingent-start template (DATE base on the sentinel + the
+    // one reserved `evt:start` recipe).
     if (blind.interchange.status !== "template")
       throw new Error("expected interchange template");
-    expect(blind.interchange.template.statements[0].vesting_base.type).toBe(
-      "EVENT",
-    );
-    expect(Object.keys(blind.interchange.sourceMap)).toHaveLength(1);
+    expect(blind.interchange.template.statements[0].vesting_base).toEqual({
+      type: "DATE",
+    });
+    expect(blind.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(blind.interchange.sourceMap)).toEqual(["evt:start"]);
     // Invariant to whether ipo fired.
     expect(fired.interchange).toEqual(blind.interchange);
   });

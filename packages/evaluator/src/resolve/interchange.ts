@@ -77,6 +77,11 @@ const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
     (r) => r.cliff.state === "UNRESOLVED",
   );
   if (!hasDeferredCliff) {
+    // Note: a contingent start now promotes a single-event-head THEN chain to a
+    // `template` (see buildTemplate), so this branch no longer fires for that
+    // common shape; the kind is retained for contract exhaustiveness. Whether any
+    // shape still reaches it — and removing the branch + pendingHeadEvent helper if
+    // not — is tracked as a follow-up cleanup.
     const head = pendingHeadEvent(resolutions);
     if (head !== undefined)
       return { kind: "EVENT_CHAINED_TAIL", eventId: head };

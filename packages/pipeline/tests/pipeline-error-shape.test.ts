@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { PersistedArtifact } from "@vestlang/evaluator";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { runPersist, runRehydrate } from "../src/persist.js";
 import { runResolveOffset } from "../src/resolve-offset.js";
 
@@ -159,11 +160,11 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
     expect(r).not.toHaveProperty("projection");
   });
 
-  // #8 — a corrupt stored event definition. The verbatim message names the event
-  // and reads as a corruption refusal, without echoing the raw parser dump.
-  it("#8 corrupt definition → rehydrate-corrupt-definition, verbatim", () => {
-    // A sidecar entry only ever belongs to a synthetic event, so the key is the
-    // reserved `evt:1` — a non-reserved key would trip the namespace guard first.
+  // #8 — a corrupt stored start recipe. The verbatim message names the reserved
+  // key and reads as a corruption refusal, without echoing the raw parser dump.
+  it("#8 corrupt recipe → rehydrate-corrupt-definition, verbatim", () => {
+    // A contingent placeholder (sentinel startDate) whose `evt:start` recipe is
+    // corrupt — the start can't be re-derived, so reload refuses.
     const r = runRehydrate({
       artifact: {
         template: {
@@ -171,7 +172,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
           statements: [
             {
               order: 1,
-              vesting_base: { type: "EVENT", event_id: "evt:1" },
+              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",
@@ -179,9 +180,12 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
             },
           ],
         },
-        runtime: { grantDate: "2025-01-01" },
+        runtime: {
+          grantDate: "2025-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
         sidecar: {
-          vestlang: { "evt:1": { definition: "TOTALLY NOT DSL ((" } },
+          vestlang: { "evt:start": { definition: "TOTALLY NOT DSL ((" } },
         },
       },
       grant_quantity: 400,
@@ -190,7 +194,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
     if (r.ok) return;
     expect(r.error.ruleId).toBe("rehydrate-corrupt-definition");
     expect(r.error.message).toBe(
-      'Cannot rehydrate: the stored definition for event "evt:1" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
+      'Cannot rehydrate: the stored recipe for "evt:start" is corrupt or unparseable. The artifact appears to be damaged; supply one built by vestlang_persist.',
     );
     // The raw parser text stays off the operator-facing message.
     expect(r.error.message).not.toContain('Expected "DATE"');

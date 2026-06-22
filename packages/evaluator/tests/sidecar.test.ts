@@ -1,21 +1,17 @@
-// Sidecar persistence. A stored artifact (template + runtime) with synthetic
-// events carries its source map out-of-band in a namespaced `vestlang` sidecar —
-// the OCF-sanctioned separate mapping table keyed by `event_id`. The artifact
-// must survive a real serialization boundary (JSON) and rehydrate with the
-// synthetic id preserved verbatim; dropping the sidecar must leave a
-// valid-but-opaque template; and a plain template with no synthetic events emits
-// no sidecar at all.
+// Sidecar persistence. A stored artifact (template + runtime) with a contingent
+// start carries its `evt:start` recipe out-of-band in a namespaced `vestlang`
+// sidecar — the OCF-sanctioned separate mapping table. The artifact must survive a
+// real serialization boundary (JSON) and rehydrate with the recipe re-resolving to
+// the real start; dropping the sidecar of a contingent artifact is a damaged
+// artifact (the start can't be re-derived); and a plain dated template with no
+// contingent start emits no sidecar at all.
 
 import { describe, it, expect } from "vitest";
-import type {
-  Amount,
-  AsOfContextInput,
-  Program,
-  Statement,
-} from "@vestlang/types";
+import type { Amount, AsOfContextInput, Statement } from "@vestlang/types";
 import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
+  CONTINGENT_START_SENTINEL,
 } from "@vestlang/core";
 import { evaluateStatement } from "../src/orchestrate";
 import {
@@ -24,7 +20,7 @@ import {
   fromSidecar,
   toPersisted,
   rehydratePersisted,
-  resolveInterchange,
+  isRehydrateMissingStartMarkerError,
   type PersistedArtifact,
 } from "../src/resolve/index";
 import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
@@ -54,8 +50,8 @@ const portion = (numerator: number, denominator: number): Amount => ({
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
 
 // `100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT "ipo")`: `+12mo` is the
-// grantDate system anchor (→ DATE), `EVENT "ipo"` the genuine condition that
-// earns the synthetic event.
+// grantDate system anchor (→ DATE), `EVENT "ipo"` the genuine condition that makes
+// this a contingent start, externalized under the reserved `evt:start` key.
 const stageAStmt = (): Statement => ({
   type: "STATEMENT",
   amount: portion(1, 1),
@@ -75,8 +71,9 @@ const stageAStmt = (): Statement => ({
 });
 
 // The stored artifact (IPO unfired): the firing-invariant `interchange` `template`
-// arm — the synthetic EVENT statement, a firing-free StoredTerms runtime, and the
-// source map — which is what persist actually stores.
+// arm — a DATE statement on the contingent-start sentinel, a firing-free
+// StoredTerms runtime, and the source map with the one `evt:start` recipe — which
+// is what persist actually stores.
 const storedArtifact = () => {
   const { interchange } = evaluateStatement(
     stageAStmt(),
@@ -91,8 +88,8 @@ const storedArtifact = () => {
   };
 };
 
-// A plain time-based template with NO synthetic events: `100% MONTHLY OVER 48
-// FROM EVENT "grantDate"` — a pure system anchor, no genuine condition.
+// A plain time-based template with NO contingent start: `100% MONTHLY OVER 48 FROM
+// EVENT "grantDate"` — a pure system anchor, no genuine event, so no `evt:start`.
 const plainStmt = (): Statement => ({
   type: "STATEMENT",
   amount: portion(1, 1),
@@ -103,32 +100,29 @@ const plainStmt = (): Statement => ({
   },
 });
 
-// The synthetic `event_id` minted at emit — there is exactly one in Stage A.
-const syntheticIdOf = (template: PersistedArtifact["template"]): string => {
-  const ev = template.statements.find((s) => s.vesting_base.type === "EVENT");
-  if (!ev || ev.vesting_base.type !== "EVENT")
-    throw new Error("no EVENT statement");
-  return ev.vesting_base.event_id;
-};
-
-describe("sidecar — round-trips through JSON + rehydration with id preserved", () => {
-  it("carries the synthetic event_id verbatim from emit to witness", () => {
+describe("sidecar — round-trips through JSON + rehydration with the recipe preserved", () => {
+  it("carries the evt:start recipe verbatim from emit to re-derived start", () => {
     const stored = storedArtifact();
-    const id = syntheticIdOf(stored.template);
+    // The stored template is the contingent placeholder: DATE base on the sentinel.
+    expect(stored.template.statements[0].vesting_base).toEqual({
+      type: "DATE",
+    });
+    expect(stored.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(stored.sourceMap)).toEqual(["evt:start"]);
 
     // Emit: bundle the canonical objects + the namespaced sidecar.
     const persisted = toPersisted(stored);
-    expect(persisted.sidecar?.[VESTLANG_SIDECAR_NAMESPACE]).toHaveProperty(id);
+    expect(persisted.sidecar?.[VESTLANG_SIDECAR_NAMESPACE]).toHaveProperty(
+      "evt:start",
+    );
 
     // A real serialization boundary: store as JSON, read it back.
     const reread: PersistedArtifact = JSON.parse(JSON.stringify(persisted));
+    expect(Object.keys(fromSidecar(reread.sidecar))).toEqual(["evt:start"]);
 
-    // The id is the same in the template statement AND the sidecar key — carried,
-    // never recomputed.
-    expect(syntheticIdOf(reread.template)).toBe(id);
-    expect(Object.keys(fromSidecar(reread.sidecar))).toEqual([id]);
-
-    // Read template + sidecar → rehydrate with the IPO fired.
+    // Read template + sidecar → rehydrate with the IPO fired. The recipe resolves
+    // to the LATER OF (max of grant+12mo and the IPO firing) and substitutes into
+    // the projection-only runtime.
     const result = rehydratePersisted(
       reread,
       ctxInput({
@@ -138,15 +132,12 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
         grantQuantity: 4800,
       }),
     );
-
-    // One witness, the same id, dated at the IPO firing.
-    expect(result.runtime.eventFirings).toEqual([
-      { event_id: id, date: "2027-03-01" },
-    ]);
+    expect(result.startToApply).toEqual({ date: "2027-03-01" });
+    expect(result.runtime.startDate).toBe("2027-03-01");
     expect(result.pending).toEqual([]);
     expect(result.dead).toEqual([]);
 
-    // The frozen template + witnessed runtime compiles to the full schedule.
+    // The frozen template + re-derived runtime compiles to the full schedule.
     const installments = compileToInstallments(
       reread.template,
       4800,
@@ -154,13 +145,15 @@ describe("sidecar — round-trips through JSON + rehydration with id preserved",
     );
     expect(installments).toHaveLength(48);
     expect(sum(installments)).toBe(4800);
+
+    // The stored artifact is never mutated: its startDate is still the sentinel.
+    expect(reread.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
   });
 });
 
-describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
-  it("rehydrates to no synthetic witness; the template is still valid OCF", () => {
+describe("sidecar — dropping a contingent artifact's sidecar is a damaged artifact", () => {
+  it("the bare template is still valid OCF, but reload refuses (start can't be re-derived)", () => {
     const stored = storedArtifact();
-    const id = syntheticIdOf(stored.template);
 
     // Persist, then DROP the sidecar (a vestlang-blind consumer in the pipeline).
     const dropped: PersistedArtifact = {
@@ -168,31 +161,29 @@ describe("sidecar — dropping it leaves a valid-but-opaque template", () => {
       runtime: stored.runtime,
     };
 
-    // No source map → no synthetic witness, even with the IPO fired.
-    expect(fromSidecar(dropped.sidecar)).toEqual({});
-    const result = rehydratePersisted(
-      dropped,
-      ctxInput({
-        grantDate: "2025-01-01",
-        events: { ipo: "2027-03-01" },
-        grantQuantity: 4800,
-      }),
-    );
-    expect(result.runtime.eventFirings ?? []).toEqual([]);
-
-    // The template is still valid canonical, the opaque event_id intact, and it
-    // compiles to nothing for that statement (a pending, un-evaluatable milestone).
+    // The template is still structurally valid canonical (DATE base + a real
+    // far-future startDate).
     expect(() =>
       assertValidVestingScheduleTemplate(dropped.template),
     ).not.toThrow();
-    expect(syntheticIdOf(dropped.template)).toBe(id);
-    expect(
-      compileToInstallments(dropped.template, 4800, result.runtime),
-    ).toEqual([]);
+    expect(fromSidecar(dropped.sidecar)).toEqual({});
+
+    // But a vestlang-aware reload detects the dropped contingency marker: the
+    // sentinel startDate with no `evt:start` recipe is a damaged artifact.
+    let thrown: unknown;
+    try {
+      rehydratePersisted(
+        dropped,
+        ctxInput({ events: { ipo: "2027-03-01" }, grantQuantity: 4800 }),
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(isRehydrateMissingStartMarkerError(thrown)).toBe(true);
   });
 });
 
-describe("sidecar — a template with no synthetic events emits no sidecar", () => {
+describe("sidecar — a plain dated template emits no sidecar", () => {
   it("toSidecar({}) is undefined and toPersisted omits the field", () => {
     const { interchange } = evaluateStatement(
       plainStmt(),
@@ -208,125 +199,19 @@ describe("sidecar — a template with no synthetic events emits no sidecar", () 
   });
 });
 
-// A grant whose program mixes a stand-in event (the `LATER OF(a, b)` half, which
-// the lowering can't store directly and so externalizes) with a user event the
-// author named `evt_1`. The stand-in's id lives in the `evt:<n>` namespace, which
-// no DSL identifier can spell, so the two never share a string and the persisted
-// artifact keeps them distinct.
-describe("sidecar — a stand-in event and a user `evt_1` stay distinct through persistence", () => {
-  // `1/2 FROM LATER OF(EVENT a, EVENT b) ... PLUS 1/2 FROM EVENT evt_1 ...`.
-  const collisionProgram = (): Program => [
-    {
-      type: "STATEMENT",
-      amount: portion(1, 2),
-      expr: {
-        type: "SCHEDULE",
-        vesting_start: {
-          type: "NODE_LATER_OF",
-          items: [
-            makeSingletonNode(makeVestingBaseEvent("a")),
-            makeSingletonNode(makeVestingBaseEvent("b")),
-          ],
-        },
-        periodicity: { type: "MONTHS", length: 4, occurrences: 4 },
-      },
-    },
-    {
-      type: "STATEMENT",
-      amount: portion(1, 2),
-      expr: {
-        type: "SCHEDULE",
-        vesting_start: makeSingletonNode(makeVestingBaseEvent("evt_1")),
-        periodicity: { type: "MONTHS", length: 4, occurrences: 4 },
-      },
-    },
-  ];
-
-  // The stored (firing-invariant interchange) artifact, with a, b unfired (the
-  // user's evt_1 firing is irrelevant to lowering; a bare EVENT base stores its own
-  // id and waits for a runtime firing).
-  const resolveStored = () => {
-    const result = resolveInterchange(
-      collisionProgram(),
-      ctxInput({ grantDate: "2026-01-01", grantQuantity: 1000 }),
-    );
-    if (result.status !== "template")
-      throw new Error(`expected template, got ${result.status}`);
-    return result;
-  };
-
-  it("persists the stand-in as `evt:1` and keeps the user's `evt_1` statement untouched", () => {
-    const stored = resolveStored();
-
-    // The two statements carry distinct ids: the stand-in's reserved-namespace id
-    // and the user's own name.
-    expect(stored.template.statements.map((s) => s.vesting_base)).toEqual([
-      { type: "EVENT", event_id: "evt:1" },
-      { type: "EVENT", event_id: "evt_1" },
-    ]);
-
-    // Only the stand-in earns a source-map entry; the user event is a plain
-    // milestone with nothing to look up.
-    const persisted = toPersisted(stored);
-    expect(Object.keys(fromSidecar(persisted.sidecar))).toEqual(["evt:1"]);
-  });
-
-  it("the persisted artifact round-trips through toPersisted with no throw", () => {
-    // AC3: a normally-lowered artifact (synthetic `evt:1` key with a matching
-    // template statement) persists cleanly.
-    const stored = resolveStored();
-    expect(() => toPersisted(stored)).not.toThrow();
-  });
-
-  it("reloading does not let the user's `evt_1` firing shadow the pending stand-in", () => {
-    const stored = resolveStored();
-    const persisted: PersistedArtifact = JSON.parse(
-      JSON.stringify(toPersisted(stored)),
-    );
-
-    // Re-resolve with a, b still unfired. (A genuine `evt_1` firing reaches the
-    // record keeper on the runtime channel, not through `events` — rehydration
-    // reads `events` only to settle synthetic definitions — so passing it here
-    // would do nothing; we leave it out to keep the test honest.)
-    const result = rehydratePersisted(
-      persisted,
-      ctxInput({ grantDate: "2026-01-01", grantQuantity: 1000 }),
-    );
-
-    // The stand-in stays pending: no witness, and its anchors still block —
-    // the LATER OF's two unfired events, reported under the selector.
-    expect(result.runtime.eventFirings ?? []).toEqual([]);
-    expect(result.pending).toContainEqual({
-      type: "UNRESOLVED_SELECTOR",
-      selector: "LATER_OF",
-      blockers: [
-        { type: "EVENT_NOT_YET_OCCURRED", event: "a" },
-        { type: "EVENT_NOT_YET_OCCURRED", event: "b" },
-      ],
-    });
-
-    // The user's `evt_1` statement is untouched — still a bare milestone in the
-    // frozen template, never collapsed into the stand-in.
-    expect(persisted.template.statements.map((s) => s.vesting_base)).toEqual([
-      { type: "EVENT", event_id: "evt:1" },
-      { type: "EVENT", event_id: "evt_1" },
-    ]);
-  });
-});
-
-// The save-path partition tripwire. The source map a normal persist produces always
-// honors the synthetic/named split; a violation can only come from a lowering bug,
-// so `toPersisted` throws a PLAIN Error (not the tagged namespace error, not a
-// structured refusal) that the persist orchestrator doesn't catch. These build the
-// violating artifacts by hand to exercise the tripwire directly.
+// The save-path partition tripwire. The artifact a normal persist produces always
+// honors the reserved-namespace partition AND the sentinel⇔`evt:start` marker
+// invariant; a violation can only come from a lowering bug, so `toPersisted` throws
+// a PLAIN Error (not the tagged namespace error, not a structured refusal) that the
+// persist orchestrator doesn't catch. These build the violating artifacts by hand.
 describe("toPersisted — save-path partition tripwire", () => {
-  // A one-statement EVENT-anchored template on `eventId`.
-  const templateWithEvent = (eventId: string): VestingScheduleTemplate => ({
+  // A one-statement DATE template on the contingent-start sentinel.
+  const sentinelTemplate = (): VestingScheduleTemplate => ({
     id: "t1",
     statements: [
       {
         order: 1,
-        vesting_base: { type: "EVENT", event_id: eventId },
+        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -335,8 +220,6 @@ describe("toPersisted — save-path partition tripwire", () => {
     ],
   });
 
-  const runtime = { grantDate: "2026-01-01" };
-
   it("throws a plain Error naming a source-map key outside the reserved namespace (AC1)", () => {
     // A key `evt_1` is a legal user Ident, NOT in the `evt:` namespace.
     const sourceMap: SourceMap = {
@@ -344,7 +227,14 @@ describe("toPersisted — save-path partition tripwire", () => {
     };
     let thrown: unknown;
     try {
-      toPersisted({ template: templateWithEvent("evt_1"), runtime, sourceMap });
+      toPersisted({
+        template: sentinelTemplate(),
+        runtime: {
+          grantDate: "2026-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
+        sourceMap,
+      });
     } catch (e) {
       thrown = e;
     }
@@ -356,42 +246,54 @@ describe("toPersisted — save-path partition tripwire", () => {
     );
   });
 
-  it("throws a plain Error, with a distinct message, for a masquerading named event (AC2)", () => {
-    // The template statement claims a reserved-namespace id (`evt:1`) but the
-    // source map carries no matching entry — a named event masquerading as a
-    // synthetic. The source map keys are all reserved, so AC1's half passes.
+  it("throws a plain Error, with a distinct message, when the sentinel/evt:start marker is inconsistent (AC2)", () => {
+    // The runtime carries the sentinel startDate but the source map has no
+    // `evt:start` recipe — the contingency marker is half-present. The keys are all
+    // reserved (empty map), so AC1's half passes.
     const sourceMap: SourceMap = {};
     let thrown: unknown;
     try {
-      toPersisted({ template: templateWithEvent("evt:1"), runtime, sourceMap });
+      toPersisted({
+        template: sentinelTemplate(),
+        runtime: {
+          grantDate: "2026-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
+        sourceMap,
+      });
     } catch (e) {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(Error);
     expect((thrown as Error).name).toBe("Error");
-    expect((thrown as Error).message).toContain(
-      'template event "evt:1" in the reserved namespace has no source-map entry',
-    );
+    expect((thrown as Error).message).toContain("evt:start");
     // AC1 and AC2 are distinguishable by message substring.
     expect((thrown as Error).message).not.toContain(
       "outside the reserved namespace",
     );
   });
 
-  it("does not throw for a normal synthetic key matched by its template statement (AC3)", () => {
+  it("does not throw for a consistent contingent artifact (sentinel + evt:start) (AC3)", () => {
     const sourceMap: SourceMap = {
-      "evt:1": { definition: "LATER OF(EVENT a, EVENT b)" },
+      "evt:start": { definition: "LATER OF(EVENT a, EVENT b)" },
     };
     expect(() =>
-      toPersisted({ template: templateWithEvent("evt:1"), runtime, sourceMap }),
+      toPersisted({
+        template: sentinelTemplate(),
+        runtime: {
+          grantDate: "2026-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
+        sourceMap,
+      }),
     ).not.toThrow();
   });
 
-  it("does not throw for a plain template with an empty source map (AC3)", () => {
+  it("does not throw for a plain dated template with an empty source map (AC3)", () => {
     expect(() =>
       toPersisted({
-        template: templateWithEvent("ipo"),
-        runtime,
+        template: sentinelTemplate(),
+        runtime: { grantDate: "2026-01-01", startDate: "2026-01-01" },
         sourceMap: {},
       }),
     ).not.toThrow();

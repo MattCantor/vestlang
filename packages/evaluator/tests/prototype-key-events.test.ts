@@ -83,19 +83,20 @@ describe("#285 — a fired prototype-key event resolves end-to-end", () => {
   });
 });
 
-describe("#285 — rehydrate produces the witness for a bare prototype-key event", () => {
-  it("fires `constructor` and leaves an ordinary sibling untouched", () => {
-    // Two bare-EVENT statements in one grant; neither earns a sidecar, so the
-    // membership check in rehydrate's bare-event loop is what's exercised. The old
-    // `"constructor" in {}` was true (inherited), skipping the firing entirely.
-    const DSL =
-      "1/2 VEST FROM EVENT constructor OVER 4 months EVERY 1 month" +
-      " PLUS 1/2 VEST FROM EVENT ipo OVER 4 months EVERY 1 month";
+describe("#285 — rehydrate re-derives the start for a bare prototype-key event", () => {
+  it("fires `constructor` as the contingent start, re-derived from the recipe", () => {
+    // A bare `EVENT constructor` start is a single contingent origin, so it stores
+    // as a contingent-start template whose `evt:start` recipe is re-resolved on
+    // reload. The recipe resolution reads the events map through the same
+    // prototype-safe path the EVENT atom uses, so a `constructor` firing is found
+    // rather than shadowed by the inherited member.
+    const DSL = "VEST FROM EVENT constructor OVER 4 months EVERY 1 month";
     // Reload reads the firing-invariant interchange artifact (firing-free runtime).
     const { interchange } = evaluateProgram(prog(DSL), ctx());
     if (interchange.status !== "template")
       throw new Error(`expected template, got ${interchange.status}`);
     const { template, sourceMap, runtime } = interchange;
+    expect(sourceMap["evt:start"].definition).toContain("constructor");
 
     const result = rehydrate(
       template,
@@ -104,18 +105,23 @@ describe("#285 — rehydrate produces the witness for a bare prototype-key event
       ctx({ events: { constructor: "2025-03-01" } }),
     );
 
-    expect(result.runtime.eventFirings).toContainEqual({
-      event_id: "constructor",
-      date: "2025-03-01",
-    });
-    // `ipo` is unfired here, so it stays pending — proof the sibling isn't shadowed
-    // or witnessed off the back of the colliding key.
-    expect(result.runtime.eventFirings?.some((f) => f.event_id === "ipo")).toBe(
-      false,
-    );
+    expect(result.startToApply).toEqual({ date: "2025-03-01" });
+    expect(result.runtime.startDate).toBe("2025-03-01");
+    expect(result.pending).toEqual([]);
+  });
+
+  it("leaves the start pending when the prototype-key event is unfired", () => {
+    const DSL = "VEST FROM EVENT constructor OVER 4 months EVERY 1 month";
+    const { interchange } = evaluateProgram(prog(DSL), ctx());
+    if (interchange.status !== "template")
+      throw new Error(`expected template, got ${interchange.status}`);
+    const { template, sourceMap, runtime } = interchange;
+
+    const result = rehydrate(template, sourceMap, runtime, ctx());
+    expect(result.startToApply).toBeNull();
     expect(result.pending).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
-      event: "ipo",
+      event: "constructor",
     });
   });
 });

@@ -77,10 +77,11 @@ describe("evaluateProgramWithRecovery", () => {
     expect(outcome.schedule.resolution.status).toBe("events-only");
   });
 
-  // Same reason kind as #43 (OVERLAPPING_ABSOLUTE_STARTS), but an event anchor.
-  // Condition (2) would admit it; condition (3) is what turns it away — the
-  // whole reason the gate reads the structure and not just the reason kind.
-  it("does not rescue an event-origin THEN chain (rejected on the event anchor)", () => {
+  // A chain headed on ONE event is a single contingent origin, so once fired it
+  // resolves directly to a `template` (the chain re-anchors off the resolved start)
+  // — there's nothing to rescue. (Before the contingent-start model it was
+  // events-only and the gate turned it away on the event anchor.)
+  it("needs no rescue for an event-origin THEN chain — it resolves to a template", () => {
     const outcome = evaluateProgramWithRecovery(
       prog(
         "200 VEST FROM EVENT ipo OVER 2 months EVERY 1 month THEN 200 VEST OVER 2 months EVERY 1 month",
@@ -89,7 +90,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(outcome.schedule.resolution.status).toBe("template");
   });
 
   // Two grids on different days of the month interleave into a stream with no
