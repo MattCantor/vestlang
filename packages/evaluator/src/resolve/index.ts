@@ -87,13 +87,21 @@ export const resolveToCore = (
     //  - The inst.state check is type narrowing, not filtering: a pending start
     //    produces only UNRESOLVED installments (one whole-portion lump, or
     //    start+N steps for a partially-settled combinator / a pending-tail).
+    //  - A dated start whose event-held cliff hasn't fired is also collected: the
+    //    whole grid is held, so core.compile emits nothing for it, and without this
+    //    its claim would vanish from the stream. unresolvedInstallments renders it
+    //    as the held (symbolic) tranches. A *fired* held cliff is materialized by
+    //    core.compile instead, so it's excluded here.
     const claims = symbolicClaims(resolutions, totalShares);
     const pendingInstallments: UnresolvedInstallment[] = [];
     resolutions.forEach((r, i) => {
+      const heldUnfired =
+        r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
       if (
         r.start.state === "PENDING_EVENT" ||
         r.start.state === "SYNTHETIC_EVENT" ||
-        r.chain.role === "pending-tail"
+        r.chain.role === "pending-tail" ||
+        heldUnfired
       ) {
         for (const inst of unresolvedInstallments(r, ctx, claims[i])
           .installments) {

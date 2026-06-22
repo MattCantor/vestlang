@@ -40,14 +40,14 @@ export const isVoid = (r: StmtResolution): boolean =>
 // A statement whose tranches the dated allocator materializes — core.compile in
 // the template arm, resolvedInstallments in the events/unresolved arms. These
 // never render symbolically; their fractions seed the claim basis below. An
-// event-held cliff (EVENT_HELD) is dated too: core.compile owns its fold (emit
-// nothing while held, the proportional cliff once fired), so it never renders
-// symbolically here.
+// event-held cliff is dated ONCE FIRED (core/expandResolution folds it at the
+// firing); while it's still held it renders symbolically (held tranches), so it's
+// not dated then — its shares must survive into the events/unresolved stream.
 const isDated = (r: StmtResolution): boolean =>
   isDatedStart(r) &&
   (r.cliff.state === "NONE" ||
     r.cliff.state === "RESOLVED" ||
-    r.cliff.state === "EVENT_HELD");
+    (r.cliff.state === "EVENT_HELD" && r.cliff.firing !== undefined));
 
 // One claim per statement, drawn from a single program-wide cumulative so the
 // symbolic side telescopes the way the allocator does. Dated statements seed
@@ -186,12 +186,21 @@ export const unresolvedInstallments = (
       return EMPTY;
     case "IMPOSSIBLE":
       return makeImpossibleSchedule(amounts, r.cliff.blockers);
-    // An event-held cliff is materialized by core.compile (which folds at the
-    // condition firing, or holds the whole grid while unfired), so it contributes
-    // no symbolic installments here. Its pending-ness is disclosed on the template
-    // verdict's blocker list (gathered in buildTemplate), not restated per tranche.
-    case "EVENT_HELD":
-      return EMPTY;
+    // An event-held cliff. Fired, it's materialized by core.compile /
+    // expandResolution (the fold at the firing), so it contributes no symbolic
+    // installments here. Unfired, the whole grid is held: render the held tranches
+    // symbolically so the shares survive into the events/unresolved stream (the
+    // template arm instead lets core.compile hold them, and discloses the blocker
+    // in buildTemplate). A bare event side names its event on the blocker; a
+    // synthetic one's held-ness rides on the symbolic installments alone.
+    case "EVENT_HELD": {
+      if (r.cliff.firing !== undefined) return EMPTY;
+      const blocker: Blocker[] =
+        r.cliff.event.kind === "bare"
+          ? [{ type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.event.eventId }]
+          : [];
+      return makeUnresolvedCliffSchedule(dates, amounts, blocker);
+    }
     case "UNRESOLVED": {
       const { shape, blockers } = r.cliff;
       switch (shape.kind) {

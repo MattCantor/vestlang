@@ -144,7 +144,15 @@ const eventsArm = (
   // route to the unresolved arm first, so the dated set here and isDated agree.
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
-    if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
+    // A dated start whose event-held cliff hasn't fired holds its whole grid — it
+    // can't materialize as dated tranches, so it renders symbolically alongside the
+    // other pending portions (its shares would otherwise vanish from the stream).
+    const heldUnfired =
+      r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
+    if (
+      (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") &&
+      !heldUnfired
+    ) {
       dated.push(r);
       // The dated path never runs unresolvedInstallments (where blockers are
       // otherwise gathered), so a committed floor's disclosures (via

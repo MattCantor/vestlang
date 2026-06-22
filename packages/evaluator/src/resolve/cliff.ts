@@ -35,7 +35,11 @@ import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
 import { pickedDate } from "../evaluate/utils.js";
-import type { CliffEvaluationContext } from "../evaluate/vestingNode/vestingBase.js";
+import type { PickReturn } from "../evaluate/utils.js";
+import {
+  isVestingStartPlaceholder,
+  type CliffEvaluationContext,
+} from "../evaluate/vestingNode/vestingBase.js";
 
 // How the event side of a held cliff names its `event_condition`.
 //   - `bare`:      a single real `EVENT e`; the template references `e` directly
@@ -92,6 +96,36 @@ export type LoweredCliff =
   // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
   // are already ImpossibleBlocker[], so no cast is needed when it's produced.
   | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
+
+// The verdict a BEFORE/AFTER gate forces on a non-event cliff, read off the cliff
+// expression's resolution: a violated gate kills it (IMPOSSIBLE), a still-pending
+// gate holds it (UNRESOLVED with the gate's blockers), a satisfied gate clears
+// (undefined) and the caller proceeds. Only reached for an event-FREE gated cliff
+// on the deferred path — an event-referencing gate rides the event_condition path
+// instead, where the recipe captures the gate verbatim.
+const gateVerdict = (
+  res: PickReturn<VestingNode>,
+  filter: (b: Blocker[]) => Blocker[] = (b) => b,
+):
+  | { state: "UNRESOLVED"; blockers: Blocker[]; shape: { kind: "symbolic" } }
+  | Extract<LoweredCliff, { state: "IMPOSSIBLE" }>
+  | undefined => {
+  if (res.type === "IMPOSSIBLE")
+    return { state: "IMPOSSIBLE", blockers: res.blockers };
+  const pending =
+    res.type === "UNRESOLVED"
+      ? res.blockers
+      : res.meta.type === "UNRESOLVED"
+        ? res.meta.blockers
+        : undefined;
+  return pending === undefined
+    ? undefined // gate satisfied — caller proceeds
+    : {
+        state: "UNRESOLVED",
+        blockers: filter(pending),
+        shape: { kind: "symbolic" },
+      };
+};
 
 // Count the grid occurrences whose vesting date falls at or before `cliffDate`,
 // on the origin-day grid (see the note on `origin` at `lowerCliff`) — the same
@@ -445,8 +479,19 @@ export const lowerDeferredCliff = (
   if (rel) return { state: "RESOLVED", cliff: rel };
   if (rel === null) return { state: "NONE" };
 
-  // A non-event, non-derivable cliff (a cross-unit duration): no start anchor to
-  // lay a grid against, so it stays unresolved until the firing date arrives.
+  // A non-event, non-derivable cliff. A gated one surfaces its gate's verdict (so a
+  // real condition the grant depends on is disclosed even while the start is
+  // pending), dropping the vestingStart placeholder — that pending-ness is the
+  // start's, reported on the start, not doubled onto the cliff. An ungated one (a
+  // cross-unit duration) simply stays unresolved until the firing date arrives.
+  if (isGatedNode(cliffExpr)) {
+    const res = evaluateVestingNodeExpr(cliffExpr, ctx);
+    const gate = gateVerdict(res, (bs) =>
+      bs.filter((b) => !isVestingStartPlaceholder(b)),
+    );
+    if (gate) return gate;
+  }
+
   return { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } };
 };
 
