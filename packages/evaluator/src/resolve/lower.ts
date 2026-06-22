@@ -778,9 +778,16 @@ export const buildTemplate = (
         // The hold is still in force (firing-blind, or the event hasn't fired).
         // Disclose it on the template verdict's blocker list so resolution.pending
         // reflects the held grid — the projection itself is empty until it fires.
-        // The interchange build is firing-blind and never reads these blockers, so
-        // this stays firing-invariant.
-        blockers.push({ type: "EVENT_NOT_YET_OCCURRED", event: eventId });
+        // We carry the event side's OWN blockers (set on the cliff when unfired):
+        // for a bare side that's `EVENT_NOT_YET_OCCURRED(real id)`; for a synthetic
+        // side it names the real underlying events (`a`/`b`), never the minted
+        // `evt:<n>` — pushing the synthetic id here would leak an internal name to
+        // MCP/CLI consumers. Pushing nothing would silently hide a held grant (the
+        // template arm has no symbolic-installment fallback), so the carried
+        // blockers are the only disclosure that the grid is held. The interchange
+        // build is firing-blind and never reads these, so this stays
+        // firing-invariant.
+        blockers.push(...(r.cliff.blockers ?? []));
       }
     }
 

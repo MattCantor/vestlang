@@ -85,14 +85,17 @@ describe("lowerCliff", () => {
     }
   });
 
-  it("unfired event cliff → EVENT_HELD, no firing (held)", () => {
+  it("unfired event cliff → EVENT_HELD, no firing (held), real-event blocker", () => {
     const noIpo = baseCtx({ grantDate: "2025-01-01", events: {} });
     const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
       makeVestingBaseEvent("ipo"),
     );
+    // Unfired → the hold carries the real event's pending blocker (`ipo`), so the
+    // grid discloses on the named event rather than vanishing.
     expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, noIpo)).toEqual({
       state: "EVENT_HELD",
       event: { kind: "bare", eventId: "ipo" },
+      blockers: [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }],
     });
   });
 

@@ -73,6 +73,12 @@ export type LoweredCliff =
       // The resolved condition firing (resolution mode, event fired). Undefined
       // when firing-blind or still pending.
       firing?: OCTDate;
+      // The event side's own pending blockers, set only while the hold is unfired
+      // (no `firing`). buildTemplate discloses the hold off these so the held grid
+      // names the REAL underlying events (`a`/`b`), never the minted synthetic id —
+      // an `evt:<n>` would leak an internal name out to MCP/CLI consumers. Omitted
+      // (and unread) once fired.
+      blockers?: Blocker[];
     }
   // A pending cliff the renderer reproduces without re-resolving. `shape` carries
   // the render variance (only the unresolved renderer branches on it):
@@ -125,6 +131,17 @@ const gateVerdict = (
         blockers: filter(pending),
         shape: { kind: "symbolic" },
       };
+};
+
+/** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements
+ *  and rehydrate. Used to carry the unfired event side's real-event blockers onto
+ *  an EVENT_HELD record (so the hold discloses on the real events, not a synthetic
+ *  id). */
+const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
+  if (res.type === "PICKED") {
+    return res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
+  }
+  return res.blockers;
 };
 
 // Count the grid occurrences whose vesting date falls at or before `cliffDate`,
@@ -405,12 +422,19 @@ const lowerEventCliff = (
   // over events; a partial/unresolved one leaves `firing` undefined.
   const firing = pickedDate(eventRes);
 
+  // While the hold is unfired, carry the event side's own pending blockers so
+  // buildTemplate discloses on the real events (the synthetic recipe's underlying
+  // `a`/`b`), never the minted `evt:<n>`. Only when non-empty, so a fired record is
+  // untouched.
+  const blockers = firing === undefined ? blockersOf(eventRes) : [];
+
   return {
     state: "EVENT_HELD",
     ...(cliff ? { cliff } : {}),
     ...(cliffDate ? { cliffDate } : {}),
     event,
     ...(firing ? { firing } : {}),
+    ...(blockers.length > 0 ? { blockers } : {}),
   };
 };
 
@@ -468,10 +492,21 @@ export const lowerDeferredCliff = (
       if (rel) cliff = rel;
     }
 
+    // The event side is firing-blind here (the start itself is pending), so the
+    // hold always stands. Resolve it anyway to carry its real-event blockers — the
+    // hold then discloses on the underlying events, not the minted synthetic id.
+    // Drop any vestingStart placeholder: that pending-ness is the start's, reported
+    // on the start, not doubled onto the cliff.
+    const eventRes = evaluateVestingNodeExpr(joinLaterOf(eventArms), ctx);
+    const blockers = blockersOf(eventRes).filter(
+      (b) => !isVestingStartPlaceholder(b),
+    );
+
     return {
       state: "EVENT_HELD",
       ...(cliff ? { cliff } : {}),
       event: classifyEventSide(eventArms),
+      ...(blockers.length > 0 ? { blockers } : {}),
     };
   }
 

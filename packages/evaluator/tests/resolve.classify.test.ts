@@ -18,6 +18,7 @@ import { classify } from "../src/resolve/classify";
 import type { StmtResolution } from "../src/resolve/lower";
 import { evaluateProgram } from "../src/orchestrate";
 import { evaluateProgramAsOf } from "../src/asof";
+import { blockerToString } from "../src/evaluate/blockerToString";
 import {
   baseCtx,
   makeSingletonSchedule,
@@ -252,6 +253,35 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
     expect(result.blockers.length).toBeGreaterThan(0);
     // Unfired → no placeable fold point.
     expect(result.cliffDate).toBeNull();
+  });
+
+  it("synthetic event_condition hold discloses on the real events, never the minted id", () => {
+    // The cliff stores under a synthetic `evt:<n>` id, but the pending disclosure
+    // must name the underlying real events (`a`, `b`) — leaking `evt:1` out to an
+    // MCP/CLI consumer would be a fidelity regression. Both events unfired.
+    const cliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("a")),
+        makeSingletonNode(makeVestingBaseEvent("b")),
+      ],
+    };
+    const program: Program = [
+      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01")), {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 48,
+        cliff,
+      }),
+    ];
+    const out = evaluateProgram(program, ctxInput());
+    expect(out.resolution.status).toBe("template");
+    // `blockerToString` recurses the whole blocker tree, so it renders any leaked
+    // synthetic id too; asserting on the rendered text is the real guard.
+    const rendered = out.resolution.pending.map(blockerToString).join(" | ");
+    expect(rendered).toContain("EVENT a");
+    expect(rendered).toContain("EVENT b");
+    expect(rendered).not.toContain("evt:");
   });
 });
 
