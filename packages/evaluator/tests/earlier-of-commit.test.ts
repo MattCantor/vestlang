@@ -8,7 +8,7 @@ import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type { AsOfContextInput, Blocker } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 
 const prog = (dsl: string) => normalizeProgram(parse(dsl));

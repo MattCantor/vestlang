@@ -19,7 +19,7 @@ import {
   makeUnresolvedCliffInstallment,
   makeUnresolvedCliffSchedule,
   makeUnresolvedVestingStartSchedule,
-} from "../evaluate/makeTranches.js";
+} from "../interpret/makeTranches.js";
 import type { StmtResolution } from "./lower.js";
 
 const EMPTY: InstallmentSet = { installments: [], blockers: [] };

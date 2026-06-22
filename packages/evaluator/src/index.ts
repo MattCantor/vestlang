@@ -3,11 +3,11 @@ export {
   evaluateStatement,
   evaluateClauseGroups,
   evaluateProgram,
-} from "./orchestrate.js";
+} from "./evaluate.js";
 export {
   resolveVestingStart,
   type ResolvedAnchor,
-} from "./evaluate/resolveVestingStart.js";
+} from "./interpret/resolveVestingStart.js";
 export { evaluateProgramAsOf, type VestedResult } from "./asof.js";
 
 // Allocation validity — the over/under-allocation rule, exposed for the persist

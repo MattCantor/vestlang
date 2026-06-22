@@ -20,7 +20,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { evaluateStatement, evaluateProgram } from "../src/orchestrate";
+import { evaluateStatement, evaluateProgram } from "../src/evaluate";
 import {
   makeSingletonSchedule,
   makeSingletonNode,

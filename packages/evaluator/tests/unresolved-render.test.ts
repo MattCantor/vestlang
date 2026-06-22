@@ -12,7 +12,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 import { unresolvedInstallments } from "../src/resolve/unresolved.js";
 import { baseCtx } from "./helpers";
 import type { StmtResolution } from "../src/resolve/lower.js";

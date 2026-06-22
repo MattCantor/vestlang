@@ -13,7 +13,7 @@ import {
   compileToInstallments,
   CONTINGENT_START_SENTINEL,
 } from "@vestlang/core";
-import { evaluateStatement } from "../src/orchestrate";
+import { evaluateStatement } from "../src/evaluate";
 import {
   VESTLANG_SIDECAR_NAMESPACE,
   toSidecar,

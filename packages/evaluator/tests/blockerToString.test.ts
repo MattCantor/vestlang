@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { ResolutionContextInput } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { blockerToString } from "../src/evaluate/blockerToString.js";
+import { blockerToString } from "../src/interpret/blockerToString.js";
 import { evaluateProgram } from "../src/index.js";
 import {
   makeDuration,

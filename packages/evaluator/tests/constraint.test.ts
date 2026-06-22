@@ -1,6 +1,6 @@
 // tests/constraint.test.ts
 import { describe, it, expect } from "vitest";
-import { evaluateConstraint } from "../src/evaluate/vestingNode/constraint.js";
+import { evaluateConstraint } from "../src/interpret/vestingNode/constraint.js";
 import {
   makeResolvedNode,
   makeUnresolvedNode,

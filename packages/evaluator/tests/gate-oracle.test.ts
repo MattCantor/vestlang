@@ -48,7 +48,7 @@ import { describe, it, expect } from "vitest";
 import type { EvaluatedSchedule, OCTDate } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 
 const GRANT = "2024-01-01";
 const TODAY = "2026-06-07"; // a stable "now" for the asOf column

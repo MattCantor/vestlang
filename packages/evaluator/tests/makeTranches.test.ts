@@ -4,7 +4,7 @@ import {
   makeStartPlusSchedule,
   makeUnresolvedVestingStartSchedule,
   makeUnresolvedCliffInstallment,
-} from "../src/evaluate/makeTranches.js";
+} from "../src/interpret/makeTranches.js";
 import {
   ImpossibleBlocker,
   DEFAULT_VESTING_DAY_OF_MONTH,

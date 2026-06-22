@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { ResolutionContextInput, VestingNodeExpr } from "@vestlang/types";
-import { resolveVestingStart } from "../src/evaluate/resolveVestingStart";
+import { resolveVestingStart } from "../src/interpret/resolveVestingStart";
 import {
   makeSingletonNode,
   makeVestingBaseDate,

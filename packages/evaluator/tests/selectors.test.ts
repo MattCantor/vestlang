@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   evaluateScheduleExpr,
   evaluateVestingNodeExpr,
-} from "../src/evaluate/selectors.js";
-import { isPickedPartial } from "../src/evaluate/utils.js";
+} from "../src/interpret/selectors.js";
+import { isPickedPartial } from "../src/interpret/utils.js";
 import {
   baseCtx,
   makeVestingBaseDate,

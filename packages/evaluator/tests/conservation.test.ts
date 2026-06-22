@@ -17,7 +17,7 @@ import { floorSharesAt } from "@vestlang/core";
 import type { Fraction, OCTDate } from "@vestlang/types";
 import type { EvaluatedSchedule, Installment } from "@vestlang/types";
 import { fracSum, fracCmp, ONE, ZERO } from "@vestlang/utils";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 import type { VestedResult } from "../src/asof";
 

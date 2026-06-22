@@ -19,7 +19,7 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
-import { evaluateStatement, evaluateProgram } from "../src/orchestrate";
+import { evaluateStatement, evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 import {
   makeSingletonSchedule,

@@ -33,13 +33,13 @@ import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
-import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import { pickedDate } from "../evaluate/utils.js";
-import type { PickReturn } from "../evaluate/utils.js";
+import { evaluateVestingNodeExpr } from "../interpret/selectors.js";
+import { pickedDate } from "../interpret/utils.js";
+import type { PickReturn } from "../interpret/utils.js";
 import {
   isVestingStartPlaceholder,
   type CliffEvaluationContext,
-} from "../evaluate/vestingNode/vestingBase.js";
+} from "../interpret/vestingNode/vestingBase.js";
 
 // How the event side of a held cliff names its `event_condition`.
 //   - `bare`:      a single real `EVENT e`; the template references `e` directly

@@ -16,9 +16,9 @@ import type {
 import { resolveToCore } from "../src/resolve/index";
 import { classify } from "../src/resolve/classify";
 import type { StmtResolution } from "../src/resolve/lower";
-import { evaluateProgram } from "../src/orchestrate";
+import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
-import { blockerToString } from "../src/evaluate/blockerToString";
+import { blockerToString } from "../src/interpret/blockerToString";
 import {
   baseCtx,
   makeSingletonSchedule,

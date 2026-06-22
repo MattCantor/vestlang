@@ -6,7 +6,7 @@
 // on fired events is that the statements are resolved against `ctx.events` first.
 // So to get the firing-invariant answer we resolve in `interchange` mode: the
 // built context for that mode carries no `events` field at all (#320), so the
-// single EVENT read (in evaluate/vestingNode/vestingBase.ts) has nothing to read
+// single EVENT read (in interpret/vestingNode/vestingBase.ts) has nothing to read
 // and returns "not fired" — an event-anchored start rides across as a
 // deferred/synthetic event, and a future calendar date still resolves on its own.
 // An EARLIER_OF never commits here either (the commit is gated on `resolution`
@@ -33,7 +33,7 @@ import {
   type TemplateBuild,
 } from "./lower.js";
 import { classify } from "./classify.js";
-import { brandStatic } from "../evaluate/blockerTree.js";
+import { brandStatic } from "../interpret/blockerTree.js";
 
 /**
  * Why an unresolved build can't be stored, read off the per-statement records.
