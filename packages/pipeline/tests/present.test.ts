@@ -58,7 +58,6 @@ const stub = (
     },
     absenceAssumptions: [],
     findings,
-    cliffDate: null,
   }) as unknown as EvaluatedSchedule;
 
 const overAllocated: Finding[] = [

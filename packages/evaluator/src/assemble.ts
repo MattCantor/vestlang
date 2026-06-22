@@ -105,5 +105,4 @@ export const assemble = (
   resolution: assembleVerdict(resolution),
   absenceAssumptions: collectAbsences(resolution.blockers),
   findings: resolution.findings,
-  cliffDate: resolution.cliffDate,
 });

@@ -168,8 +168,6 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
       throw new Error(
         `expected resolution template, got ${schedule.resolution.status}`,
       );
-    // The cliff lands at the committed floor (start + 12 months).
-    expect(schedule.cliffDate).toBe("2026-01-01");
     // The grid is no longer frozen — it projects the full grant.
     const total = schedule.resolution.installments
       .filter((i) => i.state === "RESOLVED")
@@ -326,8 +324,6 @@ describe("#363 AC-7 — nested combinator in cliff position discloses nothing", 
     const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
     if (schedule.resolution.status !== "template")
       throw new Error(`expected template, got ${schedule.resolution.status}`);
-    // The cliff lands at the committed-then-folded floor (max of the two date arms).
-    expect(schedule.cliffDate).toBe("2024-09-01");
     // Carve-out: no absence note for `e`, on either surface.
     expect(schedule.absenceAssumptions).toEqual([]);
     expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
