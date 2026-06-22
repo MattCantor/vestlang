@@ -16,13 +16,15 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { addPeriod, advanceCursor, CONTINGENT_START_SENTINEL } from "./dates";
 import {
+  addPeriod,
+  advanceCursor,
   allocateEvents,
+  CONTINGENT_START_SENTINEL,
   expandGrid,
   type GridCliff,
   type RawEvent,
-} from "./kernel";
+} from "@vestlang/primitives";
 import {
   assertValidVestingRuntime,
   assertValidVestingScheduleTemplate,

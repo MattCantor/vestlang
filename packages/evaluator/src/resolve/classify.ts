@@ -26,7 +26,7 @@ import {
   expandGrid,
   type GridCliff,
   type RawEvent,
-} from "@vestlang/core";
+} from "@vestlang/primitives";
 import { makeResolvedInstallment } from "../interpret/makeTranches.js";
 import {
   unresolvedInstallments,

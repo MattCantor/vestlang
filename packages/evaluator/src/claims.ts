@@ -3,7 +3,7 @@
 // floored to whole shares at each step, never past the grant.
 
 import type { Amount, Fraction } from "@vestlang/types";
-import { floorSharesAt } from "@vestlang/core";
+import { floorSharesAt } from "@vestlang/primitives";
 import { fracAdd, fracCmp, fracReduce, ONE, ZERO } from "@vestlang/utils";
 
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`.

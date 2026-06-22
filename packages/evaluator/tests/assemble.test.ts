@@ -18,7 +18,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { evaluateStatement, evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 import {

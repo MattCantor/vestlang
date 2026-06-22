@@ -15,7 +15,7 @@
 
 import type { Condition, OCTDate, VestingNode } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { addDays, lt, satisfiesRelation } from "./dates";
+import { addDays, lt, satisfiesRelation } from "./dates.js";
 
 interface Bound {
   date: OCTDate;

@@ -1,14 +1,13 @@
-// `@vestlang/core` — the Carta-aligned canonical interchange engine.
+// `@vestlang/core` — the reference compiler for the Carta-aligned canonical
+// interchange. The honest vestlang-blind surface: a resolved, combinator-free
+// template plus a per-grant runtime become exact integer installments.
 //
-// Exports the canonical IR types and structural/runtime validation, the engine
-// primitives (the allocator, date math, and the anchor-date fold), the static
-// empty-window analysis, and the compile entry points. Fraction arithmetic lives
-// in `@vestlang/utils`.
+// The compiler surface only — structural/runtime validation, the template-space
+// allocation diagnostics, and the compile entry points. The shared engine
+// substrate it sits on (date math, the allocator, the grid kernel, the fold, the
+// window analysis, the installment cap) lives in `@vestlang/primitives`; core
+// deliberately does NOT re-export it.
 
 export * from "./validate";
-export * from "./allocate";
-export * from "./dates";
-export * from "./fold";
-export * from "./kernel";
+export * from "./findings";
 export * from "./compile";
-export * from "./window";

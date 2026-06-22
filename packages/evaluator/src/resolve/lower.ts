@@ -31,7 +31,11 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
-import { advanceCursor, eq, CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import {
+  advanceCursor,
+  eq,
+  CONTINGENT_START_SENTINEL,
+} from "@vestlang/primitives";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../interpret/selectors.js";
 import { amountToFraction } from "../claims.js";

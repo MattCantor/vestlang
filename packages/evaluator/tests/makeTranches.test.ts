@@ -14,7 +14,7 @@ import {
   allocateVector,
   foldToGrantDate,
   gridDate,
-} from "@vestlang/core";
+} from "@vestlang/primitives";
 import {
   makeVestingBaseDate,
   makeImpossibleConditionBlocker,

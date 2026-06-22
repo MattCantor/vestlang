@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { PersistedArtifact } from "@vestlang/evaluator";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { runPersist, runRehydrate } from "../src/persist.js";
 import { runResolveOffset } from "../src/resolve-offset.js";
 

@@ -11,8 +11,8 @@ import type { Amount, AsOfContextInput, Statement } from "@vestlang/types";
 import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
-  CONTINGENT_START_SENTINEL,
 } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { evaluateStatement } from "../src/evaluate";
 import {
   VESTLANG_SIDECAR_NAMESPACE,

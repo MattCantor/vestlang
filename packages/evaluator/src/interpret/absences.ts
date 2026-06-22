@@ -6,7 +6,7 @@
 // once. Module-internal only — not re-exported from the package's public index.
 
 import type { AbsenceAssumption, Blocker, OCTDate } from "@vestlang/types";
-import { gt } from "@vestlang/core";
+import { gt } from "@vestlang/primitives";
 import { foldBlocker } from "./blockerTree.js";
 import { isVestingStartPlaceholder } from "./vestingNode/vestingBase.js";
 

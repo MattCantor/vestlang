@@ -1,6 +1,6 @@
 import type { Blocker, OCTDate } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { gt } from "@vestlang/core";
+import { gt } from "@vestlang/primitives";
 import { foldBlocker } from "./blockerTree.js";
 
 // When a pending event is checked against a known date — a gate's "before/after

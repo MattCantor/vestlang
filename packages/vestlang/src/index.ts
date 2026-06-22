@@ -1,5 +1,9 @@
-// Canonical interchange engine (shipped as a real external dependency)
+// The reference compiler (shipped as a real external dependency)
 export * as core from "@vestlang/core";
+
+// The engine substrate core sits on — date math, the allocator, the grid kernel,
+// the fold, the window analysis, the installment cap.
+export * as primitives from "@vestlang/primitives";
 
 // Parser
 export { parse } from "@vestlang/dsl";

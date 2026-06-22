@@ -1,12 +1,13 @@
 // Policy-aware, DST-safe date math over canonical ISO dates (YYYY-MM-DD).
 //
-// Ported from vestlang's interpret/time.ts. Two adaptations for core:
+// Ported from vestlang's interpret/time.ts. Two adaptations when it moved into the
+// engine substrate:
 //   - the day-of-month policy is passed directly as a VestingDayOfMonth value
-//     (core has no evaluator context to read it off); it defaults to the
+//     (there's no evaluator context here to read it off); it defaults to the
 //     canonical default, VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.
 //   - comparisons are plain string comparisons. Zero-padded ISO dates sort
 //     lexicographically, so this matches calendar order without pulling in
-//     date-fns — core ships dependency-free.
+//     date-fns — primitives ships date-fns-free.
 //
 // All stepping is done in UTC (dates built at UTC midnight, read back in UTC),
 // so day arithmetic never drifts across DST transitions.

@@ -4,9 +4,11 @@ import {
   validateVestingRuntime,
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
-  MAX_INSTALLMENTS,
 } from "../src/validate";
-import { CONTINGENT_START_SENTINEL } from "../src/dates";
+import {
+  CONTINGENT_START_SENTINEL,
+  MAX_INSTALLMENTS,
+} from "@vestlang/primitives";
 import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
 // A well-formed graded template: two chained DATE statements, with an on-grid

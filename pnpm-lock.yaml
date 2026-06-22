@@ -164,9 +164,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.17.0
         version: 1.29.0(zod@3.25.76)
-      '@vestlang/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
@@ -179,6 +176,9 @@ importers:
       '@vestlang/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../../packages/primitives
       '@vestlang/render':
         specifier: workspace:*
         version: link:../../packages/render
@@ -207,6 +207,9 @@ importers:
 
   packages/core:
     devDependencies:
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -256,6 +259,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@vestlang/render':
         specifier: workspace:*
         version: link:../render
@@ -281,12 +287,12 @@ importers:
 
   packages/inferrer:
     dependencies:
-      '@vestlang/core':
-        specifier: workspace:*
-        version: link:../core
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../evaluator
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@vestlang/render':
         specifier: workspace:*
         version: link:../render
@@ -312,15 +318,15 @@ importers:
 
   packages/linter:
     dependencies:
-      '@vestlang/core':
-        specifier: workspace:*
-        version: link:../core
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../dsl
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@vestlang/types':
         specifier: workspace:*
         version: link:../types
@@ -380,6 +386,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@vestlang/recover':
         specifier: workspace:*
         version: link:../recover
@@ -418,6 +427,25 @@ importers:
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@24.5.2)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.9.0)
+
+  packages/primitives:
+    dependencies:
+      '@vestlang/types':
+        specifier: workspace:*
+        version: link:../types
+      '@vestlang/utils':
+        specifier: workspace:*
+        version: link:../utils
+    devDependencies:
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
@@ -517,6 +545,9 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../core
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../primitives
     devDependencies:
       '@vestlang/dsl':
         specifier: workspace:*
@@ -582,9 +613,6 @@ importers:
 
   tests/integration:
     dependencies:
-      '@vestlang/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@vestlang/dsl':
         specifier: workspace:*
         version: link:../../packages/dsl
@@ -597,6 +625,9 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../../packages/normalizer
+      '@vestlang/primitives':
+        specifier: workspace:*
+        version: link:../../packages/primitives
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types

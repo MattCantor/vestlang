@@ -8,7 +8,7 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { addDays } from "@vestlang/core";
+import { addDays } from "@vestlang/primitives";
 import { addMonthsRule, addMonthsExact } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is

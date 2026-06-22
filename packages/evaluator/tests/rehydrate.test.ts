@@ -14,10 +14,8 @@ import type {
   Statement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
-import {
-  compileToInstallments,
-  CONTINGENT_START_SENTINEL,
-} from "@vestlang/core";
+import { compileToInstallments } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";

@@ -1,12 +1,12 @@
 import type { ResolutionContext, OCTDate } from "@vestlang/types";
-import { addMonthsRule as addMonthsRuleCore } from "@vestlang/core";
+import { addMonthsRule as addMonthsRulePrimitive } from "@vestlang/primitives";
 
-// Date math lives once, in @vestlang/core (dependency-free, UTC-safe stepping,
-// exact ISO-string comparison). Everything — including the evaluator's own
-// internals — imports those primitives straight from core. The one piece that
-// can't be shared as-is is the day-of-month policy: core takes a plain
-// VestingDayOfMonth, the evaluator carries it on its resolution context. This
-// module exists only to adapt addMonthsRule across that seam.
+// Date math lives once, in @vestlang/primitives (dependency-free, UTC-safe
+// stepping, exact ISO-string comparison). Everything — including the evaluator's
+// own internals — imports those primitives straight from there. The one piece
+// that can't be shared as-is is the day-of-month policy: the primitive takes a
+// plain VestingDayOfMonth, the evaluator carries it on its resolution context.
+// This module exists only to adapt addMonthsRule across that seam.
 
 /**
  * Step `months` calendar months, snapping to the day-of-month policy on the
@@ -19,7 +19,7 @@ export const addMonthsRule = (
   iso: OCTDate,
   months: number,
   ctx: ResolutionContext,
-): OCTDate => addMonthsRuleCore(iso, months, ctx.vesting_day_of_month);
+): OCTDate => addMonthsRulePrimitive(iso, months, ctx.vesting_day_of_month);
 
 /**
  * Step `months` calendar months as an exact duration: keep the day you started
@@ -30,4 +30,4 @@ export const addMonthsRule = (
  * rule (`origin` defaults to the stepped date), so no day-of-month is threaded.
  */
 export const addMonthsExact = (iso: OCTDate, months: number): OCTDate =>
-  addMonthsRuleCore(iso, months);
+  addMonthsRulePrimitive(iso, months);

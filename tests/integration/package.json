@@ -7,11 +7,11 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@vestlang/core": "workspace:*",
     "@vestlang/dsl": "workspace:*",
-    "@vestlang/normalizer": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/linter": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
+    "@vestlang/primitives": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {

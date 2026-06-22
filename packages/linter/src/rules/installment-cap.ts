@@ -1,4 +1,4 @@
-import { MAX_INSTALLMENTS, installmentCapMessage } from "@vestlang/core";
+import { MAX_INSTALLMENTS, installmentCapMessage } from "@vestlang/primitives";
 import { programInstallmentTotal } from "@vestlang/walk";
 import { RuleModule } from "../types.js";
 

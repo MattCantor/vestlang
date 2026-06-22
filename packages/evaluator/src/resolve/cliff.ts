@@ -30,7 +30,7 @@ import type {
   VestingNodeExpr,
 } from "@vestlang/types";
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
-import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
+import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/primitives";
 import { fracReduce } from "@vestlang/utils";
 import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../interpret/selectors.js";

@@ -7,21 +7,19 @@
 import type {
   ResolutionContextInput,
   Finding,
-  Fraction,
   OCTDate,
   Program,
   UnresolvedInstallment,
   VestingDayOfMonth,
-  VestingScheduleTemplate,
 } from "@vestlang/types";
 import {
   addPeriod,
-  assertValidVestingScheduleTemplate,
   installmentCapMessage,
   MAX_INSTALLMENTS,
-} from "@vestlang/core";
+} from "@vestlang/primitives";
+import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { programInstallmentTotal } from "@vestlang/walk";
-import { classifyAllocation, fracSum } from "@vestlang/utils";
+import { allocationFindingsFromFractions } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
@@ -188,42 +186,6 @@ const earliestCliffDate = (
   return earliest;
 };
 
-// The over/under-allocation rule, given the raw share-of-grant fractions. This is
-// the single home for "does this schedule allocate the whole grant?" — both the
-// live resolution path and the persisted-template re-check (in @vestlang/pipeline,
-// guarding rehydrate) run their fractions through here, so the two can't drift on
-// where the boundary sits or what the finding looks like.
-//
-// Over the grant is an error — a grant can never vest more than 100% of itself.
-// Under the grant is only a warning: leaving some of the grant unvested is a legal
-// thing to write, just usually worth a heads-up.
-//
-// The `["Program"]` path is the AST node-path the resolution-path callers want;
-// it's inert for the template path (the template carries no AST), but harmless
-// there since downstream formatting reads only kind/sum/severity.
-const allocationFindingsFromFractions = (
-  fractions: Fraction[],
-  totalShares: number,
-): Finding[] => {
-  // A grant of zero shares can't over- or under-allocate — there's nothing to
-  // allocate against — so any sum is moot and we raise no finding.
-  if (totalShares === 0) return [];
-
-  const sum = fracSum(fractions);
-  const where = classifyAllocation(sum);
-  if (where === "over") {
-    return [
-      { kind: "over-allocation", severity: "error", sum, path: ["Program"] },
-    ];
-  }
-  if (where === "under") {
-    return [
-      { kind: "under-allocation", severity: "warning", sum, path: ["Program"] },
-    ];
-  }
-  return [];
-};
-
 // Check how much of the grant the schedule allocates. We look here, before the
 // result splits into a template or a bag of events, because that split is exactly
 // where the cases diverge — a single `3/2` statement becomes a template, while
@@ -238,21 +200,6 @@ const allocationFindings = (
 ): Finding[] =>
   allocationFindingsFromFractions(
     resolutions.map((r) => r.percentage),
-    totalShares,
-  );
-
-// The same allocation check, run against a stored template rather than a live
-// resolution: sum the statements' share-of-grant fractions and classify. This is
-// what lets a persisted artifact be re-validated on rehydrate without re-resolving
-// it — the authored percentages already carry everything the sum needs. Cliff
-// percentages don't enter: a cliff's percentage is a share *of its own statement*,
-// already bounded to [0,1], not an additional claim on the grant.
-export const templateAllocationFindings = (
-  template: VestingScheduleTemplate,
-  totalShares: number,
-): Finding[] =>
-  allocationFindingsFromFractions(
-    template.statements.map((s) => s.percentage),
     totalShares,
   );
 

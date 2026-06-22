@@ -12,7 +12,7 @@
 // interchange verdict already discards.
 
 import { describe, it, expect } from "vitest";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import type {
   Amount,
   ResolutionContextInput,

@@ -7,7 +7,7 @@ import type {
   NodeMeta,
   VestingNode,
 } from "@vestlang/types";
-import { isEmptySatisfiableSet } from "@vestlang/core";
+import { isEmptySatisfiableSet } from "@vestlang/primitives";
 import { isImpossibleBlocker } from "../blockerTree.js";
 import { createGateImpossibleBlocker } from "./constraint.js";
 import { evaluateVestingBase } from "./vestingBase.js";

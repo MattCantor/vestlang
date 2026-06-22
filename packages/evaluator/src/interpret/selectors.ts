@@ -14,7 +14,7 @@ import type {
   SelectorTag,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { lt } from "@vestlang/core";
+import { lt } from "@vestlang/primitives";
 import {
   isPickedCommitted,
   isPickedPartial,

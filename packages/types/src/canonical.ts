@@ -95,7 +95,7 @@ export interface Cliff {
 interface RuntimeBase {
   // The hoisted vesting start; the DATE cursor's origin. A contingent start (its
   // calendar date unknown until a named event fires) stores the far-future
-  // CONTINGENT_START_SENTINEL (`9999-12-31`, in @vestlang/core) here, with the
+  // CONTINGENT_START_SENTINEL (`9999-12-31`, in @vestlang/primitives) here, with the
   // recipe to re-derive the real date held in a reserved `evt:start` sidecar
   // entry. The sentinel is storage-only — the compiler recognizes it and emits no
   // dated tranches rather than gridding off it (a real run past year 9999

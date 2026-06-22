@@ -13,7 +13,7 @@ import {
   evaluateProgramAsOf,
   resolveVestingStart,
 } from "../src/index.js";
-import { installmentCapMessage } from "@vestlang/core";
+import { installmentCapMessage } from "@vestlang/primitives";
 
 // #335 / #355 — the evaluator's structural boundary guard. A hand-built Program
 // (or bare start node) reaching the published evaluate surface bypasses the front

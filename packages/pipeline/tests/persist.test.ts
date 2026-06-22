@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { PersistedArtifact } from "@vestlang/evaluator";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import {
   runPersist,
   runRehydrate,
