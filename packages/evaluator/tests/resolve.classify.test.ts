@@ -1320,3 +1320,68 @@ describe("resolveToCore — under-allocation finding", () => {
     expect(resolveToCore(program, ctxInput()).findings).toEqual([]);
   });
 });
+
+// AC 6 — the fired fold reproduces today's EVENT_FIRED lump for
+// CLIFF LATER OF(12 months, EVENT ipo) on a 1-month/48 grid, 4,800 shares.
+describe("resolveToCore — AC 6: LATER OF(12 months, EVENT ipo) fold point", () => {
+  const program: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 48,
+      cliff: {
+        type: "NODE_LATER_OF",
+        items: [
+          makeSingletonNode(makeVestingBaseVestingStart(), [
+            makeDuration(12, "MONTHS", "PLUS"),
+          ]),
+          makeSingletonNode(makeVestingBaseEvent("ipo")),
+        ],
+      },
+    }),
+  ];
+
+  // The DISCRIMINATING witness: ipo @ month 30 → 3,000 lump @ month 30, then
+  // 100/mo × 18. Only the event path yields this — a plain 12-month cliff can't.
+  it("ipo @ month 30 → 3,000 @ month 30, then 100/mo × 18", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2027-07-01" }, 4800), // month 30 from 2025-01-01
+    );
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events[0]).toEqual({ date: "2027-07-01", amount: "3000" });
+    expect(events).toHaveLength(19); // 1 lump + 18 monthly
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);
+    expect(result.cliffDate).toBe("2027-07-01"); // max(12mo=2026-01-01, ipo)
+  });
+
+  // The NON-DISCRIMINATING projection (ipo ≤ month 12 → 1,200 @ month 12) is
+  // identical to a plain 12-month cliff, so this test ALSO asserts the lowered
+  // statement carries event_condition AND cliff{length:12}, and the verdict is a
+  // template with the ipo absence-assumption — otherwise it would pass even if
+  // event_condition were ignored.
+  it("ipo @ month 6 → 1,200 @ month 12; lowered shape carries event_condition + cliff", () => {
+    const result = resolveToCore(
+      program,
+      ctxInput({ ipo: "2025-07-01" }, 4800), // month 6 — before the 12-month baseline
+    );
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The discriminating assertion: the stored shape carries BOTH halves.
+    const s = result.template.statements[0];
+    expect(s.event_condition).toEqual({ event_id: "ipo" });
+    expect(s.cliff).toEqual({
+      length: 12,
+      period_type: "MONTHS",
+      percentage: { numerator: 1, denominator: 4 },
+    });
+    // The fold point is max(12mo baseline, firing) = 2026-01-01 (the baseline wins).
+    expect(result.cliffDate).toBe("2026-01-01");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events[0]).toEqual({ date: "2026-01-01", amount: "1200" });
+    expect(events).toHaveLength(37); // 1 lump + 36 monthly
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);
+  });
+});
