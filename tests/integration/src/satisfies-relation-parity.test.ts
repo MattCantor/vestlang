@@ -28,7 +28,7 @@ import type {
   EvaluatedSchedule,
   OCTDate,
 } from "@vestlang/types";
-import { satisfiesRelation } from "@vestlang/core";
+import { satisfiesRelation } from "@vestlang/primitives";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "@vestlang/evaluator";

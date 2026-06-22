@@ -120,7 +120,8 @@ umbrella at build time and never published on their own.
 | Package | Published | Role |
 |---|:---:|---|
 | **`@vestlang/vestlang`** | ✅ | The umbrella toolkit — parse, normalize, evaluate, lint, stringify, infer. The package you install. |
-| **`@vestlang/core`** | ✅ | The standalone canonical engine (dual CJS/ESM): exact-rational allocator, time-based cliff, structural + runtime validation. Consumable on its own. |
+| **`@vestlang/core`** | ✅ | The standalone reference compiler (dual CJS/ESM): a resolved, combinator-free template + a per-grant runtime → exact integer installments, with structural + runtime validation. Consumable on its own. |
+| `@vestlang/primitives` | — | The shared engine substrate core sits on: exact-rational allocator, policy-aware date math, the grid kernel + time-based cliff, the anchor-date fold, the static empty-window analysis, the installment cap |
 | `@vestlang/dsl` | — | PEG grammar + parser |
 | `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
 | `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
@@ -179,9 +180,11 @@ import { core } from "@vestlang/vestlang"; // or: import * as core from "@vestla
 ```
 
 Reach for `@vestlang/core` directly when you already hold a resolved, combinator-free
-template — e.g. another cap-table tool consuming the interchange — and just need exact
-allocation, skipping the DSL entirely. It ships dual CJS/ESM (the rest of the toolkit is
-ESM-only) so even CommonJS consumers can depend on the engine.
+template — e.g. another cap-table tool consuming the interchange — and just need to
+compile it down to exact integer installments, skipping the DSL entirely. It ships dual
+CJS/ESM (the rest of the toolkit is ESM-only) so even CommonJS consumers can depend on the
+compiler. (Core sits on `@vestlang/primitives`, the engine substrate — the bare allocator,
+date math, and grid kernel — and bundles it in, so a core consumer pulls in nothing extra.)
 
 ### 2. As an MCP server
 

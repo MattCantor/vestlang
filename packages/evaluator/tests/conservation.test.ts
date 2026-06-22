@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
-import { floorSharesAt } from "@vestlang/core";
+import { floorSharesAt } from "@vestlang/primitives";
 import type { Fraction, OCTDate } from "@vestlang/types";
 import type { EvaluatedSchedule, Installment } from "@vestlang/types";
 import { fracSum, fracCmp, ONE, ZERO } from "@vestlang/utils";

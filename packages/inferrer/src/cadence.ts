@@ -1,4 +1,9 @@
-import { addDays, addMonthsRule, daysBetween, toDate } from "@vestlang/core";
+import {
+  addDays,
+  addMonthsRule,
+  daysBetween,
+  toDate,
+} from "@vestlang/primitives";
 import type { OCTDate, PeriodTag, VestingDayOfMonth } from "@vestlang/types";
 
 export interface Cadence {

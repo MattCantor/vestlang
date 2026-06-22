@@ -24,11 +24,13 @@ import {
   isRehydrateDefinitionError,
   isRehydrateMissingStartMarkerError,
   isSyntheticNamespaceError,
-  templateAllocationFindings,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
 import { errorDiagnostics, lintText } from "@vestlang/linter";
-import { compileToInstallments } from "@vestlang/core";
+import {
+  compileToInstallments,
+  templateAllocationFindings,
+} from "@vestlang/core";
 import type {
   DeadBlocker,
   OCTDate,

@@ -9,7 +9,7 @@ import type {
   UnresolvedNode,
   VestingNode,
 } from "@vestlang/types";
-import { satisfiesRelation } from "@vestlang/core";
+import { satisfiesRelation } from "@vestlang/primitives";
 import { withBoundary } from "../boundary.js";
 
 /* ------------------------

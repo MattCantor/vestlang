@@ -22,9 +22,9 @@ import {
   ONE,
   ZERO,
 } from "@vestlang/utils";
-import { addPeriod, gt } from "./dates";
-import { allocateExact } from "./allocate";
-import { foldToGrantDate } from "./fold";
+import { addPeriod, gt } from "./dates.js";
+import { allocateExact } from "./allocate.js";
+import { foldToGrantDate } from "./fold.js";
 
 /**
  * One vesting date with the fraction of the whole grant it carries, before that

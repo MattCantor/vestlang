@@ -14,11 +14,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
-    "@vestlang/core": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/pipeline": "workspace:*",
+    "@vestlang/primitives": "workspace:*",
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*",

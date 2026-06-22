@@ -1,4 +1,4 @@
-import { allocateVector } from "@vestlang/core";
+import { allocateVector } from "@vestlang/primitives";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import type { Cadence } from "./cadence.js";
 import {

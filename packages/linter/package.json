@@ -18,9 +18,9 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vestlang/core": "workspace:*",
     "@vestlang/dsl": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
+    "@vestlang/primitives": "workspace:*",
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*",
     "@vestlang/walk": "workspace:*"

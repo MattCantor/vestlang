@@ -1,7 +1,7 @@
 // Calendar-date helpers for canonical ISO dates (YYYY-MM-DD): the validity
 // guard every input boundary shares, plus "what's today" in the same form.
 //
-// The date *arithmetic* lives in @vestlang/core; this is just the guard that
+// The date *arithmetic* lives in @vestlang/primitives; this is just the guard that
 // every input boundary shares — the grammar's DATE literal and the MCP server's
 // zod schema both reject impossible dates through here, so "is 2025-02-31 a real
 // date?" gets one answer instead of three. Dependency-free, like the rest of

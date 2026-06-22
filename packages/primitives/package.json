@@ -1,5 +1,5 @@
 {
-  "name": "@vestlang/inferrer",
+  "name": "@vestlang/primitives",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,18 +14,14 @@
   ],
   "scripts": {
     "build": "rimraf dist && tsc -p tsconfig.json",
-    "test": "vitest",
+    "test": "vitest run",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vestlang/evaluator": "workspace:*",
-    "@vestlang/primitives": "workspace:*",
-    "@vestlang/render": "workspace:*",
-    "@vestlang/types": "workspace:*"
+    "@vestlang/types": "workspace:*",
+    "@vestlang/utils": "workspace:*"
   },
   "devDependencies": {
-    "@vestlang/dsl": "workspace:*",
-    "@vestlang/normalizer": "workspace:*",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

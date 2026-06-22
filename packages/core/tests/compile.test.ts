@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
-import { addPeriod, CONTINGENT_START_SENTINEL } from "../src/dates";
+import { addPeriod, CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 
 // Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).

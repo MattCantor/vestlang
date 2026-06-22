@@ -3,7 +3,7 @@ import {
   nonEmpty,
   satisfiableSet,
   type Window,
-} from "@vestlang/core";
+} from "@vestlang/primitives";
 import { assertNever } from "@vestlang/utils";
 import type { Condition } from "@vestlang/types";
 import { RuleModule } from "../types.js";

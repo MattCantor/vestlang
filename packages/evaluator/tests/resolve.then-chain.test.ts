@@ -4,7 +4,8 @@
 // produces for the same schedule — that equivalence is what these tests pin.
 
 import { describe, it, expect } from "vitest";
-import { addPeriod, compile, CONTINGENT_START_SENTINEL } from "@vestlang/core";
+import { compile } from "@vestlang/core";
+import { addPeriod, CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {

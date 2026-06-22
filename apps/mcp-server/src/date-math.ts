@@ -4,7 +4,7 @@ import {
   addPeriod as addPeriodCore,
   daysBetween,
   monthsBetween,
-} from "@vestlang/core";
+} from "@vestlang/primitives";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";

@@ -1,10 +1,10 @@
 // The anchor-date fold: amounts dated before `cliffDate` collapse onto
 // `cliffDate`, amounts on or after pass through. Used directly by
-// `foldToGrantDate`; in-repo the fold is reached via that wrapper (core's
-// kernel.ts grant-date fold and the evaluator's unresolved-arm folds).
+// `foldToGrantDate`; in-repo the fold is reached via that wrapper (the kernel's
+// grant-date fold and the evaluator's unresolved-arm folds).
 
 import type { OCTDate } from "@vestlang/types";
-import { eq, lt } from "./dates";
+import { eq, lt } from "./dates.js";
 
 /**
  * Fold a parallel (dates, amounts) series against an anchor `cliffDate`:

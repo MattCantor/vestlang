@@ -4,8 +4,8 @@
 // combiner missed it — each conjunct is individually a satisfiable "wait, bounded
 // on one side" — so an event-anchored start with such a gate reported a storable,
 // pending template, while a fixed-DATE anchor with the same contradiction already
-// reported `impossible`. The joint interval analysis (lifted from the linter into
-// `@vestlang/core`) runs once at the gated-node entry and classifies the node
+// reported `impossible`. The joint interval analysis (shared engine substrate, in
+// `@vestlang/primitives`) runs once at the gated-node entry and classifies the node
 // impossible, in BOTH verdicts (empty-window is firing-invariant), for start gates
 // and cliff gates alike.
 //

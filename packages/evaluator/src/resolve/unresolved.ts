@@ -10,7 +10,11 @@ import type {
   InstallmentSet,
   OCTDate,
 } from "@vestlang/types";
-import { allocateVector, foldToGrantDate, gridDate } from "@vestlang/core";
+import {
+  allocateVector,
+  foldToGrantDate,
+  gridDate,
+} from "@vestlang/primitives";
 import { assertNever, fracSum } from "@vestlang/utils";
 import { claimAllocator } from "../claims.js";
 import {
