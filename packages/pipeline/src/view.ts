@@ -8,10 +8,11 @@
 // stay server-side.
 //
 // The one piece of template-arm working state that does survive is the `sourceMap`
-// — the DSL behind any synthetic event the lowering had to mint when externalizing
-// a gated or combinator-over-anchors start. Without it a consumer sees a template
-// gated on an opaque `evt:<n>` with no way to read what it stands for, so it rides
-// along on the template arm of each verdict (and is `{}` for a plain schedule).
+// — the DSL recipe behind a contingent start the lowering externalized under the
+// reserved `evt:start` key. Without it a consumer sees a template whose startDate is
+// the opaque far-future sentinel with no way to re-derive the real start, so it
+// rides along on the template arm of each verdict (and is `{}` for a plain
+// schedule).
 //
 // Both consumers used to build this object by hand, and drifted. This is the one
 // place that derivation lives.
@@ -41,6 +42,11 @@ export const reasonToString = (r: NonTemplateReason): string => {
     case "OVERLAPPING_ABSOLUTE_STARTS":
       return (
         r.detail ?? "Two independent absolute-date vesting grids on one grant."
+      );
+    case "MULTIPLE_START_ORIGINS":
+      return (
+        r.detail ??
+        "More than one distinct start origin on one grant (a contingent start can't share the grant's single hoisted start with another origin)."
       );
     case "EVENT_CLIFF":
       return (

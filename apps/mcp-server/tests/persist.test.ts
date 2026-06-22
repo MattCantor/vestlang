@@ -1,5 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
@@ -28,7 +29,11 @@ async function connectClient(): Promise<Client> {
 
 type PersistedArtifact = {
   template: { id: string; statements: unknown[] };
-  runtime: { eventFirings?: { event_id: string; date: string }[] };
+  runtime: {
+    startDate?: string;
+    grantDate?: string;
+    eventFirings?: { event_id: string; date: string }[];
+  };
   sidecar?: { vestlang: Record<string, { definition: string }> };
 };
 
@@ -43,9 +48,11 @@ type FiringToApply = {
   date: string;
   definition: string | null;
 };
+type StartToApply = { date: string };
 type Blocker = { type: string; event?: string };
 type RehydrateOutput = {
   firings_to_apply: FiringToApply[];
+  start_to_apply: StartToApply | null;
   pending: Blocker[];
   dead: Blocker[];
   projection: { date: string; amount: number }[];
@@ -93,8 +100,10 @@ async function rehydrate(
 }
 
 describe("mcp-server / persistence tool pair", () => {
-  // A combinator start (EARLIER OF an event or a date) lowers to a template with a
-  // synthetic event, so it persists WITH a sidecar.
+  // A combinator start (EARLIER OF an event or a date) is a contingent start: it
+  // lowers to a DATE-base template whose runtime.startDate is the contingent-start
+  // sentinel, with the start's recipe externalized under the one reserved
+  // `evt:start` sidecar key. So it persists WITH a sidecar.
   const COMBINATOR_DSL =
     "VEST FROM EARLIER OF (EVENT ipo, DATE 2027-01-01) OVER 48 months EVERY 1 month";
 
@@ -108,13 +117,18 @@ describe("mcp-server / persistence tool pair", () => {
 
     expect(res.isError).toBeFalsy();
     const out = res.structuredContent as unknown as PersistOutput;
-    // A storable template with the synthetic event carried out-of-band.
+    // A storable DATE-base template: the contingent start rides the sentinel
+    // startDate and its recipe lives out-of-band under `evt:start`.
     expect(out.artifact.template.statements.length).toBeGreaterThan(0);
+    expect(out.artifact.template.statements[0]).toMatchObject({
+      vesting_base: { type: "DATE" },
+    });
+    expect(out.artifact.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(out.artifact.sidecar).toBeDefined();
     const sourceMap = out.artifact.sidecar!.vestlang;
     const ids = Object.keys(sourceMap);
-    expect(ids).toHaveLength(1);
-    expect(sourceMap[ids[0]].definition).toContain("ipo");
+    expect(ids).toEqual(["evt:start"]);
+    expect(sourceMap["evt:start"].definition).toContain("ipo");
     // The gate hasn't fired, so the store-time blockers advise it's still pending —
     // surfaced under `pending`; nothing is dead here (no firing has contradicted
     // it). `dead` can be non-empty for a storable schedule once a recorded firing
@@ -168,13 +182,14 @@ describe("mcp-server / persistence tool pair", () => {
       grant_quantity: 1000,
     });
 
-    // ipo hasn't fired; the EARLIER OF can't settle (open lower bound), so no
-    // synthetic witness resolves and nothing is added to the action list.
-    expect(out.firings_to_apply).toHaveLength(0);
+    // ipo hasn't fired; the EARLIER OF can't settle (open lower bound), so the
+    // `evt:start` recipe doesn't resolve — no start to apply, nothing in the delta.
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toBeNull();
     expect(out.pending.length).toBeGreaterThan(0);
   });
 
-  it("rehydrating after the event fires yields the dated delta and projection", async () => {
+  it("rehydrating after the event fires yields the dated start and projection", async () => {
     const client = await connectClient();
     const persisted = await persistOk(client, {
       dsl: COMBINATOR_DSL,
@@ -188,18 +203,14 @@ describe("mcp-server / persistence tool pair", () => {
       events: { ipo: "2026-06-01" },
     });
 
-    // The synthetic id now resolves; the EARLIER OF picks ipo (2026-06-01, before
-    // the 2027 date), so the delta carries the synthetic id at that date, with the
-    // human-readable definition looked up from the sidecar.
-    expect(out.firings_to_apply).toHaveLength(1);
-    const firing = out.firings_to_apply[0];
-    expect(firing.date).toBe("2026-06-01");
-    expect(firing.definition).toContain("ipo");
-    expect(firing.event_id).toBe(
-      Object.keys(persisted.artifact.sidecar!.vestlang)[0],
-    );
-    // Nothing left pending or dead once the gate resolves, and the projection is
-    // dated off the resolved witness.
+    // The `evt:start` recipe now resolves; the EARLIER OF picks ipo (2026-06-01,
+    // before the 2027 date), so the contingent start is re-derived to that date and
+    // surfaced under `start_to_apply` — distinct from the (always-empty) runtime
+    // witness delta. The start carries only its date, not a definition/event_id.
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toEqual({ date: "2026-06-01" });
+    // Nothing left pending or dead once the start resolves, and the projection is
+    // dated off the resolved start.
     expect(out.pending).toHaveLength(0);
     expect(out.dead).toHaveLength(0);
     expect(out.projection.length).toBe(48);
@@ -226,19 +237,21 @@ describe("mcp-server / persistence tool pair", () => {
       artifact: persisted.artifact,
       grant_quantity: 1200,
     });
-    // A dropped/absent sidecar resolves no synthetic witnesses — empty delta — but
-    // the time-based projection still compiles.
-    expect(out.firings_to_apply).toHaveLength(0);
+    // A dropped/absent sidecar means no contingent start to re-derive — empty delta,
+    // no start to apply — but the time-based projection still compiles.
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toBeNull();
     expect(out.pending).toHaveLength(0);
     expect(out.projection.length).toBe(48);
     const total = out.projection.reduce((s, i) => s + i.amount, 0);
     expect(total).toBe(1200);
   });
 
-  // A bare named EVENT start (`VEST FROM EVENT ipo …`) lowers to a plain EVENT
-  // statement — the template names `ipo` in `vesting_base`, with no sidecar. The
-  // event is the schedule's whole dependency; rehydrate must read it off the
-  // template, not the (absent) sidecar.
+  // A bare named EVENT start (`VEST FROM EVENT ipo …`) is a contingent start: it
+  // lowers to a DATE-base template on the sentinel startDate, with its `EVENT ipo`
+  // recipe externalized under the reserved `evt:start` sidecar key. The event is
+  // the schedule's whole dependency; rehydrate re-derives the start by resolving
+  // that recipe, surfacing it under `start_to_apply`.
   const BARE_EVENT_DSL =
     "VEST FROM EVENT ipo OVER 4 months EVERY 1 month CLIFF +2 months";
 
@@ -249,17 +262,21 @@ describe("mcp-server / persistence tool pair", () => {
       grant_date: "2025-01-01",
       grant_quantity: 400,
     });
-    // The bare event lives in the template, not a sidecar.
-    expect(persisted.artifact.sidecar).toBeUndefined();
+    // The contingent start's recipe rides the `evt:start` sidecar.
+    expect(persisted.artifact.sidecar!.vestlang["evt:start"].definition).toBe(
+      "EVENT ipo",
+    );
 
     const out = await rehydrate(client, {
       artifact: persisted.artifact,
       grant_quantity: 400,
     });
 
-    // ipo hasn't fired, so nothing projects — but it must be disclosed as pending
-    // (the disclosure-symptom regression: pre-fix `pending` was []).
-    expect(out.firings_to_apply).toHaveLength(0);
+    // ipo hasn't fired, so the start can't be re-derived and nothing projects — but
+    // it must be disclosed as pending (the disclosure-symptom regression: pre-fix
+    // `pending` was []).
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toBeNull();
     expect(out.projection).toHaveLength(0);
     expect(out.pending.length).toBeGreaterThan(0);
     expect(
@@ -269,7 +286,7 @@ describe("mcp-server / persistence tool pair", () => {
     ).toBe(true);
   });
 
-  it("rehydrating a bare EVENT after it fires yields its witness and projection", async () => {
+  it("rehydrating a bare EVENT after it fires yields its start and projection", async () => {
     const client = await connectClient();
     const persisted = await persistOk(client, {
       dsl: BARE_EVENT_DSL,
@@ -290,11 +307,10 @@ describe("mcp-server / persistence tool pair", () => {
       { date: "2025-05-31", amount: 100 },
     ]);
     expect(out.pending).toHaveLength(0);
-    // The firing is a genuine delta against the empty stored runtime, reported with
-    // `definition: null` — it's the caller's own named event, not a minted gate.
-    expect(out.firings_to_apply).toEqual([
-      { event_id: "ipo", date: "2025-01-31", definition: null },
-    ]);
+    // ipo's firing re-derives the contingent start, surfaced under `start_to_apply`
+    // (just its date — no definition/event_id). The runtime witness delta is empty.
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toEqual({ date: "2025-01-31" });
   });
 
   it("AC#8: persist is firing-invariant — a firing supplied at persist is NOT baked; reload without resupply is pending", async () => {
@@ -326,13 +342,15 @@ describe("mcp-server / persistence tool pair", () => {
       // events omitted.
     });
     expect(reloadBlind.projection).toHaveLength(0);
+    expect(reloadBlind.start_to_apply).toBeNull();
     expect(
       reloadBlind.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
 
-    // Re-supplying ipo re-derives the witness from the world → full projection.
+    // Re-supplying ipo re-derives the contingent start from the world → full
+    // projection, with the start surfaced under `start_to_apply`.
     const reloadFired = await rehydrate(client, {
       artifact: withFiring.artifact,
       grant_quantity: 400,
@@ -344,9 +362,8 @@ describe("mcp-server / persistence tool pair", () => {
       { date: "2025-05-31", amount: 100 },
     ]);
     expect(reloadFired.pending).toHaveLength(0);
-    expect(reloadFired.firings_to_apply).toEqual([
-      { event_id: "ipo", date: "2025-01-31", definition: null },
-    ]);
+    expect(reloadFired.firings_to_apply).toEqual([]);
+    expect(reloadFired.start_to_apply).toEqual({ date: "2025-01-31" });
   });
 
   it("a corrected firing on rehydrate overrides the stored bare EVENT date", async () => {
@@ -364,15 +381,15 @@ describe("mcp-server / persistence tool pair", () => {
       events: { ipo: "2025-02-28" },
     });
 
-    // The supplied firing overrides the seed, so the schedule shifts a month.
+    // The supplied firing re-derives the contingent start at the corrected date, so
+    // the schedule shifts a month.
     expect(out.projection).toEqual([
       { date: "2025-04-28", amount: 200 },
       { date: "2025-05-28", amount: 100 },
       { date: "2025-06-28", amount: 100 },
     ]);
-    expect(out.firings_to_apply).toEqual([
-      { event_id: "ipo", date: "2025-02-28", definition: null },
-    ]);
+    expect(out.firings_to_apply).toEqual([]);
+    expect(out.start_to_apply).toEqual({ date: "2025-02-28" });
   });
 
   it("returns a clear error when the program is not a single template", async () => {
@@ -495,15 +512,15 @@ describe("mcp-server / persistence tool pair", () => {
 
   // ---- Issue #229 / #253: the grant's frozen conventions come from the artifact ----
   //
-  // An offset synthetic gated on `ipo`. The offset witness re-resolves EXACT
-  // (#253) — a displacement keeps its day, clamping on a short month, never
-  // snapping to the stored fixed-day rule. What the stored rule still governs is
-  // the projection GRID, which re-snaps off that witness. So this pins that the
-  // rule lives in the artifact and shows up in the grid, with the witness exact.
+  // An offset contingent start gated on `ipo`. The start re-resolves EXACT (#253) —
+  // a displacement keeps its day, clamping on a short month, never snapping to the
+  // stored fixed-day rule. What the stored rule still governs is the projection
+  // GRID, which re-snaps off that start. So this pins that the rule lives in the
+  // artifact and shows up in the grid, with the re-derived start exact.
   const OFFSET_SYNTHETIC_DSL =
     "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
 
-  it("exact witness, projection grid snaps under the stored day-of-month rule", async () => {
+  it("exact start, projection grid snaps under the stored day-of-month rule", async () => {
     const client = await connectClient();
     // Persist under rule "15" — non-default, so the rule is frozen into the runtime.
     const persisted = await persistOk(client, {
@@ -520,12 +537,11 @@ describe("mcp-server / persistence tool pair", () => {
       events: { ipo: "2025-01-31" },
     });
 
-    // The witness is the EXACT offset (#253): ipo on Jan 31 + 1 month keeps day 31
-    // and clamps to Feb's last day (2025-02-28) — a displacement never consults the
-    // "15" policy. The projection GRID still re-snaps to the 15th off that witness,
-    // so the stored rule shows up there, not in the witness date.
-    expect(out.firings_to_apply).toHaveLength(1);
-    expect(out.firings_to_apply[0].date).toBe("2025-02-28");
+    // The re-derived start is the EXACT offset (#253): ipo on Jan 31 + 1 month keeps
+    // day 31 and clamps to Feb's last day (2025-02-28) — a displacement never
+    // consults the "15" policy. The projection GRID still re-snaps to the 15th off
+    // that start, so the stored rule shows up there, not in the start date.
+    expect(out.start_to_apply).toEqual({ date: "2025-02-28" });
     expect(out.projection[0].date).toBe("2025-03-15");
     expect(out.projection).toEqual([
       { date: "2025-03-15", amount: 100 },
@@ -535,7 +551,7 @@ describe("mcp-server / persistence tool pair", () => {
     ]);
   });
 
-  it("default-rule agreement: witness and projection share the firing-date origin", async () => {
+  it("default-rule agreement: start and projection share the firing-date origin", async () => {
     const client = await connectClient();
     // No vesting_day_of_month — the default rule, so runtime.vestingDayOfMonth is
     // absent and rehydrate re-applies the same default the projection compiles under.
@@ -556,8 +572,8 @@ describe("mcp-server / persistence tool pair", () => {
     });
 
     // +1 month off a month-end, under the default rule, lands on the month-end.
-    // The witness origin (2025-02-28) is what the projection grid is anchored on.
-    expect(out.firings_to_apply[0].date).toBe("2025-02-28");
+    // The re-derived start origin (2025-02-28) is what the projection grid anchors on.
+    expect(out.start_to_apply).toEqual({ date: "2025-02-28" });
     expect(out.projection[0].date).toBe("2025-03-28");
     expect(out.projection).toEqual([
       { date: "2025-03-28", amount: 100 },
@@ -866,19 +882,19 @@ describe("mcp-server / persistence tool pair", () => {
   // be hand-edited. Two boundary failures must be handled here rather than crashing
   // deep in core: a corrupt event definition, and an impossible calendar date.
 
-  // A stored artifact whose sidecar `definition` is corrupt. The event_id matches the
-  // sidecar key AND a real EVENT-anchored template statement, so rehydrate actually
-  // reparses it (the templateEventIds guard wouldn't otherwise reach it). The id is a
-  // reserved synthetic (`evt:<n>`) — a sidecar entry only ever belongs to one, and a
-  // non-reserved key would trip the namespace guard before any reparse. Every field is
-  // calendar-valid so the schema admits it and the failure surfaces at reparse.
+  // A stored contingent-start artifact whose `evt:start` recipe is corrupt. The
+  // template is DATE-base on the contingent-start sentinel, with the (now garbage)
+  // recipe under the one reserved `evt:start` key, so rehydrate actually reparses it.
+  // A non-reserved key would trip the namespace guard before any reparse. Every
+  // structural field is calendar-valid so the schema admits it and the failure
+  // surfaces at reparse.
   const corruptArtifact = (eventId: string, definition: string) => ({
     template: {
       id: "t1",
       statements: [
         {
           order: 1,
-          vesting_base: { type: "EVENT", event_id: eventId },
+          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -886,15 +902,15 @@ describe("mcp-server / persistence tool pair", () => {
         },
       ],
     },
-    runtime: { grantDate: "2025-01-01" },
+    runtime: { grantDate: "2025-01-01", startDate: CONTINGENT_START_SENTINEL },
     sidecar: { vestlang: { [eventId]: { definition } } },
   });
 
-  it("refuses a corrupt sidecar definition, naming the event_id and not leaking the parser dump", async () => {
+  it("refuses a corrupt sidecar recipe, naming the reserved key and not leaking the parser dump", async () => {
     const client = await connectClient();
 
     const res = await rehydrateRaw(client, {
-      artifact: corruptArtifact("evt:1", "TOTALLY NOT DSL (("),
+      artifact: corruptArtifact("evt:start", "TOTALLY NOT DSL (("),
       grant_quantity: 400,
     });
 
@@ -906,8 +922,8 @@ describe("mcp-server / persistence tool pair", () => {
     expect(sc.ok).toBe(false);
     expect(sc.error.ruleId).toBe("rehydrate-corrupt-definition");
     const text = sc.error.message;
-    // Names the offending event and reads as an intentional corruption refusal.
-    expect(text).toContain("evt:1");
+    // Names the offending reserved key and reads as an intentional corruption refusal.
+    expect(text).toContain("evt:start");
     expect(text).toMatch(/corrupt|unparseable/i);
     // The raw peggy dump stays on the error's `cause`, never in the operator message.
     expect(text).not.toContain('Expected "DATE"');

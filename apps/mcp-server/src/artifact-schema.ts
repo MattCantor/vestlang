@@ -38,10 +38,9 @@ const CLIFF = z
   })
   .strict();
 
-const TEMPLATE_VESTING_BASE = z.union([
-  z.object({ type: z.literal("DATE") }).strict(),
-  z.object({ type: z.literal("EVENT"), event_id: z.string().min(1) }).strict(),
-]);
+// DATE-only: the canonical base anchors every statement on the one hoisted
+// per-grant start (a contingent start is a DATE base on the sentinel startDate).
+const TEMPLATE_VESTING_BASE = z.object({ type: z.literal("DATE") }).strict();
 
 const VESTING_STATEMENT = z
   .object({

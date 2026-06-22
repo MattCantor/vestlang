@@ -12,6 +12,7 @@
 // interchange verdict already discards.
 
 import { describe, it, expect } from "vitest";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import type {
   Amount,
   ResolutionContextInput,
@@ -445,16 +446,18 @@ describe("interchange — nested committed disclosures do not reach the storable
   });
 
   for (const { name, program } of nested363) {
-    it(`${name}: interchange is a firing-blind EVENT template (no commitment)`, () => {
+    it(`${name}: interchange is a firing-blind contingent-start template (no commitment)`, () => {
       const out = evaluateProgram(program, ctxWith({}));
       if (out.interchange.status !== "template")
         throw new Error(`expected interchange template for ${name}`);
-      // The storable start is the synthetic event, not a committed date — the
-      // firing-blind path never commits, so nothing absence-disclosure-shaped rode
-      // up into the storable verdict.
-      expect(out.interchange.template.statements[0].vesting_base.type).toBe(
-        "EVENT",
-      );
+      // The storable start is the contingent sentinel + an `evt:start` recipe, not
+      // a committed date — the firing-blind path never commits, so nothing
+      // absence-disclosure-shaped rode up into the storable verdict.
+      expect(out.interchange.template.statements[0].vesting_base).toEqual({
+        type: "DATE",
+      });
+      expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+      expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
     });
   }
 });

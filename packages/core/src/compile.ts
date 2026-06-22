@@ -11,14 +11,12 @@
 //   compileToInstallments(…) -> { date, amount: number }[]  (consumed by extended)
 
 import type {
-  Fraction,
   OCTDate,
   VestingRuntime,
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { addPeriod, advanceCursor } from "./dates";
-import { fracMul, ONE } from "@vestlang/utils";
+import { addPeriod, advanceCursor, CONTINGENT_START_SENTINEL } from "./dates";
 import {
   allocateEvents,
   expandGrid,
@@ -44,16 +42,13 @@ export interface CompiledInstallment {
 
 /**
  * Lower one statement onto the shared grid kernel. The cliff is a duration from
- * the anchor (so the lump lands on its true date, off-grid or not), and the EVENT
- * `multiplier` — realized_fraction for a partial payout, ONE otherwise — folds into
- * the statement's share of the grant before the grid splits it. `origin` carries
- * the chain's first date, the grant's single vesting day that every MONTHS grid
- * anchors to; it defaults to `anchor`.
+ * the anchor (so the lump lands on its true date, off-grid or not). `origin`
+ * carries the chain's first date, the grant's single vesting day that every MONTHS
+ * grid anchors to; it defaults to `anchor`.
  */
 const expandAnchored = (
   statement: VestingStatement,
   anchor: OCTDate,
-  multiplier: Fraction,
   dom: VestingRuntime["vestingDayOfMonth"],
   origin: OCTDate = anchor,
 ): RawEvent[] => {
@@ -76,7 +71,7 @@ const expandAnchored = (
     period: statement.period,
     periodType: statement.period_type,
     occurrences: statement.occurrences,
-    stmtFraction: fracMul(statement.percentage, multiplier),
+    stmtFraction: statement.percentage,
     statementOrder: statement.order,
     dom,
     cliff,
@@ -86,14 +81,18 @@ const expandAnchored = (
 /**
  * Expand one statement into raw events.
  *
- * DATE-anchored: events anchor at dateCursor; the cursor advances by the full
- * statement duration (occurrences × period), so statement N+1 chains off where N
- * ended (the 5/15/40/40 graded semantic).
+ * Every statement is DATE-anchored: events anchor at `dateCursor`, and the cursor
+ * advances by the full statement duration (occurrences × period), so statement
+ * N+1 chains off where N ended (the 5/15/40/40 graded semantic).
  *
- * EVENT-anchored: events anchor at the matching firing's date; the cursor is NOT
- * advanced (EVENT statements float free of the DATE chain). No matching firing →
- * the statement is skipped (returns null), leaving that portion unvested.
- * realized_fraction scales each per-event fraction for partial payouts.
+ * Sentinel-skip: when the hoisted start is CONTINGENT_START_SENTINEL the real
+ * date isn't known (a persisted contingent start whose event hasn't been
+ * re-resolved), so the statement emits NO dated tranches (returns null) and the
+ * cursor doesn't advance. This is a pure projection guard reading the sentinel
+ * VALUE — it never reaches the date grid, where a real run off year 9999 would
+ * overflow `addPeriod`/`advanceCursor`. A resolved contingent start reaches here
+ * with a real date instead: rehydrate substitutes the re-derived date into a
+ * projection-only runtime, so the sentinel is gone by then.
  */
 const expandStatement = (
   statement: VestingStatement,
@@ -102,37 +101,30 @@ const expandStatement = (
 ): { events: RawEvent[]; nextCursor: OCTDate | undefined } | null => {
   const dom = runtime.vestingDayOfMonth;
 
-  if (statement.vesting_base.type === "DATE") {
-    // Validator guarantees dateCursor is defined when any DATE statement exists.
-    const anchor = dateCursor as OCTDate;
-    // Every DATE statement in a template chains from the same starting date, so
-    // that's the origin for the day-of-month — the grant's single vesting day.
-    // For the head, anchor and origin are equal (no effect); for a later segment
-    // whose anchor landed off the start day, the origin pulls the grid back onto
-    // it.
-    const origin = runtime.startDate as OCTDate;
-    const events = expandAnchored(statement, anchor, ONE, dom, origin);
-    const nextCursor = advanceCursor(
-      anchor,
-      statement.occurrences,
-      statement.period,
-      statement.period_type,
-      dom,
-      origin,
-    );
-    return { events, nextCursor };
+  // An unresolved contingent placeholder: skip it. (Pure projection guard reading
+  // the sentinel value — see CONTINGENT_START_SENTINEL. Distinct from the
+  // rehydrate override decision, which keys on the `evt:start` entry's presence.)
+  if (runtime.startDate === CONTINGENT_START_SENTINEL) {
+    return null;
   }
 
-  // EVENT-anchored
-  const eventId = statement.vesting_base.event_id;
-  const firing = runtime.eventFirings?.find((f) => f.event_id === eventId);
-  if (!firing) return null; // statement doesn't fire; events never produced
-
-  const multiplier = firing.realized_fraction ?? ONE;
-  return {
-    events: expandAnchored(statement, firing.date, multiplier, dom),
-    nextCursor: dateCursor,
-  };
+  // Validator guarantees dateCursor is defined when any DATE statement exists.
+  const anchor = dateCursor as OCTDate;
+  // Every DATE statement in a template chains from the same starting date, so
+  // that's the origin for the day-of-month — the grant's single vesting day. For
+  // the head, anchor and origin are equal (no effect); for a later segment whose
+  // anchor landed off the start day, the origin pulls the grid back onto it.
+  const origin = runtime.startDate as OCTDate;
+  const events = expandAnchored(statement, anchor, dom, origin);
+  const nextCursor = advanceCursor(
+    anchor,
+    statement.occurrences,
+    statement.period,
+    statement.period_type,
+    dom,
+    origin,
+  );
+  return { events, nextCursor };
 };
 
 /**
@@ -155,14 +147,13 @@ const compileRaw = (
   assertValidVestingScheduleTemplate(template);
   assertValidVestingRuntime(runtime, template);
 
-  // Expand each statement. DATE statements chain through dateCursor; EVENT
-  // statements anchor absolutely at their firing.
+  // Expand each statement; every statement chains through dateCursor.
   const statements = [...template.statements].sort((a, b) => a.order - b.order);
   let dateCursor: OCTDate | undefined = runtime.startDate;
   const rawEvents: RawEvent[] = [];
   for (const statement of statements) {
     const result = expandStatement(statement, runtime, dateCursor);
-    if (!result) continue; // EVENT statement with no matching firing
+    if (!result) continue; // unresolved contingent placeholder — no tranches
     rawEvents.push(...result.events);
     dateCursor = result.nextCursor;
   }

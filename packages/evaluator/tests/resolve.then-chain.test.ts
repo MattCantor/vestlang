@@ -4,7 +4,7 @@
 // produces for the same schedule — that equivalence is what these tests pin.
 
 import { describe, it, expect } from "vitest";
-import { addPeriod, compile } from "@vestlang/core";
+import { addPeriod, compile, CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
@@ -337,12 +337,12 @@ describe("resolveToCore — a cliff on a tail measures from the handoff", () => 
   });
 });
 
-describe("resolveToCore — events-only month-end chain springs back too", () => {
-  // The template arm already springs month-end chains back (see #34 above), but a
-  // chain headed on a fired event materializes its dates on the events-only arm
-  // instead, by a separate code path. That path has to spring back the same way,
-  // or an event-origin chain would drift where a date chain doesn't. ipo fires on
-  // a 31st, so every handoff is a candidate to clamp.
+describe("resolveToCore — single-event-head month-end chain springs back too", () => {
+  // A chain headed on ONE event is a single contingent origin, so once that event
+  // fires it's a `template` whose DATE statements chain off the resolved start —
+  // and the chain has to spring month-end handoffs back the same way a date chain
+  // does (see #34 above), or it would drift. ipo fires on a 31st, so every handoff
+  // is a candidate to clamp.
   const ctx = ctxInput({
     grantDate: "2025-01-01",
     events: { ipo: "2025-01-31" },
@@ -358,16 +358,19 @@ describe("resolveToCore — events-only month-end chain springs back too", () =>
 
   it("materializes the month-end dates an un-split schedule would", () => {
     const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The fired event start dates the whole chain off the resolved date; compile
+    // the template to read the projection.
+    const events = compile(result.template, result.totalShares, result.runtime);
     // Head one month after ipo (Feb has no 31st, so Feb 28), then the tail picks
     // up and returns to the month-end: Mar 31, Apr 30 — not stuck on the 28th.
-    expect(installmentDates(result.installments)).toEqual([
+    expect(events.map((e) => e.date)).toEqual([
       "2025-02-28",
       "2025-03-31",
       "2025-04-30",
     ]);
-    expect(total(result.installments)).toBe(100000);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(100000);
   });
 });
 
@@ -538,15 +541,20 @@ const oneYear = { type: "MONTHS", length: 12, occurrences: 1 } as const;
 
 describe("resolveToCore — event-origin THEN chain, event unfired", () => {
   // ipo isn't in the events map, so neither the head nor its tail has a date yet.
+  // A chain headed on ONE event is a single contingent origin, so it is now a
+  // storable `template` (sentinel start + evt:start recipe), carrying its share
+  // claims as symbolic pending installments until the event fires.
   const program: Program = [
     eventHead(portion(1, 2), "ipo", oneYear),
     then(portion(1, 2), oneYear),
   ];
 
-  it("is unresolved, blocked on the unfired event", () => {
+  it("is a contingent template, blocked on the unfired event", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(result.sourceMap)).toEqual(["evt:start"]);
     expect(result.blockers).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "ipo",
@@ -555,28 +563,27 @@ describe("resolveToCore — event-origin THEN chain, event unfired", () => {
 
   it("carries BOTH segments' share claims as symbolic installments", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    // Head lump then tail lump, in program order; nothing is dated yet.
-    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // Head lump then tail lump, in program order; nothing is dated yet, so both
+    // ride the pending channel.
+    expect(result.pendingInstallments.map((i) => i.amount)).toEqual([
+      50000, 50000,
+    ]);
     expect(
-      result.installments.every(
-        (i) =>
-          i.state === "UNRESOLVED" &&
-          i.symbolicDate.type === "UNRESOLVED_VESTING_START",
+      result.pendingInstallments.every(
+        (i) => i.symbolicDate.type === "UNRESOLVED_VESTING_START",
       ),
     ).toBe(true);
     // Conservation: the whole grant is accounted for.
-    expect(total(result.installments)).toBe(100000);
-    // The tail's lump is undated; what the chain waits on lives on the
-    // schedule-level blocker list (asserted in the next test).
-    const tail = result.installments[1];
-    expect(tail.state).toBe("UNRESOLVED");
+    expect(result.pendingInstallments.reduce((s, i) => s + i.amount, 0)).toBe(
+      100000,
+    );
   });
 
   it("reports the head's blocker exactly once — tails don't restate it", () => {
     const result = resolveToCore(program, ctxInput());
-    if (result.kind !== "unresolved") throw new Error("expected unresolved");
+    if (result.kind !== "template") throw new Error("expected template");
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
@@ -592,12 +599,14 @@ describe("resolveToCore — multi-tail chain behind an unfired head", () => {
 
   it("each tail's claim survives; the blocker still appears once", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments.map((i) => i.amount)).toEqual([
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.pendingInstallments.map((i) => i.amount)).toEqual([
       50000, 25000, 25000,
     ]);
-    expect(total(result.installments)).toBe(100000);
+    expect(result.pendingInstallments.reduce((s, i) => s + i.amount, 0)).toBe(
+      100000,
+    );
     expect(result.blockers).toHaveLength(1);
   });
 });
@@ -676,28 +685,31 @@ describe("resolveToCore — pending-head chain, tail duration cliff (R2-B3)", ()
     }),
   ];
 
-  it("pending: lowers clean — no extra blockers, both claims intact", () => {
+  it("pending: a contingent template — no extra blockers, both claims intact", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.pendingInstallments.map((i) => i.amount)).toEqual([
+      50000, 50000,
+    ]);
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
   });
 
-  it("fired: the authored cliff takes effect on the events arm", () => {
-    // Once ipo fires the chain re-resolves through the live branch (anchored
-    // lowerCliff), so the deferred record never outlives the firing. Head: 12
-    // months from the firing. Tail: handoff 2027-06-01, 6-month cliff lumps
-    // Jul–Dec onto 2027-12-01, then monthly through 2028-06-01.
+  it("fired: the chain re-anchors off the resolved start, cliff and all", () => {
+    // Once ipo fires the chain re-resolves to a dated template off the resolved
+    // start. Head: 12 months from the firing. Tail: handoff 2027-06-01, 6-month
+    // cliff lumps Jul–Dec onto 2027-12-01, then monthly through 2028-06-01.
     const result = resolveToCore(
       program,
       ctxInput({ events: { ipo: "2026-06-01" } }),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(installmentDates(result.installments)).toEqual([
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events.map((e) => e.date)).toEqual([
       ...Array.from({ length: 12 }, (_, i) =>
         addPeriod("2026-06-01", i + 1, "MONTHS"),
       ),
@@ -706,7 +718,7 @@ describe("resolveToCore — pending-head chain, tail duration cliff (R2-B3)", ()
         addPeriod("2027-12-01", i + 1, "MONTHS"),
       ),
     ]);
-    expect(total(result.installments)).toBe(100000);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(100000);
   });
 });
 
@@ -733,9 +745,10 @@ describe("evaluateProgramAsOf — pending chain alongside a dated sibling", () =
 });
 
 describe("resolveToCore — event-origin THEN chain, event fired", () => {
-  // ipo fires on 2026-06-01. The head vests one tranche a year later, and the
-  // tail picks up from there: head at ipo + 1y, tail at ipo + 2y. Both segments
-  // sit on the same event, so the program resolves to events-only, not a template.
+  // ipo fires on 2026-06-01. A chain headed on ONE event is a single contingent
+  // origin, so once fired it re-anchors off the resolved start as a dated
+  // `template`: head at ipo + 1y, tail at ipo + 2y (no longer events-only — the
+  // single-origin chain now promotes).
   const ctx = ctxInput({
     grantDate: "2025-01-01",
     events: { ipo: "2026-06-01" },
@@ -745,34 +758,23 @@ describe("resolveToCore — event-origin THEN chain, event fired", () => {
     then(portion(1, 2), oneYear),
   ];
 
-  it("classifies to events-only with every segment materialized off the event", () => {
+  it("resolves to a dated template, every segment off the resolved start", () => {
     const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
     // Head one year after ipo, tail two years after.
-    expect(installmentDates(result.installments)).toEqual([
-      "2027-06-01",
-      "2028-06-01",
-    ]);
-    expect(total(result.installments)).toBe(100000);
-  });
-
-  it("words the overlap as a THEN chain, not an independent collision", () => {
-    const result = resolveToCore(program, ctx);
-    if (result.kind !== "events") throw new Error("expected events");
-    if (result.reason.kind !== "OVERLAPPING_ABSOLUTE_STARTS")
-      throw new Error("expected an overlapping-starts reason");
-    expect(result.reason.detail).toContain("THEN chain");
-    expect(result.reason.detail).toContain("promote");
+    expect(events.map((e) => e.date)).toEqual(["2027-06-01", "2028-06-01"]);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(100000);
   });
 });
 
-describe("resolveToCore — two independent portions, ipo and ipo + 12mo", () => {
-  // These used to collide: the offset portion recorded ipo's firing at the
-  // offset date, clashing with the bare portion's truthful one and forcing
-  // events-only. The offset anchor now externalizes as its own synthetic event,
-  // so the two coexist in one template and every recorded firing is true.
+describe("resolveToCore — two portions, ipo and ipo + 12mo (aligned collapse)", () => {
+  // Both fired: `EVENT ipo` resolves its start to 2026-06-01 and its lone
+  // 12-month occurrence to 2027-06-01 — exactly where `EVENT ipo + 12 months`
+  // starts. The second portion's start lands on the first chain's cursor, so the
+  // two resolved date grids collapse into ONE template (the same aligned-collapse
+  // the dated-grid case keeps). Every recorded date is true.
   const ctx = ctxInput({
     grantDate: "2025-01-01",
     events: { ipo: "2026-06-01" },
@@ -782,22 +784,16 @@ describe("resolveToCore — two independent portions, ipo and ipo + 12mo", () =>
     eventHead(portion(1, 2), "ipo", oneYear, 12),
   ];
 
-  it("lowers to one template with truthful firings for both anchors", () => {
+  it("collapses to one dated template (no sidecar — both starts are dated)", () => {
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements.map((s) => s.vesting_base)).toEqual([
-      { type: "EVENT", event_id: "ipo" },
-      { type: "EVENT", event_id: "evt:1" },
+      { type: "DATE" },
+      { type: "DATE" },
     ]);
-    // No firing claims ipo happened on the offset date; the synthetic event's
-    // date is the offset date by its own definition.
-    expect(result.runtime.eventFirings).toEqual([
-      { event_id: "ipo", date: "2026-06-01" },
-      { event_id: "evt:1", date: "2027-06-01" },
-    ]);
-    expect(result.sourceMap["evt:1"].definition).toMatch(/ipo/);
-    expect(result.sourceMap["evt:1"].definition).toMatch(/12 months/);
+    expect(result.runtime.startDate).toBe("2026-06-01");
+    expect(result.sourceMap).toEqual({});
   });
 
   it("round-trips through core.compile to the dates the DSL means", () => {
@@ -810,10 +806,9 @@ describe("resolveToCore — two independent portions, ipo and ipo + 12mo", () =>
 });
 
 describe("resolveToCore — THEN chain off a fired offset-event head", () => {
-  // A chain headed on ipo + 12mo: the head and its tail land the same synthetic
-  // anchor on different dates, the same shape as a chain off a bare event — so
-  // it stays events-only rather than minting a template whose firing record
-  // backdates the tail onto the named event.
+  // A chain headed on `ipo + 12mo` is a single contingent origin (one offset-event
+  // start), so once fired it re-anchors off the resolved offset date as a dated
+  // `template` — the head and tail chain, no longer events-only.
   const ctx = ctxInput({
     grantDate: "2025-01-01",
     events: { ipo: "2026-06-01" },
@@ -823,19 +818,14 @@ describe("resolveToCore — THEN chain off a fired offset-event head", () => {
     then(portion(1, 2), oneYear),
   ];
 
-  it("classifies to events-only with the chain wording, dates offset-true", () => {
+  it("resolves to a dated template, dates offset-true", () => {
     const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.reason.kind).toBe("OVERLAPPING_ABSOLUTE_STARTS");
-    if (result.reason.kind !== "OVERLAPPING_ABSOLUTE_STARTS") return;
-    expect(result.reason.detail).toContain("THEN chain");
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
     // Head anchored a year after ipo + 12mo, tail a year after that.
-    expect(installmentDates(result.installments)).toEqual([
-      "2028-06-01",
-      "2029-06-01",
-    ]);
-    expect(total(result.installments)).toBe(100000);
+    expect(events.map((e) => e.date)).toEqual(["2028-06-01", "2029-06-01"]);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(100000);
   });
 });
 

@@ -23,6 +23,22 @@ import {
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 
+// The storage-only placeholder a contingent vesting start carries in
+// `runtime.startDate`: a blatantly-fake far-future date. A start whose calendar
+// date isn't known until a named event fires can't carry a real date, so it
+// stores this sentinel and holds the real recipe out-of-band in a reserved
+// `evt:start` sidecar entry (re-derived on reload). Two consumers may read the
+// VALUE directly — the compiler (to recognize it and emit no dated tranches,
+// since a real run off year 9999 overflows the date math below) and the reload
+// damaged-artifact check — but never the rehydrate OVERRIDE decision, which keys
+// on the presence of the `evt:start` entry, not on this value.
+//
+// 9999-12-31 is the last representable date (toISO rejects past year 9999), so it
+// is unmistakable AND cannot be stepped forward without throwing — exactly the
+// fail-visible property we want. Named CONTINGENT_START_SENTINEL, distinct from
+// the evaluator's unrelated VESTING_START_LABEL/isVestingStartPlaceholder.
+export const CONTINGENT_START_SENTINEL: OCTDate = "9999-12-31";
+
 // ISO-string ↔ Date (UTC midnight).
 //
 // Both directions go through explicit components rather than string parsing /

@@ -31,13 +31,13 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
-import { advanceCursor, eq } from "@vestlang/core";
+import { advanceCursor, eq, CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { amountToFraction } from "../claims.js";
 import { isPickedCommitted, isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
-import { syntheticEventId } from "./synthetic.js";
+import { SYNTHETIC_START_EVENT_ID } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";
 
 /** First single schedule of an expression (descend combinators' items[0]). */
@@ -103,11 +103,18 @@ export interface StmtResolution {
         offsetExpr?: VestingNodeExpr;
         disclosures: Blocker[];
       }
-    // An unfired *bare* EVENT start — atomic, ungated, offset-free: canonical
-    // holds it as an EVENT statement with no firing, so it lowers into the
-    // template rather than poisoning the program to `unresolved`. The blockers
-    // carry the pending-ness.
-    | { state: "PENDING_EVENT"; eventId: string; blockers: Blocker[] }
+    // An unfired *bare* EVENT start — atomic, ungated, offset-free. canonical
+    // stores it as the hoisted contingent start (sentinel startDate + one
+    // `evt:start` recipe) rather than poisoning the program to `unresolved`.
+    // `expr` is the bare start node, rendered into the `evt:start` recipe so a
+    // reload re-derives the real date; `eventId` is kept for the disclosure/blocker
+    // paths. The blockers carry the pending-ness.
+    | {
+        state: "PENDING_EVENT";
+        eventId: string;
+        expr: VestingNodeExpr;
+        blockers: Blocker[];
+      }
     // A pending start that references a named EVENT and carries structure a bare
     // EVENT base can't hold — a combinator over anchors, a BEFORE/AFTER gate, or
     // offsets on the anchor. It collapses to one synthetic event, lowering into
@@ -285,16 +292,22 @@ const resolveNonChained = (
     };
   }
 
-  // A bare atomic EVENT start — a plain named event, no guard, no offsets. It's
-  // a real event the record keeper fires directly, so it lowers as an EVENT
-  // statement with no firing (no synthetic indirection, no source-map entry).
-  // Gated or offset event-base nodes were already claimed by the synthetic
-  // branch above.
+  // A bare atomic EVENT start — a plain named event, no guard, no offsets. It's a
+  // contingent start: `buildTemplate` hoists it to the sentinel startDate and
+  // externalizes its `EVENT <id>` recipe under the one reserved `evt:start` key.
+  // `expr` carries that recipe; `eventId` is retained only for the
+  // disclosure/blocker paths. Gated or offset event-base nodes were already
+  // claimed by the synthetic branch above.
   if (res.type === "UNRESOLVED" && sb.type === "EVENT") {
     return {
       percentage,
       periodicity,
-      start: { state: "PENDING_EVENT", eventId: sb.eventId, blockers },
+      start: {
+        state: "PENDING_EVENT",
+        eventId: sb.eventId,
+        expr: vs,
+        blockers,
+      },
       cliff,
       chain: { role: "head" },
     };
@@ -522,14 +535,13 @@ export type TemplateBuild =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
-      // Externalized combinator gates: `event_id → { definition }` for each
-      // synthetic event minted below. Empty unless a combinator-over-anchors
-      // start was collapsed.
+      // The contingent-start recipe: at most the one reserved `evt:start` entry,
+      // holding the rendered DSL of a pending start so a reload re-derives its real
+      // date. Empty for a plain dated schedule.
       sourceMap: SourceMap;
-      // Pending-ness under a `template` verdict: the unfired atomic EVENT starts
-      // and unresolved synthetic-event combinators whose witnesses haven't
-      // arrived. Advisory — the program is still a valid template; these say
-      // which projections are still empty.
+      // Pending-ness under a `template` verdict: a contingent start whose event
+      // hasn't fired. Advisory — the program is still a valid template; these say
+      // the projection is still empty.
       blockers: Blocker[];
     }
   | {
@@ -546,11 +558,24 @@ export type TemplateBuild =
       ctx: ResolutionContext;
     };
 
+// A start that anchors its own component (a non-chained head). A contingent
+// component head (PENDING_EVENT / SYNTHETIC_EVENT) is the one shape that hoists to
+// the sentinel start; a dated head hoists/chains a real date. Both are origins —
+// canonical hoists exactly one, so more than one distinct origin can't be one
+// template.
+const isContingentStart = (s: StmtResolution["start"]): boolean =>
+  s.state === "PENDING_EVENT" || s.state === "SYNTHETIC_EVENT";
+
 /**
  * Assemble one canonical template from the per-statement resolutions, or report
- * why it can't be one: any unresolved start/cliff or unfired event cliff →
- * `unresolved`; a fired event cliff or non-chaining independent DATE grids →
- * `events`.
+ * why it can't be one. The canonical template hoists exactly one start. A single
+ * contingent start (its date unknown until an event fires) hoists to the
+ * CONTINGENT_START_SENTINEL with its recipe in a reserved `evt:start` entry; a
+ * plain dated start hoists its real date. More than one distinct start origin (two
+ * events, a dated start beside an event start) can't be one template →
+ * `events`/MULTIPLE_START_ORIGINS. An unresolved/contradictory start or cliff, or
+ * an unfired event cliff → `unresolved`; a fired event cliff or non-chaining
+ * independent DATE grids → `events`.
  */
 export const buildTemplate = (
   resolutions: StmtResolution[],
@@ -570,14 +595,38 @@ export const buildTemplate = (
     ctx,
   });
 
-  // Only a genuinely-unresolved or contradictory start poisons the program. An
-  // unfired atomic EVENT start (PENDING_EVENT) lowers into the template.
-  if (
-    resolutions.some(
-      (r) => r.start.state === "UNRESOLVED" || r.start.state === "IMPOSSIBLE",
-    )
-  )
+  // A contradictory start is terminal no matter how many origins there are, so it
+  // poisons first (classify rolls a wholly-void program up to impossible). Then a
+  // genuinely-unresolved HEAD start poisons too — but a pending-tail's UNRESOLVED
+  // start is legitimate (it rides a contingent head; see below), so the
+  // unresolved-start check is scoped to heads.
+  if (resolutions.some((r) => r.start.state === "IMPOSSIBLE")) {
     return unresolved();
+  }
+
+  // The component heads (each its own FROM). Heads are the grant's start origins;
+  // tails ride their head's origin. canonical hoists one start, so a contingent
+  // head can't coexist with any other origin.
+  const heads = resolutions.filter((r) => r.chain.role === "head");
+  const contingentHeads = heads.filter((r) => isContingentStart(r.start));
+  const hasContingentStart = contingentHeads.length > 0;
+
+  if (heads.some((r) => r.start.state === "UNRESOLVED")) {
+    return unresolved();
+  }
+
+  // A contingent start consumes the one hoisted origin. A second origin — another
+  // contingent head, or any dated head beside it — has nowhere to land. (The grant
+  // stays DSL-expressible; a record keeper would split the origins into separate
+  // grants.)
+  if (hasContingentStart && heads.length > 1) {
+    return events({
+      kind: "MULTIPLE_START_ORIGINS",
+      detail:
+        "More than one distinct start origin on one grant (a contingent start cannot share canonical's single hoisted start with another origin).",
+    });
+  }
+
   if (
     resolutions.some(
       (r) => r.cliff.state === "UNRESOLVED" || r.cliff.state === "IMPOSSIBLE",
@@ -600,27 +649,37 @@ export const buildTemplate = (
 
   const dom = ctx.vesting_day_of_month;
   const statements: VestingStatement[] = [];
-  const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
   const blockers: Blocker[] = [];
-  // Synthetic events: minted once per distinct externalized anchor (keyed by its
-  // DSL definition), so two portions on the byte-identical anchor share one id
-  // and one source-map entry.
+  // The contingent-start recipe lives under the one reserved `evt:start` key (set
+  // only on the contingent-start path below).
   const sourceMap: SourceMap = {};
-  const synthByDef = new Map<string, string>();
-  let synthOrdinal = 0;
-  const mintSynthetic = (expr: VestingNodeExpr): string => {
-    const definition = stringifyVestingNodeExpr(expr);
-    let eventId = synthByDef.get(definition);
-    if (eventId === undefined) {
-      eventId = syntheticEventId(++synthOrdinal);
-      synthByDef.set(definition, eventId);
-      sourceMap[eventId] = { definition };
-    }
-    return eventId;
-  };
-  // Core dates are plain ISO strings (OCTDate); advanceCursor returns the same.
+  // Core dates are plain ISO strings (OCTDate); advanceCursor returns the same. On
+  // the contingent path startDate is the sentinel; on the dated path it's the
+  // hoisted real date the cursor chains off.
   let startDate: string | undefined;
   let cursor: string | undefined;
+
+  if (hasContingentStart) {
+    // Exactly one contingent head (the multi-origin guard ran above), every other
+    // statement a pending-tail chaining off it. Hoist the sentinel and externalize
+    // the head's recipe once under `evt:start`; the chain re-anchors to the
+    // re-derived real date on reload (the tails are DATE statements off the one
+    // hoisted start).
+    const head = contingentHeads[0];
+    const headStart = head.start;
+    // narrowing: contingentHeads only holds PENDING_EVENT / SYNTHETIC_EVENT.
+    if (
+      headStart.state !== "PENDING_EVENT" &&
+      headStart.state !== "SYNTHETIC_EVENT"
+    ) {
+      return unresolved(); // unreachable
+    }
+    startDate = CONTINGENT_START_SENTINEL;
+    sourceMap[SYNTHETIC_START_EVENT_ID] = {
+      definition: stringifyVestingNodeExpr(headStart.expr),
+    };
+    blockers.push(...headStart.blockers);
+  }
 
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
@@ -631,81 +690,42 @@ export const buildTemplate = (
     // the start itself still lowers as a plain dated anchor below.
     blockers.push(...disclosuresOf(r.start));
 
-    let vesting_base: VestingStatement["vesting_base"];
-    if (r.start.state === "PENDING_EVENT") {
-      // Unfired atomic EVENT: an EVENT statement with no firing. The projection
-      // stays empty until the witness arrives; the blocker carries the
-      // pending-ness onto the `template` verdict.
-      vesting_base = { type: "EVENT", event_id: r.start.eventId };
-      blockers.push(...r.start.blockers);
-    } else if (r.start.state === "SYNTHETIC_EVENT") {
-      // A pending combinator, gate, or offset anchor: externalize as one
-      // synthetic event. No firing yet; the witness is computed by re-resolving
-      // the definition at rehydration.
-      vesting_base = { type: "EVENT", event_id: mintSynthetic(r.start.expr) };
-      blockers.push(...r.start.blockers);
-    } else if (
-      r.start.state === "UNRESOLVED" ||
-      r.start.state === "IMPOSSIBLE"
-    ) {
-      return unresolved(); // narrowing; unreachable after the guard above
-    } else if (r.start.base.type === "EVENT") {
-      // A fired offset anchor externalizes here too: the statement references
-      // the synthetic event, whose recorded firing is the resolved date
-      // (firing + offsets) — true by its definition. The named event's raw
-      // firing stays in the consumer's ledger; restating it would add a firing
-      // no statement references (runtime validation rejects exactly that), and
-      // lowering after the firing has to produce the same artifact that
-      // lowering before it plus rehydration would.
-      const eventId = r.start.offsetExpr
-        ? mintSynthetic(r.start.offsetExpr)
-        : r.start.base.eventId;
-      const firingDate = r.start.date;
-      vesting_base = { type: "EVENT", event_id: eventId };
-      // One firing per event_id: multiple portions may float to the same event.
-      // The same event firing twice at different dates can't be one template.
-      const existing = eventFirings.find((f) => f.event_id === eventId);
-      if (!existing) {
-        eventFirings.push({ event_id: eventId, date: firingDate });
-      } else if (!eq(existing.date, firingDate)) {
-        // A chained tail produces this collision by design: a THEN chain off an
-        // event walks its segments forward from the event's firing, so the head
-        // and each tail land on the same event at different dates. That's a valid
-        // sequence, just not a single date template, so it falls to events-only
-        // (and would become a template if event chaining is ever supported).
-        // Without the chain, this is a genuine clash: two independent portions
-        // both floating to one event but wanting it on different days.
-        return events({
-          kind: "OVERLAPPING_ABSOLUTE_STARTS",
-          detail:
-            r.chain.role === "tail"
-              ? `An event-origin THEN chain anchored on "${eventId}" sequences its segments to different dates, which is not a single template; it classifies to events-only and would promote to a template if event chaining is later supported.`
-              : `Event "${eventId}" anchors two portions at different dates, which has no single template form.`,
-        });
+    // Every statement is a DATE base (canonical has no other anchor). On the
+    // contingent path the cursor stays the sentinel — the projection's
+    // sentinel-skip / re-derived start handles dating — so we only run the
+    // cursor/eq continuation check on the dated path.
+    const vesting_base: VestingStatement["vesting_base"] = { type: "DATE" };
+
+    if (!hasContingentStart) {
+      // A resolved/committed dated start. (A pending head can't appear here — the
+      // contingent branch owns those — so the remaining non-dated cases are the
+      // poisons already turned away above.)
+      if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
+        const date = r.start.date;
+        if (cursor === undefined) {
+          startDate = date;
+        } else if (!eq(date, cursor)) {
+          // A second independent DATE grid that doesn't chain — not one template.
+          return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
+        }
+        // The continuation check above compares each statement's start against
+        // this cursor, so the cursor must step exactly the way the resolve
+        // pre-pass did. Both feed `advanceCursor` the chain origin (the first DATE
+        // start). If only one did, a month-end handoff would produce Mar 31 on one
+        // side and Mar 28 on the other, the eq check would miss, and a valid chain
+        // would wrongly split off to events-only. On the first DATE statement
+        // startDate is this start, so the two are equal.
+        cursor = advanceCursor(
+          date,
+          occurrences,
+          length,
+          type,
+          dom,
+          startDate ?? date,
+        );
+      } else {
+        return unresolved(); // narrowing; unreachable after the guards above
       }
-    } else {
-      vesting_base = { type: "DATE" };
-      if (cursor === undefined) {
-        startDate = r.start.date;
-      } else if (!eq(r.start.date, cursor)) {
-        // A second independent DATE grid that doesn't chain — not one template.
-        return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
-      }
-      // The continuation check above compares each statement's start against this
-      // cursor, so the cursor must step exactly the way the resolve pre-pass did.
-      // Both feed `advanceCursor` the chain origin (the first DATE start). If only
-      // one did, a month-end handoff would produce Mar 31 on one side and Mar 28
-      // on the other, the eq check would miss, and a valid chain would wrongly
-      // split off to events-only. On the first DATE statement startDate is this
-      // start, so the two are equal.
-      cursor = advanceCursor(
-        r.start.date,
-        occurrences,
-        length,
-        type,
-        dom,
-        startDate ?? r.start.date,
-      );
     }
 
     const cliff: Cliff | undefined =
@@ -724,7 +744,6 @@ export const buildTemplate = (
 
   const runtime: VestingRuntime = {
     ...(startDate !== undefined ? { startDate } : {}),
-    ...(eventFirings.length > 0 ? { eventFirings } : {}),
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
     // onto grantDate. Core's compile applies this when runtime.grantDate is set.
     ...(ctx.grantDate ? { grantDate: ctx.grantDate } : {}),

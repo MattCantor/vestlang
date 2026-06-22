@@ -18,6 +18,7 @@ import type {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/core";
 import { evaluateStatement, evaluateProgram } from "../src/orchestrate";
 import { evaluateProgramAsOf } from "../src/asof";
 import {
@@ -203,10 +204,11 @@ describe("assemble — program collapse regression (evaluateProgram)", () => {
 });
 
 describe("assemble — atomic unfired EVENT start: classify on the spec", () => {
-  // An unfired *atomic* EVENT start is a valid canonical template (an EVENT
-  // statement with no firing), not `unresolved`: pending is the absence of a
-  // witness, carried in `blockers`, not a property of the spec's representability.
-  it("atomic unfired EVENT start → template (symbolic UNRESOLVED installment + blocker)", () => {
+  // An unfired *atomic* EVENT start is a valid canonical template (a contingent
+  // start: a DATE base on the sentinel + one `evt:start` recipe), not `unresolved`:
+  // pending is the absence of a witness, carried in `blockers`, not a property of
+  // the spec's representability.
+  it("atomic unfired EVENT start → contingent template (sentinel + evt:start, symbolic installment + blocker)", () => {
     const program: Program = [
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -226,19 +228,22 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
-    // The template holds the EVENT statement; runtime carries no witness.
+    // The template holds a DATE statement on the contingent-start sentinel; the
+    // recipe to re-derive the real start lives under the reserved `evt:start` key.
     expect(out.template.statements).toHaveLength(1);
-    expect(out.template.statements[0].vesting_base).toEqual({
-      type: "EVENT",
-      event_id: "ipo",
-    });
+    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
+    expect(out.sourceMap["evt:start"].definition).toContain("ipo");
     expect(out.runtime.eventFirings ?? []).toEqual([]);
   });
 
-  // The HYBRID case: a DATE portion vesting now + an unfired EVENT portion. The
-  // unfired event must NOT poison the program — the already-vested, fully-dated
-  // DATE installments must survive.
-  it("75% MONTHLY + 25% unfired EVENT → template, 3,600 dated + pending blocker", () => {
+  // The HYBRID case: a DATE portion vesting now + an unfired EVENT portion. This is
+  // two DISTINCT start origins (a fixed date beside an event), and canonical hoists
+  // exactly one start — so it can't be one template. It falls to events-only with
+  // MULTIPLE_START_ORIGINS, but the already-vested dated installments still survive
+  // and the pending portion rides along symbolically.
+  it("75% MONTHLY + 25% unfired EVENT → events-only/MULTIPLE_START_ORIGINS, 3,600 dated + pending blocker", () => {
     const program: Program = [
       stmt(
         portion(3, 4),
@@ -256,8 +261,9 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
       }),
     ];
     const out = evalProgram(program, ctxInput({ grantQuantity: 4800 })); // ipo unfired
-    if (out.status !== "template")
-      throw new Error(`expected template, got ${out.status}`);
+    if (out.status !== "events-only")
+      throw new Error(`expected events-only, got ${out.status}`);
+    expect(out.reason.kind).toBe("MULTIPLE_START_ORIGINS");
     // Dated tranches (3600) + one UNRESOLVED installment for the pending 25%.
     const resolved = out.installments.filter((i) => i.state === "RESOLVED");
     const unresolved = out.installments.filter((i) => i.state === "UNRESOLVED");
@@ -268,15 +274,15 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
-    expect(out.template.statements).toHaveLength(2); // DATE grid + pending EVENT
   });
 });
 
-describe("assemble — combinator-over-anchors → synthetic event", () => {
+describe("assemble — combinator-over-anchors → contingent start (evt:start)", () => {
   // A combinator over a *start anchor* selects an anchor, not a structure: the
-  // downstream grid is fixed regardless of which arm wins, so it lowers to ONE
-  // canonical template by externalizing the gate as a synthetic event + a
-  // source-map definition. Pending in `blockers`, definition in `sourceMap`.
+  // downstream grid is fixed regardless of which arm wins, so a single such start
+  // lowers to ONE canonical template — a DATE base on the contingent-start sentinel
+  // plus the gate's recipe under the reserved `evt:start` key. Pending in
+  // `blockers`, recipe in `sourceMap`.
 
   // Recursively search a blocker tree for the unfired-event leaf.
   const findsEventNotOccurred = (bs: Blocker[], event: string): boolean =>
@@ -309,25 +315,23 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     },
   });
 
-  it("LATER OF(+12mo, EVENT ipo), ipo unfired → template + synthetic event", () => {
+  it("LATER OF(+12mo, EVENT ipo), ipo unfired → contingent template (sentinel + evt:start)", () => {
     const out = evalStmt(
       combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput(),
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    // One EVENT statement anchored on a minted synthetic id.
+    // One DATE statement on the contingent-start sentinel.
     expect(out.template.statements).toHaveLength(1);
-    const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    const eventId = base.type === "EVENT" ? base.event_id : "";
-    expect(eventId).toMatch(/^evt:/);
-    // No witness — the synthetic event hasn't fired.
+    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    // No witness — the contingent start hasn't fired.
     expect(out.runtime.eventFirings ?? []).toEqual([]);
-    // The gate's meaning lives in the source map, keyed by the same id.
-    expect(Object.keys(out.sourceMap)).toEqual([eventId]);
-    expect(out.sourceMap[eventId].definition).toMatch(/LATER OF/);
-    expect(out.sourceMap[eventId].definition).toMatch(/ipo/);
+    // The gate's recipe lives in the source map under the reserved key.
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/LATER OF/);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/ipo/);
     // Pending-ness rides `blockers`; UNRESOLVED installments carry the share claim.
     // LATER OF with one settled arm → partial=true, so 48 symbolic start+N tranches.
     expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
@@ -375,32 +379,32 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     });
 
     // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still
-    // externalizes the gate as a synthetic event template.
+    // externalizes the gate as a contingent start (sentinel + evt:start recipe).
     const ix = schedule.interchange;
     if (ix.status !== "template")
       throw new Error(`expected interchange template, got ${ix.status}`);
-    expect(ix.template.statements[0].vesting_base.type).toBe("EVENT");
-    expect(Object.keys(ix.sourceMap)).toHaveLength(1);
+    expect(ix.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(ix.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(ix.sourceMap)).toEqual(["evt:start"]);
   });
 
-  it("two portions on the same anchor share one event_id + one source-map entry", () => {
+  it("two PLUS portions on the same contingent anchor are two origins → MULTIPLE_START_ORIGINS", () => {
+    // canonical hoists ONE start and chains DATE statements off it, so two parallel
+    // PLUS portions can't both anchor on the one hoisted contingent start — even on
+    // the byte-identical recipe. (They stored as a single template via per-statement
+    // EVENT bases before; Carta's single vestingStartDate couldn't hold them either.
+    // Still DSL-expressible.)
     const program: Program = [
       combinatorStmt("NODE_LATER_OF", portion(3, 4)),
       combinatorStmt("NODE_LATER_OF", portion(1, 4)),
     ];
     const out = evalProgram(program, ctxInput());
-    if (out.status !== "template")
-      throw new Error(`expected template, got ${out.status}`);
-    expect(out.template.statements).toHaveLength(2);
-    const ids = out.template.statements.map((s) =>
-      s.vesting_base.type === "EVENT" ? s.vesting_base.event_id : undefined,
-    );
-    expect(ids[0]).toBeDefined();
-    expect(ids[0]).toBe(ids[1]); // same gate → same surrogate
-    expect(Object.keys(out.sourceMap)).toEqual([ids[0]]); // one entry, deduped
+    if (out.status !== "events-only")
+      throw new Error(`expected events-only, got ${out.status}`);
+    expect(out.reason.kind).toBe("MULTIPLE_START_ORIGINS");
   });
 
-  it("100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo) → synthetic event", () => {
+  it("100% MONTHLY OVER 48 FROM LATER OF(+12mo, EVENT ipo) → contingent template", () => {
     const out = evalStmt(
       combinatorStmt("NODE_LATER_OF", portion(1, 1)),
       ctxInput({ grantQuantity: 4800 }),
@@ -408,11 +412,12 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     const s = out.template.statements[0];
-    expect(s.vesting_base.type).toBe("EVENT");
+    expect(s.vesting_base).toEqual({ type: "DATE" });
     expect(s.occurrences).toBe(48);
     expect(s.period).toBe(1);
     expect(s.period_type).toBe("MONTHS");
-    expect(Object.keys(out.sourceMap)).toHaveLength(1);
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
     expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);
     // No firing → UNRESOLVED installments carrying the share claim.
     // LATER OF with one settled arm → partial=true, 48 symbolic start+N tranches.
@@ -452,10 +457,10 @@ describe("assemble — combinator-over-anchors → synthetic event", () => {
   });
 });
 
-describe("assemble — gated atomic start → synthetic event", () => {
-  // A BEFORE/AFTER gate carries a guard a bare EVENT base can't hold, so a gated
-  // atomic start externalizes the same way a combinator does: one synthetic event
-  // whose source-map definition carries the whole guarded expression. This is
+describe("assemble — gated atomic start → contingent start (evt:start)", () => {
+  // A BEFORE/AFTER gate carries a guard, so a gated atomic start externalizes the
+  // same way a combinator does: a DATE base on the contingent-start sentinel plus
+  // the whole guarded expression under the reserved `evt:start` recipe. This is
   // what keeps the guard from being dropped at the storage boundary (#18), and it
   // makes the two word-orders of the same gate lower identically (#54).
   //
@@ -497,22 +502,20 @@ describe("assemble — gated atomic start → synthetic event", () => {
 
   const monthly = { type: "MONTHS", length: 1, occurrences: 48 } as const;
 
-  it("EVENT a BEFORE DATE (future), a unfired → synthetic event carrying the guard", () => {
+  it("EVENT a BEFORE DATE (future), a unfired → evt:start carrying the guard", () => {
     const out = evalStmt(
       stmt(portion(1, 1), eventBeforeDate, monthly),
       gatedCtx,
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    const eventId = base.type === "EVENT" ? base.event_id : "";
-    expect(eventId).toMatch(/^evt:/);
-    // The guard must survive into the stored definition, not be dropped.
-    expect(Object.keys(out.sourceMap)).toEqual([eventId]);
-    expect(out.sourceMap[eventId].definition).toMatch(/BEFORE/);
-    expect(out.sourceMap[eventId].definition).toMatch(/2030-01-01/);
-    expect(out.sourceMap[eventId].definition).toMatch(/\ba\b/);
+    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    // The guard must survive into the stored recipe, not be dropped.
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/BEFORE/);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/2030-01-01/);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/\ba\b/);
     // No firing yet; pending-ness rides blockers, share claim in UNRESOLVED installment.
     expect(out.runtime.eventFirings ?? []).toEqual([]);
     expect(out.installments).toHaveLength(1);
@@ -527,18 +530,17 @@ describe("assemble — gated atomic start → synthetic event", () => {
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    expect(Object.keys(out.sourceMap)).toHaveLength(1);
-    const [id] = Object.keys(out.sourceMap);
-    expect(out.sourceMap[id].definition).toMatch(/BEFORE/);
-    expect(out.sourceMap[id].definition).toMatch(/\be\b/);
+    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/BEFORE/);
+    expect(out.sourceMap["evt:start"].definition).toMatch(/\be\b/);
     expect(out.installments).toHaveLength(1);
     expect(out.installments[0].state).toBe("UNRESOLVED");
     expect(out.installments[0].amount).toBe(100000);
   });
 
-  it("a bare ungated EVENT start stays a plain floating event (no synthetic id)", () => {
+  it("a bare ungated EVENT start routes through evt:start too (AC 7)", () => {
     const out = evalStmt(
       stmt(
         portion(1, 1),
@@ -549,11 +551,13 @@ describe("assemble — gated atomic start → synthetic event", () => {
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    const base = out.template.statements[0].vesting_base;
-    expect(base.type).toBe("EVENT");
-    // The real event id, NOT a minted synthetic one — and no source map.
-    expect(base.type === "EVENT" ? base.event_id : "").toBe("a");
-    expect(out.sourceMap).toEqual({});
+    // A bare event start is a contingent start too: DATE base on the sentinel, with
+    // the bare `EVENT a` recipe under `evt:start` — no direct event-named base
+    // (which no longer exists).
+    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
+    expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
+    expect(out.sourceMap["evt:start"].definition).toContain("a");
   });
 });
 
@@ -691,13 +695,17 @@ describe("template arm — pending channel (R2-B1)", () => {
     }),
   ];
 
-  it("mixed DATE + pending EVENT → template with dated + UNRESOLVED installments", () => {
+  it("mixed DATE + pending EVENT → events-only (two origins), dated + UNRESOLVED installments", () => {
+    // A fixed dated start beside a contingent event start is two start origins, so
+    // it can't be one template — but the dated portion still vests and the pending
+    // portion rides along symbolically.
     const out = evalProgram(
       mixedProgram(),
       ctxInput({ grantDate: "2024-01-01", grantQuantity: 4800 }),
     );
-    expect(out.status).toBe("template");
-    if (out.status !== "template") return;
+    expect(out.status).toBe("events-only");
+    if (out.status !== "events-only") return;
+    expect(out.reason.kind).toBe("MULTIPLE_START_ORIGINS");
 
     const resolved = out.installments.filter((i) => i.state === "RESOLVED");
     const unresolved = out.installments.filter((i) => i.state === "UNRESOLVED");

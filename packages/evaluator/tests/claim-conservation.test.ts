@@ -25,8 +25,10 @@ describe("claim conservation (R2-B20)", () => {
   });
 
   // The headline fix: three pending thirds on 100 shares now tally 100, not 99.
-  // Each EVENT start keeps the program in the template arm; the three lumps are
-  // UNRESOLVED with amounts [33, 33, 34] — the remainder rides the last one.
+  // Three distinct event starts are more than one start origin, so canonical
+  // can't hoist them all onto its single contingent start — the program lands
+  // in the events-only arm (MULTIPLE_START_ORIGINS). The three lumps still
+  // telescope to UNRESOLVED [33, 33, 34], the remainder riding the last one.
   it("headline: three pending thirds on 100 shares tally [33, 33, 34] via evaluateProgram", () => {
     const program = normalizeProgram(
       parse(
@@ -42,7 +44,12 @@ describe("claim conservation (R2-B20)", () => {
     };
 
     const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("template");
+    expect(resolution.status).toBe("events-only");
+    // Distinct event origins can't share canonical's single hoisted start, so the
+    // events-only arm carries the MULTIPLE_START_ORIGINS reason (AC 6).
+    if (resolution.status === "events-only") {
+      expect(resolution.reason.kind).toBe("MULTIPLE_START_ORIGINS");
+    }
     expect(resolution.installments.map((i) => i.amount)).toEqual([33, 33, 34]);
   });
 
@@ -93,7 +100,9 @@ describe("claim conservation (R2-B20)", () => {
   // The dated basis is the summed fraction of all dated statements, regardless of
   // where they sit in program order. The pending clause is FIRST here yet still
   // claims the remainder (34), because the dated allocator already telescoped the
-  // 2/3 portion's 66 shares jointly.
+  // 2/3 portion's 66 shares jointly. A dated start beside an event start is two
+  // distinct start origins, so the program lands in the events-only arm rather
+  // than a single hoisted template.
   it("mixed dated + pending: basis is the dated set's fraction, not a textual prefix", () => {
     const program = normalizeProgram(
       parse(
@@ -109,7 +118,7 @@ describe("claim conservation (R2-B20)", () => {
     };
 
     const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("template");
+    expect(resolution.status).toBe("events-only");
     // Dated tranches first: 33 @ 2024-02-01, 33 @ 2024-03-01; then pending: 34.
     expect(resolution.installments).toEqual([
       { state: "RESOLVED", amount: 33, date: "2024-02-01" },
@@ -139,7 +148,9 @@ describe("claim conservation (R2-B20)", () => {
     };
 
     const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("unresolved");
+    // A THEN chain headed on one event is now a single hoisted template
+    // (re-anchored to the resolved date on firing), not unresolved.
+    expect(resolution.status).toBe("template");
     expect(resolution.installments.map((i) => i.amount)).toEqual([33, 67]);
 
     const asof = evaluateProgramAsOf(program, ctx);
@@ -148,7 +159,8 @@ describe("claim conservation (R2-B20)", () => {
 
   // An over-allocated pending program: claims are clamped to the grant. The
   // finding is still present — the cap is a claim-channel discipline, not a
-  // correctness declaration.
+  // correctness declaration. Two distinct event starts are more than one start
+  // origin, so the verdict is events-only rather than a hoisted template.
   it("over-allocated pending program: lumps [75, 25], sum 100, finding preserved", () => {
     const program = normalizeProgram(
       parse(
@@ -164,7 +176,7 @@ describe("claim conservation (R2-B20)", () => {
     };
 
     const { resolution, findings } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("template");
+    expect(resolution.status).toBe("events-only");
     expect(resolution.installments.map((i) => i.amount)).toEqual([75, 25]);
 
     const asof = evaluateProgramAsOf(program, ctx);

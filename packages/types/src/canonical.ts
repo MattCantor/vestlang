@@ -26,7 +26,7 @@ export interface VestingScheduleTemplate {
 
 export interface VestingStatement {
   order: number; // 1-based sequence position
-  vesting_base: TemplateVestingBase; // anchor: per-grant date (DATE) or named event (EVENT)
+  vesting_base: TemplateVestingBase; // anchor: always the hoisted per-grant date
   occurrences: number; // integer >= 1; number of vesting events in segment
   period: number; // integer >= 0; length of one installment, in period_type units
   period_type: PeriodType;
@@ -34,28 +34,26 @@ export interface VestingStatement {
   percentage: Fraction; // share of total grant this vesting statement covers
 }
 
-// Discriminated union for how a VestingStatement's schedule is anchored.
-// DATE-anchored statements take their start from a per-grant date supplied
-// out-of-band (via VestingRuntime.startDate). EVENT-anchored statements anchor
-// to the firing date of a named event (via VestingRuntime.eventFirings). The
-// event's definition (what it means, how it's achieved) is not modeled here;
-// the consumer maintains that out-of-band. Multiple statements may reference the
-// same event_id — a single firing fans out to all matching statements.
+// How a VestingStatement's schedule is anchored. Every statement takes its start
+// from the one per-grant date hoisted to VestingRuntime.startDate; the canonical
+// template has no other anchor. A contingent start (the calendar date isn't known
+// until a named event fires) is still a DATE base — its startDate is the
+// far-future CONTINGENT_START_SENTINEL, and the contingency itself lives
+// out-of-band in a reserved `evt:start` sidecar entry that vestlang re-derives on
+// reload (see packages/evaluator/src/resolve/rehydrate.ts). Carta — the
+// ingestion target — has exactly one date-typed vestingStartDate per grant and no
+// event-typed vesting start, so an event-anchored base has nothing to land in.
+//
+// A single-element union for now: kept as a `TemplateVestingBase` alias (rather
+// than inlining `{ type: "DATE" }`) so the canonical shape can grow another anchor
+// later without a wide rename.
 //
 // Named `Template*` to distinguish it from the DSL/AST `VestingBase` family
-// (`./ast.ts`), which preserves a syntactic `value: string` rather than this
-// semantic `event_id`.
-export type TemplateVestingBase =
-  | TemplateVestingBaseDate
-  | TemplateVestingBaseEvent;
+// (`./ast.ts`), which preserves a syntactic `value: string`.
+export type TemplateVestingBase = TemplateVestingBaseDate;
 
 export interface TemplateVestingBaseDate {
   type: "DATE";
-}
-
-export interface TemplateVestingBaseEvent {
-  type: "EVENT";
-  event_id: string;
 }
 
 export interface Fraction {
@@ -85,13 +83,23 @@ export interface Cliff {
 //                    Allocation is always CUMULATIVE_ROUND_DOWN — the interchange
 //                    has no allocation field.
 interface RuntimeBase {
+  // The hoisted vesting start; the DATE cursor's origin. A contingent start (its
+  // calendar date unknown until a named event fires) stores the far-future
+  // CONTINGENT_START_SENTINEL (`9999-12-31`, in @vestlang/core) here, with the
+  // recipe to re-derive the real date held in a reserved `evt:start` sidecar
+  // entry. The sentinel is storage-only — the compiler recognizes it and emits no
+  // dated tranches rather than gridding off it (a real run past year 9999
+  // overflows the date math).
   startDate?: OCTDate;
   grantDate?: OCTDate;
   vestingDayOfMonth?: VestingDayOfMonth;
 }
 
-// One named-event firing. A single firing fans out to every EVENT statement
-// sharing its event_id; the optional realized_fraction scales its contribution.
+// One named-event firing. The canonical template no longer anchors a statement to
+// an event (a contingent start is a DATE base on the sentinel), so this is dormant
+// on the start path — nothing in the engine populates or reads it for a start. It
+// is kept as the runtime's witness channel for any future event-anchored runtime
+// fact the interchange grows.
 interface EventFiring {
   event_id: string;
   date: OCTDate;
@@ -110,8 +118,7 @@ export interface StoredTerms extends RuntimeBase {
 
 // The firings-carrying runtime: evaluated/rehydrated state. Keeps the original
 // name so the compile/validate/resolve consumers that substitute it into a
-// template need no edits. `rehydrate` widens a `StoredTerms` into one of these by
-// adding the re-derived firings.
+// template need no edits.
 export interface VestingRuntime extends RuntimeBase {
   eventFirings?: EventFiring[];
 }

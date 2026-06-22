@@ -426,7 +426,9 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.status).toBe("template");
+    // Three distinct event starts are more than one start origin, so the
+    // verdict is events-only; the lumps still telescope to [33, 33, 34].
+    expect(schedule.resolution.status).toBe("events-only");
     expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
       33, 33, 34,
     ]);

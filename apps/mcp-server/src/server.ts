@@ -520,13 +520,13 @@ export function createServer(): McpServer {
     },
   );
 
-  /* rehydrate: stored artifact + the world's firings → delta + pending + projection */
+  /* rehydrate: stored artifact + the world's firings → start_to_apply + pending + projection */
   server.registerTool(
     "vestlang_rehydrate",
     {
       title: "Rehydrate a persisted artifact against fired events",
       description:
-        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns FOUR things: `firings_to_apply` — the DELTA of synthetic events whose witnesses are newly present (or moved to a new date) versus the artifact's stored runtime, each with its `date` and the `definition` it resolved against (the action list against the system of record); `pending` — gates whose definitions still don't resolve because their gating events simply haven't fired yet (keep waiting), with dead/impossible arms reported SEPARATELY under `dead`, not here; `dead` — gates that can never resolve given the firings we now know (e.g. the gating event fired OUTSIDE its window), so stop waiting on them (always present, [] when none); and `projection` — the dated installments from compiling the frozen template against the witness-updated runtime with the supplied grant_quantity (what the record keeper will show once the firings are applied). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it; you supply only the newly-fired events and grant_quantity.",
+        "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns FIVE things: `start_to_apply` — the primary action: the grant's contingent vesting start re-derived on this reload (`{ date }`), or null when its event hasn't fired yet or the grant has no contingent start. It's the instruction to set the grant's vesting start date in the system of record; the stored artifact stays contingent and bakes no date, so this re-emits on every reload where the start resolves — apply it idempotently; `firings_to_apply` — a dormant legacy channel, always [] now that a canonical vesting start is a plain date rather than an event anchor (kept for a future event-anchored runtime fact); `pending` — the start's recipe still doesn't resolve because its event simply hasn't fired yet (keep waiting), with dead/impossible arms reported SEPARATELY under `dead`, not here; `dead` — the recipe can never resolve given the firings we now know (e.g. the event fired OUTSIDE its window), so stop waiting on it (always present, [] when none); and `projection` — the dated installments from compiling the frozen template against the re-derived start with the supplied grant_quantity (what the record keeper will show once the start is applied; empty while the start is still unresolved). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it; you supply only the newly-fired events and grant_quantity.",
       inputSchema: z
         .object({
           artifact: PERSISTED_ARTIFACT,

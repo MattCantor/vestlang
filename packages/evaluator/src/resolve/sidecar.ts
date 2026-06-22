@@ -1,23 +1,24 @@
-// Sidecar persistence: the carrier for a template that holds synthetic events.
+// Sidecar persistence: the carrier for a template with a contingent start.
 //
-// Lowering a combinator-over-anchors start into a `template` externalizes the gate
-// as a grant-scoped synthetic event (`evt:<n>`) plus a source map
-// (`event_id` to `{ definition }`). The template and runtime are ordinary
-// OCF canonical objects; the source map is vestlang-specific meaning that canonical
-// can't hold today.
+// A contingent start (its calendar date unknown until a named event fires) lowers
+// to a DATE base on the CONTINGENT_START_SENTINEL startDate plus the start's recipe
+// under the one reserved `evt:start` key in a source map (`event_id` to
+// `{ definition }`). The template and runtime are ordinary OCF canonical objects;
+// the source map is vestlang-specific meaning that canonical can't hold today.
 //
 // Rather than change the canonical schema, this module persists the source map
 // out-of-band, as the OCF-sanctioned "separate mapping table that links OCF object
 // IDs to your custom data" (OCF Design Patterns, "Don't Add Additional Properties
-// to OCF"). It is keyed by the synthetic `event_id`, under an interim short
-// `vestlang` namespace key. This needs no schema change and is conformant today:
-//   - a vestlang-blind consumer sees only valid canonical (a template gated on an
-//     opaque, not-yet-fired event) and ignores the sidecar entirely;
-//   - a vestlang-aware consumer reads the sidecar back and re-resolves it through
-//     `rehydrate`.
+// to OCF"), under an interim short `vestlang` namespace key. This needs no schema
+// change and is conformant today:
+//   - a vestlang-blind consumer sees only valid canonical (a DATE-anchored template
+//     whose obviously-fake far-future startDate it would booking-wrong off, so the
+//     contingency fails visibly rather than plausibly) and ignores the sidecar;
+//   - a vestlang-aware consumer reads the sidecar back and re-derives the real
+//     start through `rehydrate`.
 //
-// The synthetic id is only ever carried through here, never recomputed (persisted
-// and read, never re-derived), so the round-trip is lossless.
+// The recipe is only ever carried through here, never recomputed (persisted and
+// read, never re-derived), so the round-trip is lossless.
 
 import type {
   ResolutionContextInput,
@@ -95,10 +96,11 @@ export const toPersisted = (artifact: {
   runtime: StoredTerms;
   sourceMap: SourceMap;
 }): PersistedArtifact => {
-  // Tripwire: the synthetic/named partition must hold before this becomes a
-  // durable artifact. A freshly-lowered map can only break it via a lowering bug,
-  // so this throws a plain Error (not a user refusal) and isn't caught downstream.
-  assertSavePartition(artifact.template, artifact.sourceMap);
+  // Tripwire: the reserved-namespace partition and the sentinel⇔`evt:start` marker
+  // invariant must hold before this becomes a durable artifact. A freshly-lowered
+  // artifact can only break it via a lowering bug, so this throws a plain Error
+  // (not a user refusal) and isn't caught downstream.
+  assertSavePartition(artifact.template, artifact.runtime, artifact.sourceMap);
   const sidecar = toSidecar(artifact.sourceMap);
   return {
     template: artifact.template,
@@ -108,10 +110,10 @@ export const toPersisted = (artifact: {
 };
 
 /**
- * The read path: recover the source map from the sidecar and re-resolve its
- * definitions against the world's named-event firings, merging the computed
- * witnesses into the frozen runtime. A dropped sidecar simply yields no synthetic
- * witnesses.
+ * The read path: recover the source map from the sidecar and re-derive a
+ * contingent start's real date from its `evt:start` recipe against the world's
+ * named-event firings, returned read-only on a projection-only runtime (the
+ * frozen artifact is never mutated). A dropped sidecar simply yields no recipe.
  */
 export const rehydratePersisted = (
   persisted: PersistedArtifact,

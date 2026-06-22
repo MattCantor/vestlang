@@ -237,16 +237,18 @@ export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
  * ------------------------ */
 
 /**
- * One externalized gate definition: the DSL the synthetic `event_id` stands in
- * for. `definition` is `@vestlang/render` output — re-resolvable AND legible.
- * Populated when a combinator-over-anchors start mints a synthetic event;
- * `{}` otherwise.
+ * One externalized start recipe: the DSL a reserved sidecar key stands in for.
+ * `definition` is `@vestlang/render` output — re-resolvable AND legible. A
+ * contingent start (its date unknown until a named event fires) externalizes its
+ * recipe under the single reserved `evt:start` key; `{}` for a plain dated
+ * schedule. Rehydration re-resolves the recipe to recover the real start.
  */
 export interface SourceMapEntry {
   definition: string;
 }
 
-/** `event_id → { definition }`, keyed once per synthetic event. */
+/** `event_id → { definition }`. Carries at most the one reserved `evt:start`
+ *  entry for a contingent start. */
 export type SourceMap = Record<string, SourceMapEntry>;
 
 /* ------------------------
@@ -281,14 +283,13 @@ export type EvaluatedScheduleVerdict =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       sourceMap: SourceMap;
-      // Mostly dated (compiled) tranches, but a pending EVENT-based statement
-      // (unfired atomic event, or an unsettled synthetic combinator) keeps its
-      // share claim here as symbolic UNRESOLVED installments — the same
-      // mixed-stream rule as the events-only arm. All RESOLVED when every
-      // statement has a known start.
+      // Mostly dated (compiled) tranches, but a contingent start whose event
+      // hasn't fired keeps its share claim here as symbolic UNRESOLVED
+      // installments — the same mixed-stream rule as the events-only arm. All
+      // RESOLVED when the start is known.
       installments: (ResolvedInstallment | UnresolvedInstallment)[];
-      // Pending witnesses (unfired atomic EVENT starts). A `template` can be
-      // representable yet carry blockers + an empty/partial projection.
+      // Pending witnesses (a contingent start awaiting its event). A `template`
+      // can be representable yet carry blockers + an empty/partial projection.
       pending: UnresolvedBlocker[];
       dead: DeadBlocker[];
     }
@@ -350,6 +351,14 @@ export type NonTemplateReason =
   // Two (or more) independent absolute-date grids on one grant. A record keeper
   // models those as separate grants, so they can't collapse into one template.
   | { kind: "OVERLAPPING_ABSOLUTE_STARTS"; detail?: string }
+  // More than one distinct contingent START origin on one grant — two named
+  // events anchoring different portions, or a contingent event start beside a
+  // fixed dated start. canonical hoists exactly one `runtime.startDate` (and one
+  // reserved `evt:start` recipe), so it has nowhere to hold a second origin.
+  // Distinct from OVERLAPPING_ABSOLUTE_STARTS, which is two *resolved* date grids;
+  // this is two starts at least one of which is event-contingent. The grant stays
+  // DSL-expressible — a record keeper would model the origins as separate grants.
+  | { kind: "MULTIPLE_START_ORIGINS"; detail?: string }
   // The cliff hangs off a named event. The canonical cliff is a fixed duration, so
   // it has nowhere to put an event-anchored cliff.
   | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
@@ -370,10 +379,13 @@ export type NonTemplateReason =
  * persist. (Contrast `EvaluatedScheduleVerdict` below, which answers the
  * here-and-now question and does consult fired events.)
  *
- *   - "template"         stores as one canonical template (an event-anchored start
- *                        is fine — it rides across as a deferred/synthetic event).
+ *   - "template"         stores as one canonical template. A single contingent
+ *                        start (its date unknown until an event fires) is fine —
+ *                        it stores as a DATE base on the sentinel startDate plus a
+ *                        reserved `evt:start` recipe.
  *   - "events-only"      stores as a flat list of dated vesting events, but not one
- *                        template (e.g. two independent date grids).
+ *                        template (e.g. two independent date grids, or more than
+ *                        one distinct start origin — MULTIPLE_START_ORIGINS).
  *   - "unrepresentable"  the record keeper has no home for it at all, even as bare
  *                        events. Three causes today: an event-anchored cliff
  *                        (EVENT_CLIFF), a cliff that can't be placed until a firing
@@ -409,11 +421,10 @@ export type InterchangeVerdict =
       // floats on event X, regardless of what's fired" — is already carried by
       // the symbolic installments above (state UNRESOLVED, with `symbolicDate`),
       // so a consumer reads pending-ness off `state !== "RESOLVED"`, not off a
-      // blockers list. Widening this arm (adding
-      // blockers, or a weaker "storable but provisional" status) is held back
-      // until the open question of whether canonical should keep expressing
-      // contingency at all is settled — that answer could force or forbid
-      // reshaping this arm, so we don't pre-commit a shape now.
+      // blockers list. (A single contingent start no longer lands here — it stores
+      // as a `template` via the sentinel + `evt:start` recipe; this arm is for the
+      // shapes a record keeper can date but not collapse to one template, e.g.
+      // multiple start origins.)
     }
   | { status: "unrepresentable"; reason: NonTemplateReason }
   // Firing-blind, so every blocker here is a *static* contradiction — branded as
