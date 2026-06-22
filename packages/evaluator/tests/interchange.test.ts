@@ -112,11 +112,12 @@ describe("interchange — firing-invariance", () => {
   });
 });
 
-describe("interchange — where the two verdicts diverge", () => {
-  // An event-anchored cliff: the closed-world view can still list the dated events
-  // (so it reads events-only), but the canonical schema has nowhere to put a cliff
-  // that hangs off an event, so it isn't storable at all.
-  it("an event cliff is events-only to resolve, but unrepresentable to store", () => {
+describe("interchange — an event-held cliff stores as a template under both lenses (#255)", () => {
+  // An event-held cliff stores as a time `cliff` + an `event_condition` (Carta's
+  // HYBRID model), so BOTH verdicts read template now — they no longer split
+  // events-only/unrepresentable. The resolution folds at the firing; the
+  // interchange is firing-blind and holds.
+  it("a fired event cliff is a template under both lenses", () => {
     const out = evaluateStatement(
       stmt(
         portion(1, 1),
@@ -131,15 +132,17 @@ describe("interchange — where the two verdicts diverge", () => {
       ctxInput({ events: { ipo: "2026-01-01" } }),
     );
 
-    expect(out.resolution.status).toBe("events-only");
-    expect(out.interchange.status).toBe("unrepresentable");
+    expect(out.resolution.status).toBe("template");
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.template.statements[0].event_condition).toEqual({
+      event_id: "ipo",
+    });
   });
 
-  // The same event cliff before its event fires: the closed-world view now reads
-  // pending (the whole grid waits on the firing), while the storable answer keeps
-  // the precise reason — the schema has no home for an event-anchored cliff, not
-  // merely a cliff that can't be placed yet.
-  it("an unfired event cliff is unresolved to resolve, unrepresentable (EVENT_CLIFF) to store", () => {
+  // The same cliff before its event fires: still a template (storability doesn't
+  // depend on firings), and the held grid projects nothing under resolution.
+  it("an unfired event cliff is a template under both lenses; resolution holds", () => {
     const out = evaluateStatement(
       stmt(
         portion(1, 1),
@@ -154,18 +157,18 @@ describe("interchange — where the two verdicts diverge", () => {
       ctxInput(),
     );
 
-    expect(out.resolution.status).toBe("unresolved");
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "ipo",
-    });
+    expect(out.resolution.status).toBe("template");
+    expect(out.interchange.status).toBe("template");
+    expect(
+      out.resolution.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
   });
 
-  // Storability can't depend on the firing: the event-cliff schedule gets the
-  // identical interchange verdict whether ipo has fired or not.
-  it("the event-cliff interchange verdict is firing-invariant", () => {
+  // AC 8: storability can't depend on the firing — the interchange verdict is
+  // byte-identical whether ipo has fired or not (deep-equal).
+  it("the event-cliff interchange verdict is firing-invariant (deep-equal fired vs unfired)", () => {
     const s = stmt(
       portion(1, 1),
       makeSingletonNode(makeVestingBaseDate("2025-01-01")),
@@ -183,20 +186,19 @@ describe("interchange — where the two verdicts diverge", () => {
     ).interchange;
 
     expect(fired).toEqual(unfired);
-    expect(unfired).toEqual({
-      status: "unrepresentable",
-      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+    expect(unfired.status).toBe("template");
+    if (unfired.status !== "template") return;
+    // Firing-blind: no firings baked into the stored runtime.
+    expect(unfired.runtime.eventFirings).toBeUndefined();
+    expect(unfired.template.statements[0].event_condition).toEqual({
+      event_id: "ipo",
     });
   });
 
-  // A gated event cliff (#113): the gate is enforced, and the two verdicts split
-  // on it the way they should. Closed-world, the firing violates the gate so the
-  // cliff can never validly land (impossible); firing-blind, the gate is merely
-  // pending, so the cliff just can't be placed yet (unrepresentable, not a
-  // contradiction). Firing-blind the gate is merely pending, so the storable
-  // reason names the structural fact (the event cliff), while the closed-world
-  // verdict carries the violation.
-  it("a gated event cliff is impossible to resolve when the firing violates the gate, unrepresentable to store", () => {
+  // A gated event cliff (#113/#255): the gate is captured in a synthetic recipe, so
+  // the interchange stores a template regardless. Closed-world, the firing violates
+  // the gate → the resolution is impossible (the two-verdict split, AC 10).
+  it("a gated event cliff with a violated firing: impossible to resolve, template to store", () => {
     // CLIFF EVENT acquisition AFTER grantDate + 1 year, acquisition firing before
     // grantDate + 1 year → the cliff gate is violated.
     const gatedCliff = makeGatedNode(
@@ -221,12 +223,13 @@ describe("interchange — where the two verdicts diverge", () => {
     );
 
     expect(out.resolution.status).toBe("impossible");
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "acquisition",
-    });
+    // Firing-blind, the gate is uncaptured-as-a-verdict, so the synthetic
+    // event_condition just holds → a storable template.
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(
+      out.interchange.template.statements[0].event_condition?.event_id,
+    ).toMatch(/^evt:\d+$/);
   });
 
   // Two independent date grids: nothing event-dependent, so both verdicts agree
@@ -319,9 +322,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
-  // An event-anchored cliff still maps to EVENT_CLIFF (the stacked commit's
-  // derivation), even firing-blind where the cliff event never reads as fired.
-  it("an event cliff stays EVENT_CLIFF", () => {
+  // An event-anchored cliff on a dated start stores as a template now (the
+  // event_condition), firing-blind where the cliff event never reads as fired.
+  it("an event cliff on a dated start stores as a template (event_condition)", () => {
     const out = evaluateStatement(
       stmt(
         portion(1, 1),
@@ -336,20 +339,17 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "ipo",
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.template.statements[0].event_condition).toEqual({
+      event_id: "ipo",
     });
   });
 
-  // An event cliff behind a *pending* start. The whole schedule waits on the start
-  // event, so firing-blind it's unresolved — but the storable cause is still the
-  // event cliff (no schema home), not a cliff merely waiting on a firing. The
-  // record keeper acts on the same fact whether the start has resolved or not, so
-  // the reason must not flip to DEFERRED_CLIFF just because the start is pending.
-  it("an event cliff behind a pending event start is EVENT_CLIFF, not DEFERRED_CLIFF", () => {
+  // An event cliff behind a *pending* event start → a COMPOUND template (AC 11):
+  // a contingent start (sentinel + evt:start recipe) AND the cliff's event_condition.
+  // Both halves store, so the interchange is a template, not unrepresentable.
+  it("an event cliff behind a pending event start → compound template", () => {
     const out = evaluateStatement(
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -360,18 +360,19 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "acquisition",
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+    expect(out.interchange.template.statements[0].event_condition).toEqual({
+      event_id: "acquisition",
     });
   });
 
-  // Start-invariance: the same event cliff with a resolved DATE start gets the
-  // identical reason. The pending-ness of the start can't change what the schema
-  // can hold for the cliff.
-  it("the event-cliff reason is the same behind a pending start as behind a date start", () => {
+  // The cliff's event_condition is the same whether the start is pending or a fixed
+  // date — the cliff lowering is start-independent. (The start half differs: a
+  // pending start hoists the sentinel + evt:start; a date start hoists the date.)
+  it("the cliff's event_condition is the same behind a pending start as behind a date start", () => {
     const periodicity: VestingPeriod = {
       type: "MONTHS",
       length: 1,
@@ -395,19 +396,18 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     ).interchange;
 
-    expect(pendingStart).toEqual(dateStart);
-    expect(pendingStart).toEqual({
-      status: "unrepresentable",
-      reason: { kind: "EVENT_CLIFF", eventId: "acquisition" },
-    });
+    expect(pendingStart.status).toBe("template");
+    expect(dateStart.status).toBe("template");
+    if (pendingStart.status !== "template" || dateStart.status !== "template")
+      return;
+    const ec = { event_id: "acquisition" };
+    expect(pendingStart.template.statements[0].event_condition).toEqual(ec);
+    expect(dateStart.template.statements[0].event_condition).toEqual(ec);
   });
 
-  // The resolution side is untouched by the interchange reason change: the pending
-  // start still holds the whole grid as one undated lump, blocked only on the start
-  // event (`ipo`). The event cliff contributes no blocker of its own here — the
-  // start gates everything before the cliff can matter, so there's no spurious
-  // `acquisition` blocker.
-  it("a pending start with an event cliff resolves unchanged — one lump, only the start's blocker", () => {
+  // The resolution side holds both contingencies: nothing vests until BOTH the
+  // start event (ipo) and the cliff event (acquisition) fire. Both are disclosed.
+  it("a pending start with an event cliff holds on both events (resolution)", () => {
     const out = evaluateStatement(
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -418,21 +418,24 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.resolution.status).toBe("unresolved");
-    if (out.resolution.status !== "unresolved") return;
-    expect(out.resolution.pending).toEqual([
-      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
-    ]);
+    expect(out.resolution.status).toBe("template");
+    if (out.resolution.status !== "template") return;
+    // Held to nothing while the start is pending.
+    expect(out.resolution.installments.every((i) => i.state !== "RESOLVED")).toBe(
+      true,
+    );
     expect(out.resolution.dead).toHaveLength(0);
-    expect(out.resolution.installments).toHaveLength(1);
-    expect(out.resolution.installments[0].state).toBe("UNRESOLVED");
+    // Both contingencies are disclosed as pending.
+    const pendingEvents = out.resolution.pending.flatMap((b) =>
+      b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
+    );
+    expect(pendingEvents).toContain("ipo");
+    expect(pendingEvents).toContain("acquisition");
   });
 
-  // A gated event cliff behind a pending start. The gate decides whether the cliff
-  // *stands* (a violated gate kills it), but a pending gate doesn't change what
-  // the cliff is anchored to — an event cliff has no schema home whether gated or
-  // not, so the storable reason names the permanent cause, not the temporary one.
-  it("a gated event cliff behind a pending start is EVENT_CLIFF — the gate doesn't erase the event identity", () => {
+  // A gated event cliff behind a pending start → compound template, the cliff side
+  // a synthetic event_condition (the gate captured in its recipe).
+  it("a gated event cliff behind a pending start → compound template, synthetic cliff condition", () => {
     const gatedCliff = makeGatedNode(
       makeVestingBaseEvent("acquisition"),
       "AFTER",
@@ -450,60 +453,16 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "acquisition",
-    });
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(
+      out.interchange.template.statements[0].event_condition?.event_id,
+    ).toMatch(/^evt:\d+$/);
   });
 
-  // A gate can't change what the schema can hold: `CLIFF EVENT ipo AFTER DATE
-  // 2026-01-01` has exactly as little a home as bare `CLIFF EVENT ipo`. Before
-  // the fix the gated form read DEFERRED_CLIFF ("can't be stored ahead of
-  // time") — implying the firing would make it storable, which it never does.
-  it("a gated event cliff reports the same EVENT_CLIFF as the bare one", () => {
-    const periodicityWith = (
-      cliff: VestingNodeExpr<"VESTING_START">,
-    ): VestingPeriod => ({
-      type: "MONTHS",
-      length: 1,
-      occurrences: 48,
-      cliff,
-    });
-    const gated = evaluateStatement(
-      stmt(
-        portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
-        periodicityWith(
-          makeGatedNode(
-            makeVestingBaseEvent("ipo"),
-            "AFTER",
-            makeSingletonNode(makeVestingBaseDate("2026-01-01")),
-          ),
-        ),
-      ),
-      ctxInput(),
-    ).interchange;
-    const bare = evaluateStatement(
-      stmt(
-        portion(1, 1),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
-        periodicityWith(makeSingletonNode(makeVestingBaseEvent("ipo"))),
-      ),
-      ctxInput(),
-    ).interchange;
-
-    expect(gated).toEqual({
-      status: "unrepresentable",
-      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
-    });
-    expect(gated).toEqual(bare);
-  });
-
-  // Same property as the bare event cliff above: the gated one's storable
-  // verdict must not move when the event fires and the gate clears.
-  it("the gated-event-cliff interchange verdict is firing-invariant", () => {
+  // AC 8: the gated event cliff's interchange verdict is firing-invariant
+  // (deep-equal whether the event has fired and cleared the gate or not).
+  it("the gated-event-cliff interchange verdict is firing-invariant (deep-equal)", () => {
     const s = stmt(
       portion(1, 1),
       makeSingletonNode(makeVestingBaseDate("2025-01-01")),
@@ -525,51 +484,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     ).interchange;
 
     expect(fired).toEqual(unfired);
-    expect(unfired).toEqual({
-      status: "unrepresentable",
-      reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
-    });
-  });
-
-  // The fix is reason-only: the resolution surface for a pending start with a
-  // gated event cliff keeps its one lump and its disclosed gate, exactly as
-  // before. (Contrast the bare event cliff above, which contributes no blocker
-  // of its own — a *gated* cliff's pending verdict rides through cliffBlockers
-  // by the pinned gate-disclosure convention.)
-  it("a pending start with a gated event cliff resolves unchanged — one lump, start blocker plus the gate's", () => {
-    const gatedCliff = makeGatedNode(
-      makeVestingBaseEvent("acquisition"),
-      "AFTER",
-      makeSingletonNode(makeVestingBaseGrantDate(), [
-        makeDuration(12, "MONTHS", "PLUS"),
-      ]),
-    );
-    const out = evaluateStatement(
-      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-        cliff: gatedCliff,
-      }),
-      ctxInput(),
-    );
-
-    expect(out.resolution.status).toBe("unresolved");
-    if (out.resolution.status !== "unresolved") return;
-    expect(out.resolution.installments).toHaveLength(1);
-    expect(out.resolution.installments[0].amount).toBe(100000);
-    // All three are pending — nothing dead.
-    expect(out.resolution.dead).toHaveLength(0);
-    expect(out.resolution.pending.map((b) => b.type)).toEqual([
-      "EVENT_NOT_YET_OCCURRED", // ipo (the start)
-      "EVENT_NOT_YET_OCCURRED", // acquisition (the gated cliff's base)
-      "UNRESOLVED_CONDITION", // the gate itself
-    ]);
+    expect(unfired.status).toBe("template");
+    if (unfired.status !== "template") return;
     expect(
-      out.resolution.pending.flatMap((b) =>
-        b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
-      ),
-    ).toEqual(["ipo", "acquisition"]);
+      unfired.template.statements[0].event_condition?.event_id,
+    ).toMatch(/^evt:\d+$/);
   });
 });
 
@@ -595,9 +514,10 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     tail(tailPeriodicity),
   ];
 
-  // The headline: the tail's event cliff is a permanent unstorability (no schema
-  // home), which must win over the temporary "tail can't be dated yet".
-  it("a bare event cliff on the tail reports EVENT_CLIFF, not EVENT_CHAINED_TAIL", () => {
+  // The tail's event cliff stores as an event_condition now, and the chain is
+  // headed on one contingent event start → a compound template (sentinel +
+  // evt:start, plus the tail's event_condition), not EVENT_CHAINED_TAIL.
+  it("a bare event cliff on the tail → compound template (event_condition on the tail)", () => {
     const out = evaluateProgram(
       chain({
         ...monthly12,
@@ -605,11 +525,12 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "fda",
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+    expect(out.interchange.template.statements[1].event_condition).toEqual({
+      event_id: "fda",
     });
   });
 
@@ -690,11 +611,10 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
-  // R2-B14: the gate routes the tail's event cliff to an UNRESOLVED record, but
-  // the event identity rides along — the permanent cause (no schema home) still
-  // beats both the gate's "can't be placed yet" and the tail's "can't be dated
-  // yet".
-  it("a gated event cliff on the tail reports EVENT_CLIFF (R2-B14)", () => {
+  // R2-B14: a gated tail event cliff lowers to a SYNTHETIC event_condition (the gate
+  // captured in its recipe), so the chain stores as a compound template, not
+  // EVENT_CHAINED_TAIL/unrepresentable.
+  it("a gated event cliff on the tail → compound template, synthetic condition (R2-B14)", () => {
     const gatedEventCliff = makeGatedNode(
       makeVestingBaseEvent("fda"),
       "AFTER",
@@ -706,12 +626,11 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       chain({ ...monthly12, cliff: gatedEventCliff }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CLIFF",
-      eventId: "fda",
-    });
+    expect(out.interchange.status).toBe("template");
+    if (out.interchange.status !== "template") return;
+    expect(
+      out.interchange.template.statements[1].event_condition?.event_id,
+    ).toMatch(/^evt:\d+$/);
   });
 });
 

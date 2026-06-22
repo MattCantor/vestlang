@@ -221,8 +221,10 @@ describe("resolveToCore — atomic unfired EVENT → contingent template", () =>
   });
 });
 
-describe("resolveToCore — unresolved (can't materialize yet)", () => {
-  it("unresolved cliff (LATER_OF over unfired events) → unresolved with blockers", () => {
+describe("resolveToCore — event-held cliff is now a template (#255)", () => {
+  it("LATER_OF over unfired events → template, held (no projection, no cliff date)", () => {
+    // A `CLIFF LATER OF(EVENT a, EVENT b)` now stores as a synthetic event_condition
+    // rather than falling out as unresolved — the held grid projects nothing.
     const cliff: VestingNodeExpr<"VESTING_START"> = {
       type: "NODE_LATER_OF",
       items: [
@@ -243,10 +245,12 @@ describe("resolveToCore — unresolved (can't materialize yet)", () => {
       ),
     ];
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The statement carries a synthetic event_condition; the whole grid is held.
+    expect(result.template.statements[0].event_condition).toBeDefined();
     expect(result.blockers.length).toBeGreaterThan(0);
-    // A LATER_OF cliff over unfired events has no placeable date.
+    // Unfired → no placeable fold point.
     expect(result.cliffDate).toBeNull();
   });
 });
@@ -295,8 +299,9 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     expect(result.kind).toBe("impossible");
   });
 
-  it("merely-pending statement (unfired event) stays unresolved, not impossible", () => {
-    // ipo unfired + an event cliff keeps it in the unresolved arm (satisfiable).
+  it("merely-pending statement (unfired event start + event cliff) → template, held", () => {
+    // ipo start unfired + an event cliff: both halves store (a contingent start +
+    // an event_condition), so this is a held template, not unresolved/impossible.
     const cliff: VestingNodeExpr<"VESTING_START"> = makeSingletonNode(
       makeVestingBaseEvent("c"),
     );
@@ -307,7 +312,7 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
       }),
     ];
     const result = resolveToCore(program, ctxInput()); // ipo, c unfired
-    expect(result.kind).toBe("unresolved");
+    expect(result.kind).toBe("template");
     // Neither the start nor the event cliff has fired → no cliff date.
     expect(result.cliffDate).toBeNull();
   });
@@ -374,7 +379,11 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
     );
   });
 
-  it("[resolving, pending] → unresolved, resolved tranches alongside pending ones", () => {
+  it("[plain dated grid, independent dated grid + event-held cliff] → events (two origins)", () => {
+    // Two independent same-start grids don't chain into one template — that's
+    // OVERLAPPING_ABSOLUTE_STARTS, events-only — regardless of the second's now-
+    // storable event_condition. (Pre-#255 the unfired event cliff poisoned this to
+    // unresolved; now the cliff is a template, so the two-grid shape decides.)
     const program: Program = [
       stmt(
         portion(1, 2),
@@ -386,20 +395,15 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
         makeSingletonNode(makeVestingBaseDate("2025-01-01")),
         {
           ...twoYearsAnnual,
-          cliff: laterOfEvents("a", "b"), // unfired → the cliff stays unresolved
+          cliff: laterOfEvents("a", "b"),
         },
       ),
     ];
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(sum(result.installments.filter(isResolved))).toBe(50000);
-    expect(result.installments.some((i) => i.state === "UNRESOLVED")).toBe(
-      true,
-    );
+    expect(result.kind).toBe("events");
   });
 
-  it("partially-resolved statement (resolved start, unresolved cliff) is not double-counted", () => {
+  it("a single dated statement with an unfired event-held cliff → template, held to nothing", () => {
     const program: Program = [
       stmt(
         portion(1, 1),
@@ -411,11 +415,13 @@ describe("resolveToCore — unresolved arm surfaces resolved siblings (#28)", ()
       ),
     ];
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    // No even-grid RESOLVED tranche leaks in alongside the symbolic cliff ones.
-    expect(result.installments.every((i) => i.state !== "RESOLVED")).toBe(true);
-    expect(result.installments).toHaveLength(2); // == occurrences, not doubled
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The whole grid is held (synthetic event_condition, unfired), so compiling
+    // the template releases nothing.
+    expect(result.template.statements[0].event_condition).toBeDefined();
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toEqual([]);
   });
 
   it("back-dated resolved sibling folds pre-grant tranches onto the grant date", () => {
@@ -549,14 +555,23 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     expect(result.blockers.length).toBeGreaterThan(0);
   });
 
-  it("an event cliff on a pending start still bails to unresolved", () => {
+  it("an event cliff on a pending start → compound template (contingent start + event_condition)", () => {
+    // FROM EVENT ipo ... CLIFF EVENT board: both halves store — a contingent start
+    // (sentinel + evt:start recipe) and the cliff's event_condition (#255 AC 11).
     const program: Program = [
       stmt(fullGrant, makeSingletonNode(makeVestingBaseEvent("ipo")), {
         ...monthly48,
         cliff: makeSingletonNode(makeVestingBaseEvent("board")),
       }),
     ];
-    expect(resolveToCore(program, ctx21()).kind).toBe("unresolved");
+    const result = resolveToCore(program, ctx21());
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.sourceMap["evt:start"].definition).toContain("ipo");
+    expect(result.template.statements[0].event_condition).toEqual({
+      event_id: "board",
+    });
   });
 
   it("a cross-unit cliff (months over a days grid) still needs the anchor → unresolved", () => {
@@ -572,10 +587,11 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
   });
 });
 
-describe("resolveToCore — an unfired event cliff holds the whole grid back (#138)", () => {
-  // 4,800 shares, monthly over 4 years, gated by `CLIFF EVENT ipo`. The start is
-  // a plain date, so the grid is fully placeable — but until ipo fires, the
-  // cliff gates every installment. Nothing may surface as RESOLVED.
+describe("resolveToCore — an event-held cliff stores as a template, held until fired (#138/#255)", () => {
+  // 4,800 shares, monthly over 4 years, held by `CLIFF EVENT ipo`. The start is a
+  // plain date, so the grid is fully placeable — but until ipo fires the
+  // event_condition holds every installment. Under #255 this is a TEMPLATE
+  // (event_condition: ipo), not unresolved/events.
   const eventCliff48: VestingPeriod = {
     type: "MONTHS",
     length: 1,
@@ -590,46 +606,52 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
     ),
   ];
 
-  it("unfired → unresolved: every installment held back, with the event blocker", () => {
+  it("unfired → template, the whole grid held (projects nothing), with the event blocker", () => {
     const result = resolveToCore(program, ctxInput({}, 4800));
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments).toHaveLength(48);
-    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
-      true,
-    );
-    // The shares are all still claimed — just not released.
-    expect(sum(result.installments)).toBe(4800);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The statement stores a bare event_condition on ipo and no time cliff.
+    expect(result.template.statements[0].event_condition).toEqual({
+      event_id: "ipo",
+    });
+    expect(result.template.statements[0].cliff).toBeUndefined();
+    // Held: compiling the template against the firing-free interchange runtime
+    // releases nothing (AC 5/7).
+    const compiled = compile(result.template, result.totalShares, result.runtime);
+    expect(compiled).toEqual([]);
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
-    // The cliff's own event hasn't fired → no effective date.
+    // The cliff's own event hasn't fired → no fold point.
     expect(result.cliffDate).toBeNull();
   });
 
-  it("fired → events with the proportional holdback lump (regression guard)", () => {
+  it("fired → template; the projection folds the proportional holdback lump", () => {
     const result = resolveToCore(
       program,
       ctxInput({ ipo: "2026-06-01" }, 4800),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.reason.kind).toBe("EVENT_CLIFF");
-    expect(result.blockers).toEqual([]);
-    // A fired event cliff reports its effective date (the firing itself).
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The resolution-mode runtime carries the condition firing.
+    expect(result.runtime.eventFirings).toEqual([
+      { event_id: "ipo", date: "2026-06-01" },
+    ]);
+    // cliffDate = the fold point (the firing itself, no time baseline).
     expect(result.cliffDate).toBe("2026-06-01");
-    // 17 monthly tranches fall at or before the firing → one 1,700-share lump
-    // on the firing date, then 100/month.
-    expect(result.installments[0]).toEqual({
-      state: "RESOLVED",
-      date: "2026-06-01",
-      amount: 1700,
-    });
-    expect(result.installments).toHaveLength(32);
-    expect(sum(result.installments)).toBe(4800);
+    // 17 monthly tranches fall at or before the firing → one 1,700-share lump on
+    // the firing date, then 100/month. Compiling against the firing-carrying
+    // runtime reproduces today's fired-event lump.
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events[0]).toEqual({ date: "2026-06-01", amount: "1700" });
+    expect(events).toHaveLength(32);
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);
   });
 
-  it("a THEN tail's unfired event cliff holds the tail back, not the head", () => {
+  it("a THEN tail's unfired event cliff holds the tail back, not the head → one template", () => {
+    // The head is a plain dated grid; the tail chains off it (dated) and carries
+    // an event_condition. Both are DATE-anchored off one start, so this is ONE
+    // template — the head vests, the tail's grid is held until ipo fires.
     const monthly12 = (cliff?: VestingNodeExpr<"VESTING_START">) => ({
       type: "MONTHS" as const,
       length: 1,
@@ -656,12 +678,16 @@ describe("resolveToCore — an unfired event cliff holds the whole grid back (#1
       },
     ];
     const result = resolveToCore(chained, ctxInput({}, 2400));
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    const resolved = result.installments.filter(isResolved);
-    expect(sum(resolved)).toBe(1200); // the head still vests
-    const held = result.installments.filter((i) => i.state === "UNRESOLVED");
-    expect(sum(held)).toBe(1200); // the tail waits on ipo
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The tail statement carries the event_condition; the head does not.
+    expect(result.template.statements[0].event_condition).toBeUndefined();
+    expect(result.template.statements[1].event_condition).toEqual({
+      event_id: "ipo",
+    });
+    // The head vests its 1,200; the tail's 1,200 is held (not in the projection).
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(1200);
     expect(
       result.blockers.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
@@ -693,43 +719,39 @@ describe("resolveToCore — event cliff at the grid edges (proportional)", () =>
 
   it("fired after the last installment → one full-grant lump on the firing", () => {
     // The grid ends 2029-01-01; ipo fires a year later. Every installment sits at
-    // or before the firing, so the whole grant folds into one lump there.
+    // or before the firing, so the whole grant folds into one lump there. Now a
+    // template — compile against the firing-carrying runtime.
     const result = resolveToCore(
       program,
       ctxInput({ ipo: "2030-01-01" }, 4800),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.installments).toEqual([
-      { state: "RESOLVED", date: "2030-01-01", amount: 4800 },
-    ]);
-    expect(sum(result.installments)).toBe(4800);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toEqual([{ date: "2030-01-01", amount: "4800" }]);
   });
 
-  it("fired before the vesting start → a plain template, no cliff", () => {
+  it("fired before the vesting start → a plain even grid (the empty lump drops away)", () => {
     // ipo fires before 2025-01-01: nothing accrued by then, so the empty lump
-    // drops the cliff entirely and the grid vests evenly across its 48 months as
-    // a single template — no events split, no cliff date.
+    // drops and the grid vests evenly across its 48 months. The verdicts AGREE now
+    // — both template (the event_condition is storable either way).
     const ctx = ctxInput({ ipo: "2024-06-01" }, 4800);
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
 
     const out = evaluateProgram(program, ctx);
     expect(out.resolution.status).toBe("template");
-    expect(out.cliffDate).toBeNull();
-    // The interchange verdict can't store an event-anchored cliff, fired or not.
-    expect(out.interchange.status).toBe("unrepresentable");
+    // cliffDate is the fold point (the firing); the lump itself has no effect
+    // because nothing accrued by then, so the grid still vests evenly (AC 15).
+    expect(out.cliffDate).toBe("2024-06-01");
+    // An event-held cliff is storable now — both verdicts read template.
+    expect(out.interchange.status).toBe("template");
 
-    if (out.resolution.status !== "template") return;
-    const grid = out.resolution.installments;
+    if (result.kind !== "template") return;
+    const grid = compile(result.template, result.totalShares, result.runtime);
     expect(grid).toHaveLength(48);
-    expect(grid.every(isResolved)).toBe(true);
-    expect(grid[0]).toEqual({
-      state: "RESOLVED",
-      date: "2025-02-01",
-      amount: 100,
-    });
-    expect(sum(grid)).toBe(4800);
+    expect(grid[0]).toEqual({ date: "2025-02-01", amount: "100" });
+    expect(grid.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);
   });
 });
 
@@ -778,52 +800,50 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
 
   // The grid vests evenly whether the firing sits before the start or after it but
   // ahead of the first installment — both are "nothing accrued yet", so both drop
-  // the cliff. The first installment lands 2025-07-01.
+  // the lump. Now a template (the event_condition is stored); compile reproduces
+  // the even grid. The first installment lands 2025-07-01.
   it.each([
     ["before the start", "2025-02-01"],
     ["after the start, before the first installment", "2025-06-15"],
-  ])("fda fires %s → a plain template, no cliff", (_label, fda) => {
+  ])("fda fires %s → a template; the grid vests evenly (empty lump drops)", (_label, fda) => {
     const ctx = ctxInput({ fda }, 120000);
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
 
     const out = evaluateProgram(program, ctx);
     expect(out.resolution.status).toBe("template");
-    expect(out.cliffDate).toBeNull();
-    // Firing-invariant: an event-anchored cliff has no storable home regardless.
-    expect(out.interchange.status).toBe("unrepresentable");
+    // Both verdicts store the event hold now — they agree.
+    expect(out.interchange.status).toBe("template");
 
-    if (out.resolution.status !== "template") return;
-    expect(out.resolution.installments).toEqual(evenGrid);
+    if (result.kind !== "template") return;
+    const compiled = compile(result.template, result.totalShares, result.runtime);
+    expect(compiled).toEqual(
+      evenGrid.map((e) => ({ date: e.date, amount: String(e.amount) })),
+    );
   });
 
   it("fda fires on the first installment → a real cliff (the lump stands)", () => {
     // The effective date equals the first grid date, so one installment (10,000)
-    // accrues by then and folds into a lump there — a genuine cliff, reported.
+    // accrues by then and folds into a lump there — a genuine cliff, stored as the
+    // event_condition and reproduced by compile.
     const ctx = ctxInput({ fda: "2025-07-01" }, 120000);
     const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.reason.kind).toBe("EVENT_CLIFF");
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
     expect(result.cliffDate).toBe("2025-07-01");
-    expect(result.installments[0]).toEqual({
-      state: "RESOLVED",
-      date: "2025-07-01",
-      amount: 10000,
-    });
-    expect(sum(result.installments)).toBe(120000);
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events[0]).toEqual({ date: "2025-07-01", amount: "10000" });
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(120000);
   });
 
-  it("unfired fda holds the whole grid back (pending, unchanged)", () => {
-    // No premature NONE: an unfired event cliff is still routed to the held-back
-    // arm with its event blocker, the grid claimed but not released.
+  it("unfired fda holds the whole grid back → template, projects nothing", () => {
+    // An unfired event_condition holds every installment: the template projects
+    // nothing (the grid is claimed but not released), with the event blocker.
     const result = resolveToCore(program, ctxInput({}, 120000));
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments).toHaveLength(12);
-    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
-      true,
-    );
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const compiled = compile(result.template, result.totalShares, result.runtime);
+    expect(compiled).toEqual([]);
     expect(result.cliffDate).toBeNull();
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "fda" },
@@ -847,10 +867,11 @@ describe("resolveToCore — the no-effect guard keys on the effective date", () 
     ]),
   });
 
-  it("MINUS offset drags the effective date before the first installment → no cliff", () => {
+  it("MINUS offset drags the effective date before the first installment → empty lump drops", () => {
     // ipo fires 2024-02-10 (after the Feb 1 installment), but the −1 month offset
     // pulls the effective date to 2024-01-10, before any installment accrues. The
-    // empty lump drops the cliff: a plain template, no cliff date.
+    // empty lump drops: a template whose grid vests evenly. The offset makes this a
+    // synthetic event_condition.
     const program: Program = [
       stmt(
         portion(1, 1),
@@ -859,18 +880,27 @@ describe("resolveToCore — the no-effect guard keys on the effective date", () 
       ),
     ];
     const ctx = ctxInput({ grantDate: "2024-01-01", ipo: "2024-02-10" }, 200);
-    expect(resolveToCore(program, ctx).kind).toBe("template");
+    const result = resolveToCore(program, ctx);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // Synthetic id (the offset can't ride on a bare id), with its recipe in the map.
+    const ec = result.template.statements[0].event_condition;
+    expect(ec?.event_id).toMatch(/^evt:\d+$/);
+    const events = compile(result.template, result.totalShares, result.runtime);
+    // Even grid: 100 on Feb 1, 100 on Mar 1.
+    expect(events).toEqual([
+      { date: "2024-02-01", amount: "100" },
+      { date: "2024-03-01", amount: "100" },
+    ]);
 
     const out = evaluateProgram(program, ctx);
-    expect(out.resolution.status).toBe("template");
-    expect(out.cliffDate).toBeNull();
-    expect(out.interchange.status).toBe("unrepresentable");
+    expect(out.interchange.status).toBe("template");
   });
 
   it("PLUS offset pushes the effective date onto an installment → a real cliff", () => {
     // ipo fires 2024-01-10 (before the Feb 1 installment), but the +1 month offset
     // pushes the effective date to 2024-02-10 — past the Feb 1 installment, which
-    // accrues and folds into a lump. The cliff stands and reports its date.
+    // accrues and folds into a lump. The cliff stands and reports its fold point.
     const program: Program = [
       stmt(
         portion(1, 1),
@@ -880,10 +910,11 @@ describe("resolveToCore — the no-effect guard keys on the effective date", () 
     ];
     const ctx = ctxInput({ grantDate: "2024-01-01", ipo: "2024-01-10" }, 200);
     const result = resolveToCore(program, ctx);
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
     expect(result.cliffDate).toBe("2024-02-10");
-    expect(sum(result.installments)).toBe(200);
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(200);
   });
 });
 
@@ -907,30 +938,27 @@ describe("resolveToCore — event cliff with an offset (CLIFF EVENT ipo + 1 mont
       program,
       ctxInput({ grantDate: "2024-01-01", ipo: "2024-02-15" }, 200),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    // Both grid tranches (Feb 1, Mar 1) precede the effective cliff date, so
-    // the whole grant folds into one lump there.
-    expect(result.installments).toEqual([
-      { state: "RESOLVED", date: "2024-03-15", amount: 200 },
-    ]);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // Both grid tranches (Feb 1, Mar 1) precede the effective cliff date
+    // (firing + 1 month = 2024-03-15), so the whole grant folds into one lump there.
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toEqual([{ date: "2024-03-15", amount: "200" }]);
   });
 
-  it("unfired → the grid is still held back, with the named event's blocker", () => {
+  it("unfired → the grid is still held back (template projects nothing), with the blocker", () => {
     const result = resolveToCore(
       program,
       ctxInput({ grantDate: "2024-01-01" }, 200),
     );
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments).toHaveLength(2);
-    expect(result.installments.every((i) => i.state === "UNRESOLVED")).toBe(
-      true,
-    );
-    expect(sum(result.installments)).toBe(200);
-    expect(result.blockers).toEqual([
-      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
-    ]);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toEqual([]);
+    // The blocker names the synthetic id (the offset externalized the event).
+    expect(
+      result.blockers.some((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
+    ).toBe(true);
   });
 });
 
