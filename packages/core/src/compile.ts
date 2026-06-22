@@ -40,30 +40,63 @@ export interface CompiledInstallment {
   amount: number;
 }
 
+// The later of two dates. OCTDate is ISO YYYY-MM-DD, so lexical order is calendar
+// order. The fold point of an event-held cliff is max(time baseline date, firing).
+const laterOf = (a: OCTDate, b: OCTDate): OCTDate => (a > b ? a : b);
+
 /**
  * Lower one statement onto the shared grid kernel. The cliff is a duration from
  * the anchor (so the lump lands on its true date, off-grid or not). `origin`
  * carries the chain's first date, the grant's single vesting day that every MONTHS
  * grid anchors to; it defaults to `anchor`.
+ *
+ * An event hold (`event_condition`) overrides the time cliff's lump: while the
+ * condition's event hasn't fired the whole grid is held (this returns no events);
+ * once it fires the grid folds at max(time baseline date, firing) as ONE
+ * proportional cliff — the lump takes whatever share of the grid accrued by then.
+ * The stored time `cliff`'s percentage is the Carta-facing baseline and is not
+ * applied as its own lump; only its date contributes (the floor in the max).
  */
 const expandAnchored = (
   statement: VestingStatement,
   anchor: OCTDate,
   dom: VestingRuntime["vestingDayOfMonth"],
+  firingFor: (eventId: string) => OCTDate | undefined,
   origin: OCTDate = anchor,
 ): RawEvent[] => {
-  const cliff: GridCliff = statement.cliff
-    ? {
-        kind: "fixed",
-        date: addPeriod(
-          anchor,
-          statement.cliff.length,
-          statement.cliff.period_type,
-          dom,
-        ),
-        percentage: statement.cliff.percentage,
-      }
-    : { kind: "none" };
+  // The time baseline date, when the statement carries a time cliff.
+  const baselineDate = statement.cliff
+    ? addPeriod(
+        anchor,
+        statement.cliff.length,
+        statement.cliff.period_type,
+        dom,
+      )
+    : undefined;
+
+  let cliff: GridCliff;
+  if (statement.event_condition) {
+    const firing = firingFor(statement.event_condition.event_id);
+    if (firing === undefined) {
+      // Held: the event hasn't fired, so the whole grid waits on it. Emit nothing.
+      return [];
+    }
+    // Fired: one proportional cliff at max(baseline, firing). The baseline date (if
+    // any) is only a floor; the lump's size is the accrued share, not the stored
+    // percentage.
+    cliff = {
+      kind: "proportional",
+      date: baselineDate !== undefined ? laterOf(baselineDate, firing) : firing,
+    };
+  } else if (statement.cliff && baselineDate !== undefined) {
+    cliff = {
+      kind: "fixed",
+      date: baselineDate,
+      percentage: statement.cliff.percentage,
+    };
+  } else {
+    cliff = { kind: "none" };
+  }
 
   return expandGrid({
     anchor,
@@ -98,6 +131,7 @@ const expandStatement = (
   statement: VestingStatement,
   runtime: VestingRuntime,
   dateCursor: OCTDate | undefined,
+  firingFor: (eventId: string) => OCTDate | undefined,
 ): { events: RawEvent[]; nextCursor: OCTDate | undefined } | null => {
   const dom = runtime.vestingDayOfMonth;
 
@@ -115,7 +149,7 @@ const expandStatement = (
   // the head, anchor and origin are equal (no effect); for a later segment whose
   // anchor landed off the start day, the origin pulls the grid back onto it.
   const origin = runtime.startDate as OCTDate;
-  const events = expandAnchored(statement, anchor, dom, origin);
+  const events = expandAnchored(statement, anchor, dom, firingFor, origin);
   const nextCursor = advanceCursor(
     anchor,
     statement.occurrences,
@@ -147,12 +181,22 @@ const compileRaw = (
   assertValidVestingScheduleTemplate(template);
   assertValidVestingRuntime(runtime, template);
 
+  // The event-hold firing lookup: a statement's `event_condition` releases its grid
+  // only once the matching firing is present in the runtime. Built once and shared.
+  // Empty in the firing-blind interchange world (StoredTerms carries no firings),
+  // so every event-held statement reads as unfired there and projects nothing.
+  const firingByEvent = new Map<string, OCTDate>(
+    (runtime.eventFirings ?? []).map((f) => [f.event_id, f.date]),
+  );
+  const firingFor = (eventId: string): OCTDate | undefined =>
+    firingByEvent.get(eventId);
+
   // Expand each statement; every statement chains through dateCursor.
   const statements = [...template.statements].sort((a, b) => a.order - b.order);
   let dateCursor: OCTDate | undefined = runtime.startDate;
   const rawEvents: RawEvent[] = [];
   for (const statement of statements) {
-    const result = expandStatement(statement, runtime, dateCursor);
+    const result = expandStatement(statement, runtime, dateCursor, firingFor);
     if (!result) continue; // unresolved contingent placeholder — no tranches
     rawEvents.push(...result.events);
     dateCursor = result.nextCursor;

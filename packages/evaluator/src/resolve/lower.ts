@@ -37,7 +37,7 @@ import { evaluateScheduleExpr } from "../evaluate/selectors.js";
 import { amountToFraction } from "../claims.js";
 import { isPickedCommitted, isPickedResolved } from "../evaluate/utils.js";
 import { lowerCliff, lowerDeferredCliff, type LoweredCliff } from "./cliff.js";
-import { SYNTHETIC_START_EVENT_ID } from "./synthetic.js";
+import { SYNTHETIC_START_EVENT_ID, syntheticEventId } from "./synthetic.js";
 import type { NonTemplateReason } from "@vestlang/types";
 
 /** First single schedule of an expression (descend combinators' items[0]). */
@@ -535,13 +535,16 @@ export type TemplateBuild =
       template: VestingScheduleTemplate;
       runtime: VestingRuntime;
       totalShares: number;
-      // The contingent-start recipe: at most the one reserved `evt:start` entry,
-      // holding the rendered DSL of a pending start so a reload re-derives its real
-      // date. Empty for a plain dated schedule.
+      // The externalized recipes: at most the one reserved `evt:start` entry for a
+      // contingent start (the rendered DSL of a pending start, so a reload
+      // re-derives its real date), plus one `evt:<n>` per synthetic event-held
+      // cliff. Empty for a plain dated schedule.
       sourceMap: SourceMap;
       // Pending-ness under a `template` verdict: a contingent start whose event
       // hasn't fired. Advisory — the program is still a valid template; these say
-      // the projection is still empty.
+      // the projection is still empty. (An event-held cliff's pending-ness rides on
+      // its blockers too, but those are gathered by the resolution-arm producers,
+      // not here.)
       blockers: Blocker[];
     }
   | {
@@ -573,8 +576,10 @@ const isContingentStart = (s: StmtResolution["start"]): boolean =>
  * CONTINGENT_START_SENTINEL with its recipe in a reserved `evt:start` entry; a
  * plain dated start hoists its real date. More than one distinct start origin (two
  * events, a dated start beside an event start) can't be one template →
- * `events`/MULTIPLE_START_ORIGINS. An unresolved/contradictory start or cliff, or
- * an unfired event cliff → `unresolved`; a fired event cliff or non-chaining
+ * `events`/MULTIPLE_START_ORIGINS. An event-held cliff stays a template (it stores
+ * as a time `cliff` + an `event_condition`). What still falls out: an
+ * unresolved/contradictory start, or a cliff with no storable home at all (a
+ * cross-unit deferred cliff, a contradiction) → `unresolved`; non-chaining
  * independent DATE grids → `events`.
  */
 export const buildTemplate = (
@@ -633,26 +638,46 @@ export const buildTemplate = (
     )
   )
     return unresolved();
-  // An event-anchored cliff never fits a template (the deliberate #255 gate —
-  // canonical's Cliff is duration-only), but where it goes depends on the firing,
-  // read off the cliff record. Unfired, the cliff still gates its
-  // whole grid — the program is pending, and routing it to the events arm would
-  // release the very installments the cliff holds back. Fired, the lump is
-  // datable and the program flattens to dated events.
-  if (resolutions.some((r) => r.cliff.state === "EVENT_PENDING"))
-    return unresolved();
-  const eventCliff = resolutions.find((r) => r.cliff.state === "EVENT_FIRED");
-  // TS doesn't carry the `.find` predicate out, so re-narrow before reading the id.
-  if (eventCliff && eventCliff.cliff.state === "EVENT_FIRED") {
-    return events({ kind: "EVENT_CLIFF", eventId: eventCliff.cliff.eventId });
-  }
+  // An event-held cliff (EVENT_HELD) no longer falls out of the template floor:
+  // it stores as a time `cliff` (the baseline, if any) plus an `event_condition`
+  // on the statement, the Carta HYBRID model. So it stays on this template path —
+  // the cliff routing above only turns away cliffs with no storable home at all
+  // (a cross-unit deferred cliff, a contradiction).
 
   const dom = ctx.vesting_day_of_month;
   const statements: VestingStatement[] = [];
   const blockers: Blocker[] = [];
-  // The contingent-start recipe lives under the one reserved `evt:start` key (set
-  // only on the contingent-start path below).
+  // The recipes externalized out-of-band: the one reserved `evt:start` key for a
+  // contingent start (set on the contingent-start path below) and a numbered
+  // `evt:<n>` per synthetic event-held cliff (minted by `mintSynthetic`).
   const sourceMap: SourceMap = {};
+  // Resolution-mode condition firings, keyed by event_id so two statements holding
+  // on the same event share one firing. Empty in the firing-blind interchange
+  // build (its cliffs carry no `firing`), which is what keeps that verdict's
+  // runtime firing-free.
+  const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
+  // Synthetic event-held cliffs: minted once per distinct rendered recipe, so two
+  // statements holding on the byte-identical event side share one id and one
+  // source-map entry.
+  const synthByDef = new Map<string, string>();
+  let synthOrdinal = 0;
+  const mintSynthetic = (expr: VestingNodeExpr): string => {
+    const definition = stringifyVestingNodeExpr(expr);
+    let eventId = synthByDef.get(definition);
+    if (eventId === undefined) {
+      eventId = syntheticEventId(++synthOrdinal);
+      synthByDef.set(definition, eventId);
+      sourceMap[eventId] = { definition };
+    }
+    return eventId;
+  };
+  // Record one condition firing per event_id (multiple statements may hold on the
+  // same event). A later collision on the same id at a different date can't arise
+  // from lowering — the same event resolves once — so the first wins.
+  const recordFiring = (eventId: string, date: OCTDate): void => {
+    if (!eventFirings.some((f) => f.event_id === eventId))
+      eventFirings.push({ event_id: eventId, date });
+  };
   // Core dates are plain ISO strings (OCTDate); advanceCursor returns the same. On
   // the contingent path startDate is the sentinel; on the dated path it's the
   // hoisted real date the cursor chains off.
@@ -728,8 +753,43 @@ export const buildTemplate = (
       }
     }
 
+    // The time `cliff` field — present on a plain time cliff (RESOLVED) and on the
+    // time baseline of an event-held cliff (EVENT_HELD with a baseline arm).
     const cliff: Cliff | undefined =
-      r.cliff.state === "RESOLVED" ? r.cliff.cliff : undefined;
+      r.cliff.state === "RESOLVED"
+        ? r.cliff.cliff
+        : r.cliff.state === "EVENT_HELD"
+          ? r.cliff.cliff
+          : undefined;
+
+    // The event hold. A bare event side uses its real id; a richer one mints a
+    // synthetic recipe. In resolution mode the resolved firing rides into
+    // runtime.eventFirings so core.compile can fold at max(cliff date, firing).
+    let event_condition: { event_id: string } | undefined;
+    if (r.cliff.state === "EVENT_HELD") {
+      const eventId =
+        r.cliff.event.kind === "bare"
+          ? r.cliff.event.eventId
+          : mintSynthetic(r.cliff.event.expr);
+      event_condition = { event_id: eventId };
+      if (r.cliff.firing !== undefined) {
+        recordFiring(eventId, r.cliff.firing);
+      } else {
+        // The hold is still in force (firing-blind, or the event hasn't fired).
+        // Disclose it on the template verdict's blocker list so resolution.pending
+        // reflects the held grid — the projection itself is empty until it fires.
+        // We carry the event side's OWN blockers (set on the cliff when unfired):
+        // for a bare side that's `EVENT_NOT_YET_OCCURRED(real id)`; for a synthetic
+        // side it names the real underlying events (`a`/`b`), never the minted
+        // `evt:<n>` — pushing the synthetic id here would leak an internal name to
+        // MCP/CLI consumers. Pushing nothing would silently hide a held grant (the
+        // template arm has no symbolic-installment fallback), so the carried
+        // blockers are the only disclosure that the grid is held. The interchange
+        // build is firing-blind and never reads these, so this stays
+        // firing-invariant.
+        blockers.push(...(r.cliff.blockers ?? []));
+      }
+    }
 
     statements.push({
       order: i + 1,
@@ -739,11 +799,16 @@ export const buildTemplate = (
       period_type: type,
       percentage: r.percentage,
       ...(cliff ? { cliff } : {}),
+      ...(event_condition ? { event_condition } : {}),
     });
   }
 
   const runtime: VestingRuntime = {
     ...(startDate !== undefined ? { startDate } : {}),
+    // The resolution-mode condition firings (empty firing-blind, which keeps the
+    // interchange runtime firing-free). core.compile reads them to place each
+    // event hold's fold.
+    ...(eventFirings.length > 0 ? { eventFirings } : {}),
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
     // onto grantDate. Core's compile applies this when runtime.grantDate is set.
     ...(ctx.grantDate ? { grantDate: ctx.grantDate } : {}),

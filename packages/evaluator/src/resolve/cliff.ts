@@ -1,19 +1,25 @@
-// Lower a DSL cliff (`VestingNodeExpr`) onto core's time-based `Cliff`.
+// Lower a DSL cliff (`VestingNodeExpr`) onto core's storable forms: a time-based
+// `Cliff` (the Carta time baseline) and/or an `event_condition` (the event hold).
 //
-// Resolve the cliff expression against runtime (reusing the selector layer, with
-// the vesting start overlaid so `vestingStart`-relative cliffs resolve), then
-// express it as `{ length, period_type, percentage }`:
+// An event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT ipo)`)
+// stores at a different joint than vestlang writes it: the time baseline lands in
+// the readable `cliff` field, and the event hold lands in `event_condition` — a
+// dated tranche carrying an event condition, Carta's HYBRID model. So lowering a
+// `LATER OF` cliff partitions its arms: time/date arms feed the `cliff` field,
+// event-referencing arms feed `event_condition`. A single bare `EVENT e` uses its
+// real id; any richer event side (multiple events, an offset, a gate) collapses to
+// one synthetic event whose recipe is re-resolved on reload.
+//
+// A pure time cliff lowers to `{ length, period_type, percentage }`:
 //   - the duration is measured from the statement anchor to the resolved cliff
 //     date, in the statement's period_type when that lands exactly, else in DAYS
 //     (always exact, so the lowered cliff reproduces the same date);
 //   - the percentage is the proportional pre-cliff share m/N (DSL cliffs are
 //     always proportional; non-proportional cliffs arrive only via OCF data).
 //
-// A bare event cliff (`CLIFF EVENT "ipo"`) is not a `cliff` field; Carta has no
-// event anchor on the cliff. It's reported (with its firing, if any) so the
-// classifier (4b) can route it structurally: a fired event cliff flattens to
-// dated events, an unfired one keeps the whole grid pending. An unresolved
-// cliff is reported with blockers.
+// EARLIER OF cliffs are deliberately NOT decomposed here — an `EARLIER OF` is
+// acceleration (a ceiling, no Carta home), so it keeps its existing time-cliff /
+// unresolved behaviour and never grows an `event_condition`.
 
 import type {
   Blocker,
@@ -26,37 +32,54 @@ import type {
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/core";
 import { fracReduce } from "@vestlang/utils";
-import { eventBaseId, isGatedNode, systemAnchorOffset } from "@vestlang/walk";
+import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../evaluate/selectors.js";
-import {
-  isPickedPartial,
-  isPickedResolved,
-  pickedDate,
-} from "../evaluate/utils.js";
+import { pickedDate } from "../evaluate/utils.js";
 import type { PickReturn } from "../evaluate/utils.js";
 import {
   isVestingStartPlaceholder,
   type CliffEvaluationContext,
 } from "../evaluate/vestingNode/vestingBase.js";
 
+// How the event side of a held cliff names its `event_condition`.
+//   - `bare`:      a single real `EVENT e`; the template references `e` directly
+//                  and the SoR already knows its firing (no sidecar entry).
+//   - `synthetic`: anything richer — multiple events, an offset, a gate. lower.ts
+//                  mints one `evt:<n>` for it (deduped by rendered recipe) and
+//                  stores the rendered `expr` in the sidecar so a reload
+//                  re-resolves it (→ max of the event arms, the gated date, …).
+type EventSide =
+  | { kind: "bare"; eventId: string }
+  | { kind: "synthetic"; expr: VestingNodeExpr<"VESTING_START"> };
+
 export type LoweredCliff =
   | { state: "NONE" }
   | { state: "RESOLVED"; cliff: Cliff }
-  // The two event-anchored states below are the deliberate floor, not a stub. The
-  // engine can already place an event cliff (classify.ts feeds EVENT_FIRED through
-  // the proportional grid kernel), but canonical's Cliff is duration-only by
-  // choice: whether the storable interchange may hold an event cliff is an open
-  // product question (#255). Until it's settled these route to "unrepresentable"
-  // rather than into a template — read them as gated, not unfinished.
-  // Event-anchored cliff whose event is on record. `effectiveAt` is where the
-  // cliff lands — the firing shifted by any offsets on the cliff anchor (`CLIFF
-  // EVENT ipo + 1 month` lands a month after the firing). The record carries the
-  // date so downstream routing never has to re-consult the events map.
-  | { state: "EVENT_FIRED"; eventId: string; effectiveAt: OCTDate }
-  // Event-anchored cliff still waiting on its event. No date yet — fired-ness is
-  // the state, not an absent field, so routing can't quietly treat an unfired
-  // cliff as no cliff.
-  | { state: "EVENT_PENDING"; eventId: string }
+  // An event-held cliff. The grid is held until the event fires; the storable
+  // form is the optional time `cliff` (the Carta baseline) plus the `event`
+  // hold. In resolution mode the resolved firing rides on `firing` (and the time
+  // baseline's date, if any, on `cliffDate`) so the projection can fold at
+  // max(cliffDate, firing); the interchange (firing-blind) build leaves both unset
+  // and projects nothing.
+  | {
+      state: "EVENT_HELD";
+      // The time baseline arm, lowered as an ordinary duration cliff. Absent for a
+      // bare `CLIFF EVENT e` (no time side at all).
+      cliff?: Cliff;
+      // The resolved date of the time baseline (the floor in the max). Present
+      // whenever `cliff` is — they come from the same arm.
+      cliffDate?: OCTDate;
+      event: EventSide;
+      // The resolved condition firing (resolution mode, event fired). Undefined
+      // when firing-blind or still pending.
+      firing?: OCTDate;
+      // The event side's own pending blockers, set only while the hold is unfired
+      // (no `firing`). buildTemplate discloses the hold off these so the held grid
+      // names the REAL underlying events (`a`/`b`), never the minted synthetic id —
+      // an `evt:<n>` would leak an internal name out to MCP/CLI consumers. Omitted
+      // (and unread) once fired.
+      blockers?: Blocker[];
+    }
   // A pending cliff the renderer reproduces without re-resolving. `shape` carries
   // the render variance (only the unresolved renderer branches on it):
   //   - `symbolic`: no placeable grid, so the tranches are start-relative.
@@ -65,50 +88,32 @@ export type LoweredCliff =
   //   - `dated-floor`: a partial `LATER OF` whose `floor` is the resolved branch's
   //     date — the lump can only move later than that lower bound, so every
   //     pre-cliff tranche folds onto it.
-  // `eventId` is event identity that survived a gate (a pending BEFORE/AFTER gate
-  // on `CLIFF EVENT x ...`): identity only, read by the storable-reason scan so a
-  // gated event cliff still reports "no schema home, ever" (EVENT_CLIFF) rather
-  // than "can't be placed yet" (DEFERRED_CLIFF). It rides only the `symbolic` and
-  // `dated` shapes — a `floor` comes only from a combinator (`NODE_LATER_OF`),
-  // which has no event id, so a floor never coexists with one.
+  // Used only for a non-event cliff that can't be placed yet (a cross-unit
+  // duration on the deferred path). An event-held cliff routes to EVENT_HELD even
+  // when pending — the hold is the state, never an absent field.
   | {
       state: "UNRESOLVED";
       blockers: Blocker[];
       shape:
-        | { kind: "symbolic"; eventId?: string }
-        | { kind: "dated"; eventId?: string }
+        | { kind: "symbolic" }
+        | { kind: "dated" }
         | { kind: "dated-floor"; floor: OCTDate };
     }
   // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
   // are already ImpossibleBlocker[], so no cast is needed when it's produced.
   | { state: "IMPOSSIBLE"; blockers: ImpossibleBlocker[] };
 
-// A gate verdict's UNRESOLVED shape is only ever `dated` or `symbolic` — the gate
-// path has no resolved branch to fold from, so it never produces `dated-floor`.
-// Naming that narrower type lets the call sites stamp an event id onto the shape
-// without TS fearing a `{ dated-floor, eventId }` phantom.
-type GateUnresolved = {
-  state: "UNRESOLVED";
-  blockers: Blocker[];
-  shape:
-    | { kind: "symbolic"; eventId?: string }
-    | { kind: "dated"; eventId?: string };
-};
-
-// The verdict a BEFORE/AFTER gate forces on a cliff, read off the cliff
+// The verdict a BEFORE/AFTER gate forces on a non-event cliff, read off the cliff
 // expression's resolution: a violated gate kills it (IMPOSSIBLE), a still-pending
-// gate holds it (UNRESOLVED), a satisfied gate clears (undefined) and the caller
-// proceeds with its own lowering. Both cliff lowering paths route their gate
-// through here so the violated/pending/satisfied split can't drift between them —
-// that drift was #113/#116. The caller supplies `dated` (is the grid placeable
-// yet?) and an optional blocker filter (the deferred path drops the vestingStart
-// placeholder, which it reports on the start, not the cliff).
+// gate holds it (UNRESOLVED with the gate's blockers), a satisfied gate clears
+// (undefined) and the caller proceeds. Only reached for an event-FREE gated cliff
+// on the deferred path — an event-referencing gate rides the event_condition path
+// instead, where the recipe captures the gate verbatim.
 const gateVerdict = (
   res: PickReturn<VestingNode>,
-  dated: boolean,
   filter: (b: Blocker[]) => Blocker[] = (b) => b,
 ):
-  | GateUnresolved
+  | { state: "UNRESOLVED"; blockers: Blocker[]; shape: { kind: "symbolic" } }
   | Extract<LoweredCliff, { state: "IMPOSSIBLE" }>
   | undefined => {
   if (res.type === "IMPOSSIBLE")
@@ -124,10 +129,19 @@ const gateVerdict = (
     : {
         state: "UNRESOLVED",
         blockers: filter(pending),
-        // The gate path never yields a floor (no resolved branch to fold from)
-        // and never sets eventId itself — the two call sites stamp it on.
-        shape: dated ? { kind: "dated" } : { kind: "symbolic" },
+        shape: { kind: "symbolic" },
       };
+};
+
+/** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements
+ *  and rehydrate. Used to carry the unfired event side's real-event blockers onto
+ *  an EVENT_HELD record (so the hold discloses on the real events, not a synthetic
+ *  id). */
+const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
+  if (res.type === "PICKED") {
+    return res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
+  }
+  return res.blockers;
 };
 
 // Count the grid occurrences whose vesting date falls at or before `cliffDate`,
@@ -173,16 +187,110 @@ const measureDuration = (
   return { length: daysBetween(anchor, cliffDate), period_type: "DAYS" };
 };
 
+// Build the `{ length, period_type, percentage }` time cliff for a resolved date,
+// or undefined when that date has no effect (at/before the start, or before the
+// first installment). Shared by the bare time cliff and the time arm of a held
+// `LATER OF` — both want the identical baseline.
+const timeCliffAt = (
+  cliffDate: OCTDate,
+  anchor: OCTDate,
+  origin: OCTDate,
+  periodType: PeriodType,
+  period: number,
+  occurrences: number,
+  dom: VestingDayOfMonth,
+): Cliff | undefined => {
+  if (!gt(cliffDate, anchor)) return undefined;
+  const m = preCliffCount(
+    cliffDate,
+    anchor,
+    origin,
+    period,
+    periodType,
+    dom,
+    occurrences,
+  );
+  if (m === 0) return undefined;
+  const { length, period_type } = measureDuration(
+    anchor,
+    cliffDate,
+    periodType,
+    dom,
+  );
+  return {
+    length,
+    period_type,
+    percentage: fracReduce({ numerator: m, denominator: occurrences }),
+  };
+};
+
+// A `LATER OF`'s arms, or undefined when `expr` isn't one. The cliff decomposition
+// only opens a top-level `LATER OF`; an `EARLIER OF` (acceleration) is left whole.
+const laterOfArms = (
+  expr: VestingNodeExpr<"VESTING_START">,
+): VestingNodeExpr<"VESTING_START">[] | undefined =>
+  expr.type === "NODE_LATER_OF" ? [...expr.items] : undefined;
+
+// Does this cliff lower to an `event_condition`? Yes for an event-referencing leaf
+// or a top-level `LATER OF` (a hold, or a time baseline + a hold). NOT for a
+// top-level `EARLIER OF`: that's acceleration — a ceiling with no Carta home — so
+// it keeps its plain time-cliff lowering and never grows an event hold (AC 9). A
+// non-event cliff is no, trivially.
+const decomposesToEventCondition = (
+  expr: VestingNodeExpr<"VESTING_START">,
+): boolean => expr.type !== "NODE_EARLIER_OF" && referencesEvent(expr);
+
+// Wrap one or more arms back into a single expression: a lone arm stands on its
+// own, several become a `LATER OF` (max of them). Used to rebuild the time side
+// and the event side as standalone expressions the rest of the lowering resolves.
+const joinLaterOf = (
+  arms: VestingNodeExpr<"VESTING_START">[],
+): VestingNodeExpr<"VESTING_START"> =>
+  arms.length === 1
+    ? arms[0]
+    : {
+        type: "NODE_LATER_OF",
+        items: arms as [
+          VestingNodeExpr<"VESTING_START">,
+          VestingNodeExpr<"VESTING_START">,
+          ...VestingNodeExpr<"VESTING_START">[],
+        ],
+      };
+
+// The event side of a held cliff, classified for `event_condition`. A single bare
+// `EVENT e` (leaf node, no offsets, no gate) keeps its real id; anything richer —
+// more than one event arm, an offset, or a gate — collapses to one synthetic
+// recipe that re-resolves to the max/gated date on reload.
+const classifyEventSide = (
+  eventArms: VestingNodeExpr<"VESTING_START">[],
+): EventSide => {
+  if (eventArms.length === 1) {
+    const only = eventArms[0];
+    const bareId = eventBaseId(only);
+    // Bare = a leaf EVENT node (eventBaseId is non-undefined only there) with no
+    // offsets and no gate. The `type === "NODE"` re-check lets TS read
+    // `offsets`/`condition` — eventBaseId already guarantees it, but doesn't carry
+    // the narrowing out.
+    if (
+      bareId !== undefined &&
+      only.type === "NODE" &&
+      !isGatedNode(only) &&
+      only.offsets.length === 0
+    ) {
+      return { kind: "bare", eventId: bareId };
+    }
+  }
+  return { kind: "synthetic", expr: joinLaterOf(eventArms) };
+};
+
 // `origin` is the date the whole chain started from, used only to count how many
 // grid occurrences fall on/before the cliff. Every MONTHS segment grids on the
 // origin's day-of-month — the grant's one vesting day — not on the handoff its
 // anchor landed on (mid-month off a DAYS run, or clamped onto a short month like
 // Feb 28 off a Jan 31 head). So the count has to be taken against that same grid,
-// the one core later partitions the lump on. If the two disagreed, the percentage
-// baked in here wouldn't match how core splits the tranches and the boundary
-// tranche would be misallocated. It defaults to `anchor`, so a head or any
-// non-chained statement (its own origin) is unaffected. The cliff *date* below is
-// left origin-blind on purpose: a cliff is a fixed duration from this segment's
+// the one core later partitions the lump on. It defaults to `anchor`, so a head or
+// any non-chained statement (its own origin) is unaffected. The cliff *date* below
+// is left origin-blind on purpose: a cliff is a fixed duration from this segment's
 // anchor, so it lands wherever that duration puts it regardless of which day the
 // grid anchors to.
 export const lowerCliff = (
@@ -196,107 +304,40 @@ export const lowerCliff = (
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
-  // Resolve the cliff expression once, overlaying the vesting start so a
-  // `vestingStart`-relative cliff (e.g. "+12 months") resolves. Both the
-  // event-cliff routing just below and the time-based lowering further down read
-  // this single resolution.
+  // Overlay the vesting start so a `vestingStart`-relative arm (e.g. "+12 months")
+  // resolves. Both the event-cliff decomposition and the time-based lowering read
+  // resolutions taken under this overlay.
   const overlayCtx: CliffEvaluationContext = { ...ctx, vestingStart: anchor };
-  const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
 
-  // A genuinely event-anchored cliff has no time-based cliff field, so it's
-  // reported as EVENT_FIRED / EVENT_PENDING for the classifier (4b) to route on. A
-  // gate on it still decides whether the cliff stands: a violated or still-pending
-  // gate routes it away (UNRESOLVED), exactly as a non-event cliff that resolves
-  // impossible/pending does — the gate is enforced by the shared evaluator above,
-  // never by re-deciding here. (This used to return EVENT unconditionally, so a
-  // gate on an event cliff was silently dropped — #113.)
-  const evId = eventBaseId(cliffExpr);
-  if (evId) {
-    // The gate decides whether the event cliff stands. A violated gate kills it; a
-    // still-pending gate keeps it unresolved (with a `dated` shape — the grid is
-    // placeable from the resolved start); a satisfied gate clears and falls through
-    // to the bare event cliff below. Carrying the gate here is what stops it being
-    // dropped (#113). A pending gate holds the cliff but doesn't change what it's
-    // anchored to, so the event id rides on the UNRESOLVED record's shape for the
-    // storable-reason scan. A violated gate passes through untouched: a dead cliff
-    // is a contradiction, not an event cliff.
-    if (isGatedNode(cliffExpr)) {
-      const gate = gateVerdict(res, true);
-      if (gate)
-        // Stamp the event id onto the gate's shape so the storable-reason scan
-        // still reads EVENT_CLIFF. The gate path produces only `dated`/`symbolic`
-        // shapes, both of which carry an optional eventId.
-        return gate.state === "UNRESOLVED"
-          ? { ...gate, shape: { ...gate.shape, eventId: evId } }
-          : gate;
-    }
-    // The shared resolution above already applied the anchor's offsets to the
-    // firing, so the resolved date IS the cliff's effective spot. Reading the raw
-    // events map here instead would drop the offset and land the lump a period
-    // early. The expression resolves exactly when the event has fired (a pending
-    // gate was routed away just above).
-    if (!isPickedResolved(res))
-      return { state: "EVENT_PENDING", eventId: evId };
-    const effectiveAt = res.meta.date;
-    // A fired event cliff is proportional: its lump is whatever the grid has
-    // accrued by the effective date. When nothing has — the date sits at/before
-    // the start, or after it but ahead of the first installment — the lump is
-    // empty and there is no cliff. Mirrors the duration path's two no-effect
-    // guards below, keyed on the effective date (firing plus any cliff offset),
-    // so a MINUS offset that drags the date before the first installment also
-    // normalizes away while a PLUS offset that lands on/after it stays real.
-    if (
-      preCliffCount(
-        effectiveAt,
-        anchor,
-        origin,
-        period,
-        periodType,
-        ctx.vesting_day_of_month,
-        occurrences,
-      ) === 0
-    )
-      return { state: "NONE" };
-    return { state: "EVENT_FIRED", eventId: evId, effectiveAt };
+  // An event-referencing cliff decomposes into a time baseline + an event hold.
+  // `referencesEvent` descends, so it sees an event hiding in a LATER OF arm or a
+  // gate reference (the leaf-only `eventBaseId` never would). A top-level EARLIER OF
+  // is excluded — acceleration has no Carta home, so it keeps its existing
+  // time-cliff/commit behaviour and never grows an event_condition (AC 9).
+  if (decomposesToEventCondition(cliffExpr)) {
+    return lowerEventCliff(
+      cliffExpr,
+      anchor,
+      origin,
+      periodType,
+      period,
+      occurrences,
+      ctx,
+      overlayCtx,
+    );
   }
 
-  // A violated gate (or any contradictory cliff) is dead.
+  // A non-event cliff. A violated gate (or any contradictory cliff) is dead.
+  const res = evaluateVestingNodeExpr(cliffExpr, overlayCtx);
   if (res.type === "IMPOSSIBLE")
     return { state: "IMPOSSIBLE", blockers: res.blockers };
 
   // A cliff date is known when the expression fully resolves OR an EARLIER_OF cliff
-  // committed to its floor (`pickedDate` covers both). A partial LATER_OF (e.g.
-  // `LATER OF(+12 months, EVENT ipo)` with ipo unfired) does NOT yield a date here:
-  // its resolved branch is an upper bound the pending event could push later, so
-  // reporting it as RESOLVED would over-vest — it stays UNRESOLVED below. An
-  // EARLIER_OF commit is the mirror: its branch is a lower bound (the latest the
-  // cliff could land), so committing to it is the safe floor. The commit is silent
-  // here by design: a cliff is date/duration-only, with no slot to hold an event,
-  // so an EARLIER_OF *cliff* carries no absence disclosure (the #251 AC6 carve-out).
-  // The start-anchor disclosure (#325) does not extend to the cliff; the floor and
-  // projection are correct.
-  const cliffDate: OCTDate | undefined = pickedDate(res);
-
+  // committed to its floor (`pickedDate` covers both). A partial LATER_OF without
+  // an event arm can't arise (the event branch above claims every event-referencing
+  // cliff), so what's left here is an ordinary date/duration cliff.
+  const cliffDate = pickedDate(res);
   if (!cliffDate) {
-    // Pending cliff. The grid is placeable from the resolved start, so the render
-    // shape is `dated` — the renderer can lay the tranches and only the cliff
-    // lump's exact spot is still open. A partial LATER_OF additionally carries its
-    // resolved branch's date as the fold floor (`dated-floor`): the lump can only
-    // move later than that lower bound, so every pre-cliff tranche sits at it.
-    //
-    // A partial pick can only arise from a `NODE_LATER_OF` with at least one
-    // resolved arm (partial emit is LATER_OF-only), so its `pivot` is always the
-    // latest settled arm's date — exactly the floor. We read it straight off the
-    // pick the selector already produced, no re-resolution.
-    if (isPickedPartial(res)) {
-      return {
-        state: "UNRESOLVED",
-        blockers: res.meta.blockers,
-        shape: { kind: "dated-floor", floor: res.pivot },
-      };
-    }
-    // A resolved pick set `cliffDate` above, so what's left here is a bare
-    // UNRESOLVED node (no resolved branch, hence no floor).
     return {
       state: "UNRESOLVED",
       blockers: res.type === "UNRESOLVED" ? res.blockers : [],
@@ -304,36 +345,96 @@ export const lowerCliff = (
     };
   }
 
-  // Cliff at/before the start has no effect.
-  if (!gt(cliffDate, anchor)) return { state: "NONE" };
-
-  const dom: VestingDayOfMonth = ctx.vesting_day_of_month;
-
-  // Proportional pre-cliff share: occurrences whose grid date is <= cliffDate.
-  const m = preCliffCount(
+  const dom = ctx.vesting_day_of_month;
+  const cliff = timeCliffAt(
     cliffDate,
     anchor,
     origin,
+    periodType,
     period,
-    periodType,
-    dom,
     occurrences,
-  );
-  if (m === 0) return { state: "NONE" };
-
-  const { length, period_type } = measureDuration(
-    anchor,
-    cliffDate,
-    periodType,
     dom,
   );
+  return cliff ? { state: "RESOLVED", cliff } : { state: "NONE" };
+};
+
+// Lower an event-referencing cliff to a time baseline + an `event_condition`. The
+// anchored path: there's a concrete `anchor`, so the time baseline (if any) can be
+// dated and the event side resolved against the world.
+const lowerEventCliff = (
+  cliffExpr: VestingNodeExpr<"VESTING_START">,
+  anchor: OCTDate,
+  origin: OCTDate,
+  periodType: PeriodType,
+  period: number,
+  occurrences: number,
+  ctx: ResolutionContext,
+  overlayCtx: CliffEvaluationContext,
+): LoweredCliff => {
+  const dom = ctx.vesting_day_of_month;
+  const arms = laterOfArms(cliffExpr);
+
+  // Partition a top-level LATER OF into event-referencing arms and time/date arms.
+  // A bare event cliff (or a gated/offset single event) isn't a LATER OF, so it's
+  // the whole expression as the single event arm with no time side.
+  const eventArms = arms ? arms.filter((a) => referencesEvent(a)) : [cliffExpr];
+  const timeArms = arms ? arms.filter((a) => !referencesEvent(a)) : [];
+
+  // The time baseline: lower the time arms as their own cliff (max of them). Its
+  // resolved date is the floor in the eventual max(cliffDate, firing).
+  let cliff: Cliff | undefined;
+  let cliffDate: OCTDate | undefined;
+  if (timeArms.length > 0) {
+    const timeRes = evaluateVestingNodeExpr(joinLaterOf(timeArms), overlayCtx);
+    const d = pickedDate(timeRes);
+    if (d !== undefined) {
+      cliff = timeCliffAt(
+        d,
+        anchor,
+        origin,
+        periodType,
+        period,
+        occurrences,
+        dom,
+      );
+      // Keep the date as the fold floor even if it has no lump effect (the firing
+      // may still land after it); only drop it when there's a real cliff to store.
+      if (cliff) cliffDate = d;
+    }
+  }
+
+  const event = classifyEventSide(eventArms);
+
+  // Resolve the event side to learn its firing (resolution mode) or its deadness.
+  // The gate (if any) is captured verbatim in the recipe, but its verdict still
+  // decides the resolution reading: a violated gate is dead, a pending one holds,
+  // a satisfied + fired one folds. Resolved here against the same overlay so a
+  // `vestingStart`-relative gate reference (rare) lines up.
+  const eventRes = evaluateVestingNodeExpr(joinLaterOf(eventArms), overlayCtx);
+
+  // A violated gate (the event fired outside its window) kills the cliff: dead, not
+  // held. Mirrors the start path, where a contradictory anchor is IMPOSSIBLE.
+  if (eventRes.type === "IMPOSSIBLE")
+    return { state: "IMPOSSIBLE", blockers: eventRes.blockers };
+
+  // Fired (and any gate satisfied) → the firing date; else the hold stands with no
+  // firing. `pickedDate` covers a resolved bare event and a fully-resolved LATER OF
+  // over events; a partial/unresolved one leaves `firing` undefined.
+  const firing = pickedDate(eventRes);
+
+  // While the hold is unfired, carry the event side's own pending blockers so
+  // buildTemplate discloses on the real events (the synthetic recipe's underlying
+  // `a`/`b`), never the minted `evt:<n>`. Only when non-empty, so a fired record is
+  // untouched.
+  const blockers = firing === undefined ? blockersOf(eventRes) : [];
+
   return {
-    state: "RESOLVED",
-    cliff: {
-      length,
-      period_type,
-      percentage: fracReduce({ numerator: m, denominator: occurrences }),
-    },
+    state: "EVENT_HELD",
+    ...(cliff ? { cliff } : {}),
+    ...(cliffDate ? { cliffDate } : {}),
+    event,
+    ...(firing ? { firing } : {}),
+    ...(blockers.length > 0 ? { blockers } : {}),
   };
 };
 
@@ -342,25 +443,18 @@ export const lowerCliff = (
  * combinator event, or a THEN tail whose chain head is still pending — where
  * there is no concrete anchor date to resolve against.
  *
- * Only a `vestingStart`-relative duration cliff in the grid's own unit is
- * derivable anchor-free: `length`/`period_type` are the offset itself, and the
- * pre-cliff share is `floor(cliffLength / step) / occurrences` — independent of
- * when the event eventually fires (a 12-month cliff on a 1-month/48 grid is
- * always 12/48 = 25%). Core's compile then applies it at the firing date,
- * reproducing exactly what the already-fired case (anchored `lowerCliff`) yields.
+ * A `vestingStart`-relative duration cliff in the grid's own unit is derivable
+ * anchor-free: `length`/`period_type` are the offset itself, and the pre-cliff
+ * share is `floor(cliffLength / step) / occurrences` — independent of when the
+ * event eventually fires (a 12-month cliff on a 1-month/48 grid is always
+ * 12/48 = 25%). Core's compile then applies it at the start date, reproducing
+ * exactly what the already-fired anchored path yields.
  *
- * Everything else needs the firing date and can't lower to a `cliff` field:
- *   - a bare event cliff (`CLIFF EVENT x`, no time-based form) keeps its
- *     event-anchoredness, lowered to EVENT_PENDING (on this path the start is
- *     pending, so the cliff's event can never have a placeable date). buildTemplate's
- *     pending-event-cliff guard still routes the statement to `unresolved` — the
- *     routing is unchanged from when this returned a bare UNRESOLVED — but the
- *     record now says *why* it's unstorable (no schema home for an event cliff)
- *     rather than collapsing to "a cliff that can't be placed yet", which is the
- *     same answer a resolved start with this cliff gets.
- *   - a cliff whose unit differs from the grid's (a months-cliff over a days-grid
- *     counts a varying number of pre-cliff occurrences depending on the anchor) is
- *     UNRESOLVED — it genuinely can't be placed until the firing is known.
+ * An event-referencing cliff still decomposes into a time baseline (any such
+ * anchor-free duration arm) + an `event_condition`. On this path the start itself
+ * is pending, so the event side is firing-blind — the condition holds and the
+ * compiler sequences the start-hold then the cliff-hold (Decision 7). Everything
+ * else (a cross-unit duration) stays UNRESOLVED until the firing date arrives.
  */
 export const lowerDeferredCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
@@ -371,73 +465,109 @@ export const lowerDeferredCliff = (
 ): LoweredCliff => {
   if (!cliffExpr) return { state: "NONE" };
 
-  const off = systemAnchorOffset(cliffExpr, "VESTING_START");
-  // Anchor-free only when the cliff is a bare `vestingStart + duration` in the
-  // grid's own unit; then length/period_type are the offset and the pre-cliff
-  // count is independent of when the start eventually fires. The shared shape-match
-  // already excludes MINUS and richer shapes; the `value <= 0` guard is this
-  // caller's own (a zero-length forward duration is no cliff here).
-  if (off && off.unit === periodType) {
-    if (off.value <= 0) return { state: "NONE" };
-    const m = Math.min(Math.floor(off.value / period), occurrences);
-    if (m === 0) return { state: "NONE" };
+  // An event-referencing cliff on a deferred start: decompose into a relative time
+  // baseline (this path expresses a `vestingStart + duration` cliff anchor-free)
+  // plus the `event_condition`. The event side is firing-blind here — the start is
+  // pending, so the firing can't be placed; the hold stands with no firing. An
+  // EARLIER OF is excluded (acceleration, AC 9), same as the anchored path.
+  if (decomposesToEventCondition(cliffExpr)) {
+    const arms = laterOfArms(cliffExpr);
+    const eventArms = arms
+      ? arms.filter((a) => referencesEvent(a))
+      : [cliffExpr];
+    const timeArms = arms ? arms.filter((a) => !referencesEvent(a)) : [];
+
+    // The time baseline, anchor-free: only a bare `vestingStart + duration` arm in
+    // the grid's own unit is derivable. A cross-unit or richer time arm can't be
+    // placed without the start, so it simply contributes no stored baseline (the
+    // condition still holds the whole grid).
+    let cliff: Cliff | undefined;
+    if (timeArms.length === 1) {
+      const rel = relativeDurationCliff(
+        timeArms[0],
+        periodType,
+        period,
+        occurrences,
+      );
+      if (rel) cliff = rel;
+    }
+
+    // The event side is firing-blind here (the start itself is pending), so the
+    // hold always stands. Resolve it anyway to carry its real-event blockers — the
+    // hold then discloses on the underlying events, not the minted synthetic id.
+    // Drop any vestingStart placeholder: that pending-ness is the start's, reported
+    // on the start, not doubled onto the cliff.
+    const eventRes = evaluateVestingNodeExpr(joinLaterOf(eventArms), ctx);
+    const blockers = blockersOf(eventRes).filter(
+      (b) => !isVestingStartPlaceholder(b),
+    );
+
     return {
-      state: "RESOLVED",
-      cliff: {
-        length: off.value,
-        period_type: off.unit,
-        percentage: fracReduce({ numerator: m, denominator: occurrences }),
-      },
+      state: "EVENT_HELD",
+      ...(cliff ? { cliff } : {}),
+      event: classifyEventSide(eventArms),
+      ...(blockers.length > 0 ? { blockers } : {}),
     };
   }
 
-  // Not derivable without the firing date (an event cliff, a cross-unit duration,
-  // or a gated cliff). There's no start anchor to lay a grid against, so it can
-  // never be `dated`.
-  const gated = isGatedNode(cliffExpr);
+  const rel = relativeDurationCliff(cliffExpr, periodType, period, occurrences);
+  if (rel) return { state: "RESOLVED", cliff: rel };
+  if (rel === null) return { state: "NONE" };
 
-  // A bare (ungated) event cliff keeps its event-anchoredness rather than
-  // flattening to a generic UNRESOLVED: it's EVENT_PENDING (no date), since a
-  // pending start means the cliff's firing can never be placed on this path.
-  // buildTemplate routes the pending event cliff to `unresolved` exactly as the
-  // old UNRESOLVED return did, but the record now reports the truer cause (no
-  // schema home for an event cliff at all). A gated event cliff is handled below —
-  // the gate's verdict carries the routing and blockers, with the event identity
-  // stamped on the record.
-  const evId = eventBaseId(cliffExpr);
-  if (evId && !gated) return { state: "EVENT_PENDING", eventId: evId };
+  // A non-event, non-derivable cliff. A gated one surfaces its gate's verdict (so a
+  // real condition the grant depends on is disclosed even while the start is
+  // pending), dropping the vestingStart placeholder — that pending-ness is the
+  // start's, reported on the start, not doubled onto the cliff. An ungated one (a
+  // cross-unit duration) simply stays unresolved until the firing date arrives.
+  if (isGatedNode(cliffExpr)) {
+    const res = evaluateVestingNodeExpr(cliffExpr, ctx);
+    const gate = gateVerdict(res, (bs) =>
+      bs.filter((b) => !isVestingStartPlaceholder(b)),
+    );
+    if (gate) return gate;
+  }
 
-  // An ungated, non-event non-derivable cliff (a cross-unit duration) has no gate
-  // to report; it stays unresolved until the firing date arrives. No start anchor
-  // means no placeable grid, so its shape is fully symbolic.
-  if (!gated)
-    return { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } };
+  return { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } };
+};
 
-  // A gated cliff (including a gated *event* cliff): the gate's own verdict is the
-  // sharper answer, so surface it. Resolve the cliff with no vesting-start overlay
-  // (the subject stays pending) and report its verdict, dropping the vestingStart
-  // placeholder — that pending-ness is the start's, reported on the start, not
-  // doubled onto the cliff. A satisfied gate doesn't rescue this cliff: with no
-  // start anchor it still can't be placed, so it stays unresolved until the firing
-  // date arrives.
-  const res = evaluateVestingNodeExpr(cliffExpr, ctx);
-  const gate = gateVerdict(res, false, (bs) =>
-    bs.filter((b) => !isVestingStartPlaceholder(b)),
-  );
-  const lowered:
-    | GateUnresolved
-    | Extract<LoweredCliff, { state: "IMPOSSIBLE" }> = gate ?? {
-    state: "UNRESOLVED",
-    blockers: [],
-    shape: { kind: "symbolic" },
+// A bare `vestingStart + duration` cliff in the grid's own unit, lowered
+// anchor-free. Returns the Cliff, `null` when the duration has no effect (zero
+// length, or fewer than one step), or `undefined` when the shape isn't derivable
+// without the firing (a cross-unit duration, an offset/gate the shape-match
+// excludes). The shared shape-match already excludes MINUS and richer shapes.
+const relativeDurationCliff = (
+  expr: VestingNodeExpr<"VESTING_START">,
+  periodType: PeriodType,
+  period: number,
+  occurrences: number,
+): Cliff | null | undefined => {
+  const off = systemAnchorOffsetLocal(expr);
+  if (!off || off.unit !== periodType) return undefined;
+  if (off.value <= 0) return null;
+  const m = Math.min(Math.floor(off.value / period), occurrences);
+  if (m === 0) return null;
+  return {
+    length: off.value,
+    period_type: off.unit,
+    percentage: fracReduce({ numerator: m, denominator: occurrences }),
   };
-  // Same identity rule as the anchored path: a gated *event* cliff keeps its
-  // event id on the UNRESOLVED record — whether the gate is pending or cleared
-  // without an anchor to place against. Only a violated gate (IMPOSSIBLE)
-  // drops it: a dead cliff isn't an event cliff anymore. The deferred path's
-  // shapes are always `symbolic` (no anchor to date a grid against, no floor),
-  // both of which carry an optional eventId.
-  return lowered.state === "UNRESOLVED" && evId !== undefined
-    ? { ...lowered, shape: { ...lowered.shape, eventId: evId } }
-    : lowered;
+};
+
+// The lone positive `vestingStart + duration` offset, or undefined for any richer
+// shape. Inlined rather than reaching for `systemAnchorOffset` so the cliff
+// lowering keeps one shape-match it owns.
+const systemAnchorOffsetLocal = (
+  expr: VestingNodeExpr<"VESTING_START">,
+): { value: number; unit: PeriodType } | undefined => {
+  if (
+    expr.type !== "NODE" ||
+    expr.base.type !== "VESTING_START" ||
+    expr.condition !== undefined ||
+    expr.offsets.length !== 1
+  )
+    return undefined;
+  const off = expr.offsets[0];
+  // `off.unit` is a PeriodTag (DAYS/MONTHS), a subset of PeriodType — the cliff's
+  // period_type widens to it safely.
+  return off.sign === "PLUS" ? { value: off.value, unit: off.unit } : undefined;
 };

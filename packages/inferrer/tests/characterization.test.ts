@@ -24,11 +24,6 @@ const renderReason = (r: NonTemplateReason): string => {
       );
     case "MULTIPLE_START_ORIGINS":
       return r.detail ?? "More than one distinct start origin on one grant.";
-    case "EVENT_CLIFF":
-      return (
-        r.detail ??
-        `Event-anchored cliff on "${r.eventId}" has no template form.`
-      );
     case "EVENT_CHAINED_TAIL":
       return (
         r.detail ??

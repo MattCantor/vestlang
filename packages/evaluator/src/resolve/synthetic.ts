@@ -16,6 +16,13 @@ const SYNTHETIC_EVENT_ID_PREFIX = "evt:";
 // a fixed name rather than a numbered scheme.
 export const SYNTHETIC_START_EVENT_ID = `${SYNTHETIC_EVENT_ID_PREFIX}start`;
 
+// A numbered synthetic id, `evt:<n>`. Cliffs are plural (one per statement), so an
+// event-held cliff whose event side is richer than a bare id mints one of these,
+// deduped by rendered recipe (lower.ts owns the counter + map). The single-key
+// `evt:start` scheme suffices only for the one hoisted start.
+export const syntheticEventId = (ordinal: number): string =>
+  `${SYNTHETIC_EVENT_ID_PREFIX}${ordinal}`;
+
 // A synthetic id is one of the reserved forms: the start key `evt:start`, or a
 // numbered `evt:<n>` (a digits-only suffix). A user-authored event name never
 // matches (the Ident rule excludes the colon), and — closing AC 8 — neither does
@@ -24,7 +31,7 @@ export const SYNTHETIC_START_EVENT_ID = `${SYNTHETIC_EVENT_ID_PREFIX}start`;
 // (`evt:<n>` is no longer minted — starts route through `evt:start` — but the
 // guard still recognizes it so an artifact carrying one stays loadable.) Module-
 // local: the only consumer is the partition scan below.
-const isSyntheticEventId = (id: string): boolean => {
+export const isSyntheticEventId = (id: string): boolean => {
   if (!id.startsWith(SYNTHETIC_EVENT_ID_PREFIX)) return false;
   const suffix = id.slice(SYNTHETIC_EVENT_ID_PREFIX.length);
   return suffix === "start" || /^[0-9]+$/.test(suffix);
@@ -67,26 +74,30 @@ const firstNonReservedKey = (sourceMap: SourceMap): string | undefined =>
 // Save-path tripwire: assert the partition + the contingent-start marker invariant
 // hold before persisting.
 //
-// Two halves, both checkable only on save, where the source map and runtime are
-// complete by construction (lower.ts just produced them):
+// Three halves, all checkable only on save, where the template, runtime, and
+// source map are complete by construction (lower.ts just produced them):
 //   (a) every source-map key is a reserved synthetic id;
 //   (b) the contingent-start marker is consistent: a CONTINGENT_START_SENTINEL
 //       startDate has a matching `evt:start` recipe, and an `evt:start` recipe has
 //       the sentinel startDate. One without the other is a damaged artifact (the
-//       sentinel would project nothing / the recipe could never be applied).
+//       sentinel would project nothing / the recipe could never be applied);
+//   (c) no statement's `event_condition` points at a reserved `evt:<n>` id with no
+//       matching source-map recipe (a dangling synthetic pointer — the recipe was
+//       lost, so the reload could never re-resolve the hold). This is the original
+//       pre-#372 masquerade check, retargeted from the (now DATE-only) start slot
+//       to the cliff's `event_condition`. Dangling-pointer only: an orphan recipe
+//       no statement references is NOT a violation — the reverse direction is
+//       deliberately unenforced.
 //
-// (Half (b) replaces the old "no template EVENT statement masquerades as a
-// synthetic" check, dead now that the canonical base is DATE-only.)
-//
-// A freshly-lowered artifact can only violate this through a vestlang lowering
+// A freshly-lowered artifact can only violate any half through a vestlang lowering
 // regression — no user DSL can trigger it (Ident excludes the colon; the start
-// recipe always mints `evt:start`). So a violation is a programmer error: this
-// throws a plain `Error` (NOT the tagged namespace error), which the persist
-// orchestrator does not catch — it propagates as the bug it is rather than
-// dressing up as a user refusal. The two halves carry distinct, stable message
-// substrings so a caller can tell them apart.
+// recipe always mints `evt:start`; cliff synthetics always mint a recipe alongside
+// the id). So a violation is a programmer error: this throws a plain `Error` (NOT
+// the tagged namespace error), which the persist orchestrator does not catch — it
+// propagates as the bug it is rather than dressing up as a user refusal. The three
+// halves carry distinct, stable message substrings so a caller can tell them apart.
 export const assertSavePartition = (
-  _template: VestingScheduleTemplate,
+  template: VestingScheduleTemplate,
   runtime: StoredTerms,
   sourceMap: SourceMap,
 ): void => {
@@ -105,6 +116,19 @@ export const assertSavePartition = (
         ? `Persist invariant violated: the contingent-start sentinel is present but the "${SYNTHETIC_START_EVENT_ID}" recipe is missing.`
         : `Persist invariant violated: an "${SYNTHETIC_START_EVENT_ID}" recipe is present but the startDate is not the contingent-start sentinel.`,
     );
+  }
+
+  for (const stmt of template.statements) {
+    const eventId = stmt.event_condition?.event_id;
+    if (
+      eventId !== undefined &&
+      isSyntheticEventId(eventId) &&
+      !Object.hasOwn(sourceMap, eventId)
+    ) {
+      throw new Error(
+        `Persist invariant violated: statement event_condition "${eventId}" in the reserved namespace has no source-map recipe.`,
+      );
+    }
   }
 };
 

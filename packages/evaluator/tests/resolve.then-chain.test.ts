@@ -621,18 +621,25 @@ describe("resolveToCore — pending-head chain, tail with an event cliff (R2-B3)
     }),
   ];
 
-  it("keeps both claims and the head's blocker once; the cliff adds no blocker", () => {
+  it("→ compound template: contingent start + the tail's event_condition", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
-    expect(total(result.installments)).toBe(100000);
-    // Parity with a non-chained pending start carrying the same cliff: the start
-    // gates everything before the cliff can matter, so blockers stay the head's
-    // alone — the cliff's identity surfaces in the storable reason instead.
-    expect(result.blockers).toEqual([
-      { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
-    ]);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    // The chain is headed on one contingent event start; the tail carries the
+    // cliff's event_condition (fda). Both halves store.
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.template.statements[1].event_condition).toEqual({
+      event_id: "fda",
+    });
+    expect(result.pendingInstallments.reduce((s, i) => s + i.amount, 0)).toBe(
+      100000,
+    );
+    // Both contingencies are disclosed.
+    const pendingEvents = result.blockers.flatMap((b) =>
+      b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
+    );
+    expect(pendingEvents).toContain("ipo");
+    expect(pendingEvents).toContain("fda");
   });
 });
 
@@ -655,18 +662,19 @@ describe("resolveToCore — pending-head chain, tail cliff gate is disclosed (R2
   ];
 
   it("surfaces the gate blocker alongside the head's, each once", () => {
+    // The tail's gate is on a `vestingStart + 6 months` time cliff (no event), so
+    // it does NOT become an event_condition — it's a deferred gated time cliff that
+    // can't be placed without the start, so it keeps the program unresolved and
+    // surfaces its gate's condition (unchanged from pre-#255).
     const result = resolveToCore(program, ctxInput());
     expect(result.kind).toBe("unresolved");
     if (result.kind !== "unresolved") return;
-    // Before the fix the gate vanished with the zeroed cliff record.
     expect(
       result.blockers.filter((b) => b.type === "EVENT_NOT_YET_OCCURRED"),
     ).toEqual([{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }]);
     expect(result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(
       true,
     );
-    // The tail's lump is undated (the chain's wait lives on the schedule-level
-    // blockers asserted above); amounts are untouched.
     const tailLump = result.installments[1];
     expect(tailLump.state).toBe("UNRESOLVED");
     expect(total(result.installments)).toBe(100000);
@@ -907,27 +915,25 @@ describe("resolveToCore — pending-head chain, tail gated event cliff (R2-B14)"
     then(portion(1, 2), { ...monthly12, cliff: gatedEventCliff }),
   ];
 
-  // The R2-B14 fix is interchange-reason-only; this pins that the resolution
-  // surface didn't move: both claims, the head's blocker once, and the gate's
-  // own blockers disclosed through cliffBlockers (per the R2-B3 convention).
-  it("amounts and blockers are unchanged by the reason fix", () => {
+  // Under #255 a gated EVENT cliff on the tail → a synthetic event_condition (the
+  // gate captured in its recipe), and the chain is headed on one contingent event
+  // start, so the whole thing is a COMPOUND template.
+  it("→ compound template: contingent start + a synthetic event_condition on the tail", () => {
     const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    expect(result.installments.map((i) => i.amount)).toEqual([50000, 50000]);
-    expect(total(result.installments)).toBe(100000);
-    expect(
-      result.blockers.filter(
-        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
-      ),
-    ).toHaveLength(1);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(result.template.statements[1].event_condition?.event_id).toMatch(
+      /^evt:\d+$/,
+    );
+    expect(result.pendingInstallments.reduce((s, i) => s + i.amount, 0)).toBe(
+      100000,
+    );
+    // The start's blocker is disclosed.
     expect(
       result.blockers.some(
-        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "fda",
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
-    expect(result.blockers.some((b) => b.type === "UNRESOLVED_CONDITION")).toBe(
-      true,
-    );
   });
 });

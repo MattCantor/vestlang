@@ -22,7 +22,11 @@ const DSL =
   "OVER 48 months EVERY 1 month CLIFF EVENT board";
 
 describe("partially-resolved combinator start keeps its START_PLUS cadence", () => {
-  it("projects one START_PLUS tranche per occurrence, not a single lump", () => {
+  it("projects one START_PLUS tranche per occurrence in the template's pending stream", () => {
+    // `LATER OF(gd + 12mo, EVENT ipo)` start (combinator, ipo pending) + `CLIFF
+    // EVENT board` → a COMPOUND template (a synthetic contingent start + the cliff's
+    // event_condition). The combinator start's cadence still renders as START_PLUS
+    // tranches, now in the template verdict's pending installments.
     const program = normalizeProgram(parse(DSL));
     const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
@@ -30,8 +34,8 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("unresolved");
-    if (resolution.status !== "unresolved") return;
+    expect(resolution.status).toBe("template");
+    if (resolution.status !== "template") return;
 
     expect(resolution.installments).toHaveLength(48);
     expect(
@@ -56,29 +60,28 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
   });
 });
 
-// The cliff mirror of the above: a partial `LATER OF` *cliff* (the +12mo arm
-// resolves, the event is pending) records a `dated-floor` shape whose `floor` is
-// the resolved lower bound. The unresolved renderer must fold every pre-cliff
-// tranche onto that floor — not collapse the cliff to it, and not fold onto the
-// grant date. grantDate (2025-01-01) and the floor (2026-01-01) differ here, so a
-// tranche landing on the floor proves the renderer read `shape.floor`.
-describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () => {
+// The cliff mirror of the above: `CLIFF LATER OF(vestingStart + 12mo, EVENT ipo)`
+// on a dated start now stores as an event_condition (the time baseline in `cliff`,
+// the event hold in `event_condition`). Unfired, the whole grid — including the
+// 12-month lump — is held (AC 7: the floor is the hold, not an unresolved verdict).
+// So it's a TEMPLATE that releases nothing; the held grid renders symbolically.
+describe("partial LATER OF cliff holds the whole grid (the floor is the hold)", () => {
   const DSL =
     "VEST FROM grantDate OVER 48 months EVERY 1 month " +
     "CLIFF LATER OF(vestingStart + 12 months, EVENT ipo)";
 
-  it("renders UNRESOLVED_CLIFF installments folded onto the 12-month floor", () => {
+  it("template; every share held as an UNRESOLVED_CLIFF tranche, nothing released", () => {
     const program = normalizeProgram(parse(DSL));
     const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
-      events: {}, // ipo unfired → the cliff's later arm is pending
+      events: {}, // ipo unfired → the event_condition holds
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("unresolved");
-    if (resolution.status !== "unresolved") return;
+    expect(resolution.status).toBe("template");
+    if (resolution.status !== "template") return;
 
-    // Every installment is a cliff lump waiting on the event.
+    // The whole grid is held (no RESOLVED tranche), rendered as cliff lumps.
     expect(
       resolution.installments.every(
         (i) =>
@@ -86,16 +89,7 @@ describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () =>
           i.symbolicDate.type === "UNRESOLVED_CLIFF",
       ),
     ).toBe(true);
-    // Some tranche folded onto the floor (start + 12mo), not the grant date.
-    expect(
-      resolution.installments.some(
-        (i) =>
-          i.state === "UNRESOLVED" &&
-          i.symbolicDate.type === "UNRESOLVED_CLIFF" &&
-          i.symbolicDate.date === "2026-01-01",
-      ),
-    ).toBe(true);
-    // Shares are conserved across the fold.
+    // Shares are conserved in the held stream.
     expect(resolution.installments.reduce((sum, i) => sum + i.amount, 0)).toBe(
       4800,
     );
@@ -107,28 +101,25 @@ describe("partial LATER OF cliff folds pre-cliff tranches onto its floor", () =>
   });
 });
 
-// Reachability pin for the dated-start path: a known start with a *pending*
-// cliff must render dated installments (UNRESOLVED_CLIFF), never the
-// start-relative START_PLUS form. Here the start is a plain grant-date anchor
-// (so it resolves) but the cliff waits on an unfired gated event, so the whole
-// grid stays pending. The cliff being event-gated routes it through the
-// deferred-shape machinery, which for a *resolved* start still yields a dated
-// shape — proving the symbolic-cliff arm in the renderer stays unreachable.
+// A resolved start with a gated event cliff (`CLIFF EVENT board BEFORE DATE …`)
+// now stores as a SYNTHETIC event_condition (the gate captured in its recipe), so
+// it's a template held until board fires. The held grid renders as dated cliff
+// lumps (UNRESOLVED_CLIFF), never the start-relative START_PLUS form.
 describe("resolved start with a pending gated-event cliff renders dated, not START_PLUS", () => {
   const DSL =
     "VEST FROM grantDate OVER 4 months EVERY 1 month " +
     "CLIFF EVENT board BEFORE DATE 2030-01-01";
 
-  it("renders every installment as UNRESOLVED_CLIFF and none as START_PLUS", () => {
+  it("template; renders every held installment as UNRESOLVED_CLIFF and none as START_PLUS", () => {
     const program = normalizeProgram(parse(DSL));
     const { resolution } = evaluateProgram(program, {
       grantDate: "2025-01-01",
-      events: {}, // board unfired → the cliff stays pending
+      events: {}, // board unfired → the event_condition holds
       grantQuantity: 400,
     });
 
-    expect(resolution.status).toBe("unresolved");
-    if (resolution.status !== "unresolved") return;
+    expect(resolution.status).toBe("template");
+    if (resolution.status !== "template") return;
 
     expect(resolution.installments.length).toBeGreaterThan(0);
     expect(

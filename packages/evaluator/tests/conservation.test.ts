@@ -109,6 +109,16 @@ const SHAPES: Shape[] = [
     events: ["board"],
   },
   {
+    // A cross-unit deferred cliff (months over a days grid) on a pending event
+    // start can't be placed until ipo fires AND keeps no event_condition (it's a
+    // non-event, cross-unit cliff), so the unfired run is genuinely
+    // unresolved/symbolic-only — the arm event cliffs no longer reach since #255.
+    name: "pending event start, cross-unit deferred cliff",
+    dsl: "VEST FROM EVENT ipo OVER 30 days EVERY 30 days CLIFF vestingStart + 12 months",
+    amounts: [P(1, 1)],
+    events: ["ipo"],
+  },
+  {
     name: "THEN chain, dated head",
     dsl: "1/4 VEST OVER 12 months EVERY 1 month THEN 3/4 VEST OVER 36 months EVERY 1 month",
     amounts: [P(1, 4), P(3, 4)],

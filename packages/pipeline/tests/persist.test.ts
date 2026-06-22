@@ -65,10 +65,12 @@ describe("runPersist (AC#4)", () => {
   });
 
   it("refuses a non-template resolution, naming the status", () => {
-    // An event-anchored cliff can't be one canonical template (the cliff is
-    // duration-only), so it resolves to a non-template shape.
+    // Two independent absolute-date grids can't be one canonical template (a record
+    // keeper models them as separate grants), so this resolves to events-only.
     const r = runPersist({
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });
@@ -687,5 +689,119 @@ describe("#251 — persist gates on interchange; rehydrate never commits", () =>
     expect(out.firings_to_apply).toHaveLength(0);
     expect(out.projection).toHaveLength(0);
     expect(out.pending.length).toBeGreaterThan(0);
+  });
+});
+
+// #255 — the event-held cliff round-trip: persist an event_condition, then
+// rehydrate against the world's firings and confirm the projection folds.
+describe("runPersist/runRehydrate — event_condition round-trip (#255)", () => {
+  // AC 12: a bare event cliff persists with an event_condition on the statement and
+  // NO sidecar recipe (the SoR owns the real event). Rehydrating with the event
+  // fired folds the grid; firings_to_apply is empty (the SoR already knows it).
+  it("AC12/AC14: a bare event cliff round-trips; firings_to_apply stays empty", () => {
+    const persisted = persistOk({
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    const stmt = persisted.artifact.template.statements[0];
+    expect(stmt.event_condition).toEqual({ event_id: "ipo" });
+    expect(stmt.cliff).toBeUndefined();
+    // No sidecar: a bare real event needs no recipe.
+    expect(persisted.artifact.sidecar).toBeUndefined();
+
+    // Rehydrate with ipo fired @ month 30 (2027-07-01): folds 3000 at the firing.
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { ipo: "2027-07-01" },
+    });
+    expect(out.firings_to_apply).toHaveLength(0); // bare real event — SoR knows it
+    expect(out.projection[0]).toEqual({ date: "2027-07-01", amount: 3000 });
+    expect(out.projection.reduce((a, e) => a + e.amount, 0)).toBe(4800);
+
+    // Unfired → held: nothing projects.
+    const held = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+    });
+    expect(held.projection).toHaveLength(0);
+    expect(held.firings_to_apply).toHaveLength(0);
+  });
+
+  // AC 14: a SYNTHETIC event_condition (CLIFF LATER OF(EVENT a, EVENT b)) persists
+  // with its recipe in the sidecar; rehydrating with a and b fired surfaces the
+  // computed release max(a, b) in firings_to_apply.
+  it("AC14: a synthetic event_condition surfaces max(a,b) in firings_to_apply", () => {
+    const persisted = persistOk({
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF LATER OF(EVENT a, EVENT b)",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    const ec = persisted.artifact.template.statements[0].event_condition;
+    expect(ec?.event_id).toMatch(/^evt:\d+$/);
+    // The recipe rides in the sidecar.
+    expect(persisted.artifact.sidecar).toBeDefined();
+
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { a: "2026-03-01", b: "2026-07-01" },
+    });
+    // The computed release is pushed: { event_id: evt:<n>, date: max(a,b) }.
+    expect(out.firings_to_apply).toHaveLength(1);
+    expect(out.firings_to_apply[0]).toMatchObject({
+      event_id: ec?.event_id,
+      date: "2026-07-01", // max(a, b)
+    });
+  });
+
+  // AC 11: a compound contingency (event start + event cliff) persists as a
+  // template — a sentinel start + evt:start recipe AND the cliff's event_condition,
+  // both sidecar-carried. Projects nothing until BOTH fire; once both fire, the
+  // grid anchors at the re-derived start and folds at the cliff firing.
+  it("AC11: a compound (event start + event cliff) round-trips and needs BOTH firings", () => {
+    const persisted = persistOk({
+      dsl: "VEST FROM EVENT ipo OVER 48 months EVERY 1 month CLIFF EVENT board",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    expect(persisted.artifact.runtime.startDate).toBe(
+      CONTINGENT_START_SENTINEL,
+    );
+    expect(persisted.artifact.template.statements[0].event_condition).toEqual({
+      event_id: "board",
+    });
+    // The start recipe is carried; both halves are sidecar-present (evt:start).
+    expect(
+      persisted.artifact.sidecar?.vestlang["evt:start"]?.definition,
+    ).toContain("ipo");
+
+    // Neither fired → held.
+    expect(
+      rehydrateOk({ artifact: persisted.artifact, grant_quantity: 4800 })
+        .projection,
+    ).toHaveLength(0);
+
+    // Only the start fired → still held by the cliff.
+    const startOnly = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { ipo: "2025-06-01" },
+    });
+    expect(startOnly.start_to_apply).toEqual({ date: "2025-06-01" });
+    expect(startOnly.projection).toHaveLength(0); // board still holds the grid
+
+    // Both fired → the grid anchors at ipo and folds at board.
+    const both = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { ipo: "2025-06-01", board: "2027-06-01" },
+    });
+    expect(both.start_to_apply).toEqual({ date: "2025-06-01" });
+    expect(both.projection.length).toBeGreaterThan(0);
+    expect(both.projection.reduce((a, e) => a + e.amount, 0)).toBe(4800);
+    // The first tranche is the board-firing fold (24 months from ipo accrued).
+    expect(both.projection[0].date).toBe("2027-06-01");
   });
 });

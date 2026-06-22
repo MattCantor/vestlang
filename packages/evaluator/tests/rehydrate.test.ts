@@ -522,3 +522,74 @@ describe("rehydrate — grant date sourced from the artifact, not the caller", (
     expect(result.runtime.startDate).toBe("2026-01-01");
   });
 });
+
+// #255 — rehydrating an event-held cliff re-derives its condition firing onto
+// runtime.eventFirings (the channel core.compile reads to fold the cliff).
+describe("rehydrate — event_condition firings (#255)", () => {
+  // AC 4 observable: CLIFF LATER OF(EVENT a, EVENT b) → a synthetic evt:<n>; after
+  // rehydrating against firings for a and b, runtime.eventFirings carries
+  // { event_id: evt:<n>, date: max(a, b) }.
+  it("AC4: a synthetic event_condition re-resolves to max(a,b) on runtime.eventFirings", () => {
+    const { template, sourceMap, runtime } = storedFromDsl(
+      "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF LATER OF(EVENT a, EVENT b)",
+      ctxInput({ grantQuantity: 4800 }),
+    );
+    const eventId = template.statements[0].event_condition?.event_id;
+    expect(eventId).toMatch(/^evt:\d+$/);
+
+    const result = rehydrate(
+      template,
+      sourceMap,
+      runtime,
+      ctxInput({
+        grantDate: "2025-01-01",
+        events: { a: "2026-03-01", b: "2026-07-01" },
+        grantQuantity: 4800,
+      }),
+    );
+    expect(result.runtime.eventFirings).toContainEqual({
+      event_id: eventId,
+      date: "2026-07-01", // max(a, b)
+    });
+  });
+
+  // AC 8 mechanical witness: the same statement evaluated fired vs unfired yields
+  // deep-equal interchange verdicts (firing-invariance), while resolution differs.
+  it("AC8: the interchange verdict is deep-equal fired vs unfired", () => {
+    const dsl =
+      "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo";
+    const program = normalizeProgram(parse(dsl));
+    const unfired = evaluateProgram(
+      program,
+      ctxInput({ grantQuantity: 4800 }),
+    ).interchange;
+    const fired = evaluateProgram(
+      program,
+      ctxInput({ events: { ipo: "2026-06-01" }, grantQuantity: 4800 }),
+    ).interchange;
+    expect(fired).toEqual(unfired);
+  });
+
+  // A bare real-event condition re-derives from the world (no sidecar recipe).
+  it("a bare real event_condition resolves its firing from the world", () => {
+    const { template, sourceMap, runtime } = storedFromDsl(
+      "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      ctxInput({ grantQuantity: 4800 }),
+    );
+    expect(Object.keys(sourceMap)).toEqual([]); // no recipe for a bare real id
+    const result = rehydrate(
+      template,
+      sourceMap,
+      runtime,
+      ctxInput({
+        grantDate: "2025-01-01",
+        events: { ipo: "2027-07-01" },
+        grantQuantity: 4800,
+      }),
+    );
+    expect(result.runtime.eventFirings).toContainEqual({
+      event_id: "ipo",
+      date: "2027-07-01",
+    });
+  });
+});

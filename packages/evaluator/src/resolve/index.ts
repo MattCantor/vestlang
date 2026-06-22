@@ -87,13 +87,21 @@ export const resolveToCore = (
     //  - The inst.state check is type narrowing, not filtering: a pending start
     //    produces only UNRESOLVED installments (one whole-portion lump, or
     //    start+N steps for a partially-settled combinator / a pending-tail).
+    //  - A dated start whose event-held cliff hasn't fired is also collected: the
+    //    whole grid is held, so core.compile emits nothing for it, and without this
+    //    its claim would vanish from the stream. unresolvedInstallments renders it
+    //    as the held (symbolic) tranches. A *fired* held cliff is materialized by
+    //    core.compile instead, so it's excluded here.
     const claims = symbolicClaims(resolutions, totalShares);
     const pendingInstallments: UnresolvedInstallment[] = [];
     resolutions.forEach((r, i) => {
+      const heldUnfired =
+        r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
       if (
         r.start.state === "PENDING_EVENT" ||
         r.start.state === "SYNTHETIC_EVENT" ||
-        r.chain.role === "pending-tail"
+        r.chain.role === "pending-tail" ||
+        heldUnfired
       ) {
         for (const inst of unresolvedInstallments(r, ctx, claims[i])
           .installments) {
@@ -135,13 +143,21 @@ export const resolveToCore = (
 // `start.date` is the handoff date — which is the very anchor lowerCliff measured
 // against — so heads, tails, independent grids, and fired EVENT starts (whose
 // `start.date` already folds in the firing and any offsets) all go through this
-// one expression. An EVENT_FIRED cliff carries its landing spot directly as
-// `effectiveAt`; an EVENT_PENDING one has no date to return.
+// one expression. An event-held cliff reports its fold point — max(time baseline
+// date, firing) — when fired, and nothing while it's still held.
 const statementCliffDate = (
   r: StmtResolution,
   dom: VestingDayOfMonth,
 ): OCTDate | undefined => {
-  if (r.cliff.state === "EVENT_FIRED") return r.cliff.effectiveAt;
+  if (r.cliff.state === "EVENT_HELD") {
+    // Unfired (or firing-blind) → no placeable fold point. Fired → the later of
+    // the firing and the stored time baseline's date (the floor in the max).
+    if (r.cliff.firing === undefined) return undefined;
+    const floor = r.cliff.cliffDate;
+    return floor !== undefined && floor > r.cliff.firing
+      ? floor
+      : r.cliff.firing;
+  }
   if (
     r.cliff.state === "RESOLVED" &&
     (r.start.state === "RESOLVED" || r.start.state === "COMMITTED")

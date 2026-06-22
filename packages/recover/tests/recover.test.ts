@@ -65,7 +65,10 @@ describe("evaluateProgramWithRecovery", () => {
     expect(outcome.recovered.residualError).toBe(0);
   });
 
-  it("does not rescue an event-anchored cliff (rejected on reason kind)", () => {
+  // An event-held cliff resolves directly to a `template` now (it stores as an
+  // event_condition, #255), so there's nothing to rescue — it never reaches the
+  // events-only arm the recovery path operates on.
+  it("needs no rescue for an event-held cliff — it resolves to a template", () => {
     const outcome = evaluateProgramWithRecovery(
       prog(
         "100 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month CLIFF EVENT ipo",
@@ -74,7 +77,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(outcome.schedule.resolution.status).toBe("template");
   });
 
   // A chain headed on ONE event is a single contingent origin, so once fired it

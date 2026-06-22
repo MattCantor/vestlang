@@ -1,22 +1,26 @@
 // Rehydration: turn a stored canonical artifact + the world's named-event firings
-// into the contingent start's real date, surfaced read-only.
+// into the runtime witnesses a reload needs — the contingent start's real date AND
+// each event-held cliff's condition firing, surfaced read-only.
 //
-// A contingent start (its calendar date unknown until a named event fires) is
-// stored as a DATE base whose `runtime.startDate` is the CONTINGENT_START_SENTINEL,
-// with the start's recipe externalized under the one reserved `evt:start` sidecar
-// key (its `@vestlang/render` DSL). Rehydration is the inverse half: once the
-// world's named events fire (the IPO happens, attested by the caller in
-// `ctx.events`, the same channel `evaluateVestingBase` reads), the start's witness
-// is re-derived by resolving that recipe against the updated grant context.
+// Two storage facts get re-derived here, both firing-invariant in the artifact:
+//   - A contingent START is a DATE base whose `runtime.startDate` is the
+//     CONTINGENT_START_SENTINEL, with the start's recipe under the one reserved
+//     `evt:start` sidecar key. Rehydration re-derives the real date and substitutes
+//     it into the projection-only runtime's startDate (the artifact keeps the
+//     sentinel).
+//   - An event-held CLIFF stores an `event_condition.event_id` on a statement: a
+//     real user event (the SoR knows its firing) or a synthetic `evt:<n>` whose
+//     recipe re-resolves to the held date (the later of two events, a gated date).
+//     Rehydration re-derives each condition's firing from the world and puts it on
+//     `runtime.eventFirings`, the channel core.compile reads to fold the cliff.
 //
 // The stored artifact is FROZEN and stays contingent forever (it bakes no date —
 // firing-invariant by construction, so a later backdated correction re-derives
-// cleanly). Rehydration never mutates it: it emits the re-derived date and a
-// projection-only runtime (startDate substituted with the real date), which the
-// caller compiles against. The re-resolution rides the existing selector layer, so
-// the edge cases fall out for free: a `LATER_OF` is an open upper bound that
-// doesn't resolve until its event fires (no premature witness), and a re-resolved
-// witness takes the corrected date directly (back-dated corrections stay sane).
+// cleanly). Rehydration never mutates it. The re-resolution rides the existing
+// selector layer, so the edge cases fall out for free: a `LATER_OF` is an open
+// upper bound that doesn't resolve until its event fires (no premature witness),
+// and a re-resolved witness takes the corrected date directly (back-dated
+// corrections stay sane).
 
 import type {
   Blocker,
@@ -41,16 +45,18 @@ import { partitionResolutionBlockers } from "../evaluate/blockerTree.js";
 import { isPickedResolved, type PickReturn } from "../evaluate/utils.js";
 import {
   assertReloadKeysReserved,
+  isSyntheticEventId,
   SYNTHETIC_START_EVENT_ID,
 } from "./synthetic.js";
 
 export interface RehydrateResult {
   // The projection-only runtime: the stored runtime with a resolved contingent
-  // start substituted into `startDate` (so the caller compiles a real projection).
-  // When the `evt:start` recipe is unresolved (event not fired) the sentinel stays,
-  // and the compiler's sentinel-skip projects nothing; when there's no contingent
-  // start at all the stored runtime carries through unchanged. The STORED artifact
-  // is never mutated — this is a fresh runtime.
+  // start substituted into `startDate` AND each re-derived event-held cliff firing
+  // on `eventFirings` (so the caller compiles a real projection — the start anchors
+  // the grid, the cliff firings fold it). When the `evt:start` recipe is unresolved
+  // the sentinel stays and the compiler's sentinel-skip projects nothing; an
+  // unfired cliff condition leaves no firing, so core.compile holds that grid. The
+  // STORED artifact is never mutated — this is a fresh runtime.
   runtime: VestingRuntime;
   // The newly-derived contingent start, when the `evt:start` recipe resolved on
   // this reload; null when it's unresolved or there is no contingent start.
@@ -175,6 +181,12 @@ const reparseRecipe = (
   }
 };
 
+// Reparse a bare event-condition label (`EVENT <id>`) for a real user event, the
+// trivial recipe a bare `event_condition` carries no sidecar entry for. Same tagged
+// failure as a recipe — a stored id that isn't a legal bare name is corruption.
+const reparseForEvent = (eventId: string, label: string): VestingNodeExpr =>
+  reparseRecipe(eventId, label);
+
 /** Blockers of a non-resolved pick — mirrors the extraction in resolveStatements. */
 const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
   if (res.type === "PICKED") {
@@ -248,44 +260,85 @@ export const rehydrate = (
     "rehydrate",
   );
 
+  // Blockers gathered across the start and the event-condition re-resolutions, all
+  // split by the closed-world reading once at the boundary below.
+  const blockers: Blocker[] = [];
+
+  // --- The contingent start (the evt:start path) ---
   // The OVERRIDE decision keys STRICTLY on the presence of the `evt:start` entry,
   // never on the startDate value (keying on "is it still the sentinel" would bake
   // resolved state into the artifact and break firing-invariance). No recipe → the
-  // stored runtime carries through unchanged (a plain dated schedule, or a dropped
+  // stored start carries through unchanged (a plain dated schedule, or a dropped
   // sidecar's opaque start).
-  if (!hasStartRecipe) {
-    return {
-      runtime: { ...runtime },
-      startToApply: null,
-      pending: [],
-      dead: [],
-    };
+  let startDate: OCTDate | undefined = runtime.startDate;
+  let startToApply: { date: OCTDate } | null = null;
+  if (hasStartRecipe) {
+    const recipe = sourceMap[SYNTHETIC_START_EVENT_ID];
+    const node = reparseRecipe(SYNTHETIC_START_EVENT_ID, recipe.definition);
+    const res = evaluateVestingNodeExpr(node, ctx);
+    if (isPickedResolved(res)) {
+      // Resolved: substitute the re-derived date so the caller compiles real
+      // tranches. The stored artifact keeps the sentinel — this is a fresh runtime.
+      startDate = res.meta.date;
+      startToApply = { date: res.meta.date };
+    } else {
+      // Unresolved (event not fired) or dead (fired outside its window): keep the
+      // sentinel so the projection stays empty (the compiler's sentinel-skip).
+      blockers.push(...blockersOf(res));
+    }
   }
 
-  const recipe = sourceMap[SYNTHETIC_START_EVENT_ID];
-  const node = reparseRecipe(SYNTHETIC_START_EVENT_ID, recipe.definition);
-  const res = evaluateVestingNodeExpr(node, ctx);
-
-  if (isPickedResolved(res)) {
-    // Resolved: substitute the re-derived date into a projection-only runtime so
-    // the caller compiles real tranches. The stored artifact keeps the sentinel —
-    // this is a fresh runtime, never written back.
-    const date = res.meta.date;
-    return {
-      runtime: { ...runtime, startDate: date },
-      startToApply: { date },
-      pending: [],
-      dead: [],
-    };
+  // --- The event-held cliffs (the event_condition path) ---
+  // Each statement's `event_condition.event_id` is re-derived against the world:
+  // a bare real id resolves through the trivial `EVENT <id>`; a synthetic `evt:<n>`
+  // re-resolves its sidecar recipe (→ the later of two events, a gated date). The
+  // resolved firing rides onto `runtime.eventFirings`, the channel core.compile
+  // reads to fold the cliff at max(cliff date, firing). One firing per id (two
+  // statements may hold on the same event). Scanned over `event_condition.event_id`
+  // — NOT the (DATE-only) `vesting_base` — so the cliff hold is actually found.
+  const firings = new Map<string, OCTDate>();
+  const conditionIds = new Set<string>();
+  for (const stmt of template.statements) {
+    const id = stmt.event_condition?.event_id;
+    if (id !== undefined) conditionIds.add(id);
+  }
+  for (const eventId of conditionIds) {
+    if (firings.has(eventId)) continue;
+    let node: VestingNodeExpr;
+    if (isSyntheticEventId(eventId)) {
+      // A synthetic id resolves from its sidecar recipe. A dropped sidecar (no
+      // entry) leaves it opaque — no witness, the hold simply stands.
+      const recipe = sourceMap[eventId];
+      if (recipe === undefined) continue;
+      node = reparseRecipe(eventId, recipe.definition);
+    } else {
+      // A bare real id: the SoR knows its firing. Resolve through the trivial
+      // `EVENT <id>` against the world, like a bare-event start on reload.
+      node = reparseForEvent(eventId, `EVENT ${eventId}`);
+    }
+    const res = evaluateVestingNodeExpr(node, ctx);
+    if (isPickedResolved(res)) {
+      firings.set(eventId, res.meta.date);
+    } else {
+      blockers.push(...blockersOf(res));
+    }
   }
 
-  // Unresolved (event not fired) or dead (fired outside its window): keep the
-  // sentinel so the projection stays empty (the compiler's sentinel-skip), and
-  // surface the blockers.
-  const { pending, dead } = partitionResolutionBlockers(blockersOf(res));
+  const eventFirings = [...firings.entries()].map(([event_id, date]) => ({
+    event_id,
+    date,
+  }));
+
+  const newRuntime: VestingRuntime = {
+    ...runtime,
+    ...(startDate !== undefined ? { startDate } : {}),
+    ...(eventFirings.length > 0 ? { eventFirings } : {}),
+  };
+
+  const { pending, dead } = partitionResolutionBlockers(blockers);
   return {
-    runtime: { ...runtime },
-    startToApply: null,
+    runtime: newRuntime,
+    startToApply,
     pending,
     dead,
   };

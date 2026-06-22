@@ -298,4 +298,83 @@ describe("toPersisted — save-path partition tripwire", () => {
       }),
     ).not.toThrow();
   });
+
+  // A dated template carrying one statement with the given event_condition.
+  const conditionTemplate = (eventId: string): VestingScheduleTemplate => ({
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "DATE" },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+        event_condition: { event_id: eventId },
+      },
+    ],
+  });
+
+  // AC 13: the dangling-pointer half, retargeted to event_condition. A statement
+  // whose event_condition.event_id is a reserved evt:<n> id with no matching
+  // source-map recipe is rejected with a PLAIN Error (an internal-bug tripwire, not
+  // the tagged namespace error). Hand-built — lowering never mints this.
+  it("throws a plain Error when an event_condition's evt:<n> id has no source-map recipe (AC13)", () => {
+    let thrown: unknown;
+    try {
+      toPersisted({
+        template: conditionTemplate("evt:1"),
+        runtime: { grantDate: "2026-01-01", startDate: "2026-01-01" },
+        sourceMap: {}, // the recipe was lost — dangling pointer
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).name).toBe("Error");
+    expect((thrown as Error).message).toContain('event_condition "evt:1"');
+    expect((thrown as Error).message).toContain("no source-map recipe");
+  });
+
+  // A bare REAL event_condition id needs no recipe — it resolves against the world,
+  // so it must NOT trip the dangling-pointer check.
+  it("does not throw for a bare real event_condition id with no recipe (AC13)", () => {
+    expect(() =>
+      toPersisted({
+        template: conditionTemplate("board"),
+        runtime: { grantDate: "2026-01-01", startDate: "2026-01-01" },
+        sourceMap: {},
+      }),
+    ).not.toThrow();
+  });
+
+  // A synthetic event_condition WITH its recipe is consistent — no throw.
+  it("does not throw for a synthetic event_condition backed by its recipe (AC12)", () => {
+    expect(() =>
+      toPersisted({
+        template: conditionTemplate("evt:1"),
+        runtime: { grantDate: "2026-01-01", startDate: "2026-01-01" },
+        sourceMap: { "evt:1": { definition: "LATER OF(EVENT a, EVENT b)" } },
+      }),
+    ).not.toThrow();
+  });
+
+  // Dangling-pointer ONLY: an orphan evt:<n> recipe that no statement references is
+  // NOT rejected (we don't enforce the reverse direction). It rides beside a
+  // consistent contingent start so the namespace + marker halves both pass.
+  it("does not reject an orphan evt:<n> recipe no statement references (AC13)", () => {
+    expect(() =>
+      toPersisted({
+        template: sentinelTemplate(), // no event_condition references evt:7
+        runtime: {
+          grantDate: "2026-01-01",
+          startDate: CONTINGENT_START_SENTINEL,
+        },
+        sourceMap: {
+          "evt:start": { definition: "EVENT ipo" },
+          "evt:7": { definition: "LATER OF(EVENT a, EVENT b)" },
+        },
+      }),
+    ).not.toThrow();
+  });
 });

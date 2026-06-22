@@ -31,6 +31,16 @@ export interface VestingStatement {
   period: number; // integer >= 0; length of one installment, in period_type units
   period_type: PeriodType;
   cliff?: Cliff;
+  // An event that must fire before this statement's grid releases. This is how an
+  // event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT ipo)`)
+  // stores: the time baseline, if any, lands in `cliff`, and the event hold lands
+  // here. It tracks Carta's HYBRID tranche — a dated schedule carrying an
+  // EVENT_NON_MARKET performanceCondition. The `event_id` names the gating event:
+  // a real user event for a bare `CLIFF EVENT e`, or a reserved synthetic `evt:<n>`
+  // whose recipe lives in the sidecar when the event side is richer than a single
+  // bare id (multiple events, an offset, a gate). Until the event fires the whole
+  // grid is held; once it does, the projection folds at max(cliff date, firing).
+  event_condition?: { event_id: string };
   percentage: Fraction; // share of total grant this vesting statement covers
 }
 
@@ -95,11 +105,16 @@ interface RuntimeBase {
   vestingDayOfMonth?: VestingDayOfMonth;
 }
 
-// One named-event firing. The canonical template no longer anchors a statement to
-// an event (a contingent start is a DATE base on the sentinel), so this is dormant
-// on the start path — nothing in the engine populates or reads it for a start. It
-// is kept as the runtime's witness channel for any future event-anchored runtime
-// fact the interchange grows.
+// One named-event firing — the runtime witness channel for an event hold. The
+// start path no longer uses it (a contingent start is a DATE base on the sentinel
+// + an `evt:start` recipe), but a statement's `event_condition` does: in
+// resolution mode the engine records the resolved condition firing here, keyed by
+// the condition's `event_id` (a real id or a synthetic `evt:<n>`), and `compile`
+// reads it to place the cliff fold at max(cliff date, firing). The interchange
+// (firing-blind) build leaves it unset, so the hold projects nothing. Firing-
+// invariance is type-enforced below: a stored artifact can carry no firings, so
+// they are re-derived from the world on every reload (see resolve/rehydrate.ts),
+// never baked in.
 interface EventFiring {
   event_id: string;
   date: OCTDate;

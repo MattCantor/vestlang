@@ -54,7 +54,9 @@ describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", 
 
   it("clears the gate (resolvable, not dead) under the DEFAULT policy", () => {
     const s = evaluate(DSL, { events });
-    expect(s.resolution.status).toBe("events-only");
+    // A gated event cliff that fired and cleared its gate → a template (synthetic
+    // event_condition), folded by core.compile to the same lump.
+    expect(s.resolution.status).toBe("template");
     expect(allResolved(s.resolution.installments)).toBe(true);
     expect(s.cliffDate).toBe("2025-07-12");
     // Default grid lands on the 10th, so 6 installments accrue by 07-12; the cliff
@@ -72,7 +74,7 @@ describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", 
 
   it("clears the SAME exact gate under policy '15' (was dead before #253)", () => {
     const s = evaluate(DSL, { events, vesting_day_of_month: "15" });
-    expect(s.resolution.status).toBe("events-only");
+    expect(s.resolution.status).toBe("template");
     expect(allResolved(s.resolution.installments)).toBe(true);
     expect(s.cliffDate).toBe("2025-07-12");
     // The grid snaps to the 15th, so only 5 installments accrue by 07-12 (Jul-15

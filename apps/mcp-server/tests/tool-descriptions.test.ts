@@ -37,13 +37,16 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
     expect(description).not.toMatch(/today only.*cliff/i);
   });
 
-  it("names all three causes of an 'unrepresentable' verdict", async () => {
+  it("names the remaining causes of an 'unrepresentable' verdict and notes event cliffs are excluded", async () => {
     const description = await descriptionOf("vestlang_evaluate");
-    // EVENT_CLIFF, DEFERRED_CLIFF, EVENT_CHAINED_TAIL — described in prose,
-    // mirroring the InterchangeVerdict doc in @vestlang/types.
-    expect(description).toContain("event-anchored cliff");
+    // Under #255 the EVENT_CLIFF cause is gone (an event-held cliff stores as a
+    // template via event_condition); the remaining causes are DEFERRED_CLIFF and
+    // EVENT_CHAINED_TAIL, described in prose mirroring the InterchangeVerdict doc.
     expect(description).toContain("until an event fires");
     expect(description).toContain("chained behind a start");
+    // It must say an event-held cliff is NOT unrepresentable (it's a template).
+    expect(description).toMatch(/event[- ]held cliff is NOT/i);
+    expect(description).toContain("event_condition");
   });
 
   it("documents the recovered block surfaced on a rescue", async () => {

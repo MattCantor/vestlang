@@ -359,9 +359,6 @@ export type NonTemplateReason =
   // this is two starts at least one of which is event-contingent. The grant stays
   // DSL-expressible — a record keeper would model the origins as separate grants.
   | { kind: "MULTIPLE_START_ORIGINS"; detail?: string }
-  // The cliff hangs off a named event. The canonical cliff is a fixed duration, so
-  // it has nowhere to put an event-anchored cliff.
-  | { kind: "EVENT_CLIFF"; eventId: string; detail?: string }
   // A THEN tail chained behind a head that's waiting on an event: the tail can't
   // be dated until the head's event fires, and there's no cliff involved at all.
   // `eventId` is what the head waits on: the event's name for a bare
@@ -387,11 +384,13 @@ export type NonTemplateReason =
  *                        template (e.g. two independent date grids, or more than
  *                        one distinct start origin — MULTIPLE_START_ORIGINS).
  *   - "unrepresentable"  the record keeper has no home for it at all, even as bare
- *                        events. Three causes today: an event-anchored cliff
- *                        (EVENT_CLIFF), a cliff that can't be placed until a firing
- *                        is known (DEFERRED_CLIFF), and a THEN tail behind a head
- *                        still waiting on an event (EVENT_CHAINED_TAIL) — no cliff,
- *                        just a sequence that can't be dated yet.
+ *                        events. Two causes today: a cliff that can't be placed
+ *                        until a firing is known (DEFERRED_CLIFF), and a THEN tail
+ *                        behind a head still waiting on an event (EVENT_CHAINED_TAIL)
+ *                        — no cliff, just a sequence that can't be dated yet. (An
+ *                        event-anchored cliff used to land here too; it now stores
+ *                        as a template — a time `cliff` plus an `event_condition` —
+ *                        so `unrepresentable` is largely vacated for cliffs.)
  *   - "impossible"       self-contradictory no matter what events fire (e.g. a date
  *                        required to fall after a strictly later date).
  */

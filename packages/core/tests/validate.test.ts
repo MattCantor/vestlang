@@ -425,3 +425,90 @@ describe("validateStatement — percentage bounds", () => {
     expect(result.valid).toBe(true);
   });
 });
+
+// #255 — event_condition shape validation. A non-empty event_id is required; an
+// unfired event_condition (no matching firing) is the VALID held state, never
+// rejected. No firing↔condition cross-check in either direction (AC 16).
+describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
+  const withCondition = (
+    event_condition: unknown,
+  ): VestingScheduleTemplate => ({
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "DATE" },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+        // Untrusted input may carry a shape the static type forbids.
+        event_condition: event_condition as { event_id: string },
+      },
+    ],
+  });
+
+  it("accepts a well-formed event_condition (bare real id)", () => {
+    expect(
+      validateVestingScheduleTemplate(withCondition({ event_id: "ipo" })).valid,
+    ).toBe(true);
+  });
+
+  it("accepts a synthetic event_condition id", () => {
+    expect(
+      validateVestingScheduleTemplate(withCondition({ event_id: "evt:1" }))
+        .valid,
+    ).toBe(true);
+  });
+
+  it("rejects an empty event_id", () => {
+    const result = validateVestingScheduleTemplate(
+      withCondition({ event_id: "" }),
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain(
+      "statements[0].event_condition.event_id",
+    );
+  });
+
+  it("rejects a non-string event_id", () => {
+    const result = validateVestingScheduleTemplate(withCondition({}));
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain(
+      "statements[0].event_condition.event_id",
+    );
+  });
+});
+
+// AC 16: a runtime carrying an event_condition with NO matching firing validates
+// as VALID (the held state). Neither an unreferenced firing nor an orphan condition
+// is rejected — the validator never cross-checks the two.
+describe("validateVestingRuntime — held event_condition is valid (#255 AC16)", () => {
+  const conditionTemplate: VestingScheduleTemplate = {
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        vesting_base: { type: "DATE" },
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
+        percentage: { numerator: 1, denominator: 1 },
+        event_condition: { event_id: "ipo" },
+      },
+    ],
+  };
+
+  it("a runtime with NO firing for the condition validates (held)", () => {
+    const runtime: VestingRuntime = { startDate: "2025-01-01" };
+    expect(validateVestingRuntime(runtime, conditionTemplate).valid).toBe(true);
+  });
+
+  it("an eventFirings entry that no condition references is not rejected", () => {
+    const runtime: VestingRuntime = {
+      startDate: "2025-01-01",
+      eventFirings: [{ event_id: "unrelated", date: "2026-01-01" }],
+    };
+    expect(validateVestingRuntime(runtime, conditionTemplate).valid).toBe(true);
+  });
+});

@@ -208,18 +208,18 @@ describe("kernel oracle — a cliff gated on an event that fires", () => {
 
   it("IPO on a grid date lumps the first year, then resumes monthly", () => {
     // IPO lands exactly on the first anniversary — 12 of 48 months are behind it.
+    // Now a template (event_condition: ipo); compile against the firing-carrying
+    // runtime reproduces the same lump + grid.
     const result = resolveToCore(
       program,
       ctxInput({ ipo: "2026-01-01" }, 48000),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
-    expect(result.installments).toHaveLength(37);
-    expect(result.installments[0]).toMatchObject({
-      date: "2026-01-01",
-      amount: 12000,
-    });
-    expect(sum(result.installments)).toBe(48000);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(events).toHaveLength(37);
+    expect(events[0]).toEqual({ date: "2026-01-01", amount: "12000" });
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(48000);
   });
 });
 
@@ -240,20 +240,19 @@ describe("kernel oracle — an off-grid event cliff derives its own percentage",
   ];
 
   it("15 of 48 months precede the firing → a 15/48 lump", () => {
-    // IPO on 2026-04-15 sits just after the 15th monthly point (2026-04-01).
+    // IPO on 2026-04-15 sits just after the 15th monthly point (2026-04-01). Now a
+    // template; compile reproduces the off-grid proportional lump.
     const result = resolveToCore(
       program,
       ctxInput({ ipo: "2026-04-15" }, 48000),
     );
-    expect(result.kind).toBe("events");
-    if (result.kind !== "events") return;
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
     // 15/48 of 48000 = 15000.
-    expect(result.installments[0]).toMatchObject({
-      date: "2026-04-15",
-      amount: 15000,
-    });
-    expect(result.installments).toHaveLength(34); // 1 lump + 33 remaining months
-    expect(sum(result.installments)).toBe(48000);
+    expect(events[0]).toEqual({ date: "2026-04-15", amount: "15000" });
+    expect(events).toHaveLength(34); // 1 lump + 33 remaining months
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(48000);
   });
 });
 
@@ -309,11 +308,11 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
   });
 });
 
-describe("kernel oracle — a schedule blocked by its cliff still lays out its grid", () => {
-  // The start date is known but the cliff waits on events that haven't happened,
-  // so nothing can vest yet. The resolver still projects where the tranches WOULD
-  // fall — and those provisional dates are produced by the same grid walk, so
-  // they're worth pinning. Started on a 31st so the short months show up.
+describe("kernel oracle — a schedule held by its event_condition lays out the grid once fired", () => {
+  // The start date is known but the cliff's event_condition waits on events that
+  // haven't happened, so nothing can vest yet — a held template. Once the events
+  // fire, the same grid walk lands the clamped month-ends. Started on a 31st so the
+  // short months show up.
   const program: Program = [
     stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-31")), {
       type: "MONTHS",
@@ -323,16 +322,22 @@ describe("kernel oracle — a schedule blocked by its cliff still lays out its g
     }),
   ];
 
-  it("projects the four pending tranches onto clamped month-ends", () => {
-    const result = resolveToCore(program, ctxInput());
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
-    const dates = result.installments.map((i) =>
-      i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
-        ? i.symbolicDate.date
-        : undefined,
+  it("held → template projects nothing; fired before the start → the four clamped month-ends", () => {
+    const held = resolveToCore(program, ctxInput());
+    expect(held.kind).toBe("template");
+    if (held.kind !== "template") return;
+    // Unfired event_condition → the held template releases nothing.
+    expect(compile(held.template, held.totalShares, held.runtime)).toEqual([]);
+
+    // Fire both events before the start so the synthetic fold has no lump effect:
+    // the grid then lays out evenly on the clamped month-ends, the same walk.
+    const fired = resolveToCore(
+      program,
+      ctxInput({ a: "2024-12-01", b: "2024-12-15" }, 4000),
     );
-    expect(dates).toEqual([
+    if (fired.kind !== "template") throw new Error("expected template");
+    const events = compile(fired.template, fired.totalShares, fired.runtime);
+    expect(events.map((e) => e.date)).toEqual([
       "2025-02-28",
       "2025-03-31",
       "2025-04-30",
@@ -341,11 +346,11 @@ describe("kernel oracle — a schedule blocked by its cliff still lays out its g
   });
 });
 
-describe("kernel oracle — resolved tranches surface alongside a blocked sibling", () => {
-  // Half the grant vests on a plain annual schedule; the other half is stuck
-  // behind an unfired cliff. The whole grant can't collapse to one template, but
-  // the half that IS settled should still come back with real dates and amounts —
-  // and that half runs through the same allocation path the events arm uses.
+describe("kernel oracle — an independent grid beside an event-held sibling routes to events", () => {
+  // Half the grant vests on a plain annual schedule; the other half is held behind
+  // an event_condition. They're two independent same-start grids, so the program
+  // can't collapse to one template → events-only (the held half rides along
+  // symbolically). The settled half runs through the same allocation path.
   const program: Program = [
     stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2025-01-01")), {
       type: "MONTHS",
@@ -360,10 +365,10 @@ describe("kernel oracle — resolved tranches surface alongside a blocked siblin
     }),
   ];
 
-  it("carries the settled half's dated tranches and flags the blocked half", () => {
+  it("carries the settled half's dated tranches and flags the held half", () => {
     const result = resolveToCore(program, ctxInput({}, 100000));
-    expect(result.kind).toBe("unresolved");
-    if (result.kind !== "unresolved") return;
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
     const resolved = result.installments.filter(isResolved);
     expect(resolved.map((i) => ({ date: i.date, amount: i.amount }))).toEqual([
       { date: "2026-01-01", amount: 25000 },

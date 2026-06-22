@@ -202,10 +202,11 @@ describe("runVestedBetween", () => {
   });
 });
 
-// R2-B3: a pending-head chain with a tail event cliff must report the cliff
-// (permanent — no schema home), not the chain (temporary — undated until firing).
-describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3)", () => {
-  it("names the cliff's event in the storable reason", () => {
+// R2-B3 / #255: a pending-head chain with a tail event cliff now stores as a
+// compound template (a contingent start + the tail's event_condition), not an
+// unstorable event-anchored cliff.
+describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3/#255)", () => {
+  it("stores the tail's event hold as a compound template", () => {
     const r = runEvaluate(
       "1/2 VEST FROM EVENT ipo OVER 12 months EVERY 1 month " +
         "THEN 1/2 VEST OVER 12 months EVERY 1 month CLIFF EVENT fda",
@@ -213,30 +214,21 @@ describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3)", (
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.interchange.status).toBe("unrepresentable");
-    if (r.view.interchange.status !== "unrepresentable") return;
-    expect(r.view.interchange.reason).toBe(
-      'Event-anchored cliff on "fda" has no template form.',
-    );
+    expect(r.view.interchange.status).toBe("template");
   });
 });
 
-// R2-B14: a gated event cliff is as unstorable as a bare one — the reason must
-// name the event (permanent, no schema home), not claim the schedule merely
-// "can't be stored ahead of time".
-describe("runEvaluate — gated event cliff keeps its EVENT identity (R2-B14)", () => {
-  it("names the cliff's event in the storable reason", () => {
+// R2-B14 / #255: a gated event cliff stores as a synthetic event_condition (the
+// gate captured in its recipe), so the schedule is a storable template.
+describe("runEvaluate — gated event cliff stores as a template (R2-B14/#255)", () => {
+  it("stores the gated event hold as a template", () => {
     const r = runEvaluate(
       "VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo AFTER DATE 2025-01-01",
       { grant_date: "2024-01-01", grant_quantity: 48 },
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.interchange.status).toBe("unrepresentable");
-    if (r.view.interchange.status !== "unrepresentable") return;
-    expect(r.view.interchange.reason).toBe(
-      'Event-anchored cliff on "ipo" has no template form.',
-    );
+    expect(r.view.interchange.status).toBe("template");
   });
 });
 
