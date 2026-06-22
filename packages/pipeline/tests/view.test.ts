@@ -97,22 +97,23 @@ describe("toScheduleView", () => {
   });
 
   it("surfaces the interchange verdict alongside the resolution one", () => {
-    // An event cliff is events-only when you read against known events, but has no
-    // storable form, so the two verdicts differ — the view shows both.
+    // A deferred cliff resolves to dated events against known firings, but has no
+    // storable form, so the two verdicts differ — the view shows both, each with
+    // its own rendered reason.
     const view = toScheduleView(
       stub({
         status: "events-only",
-        reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+        reason: { kind: "DEFERRED_CLIFF" },
         interchange: {
           status: "unrepresentable",
-          reason: { kind: "EVENT_CLIFF", eventId: "ipo" },
+          reason: { kind: "DEFERRED_CLIFF" },
         },
       }),
     );
     expect(view.resolution.status).toBe("events-only");
     expect(view.interchange.status).toBe("unrepresentable");
     if (view.interchange.status === "unrepresentable") {
-      expect(view.interchange.reason).toContain("ipo");
+      expect(view.interchange.reason).toContain("once an event fires");
     }
   });
 

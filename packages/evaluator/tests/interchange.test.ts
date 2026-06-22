@@ -590,8 +590,9 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   });
 
   // A gated duration cliff routes through the gate's verdict (UNRESOLVED), so
-  // the storable reason is DEFERRED_CLIFF. A gated *event* cliff keeps EVENT_CLIFF
-  // instead (next test) — only an event-free gate is a deferred cliff.
+  // the storable reason is DEFERRED_CLIFF. A gated *event* cliff instead lowers to
+  // a synthetic event_condition and stores as a template (next test) — only an
+  // event-free gate is a deferred cliff.
   it("a gated duration cliff on the tail reports DEFERRED_CLIFF", () => {
     const gatedCliff = makeGatedNode(
       makeVestingBaseVestingStart(),

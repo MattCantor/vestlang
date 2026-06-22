@@ -48,11 +48,6 @@ export const reasonToString = (r: NonTemplateReason): string => {
         r.detail ??
         "More than one distinct start origin on one grant (a contingent start can't share the grant's single hoisted start with another origin)."
       );
-    case "EVENT_CLIFF":
-      return (
-        r.detail ??
-        `Event-anchored cliff on "${r.eventId}" has no template form.`
-      );
     case "EVENT_CHAINED_TAIL":
       return (
         r.detail ??
