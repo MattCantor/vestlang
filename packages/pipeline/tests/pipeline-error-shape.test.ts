@@ -83,11 +83,14 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
   });
 
   // #5 — a non-template *interchange* shape shares the ruleId but is witnessed by
-  // its distinct verbatim message. An event-anchored cliff is unrepresentable in
-  // the storable interchange (the gate persist now reads).
+  // its distinct verbatim message. Two independent date grids store as events-only,
+  // not a single template (the gate persist reads). (An event-anchored cliff is no
+  // longer non-template under #255 — it stores as a template via event_condition.)
   it("#5 non-template storable shape → persist-not-storable, exact wording", () => {
     const r = runPersist({
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });
@@ -98,7 +101,7 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
       "Only a single-template program is storable as a persisted artifact",
     );
     expect(r.error.message).toContain(
-      'this program\'s storable form is "unrepresentable"',
+      'this program\'s storable form is "events-only"',
     );
     expect(r.error.message).toContain(
       "Adjust the schedule so it collapses to a single canonical template.",

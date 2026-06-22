@@ -65,10 +65,12 @@ describe("runPersist (AC#4)", () => {
   });
 
   it("refuses a non-template resolution, naming the status", () => {
-    // An event-anchored cliff can't be one canonical template (the cliff is
-    // duration-only), so it resolves to a non-template shape.
+    // Two independent absolute-date grids can't be one canonical template (a record
+    // keeper models them as separate grants), so this resolves to events-only.
     const r = runPersist({
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });

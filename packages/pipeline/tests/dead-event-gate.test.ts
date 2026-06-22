@@ -94,15 +94,14 @@ describe("#287 — jointly-empty date gate is impossible", () => {
     expect(presentSchedule(start).pending).toBe(true);
     expect(presentSchedule(start).dead).toBe(false);
 
-    // Cliff: a satisfiable event cliff still has no schema home, so the storable
-    // verdict stays `unrepresentable` (EVENT_CLIFF) and the resolves-to verdict
-    // stays `unresolved` — the analysis only under-reports, it never kills a live
-    // schedule.
+    // Cliff: a satisfiable event cliff now stores as a template (event_condition),
+    // so the storable verdict is `template` and the resolves-to verdict is a held
+    // `template` while ipo is unfired — live, never killed.
     const cliff = evalDsl(
       "VEST FROM DATE 2025-01-01 OVER 48 MONTHS EVERY 1 MONTH " +
         "CLIFF EVENT ipo AFTER DATE 2026-01-01",
     );
-    expect(cliff.interchange.status).toBe("unrepresentable");
-    expect(cliff.resolution.status).toBe("unresolved");
+    expect(cliff.interchange.status).toBe("template");
+    expect(cliff.resolution.status).toBe("template");
   });
 });

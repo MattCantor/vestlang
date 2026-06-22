@@ -228,11 +228,16 @@ export interface RehydrateOutput {
 // its own ruleId so a consumer can remediate them differently.
 export type RehydrateResult = Result<RehydrateOutput>;
 
-// The delta: synthetic witnesses present in the rehydrated runtime's eventFirings
-// but absent — or sitting on a different date — versus the input artifact's stored
-// runtime. That difference is exactly the set of firings a vestlang-aware operator
-// must now apply in the system of record. We index both sides by event_id and keep
-// an entry when it's new or its date moved.
+// The delta: SYNTHETIC event-condition witnesses present in the rehydrated runtime's
+// eventFirings but absent — or sitting on a different date — versus the input
+// artifact's stored runtime. A synthetic id is minted precisely because the SoR can
+// store and honour its computed release, so its firing (`max(a, b)`, a gated date)
+// is pushed back here for the operator to apply. A BARE real-event condition is NOT
+// pushed: the SoR already knows that firing (it's re-derived from the world the
+// operator supplied), so it surfaces nothing. We tell them apart by the sidecar —
+// a synthetic id has a recipe entry, a bare real one does not. (The stored side is
+// always firing-free, so `before` is empty in practice; the diff is kept so a
+// re-applied firing on an unchanged date stays out of the list.)
 function computeDelta(
   before: readonly EventFiring[],
   after: readonly EventFiring[],
@@ -241,12 +246,15 @@ function computeDelta(
   const priorByDate = new Map(before.map((f) => [f.event_id, f.date]));
   const delta: FiringToApply[] = [];
   for (const firing of after) {
+    const definition = definitionFor(firing.event_id);
+    // No sidecar recipe ⇒ a bare real-event condition the SoR already knows — skip.
+    if (definition === null) continue;
     const prior = priorByDate.get(firing.event_id);
     if (prior === firing.date) continue; // unchanged — nothing to apply
     delta.push({
       event_id: firing.event_id,
       date: firing.date,
-      definition: definitionFor(firing.event_id),
+      definition,
     });
   }
   return delta;
@@ -353,9 +361,11 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
   const definitionFor = (eventId: string): string | null =>
     sourceMap[eventId]?.definition ?? null;
 
-  // The dormant runtime witness channel (no canonical statement is event-anchored
-  // anymore, so this is empty in practice — see canonical.ts), kept distinct from
-  // the contingent-start action below.
+  // The event-hold witness channel: each SYNTHETIC event_condition the rehydration
+  // newly resolved (a `max(a, b)`, a gated date) the operator must apply in the SoR.
+  // Bare real-event conditions are excluded (the SoR already knows them — see
+  // computeDelta), and the contingent start is surfaced separately as
+  // `start_to_apply`.
   const firings_to_apply = computeDelta(
     input.artifact.runtime.eventFirings ?? [],
     result.runtime.eventFirings ?? [],

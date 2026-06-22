@@ -31,7 +31,7 @@ export const syntheticEventId = (ordinal: number): string =>
 // (`evt:<n>` is no longer minted — starts route through `evt:start` — but the
 // guard still recognizes it so an artifact carrying one stays loadable.) Module-
 // local: the only consumer is the partition scan below.
-const isSyntheticEventId = (id: string): boolean => {
+export const isSyntheticEventId = (id: string): boolean => {
   if (!id.startsWith(SYNTHETIC_EVENT_ID_PREFIX)) return false;
   const suffix = id.slice(SYNTHETIC_EVENT_ID_PREFIX.length);
   return suffix === "start" || /^[0-9]+$/.test(suffix);
