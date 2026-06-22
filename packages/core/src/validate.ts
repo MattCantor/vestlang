@@ -162,6 +162,22 @@ const validateStatement = (
   if (s.cliff) {
     validateCliff(s.cliff, `${path}.cliff`, errors);
   }
+  // The event hold: a shape check only. `event_id` must be a non-empty string —
+  // that's all this layer can know. An unfired event_condition (no matching firing
+  // in the runtime) is VALID, the held state; we never cross-check the firing here,
+  // in either direction. Real-vs-synthetic id membership isn't this validator's job
+  // (it sees only template + runtime, no sidecar/world): a synthetic id's backing
+  // is the save-path dangling-pointer check, and a bare real id simply resolves
+  // against the world (unresolved = held, not an error).
+  if (s.event_condition !== undefined) {
+    const ec = s.event_condition as { event_id?: unknown };
+    if (typeof ec.event_id !== "string" || ec.event_id.length === 0) {
+      errors.push({
+        path: `${path}.event_condition.event_id`,
+        message: "must be a non-empty string",
+      });
+    }
+  }
 };
 
 /**
@@ -235,9 +251,12 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
  *   - dates must be real calendar dates (2025-02-31 is rejected, not rolled)
  *   - realized_fraction (if present) must be a valid Fraction in [0, 1]
  *
- * The canonical base is DATE-only now, so eventFirings references no template
- * statement — the field is a dormant runtime channel (see canonical.ts). Its
- * entries are still shape-checked, but there is no template-event cross-check.
+ * eventFirings is the event-hold witness channel: a firing here releases the grid
+ * of any statement whose `event_condition.event_id` matches. The entries are
+ * shape-checked, but deliberately NOT cross-checked against the template's
+ * event_conditions in either direction — an unfired condition (no matching firing)
+ * is the valid held state, and an unreferenced firing is harmless. That symmetry
+ * (no orphan rejection) is the rule that, if broken, would fail every held grant.
  */
 export const validateVestingRuntime = (
   runtime: VestingRuntime,

@@ -37,42 +37,22 @@ import { brandStatic } from "../evaluate/blockerTree.js";
 
 /**
  * Why an unresolved build can't be stored, read off the per-statement records.
- * Three distinct causes, in precedence order:
+ * Two distinct causes, in precedence order:
  *
- *   - EVENT_CLIFF        a cliff hangs off a named event — the schema has no home
- *                        for it at all, gated or not (kept firing-invariant:
- *                        blind to firings an event cliff always reads unfired,
- *                        landing here as the EVENT_PENDING record when bare, or as
- *                        an UNRESOLVED record carrying the event id on its shape
- *                        when a pending gate did the routing). Reported the same
- *                        whether the start resolved, is itself pending, or is a
- *                        THEN tail behind a pending head.
  *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
  *                        with no cliff anywhere — the tail just can't be dated yet.
  *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
  *
- * The cliff causes win over the tail one: a chained tail behind a pending head can
+ * (The old EVENT_CLIFF cause is gone: an event-held cliff now stores as a template
+ * — a time `cliff` plus an `event_condition` — so it never lands in this build at
+ * all. `unrepresentable` is largely vacated for cliffs.)
+ *
+ * The cliff cause wins over the tail one: a chained tail behind a pending head can
  * coexist with a cliff elsewhere — or carry one itself — and the cliff is the harder
  * constraint to act on.
  * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
  */
 const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
-  // First statement (program order) whose cliff is event-anchored — an
-  // EVENT_PENDING record, or an UNRESOLVED record whose gate routing kept the
-  // event id on its shape. The scan runs only on the firing-blind interchange
-  // build, where an event cliff always reads unfired, so EVENT_FIRED can't arise
-  // here and is intentionally excluded.
-  for (const r of resolutions) {
-    const c = r.cliff;
-    const eventId =
-      c.state === "EVENT_PENDING"
-        ? c.eventId
-        : c.state === "UNRESOLVED" && c.shape.kind !== "dated-floor"
-          ? c.shape.eventId
-          : undefined;
-    if (eventId !== undefined) return { kind: "EVENT_CLIFF", eventId };
-  }
-
   const hasDeferredCliff = resolutions.some(
     (r) => r.cliff.state === "UNRESOLVED",
   );
@@ -159,20 +139,15 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
   const v = classify(build);
   switch (v.kind) {
     case "events":
-      // Two date grids stay events-only here too — they're firing-invariant. An
-      // event cliff is the one place the two verdicts disagree: the record keeper
-      // can list the dated events for it (so resolution calls it events-only), but
-      // it can't store the cliff itself, so the storable answer is "no home".
-      // (Firing-blind a cliff event never reads as fired, so the EVENT_CLIFF
-      // reason can't actually arrive here anymore; the mapping stays for the
-      // exhaustiveness of the contract.)
-      return v.reason.kind === "EVENT_CLIFF"
-        ? { status: "unrepresentable", reason: v.reason }
-        : {
-            status: "events-only",
-            installments: v.installments,
-            reason: v.reason,
-          };
+      // Independent date grids and multiple start origins stay events-only here
+      // too — they're firing-invariant. An event-held cliff no longer reaches this
+      // arm: it stores as a template (a time `cliff` + an `event_condition`), so
+      // the verdicts agree on it rather than splitting events-only/unrepresentable.
+      return {
+        status: "events-only",
+        installments: v.installments,
+        reason: v.reason,
+      };
     case "impossible":
       // Firing-blind, so these are static contradictions — brand them so the type
       // can't be confused with a resolution-space `dead` blocker.

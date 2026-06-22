@@ -39,12 +39,15 @@ export const isVoid = (r: StmtResolution): boolean =>
 
 // A statement whose tranches the dated allocator materializes — core.compile in
 // the template arm, resolvedInstallments in the events/unresolved arms. These
-// never render symbolically; their fractions seed the claim basis below.
+// never render symbolically; their fractions seed the claim basis below. An
+// event-held cliff (EVENT_HELD) is dated too: core.compile owns its fold (emit
+// nothing while held, the proportional cliff once fired), so it never renders
+// symbolically here.
 const isDated = (r: StmtResolution): boolean =>
   isDatedStart(r) &&
   (r.cliff.state === "NONE" ||
     r.cliff.state === "RESOLVED" ||
-    r.cliff.state === "EVENT_FIRED");
+    r.cliff.state === "EVENT_HELD");
 
 // One claim per statement, drawn from a single program-wide cumulative so the
 // symbolic side telescopes the way the allocator does. Dated statements seed
@@ -183,15 +186,12 @@ export const unresolvedInstallments = (
       return EMPTY;
     case "IMPOSSIBLE":
       return makeImpossibleSchedule(amounts, r.cliff.blockers);
-    // A fired event cliff is dated — the events arm places its lump at the
-    // effective date — so it contributes nothing to the unresolved verdict.
-    case "EVENT_FIRED":
+    // An event-held cliff is materialized by core.compile (which folds at the
+    // condition firing, or holds the whole grid while unfired), so it contributes
+    // no symbolic installments here. Its pending-ness is disclosed on the template
+    // verdict's blocker list (gathered in buildTemplate), not restated per tranche.
+    case "EVENT_HELD":
       return EMPTY;
-    case "EVENT_PENDING":
-      // The event hasn't fired, so the whole grid waits on it.
-      return makeUnresolvedCliffSchedule(dates, amounts, [
-        { type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.eventId },
-      ]);
     case "UNRESOLVED": {
       const { shape, blockers } = r.cliff;
       switch (shape.kind) {

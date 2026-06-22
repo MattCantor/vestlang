@@ -16,6 +16,7 @@ import type {
   ResolutionContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
+  OCTDate,
   ResolvedInstallment,
   SymbolicInstallment,
 } from "@vestlang/types";
@@ -35,6 +36,11 @@ import {
 import { disclosuresOf } from "./lower.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { ClassifiedVerdict } from "./types.js";
+
+// The later of a firing and an optional time-baseline floor — the fold point of an
+// event-held cliff. OCTDate is ISO YYYY-MM-DD, so lexical order is calendar order.
+const laterOf = (firing: OCTDate, floor: OCTDate | undefined): OCTDate =>
+  floor !== undefined && floor > firing ? floor : firing;
 
 /**
  * Expand one resolved statement to its dated fraction-of-grant events, honoring a
@@ -71,17 +77,15 @@ const expandResolution = (
       ),
       percentage: r.cliff.cliff.percentage,
     };
-  } else if (r.cliff.state === "EVENT_FIRED") {
-    // An event cliff has no percentage of its own — the lump takes whatever
-    // share of the grid lands at or before its effective date (the firing plus
-    // any offsets on the cliff anchor), read off the record.
-    cliff = { kind: "proportional", date: r.cliff.effectiveAt };
-  } else if (r.cliff.state === "EVENT_PENDING") {
-    // Unfired, the cliff still gates every installment, so there are no dated
-    // tranches to emit; the routing holds such portions back before this expander
-    // runs, and the empty return keeps the failure mode "withheld", never
-    // "released".
-    return [];
+  } else if (r.cliff.state === "EVENT_HELD") {
+    // An event-held cliff that landed in an events build via another cause (e.g.
+    // multiple start origins). Unfired, the hold gates the whole grid → emit
+    // nothing. Fired, the lump folds at max(cliff baseline date, firing) — the
+    // baseline contributes only its date as a floor, the lump's size is whatever
+    // share the grid accrued by then (proportional).
+    if (r.cliff.firing === undefined) return [];
+    const foldDate = laterOf(r.cliff.firing, r.cliff.cliffDate);
+    cliff = { kind: "proportional", date: foldDate };
   } else if (r.cliff.state === "NONE") {
     cliff = { kind: "none" };
   } else {
@@ -134,9 +138,10 @@ const eventsArm = (
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   const dated: StmtResolution[] = [];
-  // Dated starts in this arm (RESOLVED or a committed floor) always have a dated
-  // cliff — buildTemplate routes unfired event cliffs and dead cliffs to the
-  // unresolved arm first — so the dated set here and isDated's definition agree.
+  // Dated starts in this arm (RESOLVED or a committed floor) carry a cliff
+  // expandResolution can place — NONE, a resolved time cliff, or an event-held
+  // cliff (folded at the firing, or held to nothing while unfired). Dead cliffs
+  // route to the unresolved arm first, so the dated set here and isDated agree.
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {

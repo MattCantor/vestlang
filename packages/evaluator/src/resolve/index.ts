@@ -135,13 +135,21 @@ export const resolveToCore = (
 // `start.date` is the handoff date — which is the very anchor lowerCliff measured
 // against — so heads, tails, independent grids, and fired EVENT starts (whose
 // `start.date` already folds in the firing and any offsets) all go through this
-// one expression. An EVENT_FIRED cliff carries its landing spot directly as
-// `effectiveAt`; an EVENT_PENDING one has no date to return.
+// one expression. An event-held cliff reports its fold point — max(time baseline
+// date, firing) — when fired, and nothing while it's still held.
 const statementCliffDate = (
   r: StmtResolution,
   dom: VestingDayOfMonth,
 ): OCTDate | undefined => {
-  if (r.cliff.state === "EVENT_FIRED") return r.cliff.effectiveAt;
+  if (r.cliff.state === "EVENT_HELD") {
+    // Unfired (or firing-blind) → no placeable fold point. Fired → the later of
+    // the firing and the stored time baseline's date (the floor in the max).
+    if (r.cliff.firing === undefined) return undefined;
+    const floor = r.cliff.cliffDate;
+    return floor !== undefined && floor > r.cliff.firing
+      ? floor
+      : r.cliff.firing;
+  }
   if (
     r.cliff.state === "RESOLVED" &&
     (r.start.state === "RESOLVED" || r.start.state === "COMMITTED")
