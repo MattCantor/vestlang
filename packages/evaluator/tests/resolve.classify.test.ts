@@ -267,12 +267,16 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
       ],
     };
     const program: Program = [
-      stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-01")), {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 48,
-        cliff,
-      }),
+      stmt(
+        portion(1, 1),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        {
+          type: "MONTHS",
+          length: 1,
+          occurrences: 48,
+          cliff,
+        },
+      ),
     ];
     const out = evaluateProgram(program, ctxInput());
     expect(out.resolution.status).toBe("template");
@@ -282,6 +286,61 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
     expect(rendered).toContain("EVENT a");
     expect(rendered).toContain("EVENT b");
     expect(rendered).not.toContain("evt:");
+  });
+
+  it("two statements with a byte-identical synthetic event side share one minted id", () => {
+    // Dedup by rendered recipe: a head dated grid plus two THEN tails, each tail
+    // carrying the same `CLIFF LATER OF(EVENT a, EVENT b)`. Both tails' event sides
+    // render byte-identically, so they collapse onto ONE synthetic `evt:<n>` and
+    // one sidecar entry rather than minting `evt:1` and `evt:2`.
+    const eventCliff = (): VestingNodeExpr<"VESTING_START"> => ({
+      type: "NODE_LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("a")),
+        makeSingletonNode(makeVestingBaseEvent("b")),
+      ],
+    });
+    const monthly12 = (cliff?: VestingNodeExpr<"VESTING_START">) => ({
+      type: "MONTHS" as const,
+      length: 1,
+      occurrences: 12,
+      ...(cliff ? { cliff } : {}),
+    });
+    const tail = (cliff: VestingNodeExpr<"VESTING_START">): Statement => ({
+      type: "STATEMENT",
+      chained: true,
+      amount: portion(1, 3),
+      expr: {
+        type: "SCHEDULE",
+        vesting_start: null,
+        periodicity: monthly12(cliff),
+      },
+    });
+    const program: Program = [
+      stmt(
+        portion(1, 3),
+        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        monthly12(),
+      ),
+      tail(eventCliff()),
+      tail(eventCliff()),
+    ];
+    const result = resolveToCore(program, ctxInput());
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+
+    // Both tails reference the same minted id (the head carries none).
+    const id1 = result.template.statements[1].event_condition?.event_id;
+    const id2 = result.template.statements[2].event_condition?.event_id;
+    expect(id1).toMatch(/^evt:\d+$/);
+    expect(id2).toBe(id1);
+
+    // Exactly one `evt:<n>` sidecar entry — the dedup collapsed the two byte-equal
+    // recipes onto one.
+    const syntheticKeys = Object.keys(result.sourceMap).filter((k) =>
+      /^evt:\d+$/.test(k),
+    );
+    expect(syntheticKeys).toEqual([id1]);
   });
 });
 
