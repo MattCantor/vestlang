@@ -230,9 +230,11 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
 
   it("persist refuses a non-template program with persist-not-storable (now on the wire)", async () => {
     const client = await connectClient();
-    // An event-anchored cliff can't be one canonical template.
+    // Two independent date grids can't be one canonical template (events-only).
     const res = await call(client, "vestlang_persist", {
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       ...GRANT,
     });
     expect(res.isError).toBeFalsy();
@@ -494,14 +496,16 @@ describe("#345 AC#6 — refusal message bytes are unchanged", () => {
       "schedule expands to 1000000 installments, exceeds the limit of 10000",
     );
 
-    // persist — persist-not-storable
+    // persist — persist-not-storable (two independent date grids → events-only)
     const persist = await call(client, "vestlang_persist", {
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       ...GRANT,
     });
     expect(sc(persist).error?.ruleId).toBe("persist-not-storable");
     expect(sc(persist).error?.message).toBe(
-      'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "unrepresentable". Adjust the schedule so it collapses to a single canonical template.',
+      'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "events-only". Adjust the schedule so it collapses to a single canonical template.',
     );
 
     // rehydrate — rehydrate-missing-grant-date (#293 hardened message)

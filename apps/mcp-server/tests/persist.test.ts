@@ -394,10 +394,12 @@ describe("mcp-server / persistence tool pair", () => {
 
   it("returns a clear error when the program is not a single template", async () => {
     const client = await connectClient();
-    // An event-anchored cliff can't be expressed as one canonical template — the
-    // cliff is duration-only — so this resolves to something non-storable.
+    // Two independent absolute-date grids can't be one canonical template (a record
+    // keeper models them as separate grants), so this resolves to events-only.
     const res = await persist(client, {
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });
@@ -718,8 +720,12 @@ describe("mcp-server / persistence tool pair", () => {
 
   it("AC#5/#345: persist's non-template refusal message is byte-stable", async () => {
     const client = await connectClient();
+    // Two independent date grids → events-only (an event cliff stores as a template
+    // now, so it no longer witnesses a non-template refusal).
     const res = await persist(client, {
-      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo",
+      dsl:
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 12 months " +
+        "PLUS 1/2 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 12 months",
       grant_date: "2025-01-01",
       grant_quantity: 1000,
     });
@@ -731,7 +737,7 @@ describe("mcp-server / persistence tool pair", () => {
     expect(sc.ok).toBe(false);
     expect(sc.error.ruleId).toBe("persist-not-storable");
     expect(sc.error.message).toBe(
-      'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "unrepresentable". Adjust the schedule so it collapses to a single canonical template.',
+      'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "events-only". Adjust the schedule so it collapses to a single canonical template.',
     );
   });
 
