@@ -327,8 +327,9 @@ const EVENT_REL_EVENT: Cell[] = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Orientation 5 — CLIFF <gate>  (the gate sits on a cliff anchor, not the start).
 // The same proviso floor as the start: a violated gate is impossible, an unfired
-// reference pends. The one difference is that an event-anchored cliff has no
-// template form, so a *satisfied* gate reads events-only rather than vests.
+// reference pends. Under #255 a satisfied gate that has fired VESTS: the event-held
+// cliff lowers to a (synthetic) event_condition, a storable template that folds at
+// the gated firing date.
 // Regression cover for #113, where a cliff-anchor gate parsed and lint-clean was
 // then silently dropped at resolution (satisfied and violated both vested).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,9 +348,9 @@ const CLIFF_GATE: Cell[] = [
     dsl: c("EVENT acquisition AFTER grantDate + 1 year"),
     asOf: TODAY,
     events: { acquisition: "2025-06-01" },
-    correct: "events-only",
+    correct: "vests",
     basis: "direct",
-    why: "acquisition after grantDate + 1yr; the gate holds. An event cliff has no template form, so the schedule resolves to events-only.",
+    why: "acquisition after grantDate + 1yr; the gate holds and the event has fired. The event-held cliff stores as a (synthetic) event_condition that folds at the firing → vests.",
   },
   {
     dsl: c("EVENT acquisition AFTER grantDate + 1 year"),
@@ -370,9 +371,9 @@ const CLIFF_GATE: Cell[] = [
     dsl: c("EVENT acquisition AFTER EVENT board"),
     asOf: TODAY,
     events: { acquisition: "2025-06-01", board: "2025-01-01" },
-    correct: "events-only",
+    correct: "vests",
     basis: "direct",
-    why: "board fires before acquisition, so the gate holds; event cliff → events-only.",
+    why: "board fires before acquisition, so the gate holds and acquisition has fired; the event-held cliff stores as a synthetic event_condition that folds at the firing → vests.",
   },
 ];
 
