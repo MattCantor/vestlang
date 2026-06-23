@@ -490,6 +490,66 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       /^evt:\d+$/,
     );
   });
+
+  // EVENT_CHAINED_TAIL is reachable, not vestigial. A lone contingent THEN chain
+  // would promote to a contingent-start template — but pair it with a statically
+  // impossible sibling and the impossible start poisons the build to `unresolved`
+  // before promotion runs, while the chain's pending head survives. The tail then
+  // walks back to its still-pending head and the reason is EVENT_CHAINED_TAIL.
+  it("a contingent chain beside an impossible sibling reports EVENT_CHAINED_TAIL", () => {
+    const monthly2: VestingPeriod = {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 2,
+    };
+    // A start dated strictly before its own date — a contradiction independent of
+    // any firing, so it's impossible firing-blind (mirrors the voidStart literal
+    // below in this file, but date/date rather than event-gated).
+    const impossibleStart: VestingNode<"GRANT_DATE"> = {
+      type: "NODE",
+      base: makeVestingBaseDate("2025-06-01"),
+      offsets: [],
+      condition: {
+        type: "ATOM",
+        constraint: {
+          type: "BEFORE",
+          base: makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+          strict: true,
+        },
+      },
+    };
+    const program: Program = [
+      // Component A — contingent THEN chain headed on the unfired `ipo`.
+      stmt(
+        portion(1, 4),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+        monthly2,
+      ),
+      {
+        type: "STATEMENT",
+        chained: true,
+        amount: portion(1, 4),
+        expr: { type: "SCHEDULE", vesting_start: null, periodicity: monthly2 },
+      },
+      // Component B — the statically-impossible sibling that poisons the build.
+      stmt(portion(1, 2), impossibleStart, {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 12,
+      }),
+    ];
+
+    const out = evaluateProgram(program, ctxInput());
+
+    // The program is also dead (component B is impossible); EVENT_CHAINED_TAIL is
+    // reported alongside that deadness, not as the program's only defect.
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CHAINED_TAIL",
+      eventId: "ipo",
+    });
+  });
 });
 
 describe("interchange — a pending-head THEN tail's cliff decides the reason (R2-B3)", () => {
