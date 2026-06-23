@@ -27,6 +27,7 @@ import {
   type GridCliff,
   type RawEvent,
 } from "@vestlang/primitives";
+import { numericToFraction } from "@vestlang/utils";
 import { makeResolvedInstallment } from "../interpret/makeTranches.js";
 import {
   unresolvedInstallments,
@@ -75,7 +76,9 @@ const expandResolution = (
         r.cliff.cliff.period_type,
         dom,
       ),
-      percentage: r.cliff.cliff.percentage,
+      // The embedded canonical Cliff stores a Numeric decimal; the kernel works
+      // in exact rational.
+      percentage: numericToFraction(r.cliff.cliff.percentage),
     };
   } else if (r.cliff.state === "EVENT_HELD") {
     // An event-held cliff that landed in an events build via another cause (e.g.

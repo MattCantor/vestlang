@@ -10,7 +10,7 @@
 // form exactly — any divergence would force the OCF↔core bridge `@vestlang/core`
 // exists to delete.
 
-import type { OCTDate } from "./helpers.js";
+import type { Numeric, OCTDate } from "./helpers.js";
 import type { VestingDayOfMonth } from "./oct_types.js";
 
 // From enums/PeriodType.schema.json
@@ -41,7 +41,10 @@ export interface VestingStatement {
   // bare id (multiple events, an offset, a gate). Until the event fires the whole
   // grid is held; once it does, the projection folds at max(cliff date, firing).
   event_condition?: { event_id: string };
-  percentage: Fraction; // share of total grant this vesting statement covers
+  // Share of the total grant this vesting statement covers, stored as an OCF
+  // `Numeric` decimal string (the interchange holds a fixed-point decimal, not a
+  // rational). The engine parses it back to an exact Fraction at every read.
+  percentage: Numeric;
 }
 
 // How a VestingStatement's schedule is anchored. Every statement takes its start
@@ -79,7 +82,11 @@ export interface Cliff {
   // on an installment boundary.
   length: number; // duration until the cliff, in period_type units (integer >= 0)
   period_type: PeriodType; // unit of `length`
-  percentage: Fraction; // share of the statement that vests at the cliff
+  // Share of the statement that vests at the cliff, stored as an OCF `Numeric`
+  // decimal string (parsed to a Fraction at every read). A repeating share like
+  // a 1/3 cliff can only be written truncated here — the precision guard flags
+  // when that truncation misallocates at the grant size in play.
+  percentage: Numeric;
 }
 
 // The firing-free part of the per-grant runtime the engine substitutes into a

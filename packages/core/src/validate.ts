@@ -8,7 +8,11 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { isValidCalendarDate } from "@vestlang/utils";
+import {
+  isNumeric,
+  isValidCalendarDate,
+  numericToFraction,
+} from "@vestlang/utils";
 import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
 
 export interface ValidationError {
@@ -63,13 +67,15 @@ const validateCliff = (
       message: `must be one of ${PERIOD_TYPES.join(", ")}`,
     });
   }
-  validateFraction(c.percentage, `${path}.percentage`, errors);
-  // percentage is a share of the statement, so it must lie in [0, 1].
-  if (
-    isInteger(c.percentage.numerator) &&
-    isPositiveInt(c.percentage.denominator) &&
-    !fractionInUnitInterval(c.percentage)
-  ) {
+  // percentage is stored as an OCF Numeric decimal and is a share of the
+  // statement, so once it parses it must lie in [0, 1]. Shape-check the string
+  // first; only then parse and bound-check the value.
+  if (!isNumeric(c.percentage)) {
+    errors.push({
+      path: `${path}.percentage`,
+      message: "must be an OCF Numeric string",
+    });
+  } else if (!numericInUnitInterval(c.percentage)) {
     errors.push({
       path: `${path}.percentage`,
       message: "must be in the closed interval [0, 1]",
@@ -135,13 +141,18 @@ const validateStatement = (
       message: `must be one of ${PERIOD_TYPES.join(", ")}`,
     });
   }
-  validateFraction(s.percentage, `${path}.percentage`, errors);
-  // A negative share is never meaningful — it makes the allocator emit negative
+  // The statement's share of the grant, stored as an OCF Numeric decimal. A
+  // negative share is never meaningful — it makes the allocator emit negative
   // installments — so reject it here. Over 1 is *not* rejected: the evaluator
   // represents an over-allocating clause as a statement whose percentage exceeds
   // 1 and surfaces it as an over-allocation finding rather than a hard error, so
   // the upper bound stays a finding's job, not the validator's.
-  if (isInteger(s.percentage.numerator) && s.percentage.numerator < 0) {
+  if (!isNumeric(s.percentage)) {
+    errors.push({
+      path: `${path}.percentage`,
+      message: "must be an OCF Numeric string",
+    });
+  } else if (numericToFraction(s.percentage).numerator < 0) {
     errors.push({
       path: `${path}.percentage`,
       message: "must be >= 0",
@@ -228,6 +239,13 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
   // numerator/denominator <= 1 ⇔ numerator <= denominator
   return f.numerator <= f.denominator;
 };
+
+// A stored Numeric percentage lies in [0, 1]. Parse to the exact rational and
+// reuse the fraction bound check, so the decimal and the fraction paths can't
+// disagree on where the interval edges sit. The caller has already confirmed the
+// string is a well-formed Numeric.
+const numericInUnitInterval = (n: string): boolean =>
+  fractionInUnitInterval(numericToFraction(n));
 
 /**
  * Validates the per-grant runtime data passed to the compiler against the
