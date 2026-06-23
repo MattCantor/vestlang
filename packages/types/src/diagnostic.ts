@@ -7,6 +7,7 @@
 // import cycle. It sits here, at the dependency floor, so both can speak it.
 
 import type { Fraction } from "./canonical.js";
+import type { Numeric } from "./helpers.js";
 
 // How a diagnostic addresses the node it's about: a field name ("expr",
 // "cliff") or an array index (a selector / AND / OR arm). Mirrors a walk path.
@@ -50,6 +51,18 @@ export interface Diagnostic {
 // `severity` reuses the same vocabulary as Diagnostic so both can be filtered
 // together (e.g. "any errors?"). `under-allocation` is defined now but only
 // produced in a later phase.
+//
+// `precision-insufficient` is the precision-analyzer guard's channel: a stored
+// percentage is a fixed-point decimal (a Numeric), so a repeating share like 1/3
+// can only be written truncated, and at some grant sizes that truncation
+// allocates to the wrong whole-share count. The evaluator runs the analyzer on
+// each stored percentage and raises this warning (not an error — the schedule is
+// still valid, it just allocates a share or two off from the intended fraction)
+// when the verdict says the decimal misallocates or can't be represented. It
+// carries everything a message needs straight off the analyzer: the decimal as
+// written, the share basis it was measured against, the fraction it was inferred
+// to mean, and the shorter decimal that would have allocated correctly (absent
+// when even ten places can't land it).
 export type Finding =
   | {
       kind: "over-allocation";
@@ -61,5 +74,20 @@ export type Finding =
       kind: "under-allocation";
       severity: "warning";
       sum: Fraction;
+      path?: NodePath;
+    }
+  | {
+      kind: "precision-insufficient";
+      severity: "warning";
+      // The stored decimal as written, and the share count it was analyzed
+      // against (a statement's basis is the grant; a cliff's is its statement's
+      // share of the grant).
+      percentage: Numeric;
+      shareCount: number;
+      // The fraction the analyzer inferred the author meant, e.g. 1/3.
+      inferred: Fraction;
+      // The shortest decimal that allocates to the intended count. Undefined when
+      // no ≤10-place decimal lands it (the analyzer's not-representable verdict).
+      recommended?: Numeric;
       path?: NodePath;
     };

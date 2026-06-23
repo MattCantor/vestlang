@@ -23,3 +23,24 @@ export interface Selector<T, K extends string = string> {
 // signatures; it carries no nominal brand today. Reconsidering a real brand +
 // a validating mint is tracked as a vestlang issue.
 export type OCTDate = string;
+
+// types/Numeric.schema.json
+// existing OCT schema
+//
+// A fixed-point decimal string — optional sign, integer part, up to ten
+// fractional digits, no scientific notation. This is OCF's `Numeric`, NOT
+// Carta's `{ value }` object. The interchange stores a vesting percentage in
+// this shape rather than as an exact rational, which is why a repeating share
+// (a 1/3 cliff) can only be written truncated. Like OCTDate this is a plain
+// `string` alias with no brand — validated at the read/write boundaries via
+// `isNumeric` / `validateNumeric` (in @vestlang/utils).
+export type Numeric = string;
+
+// The one source of truth for the OCF `Numeric` grammar. Everything that has to
+// agree on the shape — the boundary validator, the persist zod schema, the
+// parse/render helpers, the precision analyzer — references this single regex
+// (as a string so a zod `.regex()` and a fresh `RegExp` can both consume it).
+export const NUMERIC_PATTERN_SOURCE = "^[+-]?[0-9]+(\\.[0-9]{1,10})?$";
+
+// The same grammar as a ready-to-use RegExp.
+export const NUMERIC_PATTERN: RegExp = new RegExp(NUMERIC_PATTERN_SOURCE);
