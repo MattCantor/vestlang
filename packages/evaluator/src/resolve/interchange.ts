@@ -57,11 +57,23 @@ const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
     (r) => r.cliff.state === "UNRESOLVED",
   );
   if (!hasDeferredCliff) {
-    // Note: a contingent start now promotes a single-event-head THEN chain to a
-    // `template` (see buildTemplate), so this branch no longer fires for that
-    // common shape; the kind is retained for contract exhaustiveness. Whether any
-    // shape still reaches it — and removing the branch + pendingHeadEvent helper if
-    // not — is tracked as a follow-up cleanup.
+    // This branch is live. A lone single-event-head THEN chain promotes to a
+    // contingent-start `template` (see buildTemplate), so on its own it never gets
+    // here — but pair that chain with a statically-impossible sibling component and
+    // it does. The impossible sibling (e.g. a start dated strictly before its own
+    // date — a contradiction with no firing involved) trips the IMPOSSIBLE-start
+    // guard in lower.ts, which routes the whole build to `unresolved()` *before*
+    // contingent-start promotion ever runs. Meanwhile the chain's pending head
+    // survives isVoid/classify untouched — a head still waiting on an event isn't
+    // void, only a flatly-impossible start (or a dated start + impossible cliff) is.
+    // So the build lands `unresolved`, there's no deferred cliff, and the tail walks
+    // back to its still-pending head: EVENT_CHAINED_TAIL.
+    //
+    // Note the doubled diagnosis: such a program is at once dead (that impossible
+    // sibling) and pending (the live chain). We report EVENT_CHAINED_TAIL *alongside*
+    // the deadness, not instead of it — an impossible sibling on its own rolls the
+    // interchange up to `impossible`, but the live pending head keeps this program
+    // off that all-void rollup, leaving the chained-tail reason to surface.
     const head = pendingHeadEvent(resolutions);
     if (head !== undefined)
       return { kind: "EVENT_CHAINED_TAIL", eventId: head };
