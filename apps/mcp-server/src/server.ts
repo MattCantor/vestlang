@@ -119,7 +119,10 @@ const EVAL_CONTEXT_FIELDS = {
     .number()
     .int("grant_quantity must be a whole number")
     .min(0, "grant_quantity must be non-negative")
-    .safe("grant_quantity must be within the safe integer range")
+    .max(
+      Number.MAX_SAFE_INTEGER,
+      "grant_quantity must be within the safe integer range",
+    )
     .describe("Total shares granted"),
   events: z
     .record(z.string().min(1), ISO_DATE)
@@ -194,7 +197,7 @@ export function createServer(): McpServer {
       title: "Parse vestlang",
       description:
         "Parse vestlang DSL text into a raw AST (RawProgram). On success returns { ok: true, ast }. A syntax error returns { ok: false, error } with the diagnostic ruleId and source location.",
-      inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
+      inputSchema: z.strictObject({ dsl: DSL_INPUT }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -216,7 +219,7 @@ export function createServer(): McpServer {
       title: "Compile vestlang to normalized AST",
       description:
         "Parse vestlang DSL text and produce the normalized canonical AST (Program). Use this when reasoning about the structure of a schedule; it is the same shape the evaluator consumes.",
-      inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
+      inputSchema: z.strictObject({ dsl: DSL_INPUT }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -237,15 +240,13 @@ export function createServer(): McpServer {
       title: "Stringify AST to vestlang",
       description:
         "Convert a vestlang AST (either a Statement or a Program array) back into DSL source text. Useful for round-tripping or presenting a machine-generated schedule as canonical vestlang.",
-      inputSchema: z
-        .object({
-          ast: z
-            .unknown()
-            .describe(
-              "A vestlang Statement or Program (array of Statements). Typically obtained from vestlang_compile.",
-            ),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        ast: z
+          .unknown()
+          .describe(
+            "A vestlang Statement or Program (array of Statements). Typically obtained from vestlang_compile.",
+          ),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -280,30 +281,26 @@ export function createServer(): McpServer {
       title: "Infer vestlang from tranche array",
       description:
         "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Decomposes the stream by branch-and-bound minimum-cardinality exact cover — the fewest uniform trains, cliffs, and one-off pulses that reproduce it (a greedy seed sets the bound, then the search tries to beat it), with a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
-      inputSchema: z
-        .object({
-          tranches: z
-            .array(
-              z
-                .object({
-                  date: ISO_DATE,
-                  amount: z
-                    .number()
-                    .int("tranche amount must be a whole number")
-                    .min(0, "tranche amount must be non-negative")
-                    .describe("Tranche amount (not cumulative)"),
-                })
-                .strict(),
-            )
-            .min(1, "tranches must contain at least one entry")
-            .describe(
-              "Array of {date, amount} vesting tranches. Same-date tranches are summed.",
-            ),
-          grant_date: ISO_DATE.optional().describe(
-            "Optional grant date anchor. If omitted, defaults to the first tranche date.",
+      inputSchema: z.strictObject({
+        tranches: z
+          .array(
+            z.strictObject({
+              date: ISO_DATE,
+              amount: z
+                .number()
+                .int("tranche amount must be a whole number")
+                .min(0, "tranche amount must be non-negative")
+                .describe("Tranche amount (not cumulative)"),
+            }),
+          )
+          .min(1, "tranches must contain at least one entry")
+          .describe(
+            "Array of {date, amount} vesting tranches. Same-date tranches are summed.",
           ),
-        })
-        .strict().shape,
+        grant_date: ISO_DATE.optional().describe(
+          "Optional grant date anchor. If omitted, defaults to the first tranche date.",
+        ),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -341,12 +338,10 @@ export function createServer(): McpServer {
       title: "Evaluate vesting schedule",
       description:
         'Evaluate a vestlang program against a grant context. The program is treated as ONE grant: its statements collapse into a single schedule of installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) with blockers, and you get TWO verdicts on it. `interchange` — the storable verdict, what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — largely vacated for cliffs now; the remaining causes, each named in a `reason`: a cliff that can\'t be placed until an event fires (a cross-unit deferred cliff), or a THEN tail chained behind a start still waiting on an event. An event-held cliff is NOT unrepresentable — it stores as a `template`, with the time baseline in `cliff` and the event hold in `event_condition`), or "impossible" (a structural contradiction). `resolution` — the resolves-to verdict given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `interchange`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `pendingBlockers`, never from a verdict status), `dead` (something contradicted given the firings — read off `deadBlockers`; distinct from a terminal `impossible` status, since a live statement can sit beside a dead one), and `valid` (false when the program allocates more than the grant) with a single `findings` array (each `kind`, `severity`, exact `sum`, human `message`) computed over the whole program; installments are still returned when `valid` is false but aren\'t a valid schedule. It carries `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, message }, whose later or backdated firing could change the result), and `breakdown` — one entry per clause (a THEN chain reports as one entry, since its segments can\'t be placed apart) with that clause\'s own installments and blockers, split into `pendingBlockers` and `deadBlockers` (no verdict; a clause has no storable schedule of its own), for attribution — amounts are each clause\'s own evaluation against the whole grant, so on non-divisible portions they can differ from the collapsed schedule\'s by ±1 share; the collapsed schedule is authoritative. On a rescue — an events-only program whose realized projection collapses back to a single template — the verdict reads "template" and a `recovered` block records what it was rescued from (the events-only `reason`, the inferred single-template `dsl`, its `vestingDayOfMonth`, and a `residualError`); it is absent otherwise. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view.',
-      inputSchema: z
-        .object({
-          dsl: DSL_INPUT,
-          ...EVAL_CONTEXT_FIELDS,
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        dsl: DSL_INPUT,
+        ...EVAL_CONTEXT_FIELDS,
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -375,15 +370,13 @@ export function createServer(): McpServer {
       title: "Evaluate vesting as of a date",
       description:
         "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. For the verdicts and storability flags, use vestlang_evaluate.",
-      inputSchema: z
-        .object({
-          dsl: DSL_INPUT,
-          ...EVAL_CONTEXT_FIELDS,
-          as_of: ISO_DATE.optional().describe(
-            "As-of date (YYYY-MM-DD). Defaults to today.",
-          ),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        dsl: DSL_INPUT,
+        ...EVAL_CONTEXT_FIELDS,
+        as_of: ISO_DATE.optional().describe(
+          "As-of date (YYYY-MM-DD). Defaults to today.",
+        ),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -412,14 +405,12 @@ export function createServer(): McpServer {
       title: "Vested shares in a date window",
       description:
         "Return the grant's RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. The program is collapsed into one schedule first; UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested.",
-      inputSchema: z
-        .object({
-          dsl: DSL_INPUT,
-          ...EVAL_CONTEXT_FIELDS,
-          from: ISO_DATE.describe("Window start, inclusive (YYYY-MM-DD)"),
-          to: ISO_DATE.describe("Window end, inclusive (YYYY-MM-DD)"),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        dsl: DSL_INPUT,
+        ...EVAL_CONTEXT_FIELDS,
+        from: ISO_DATE.describe("Window start, inclusive (YYYY-MM-DD)"),
+        to: ISO_DATE.describe("Window end, inclusive (YYYY-MM-DD)"),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -452,7 +443,7 @@ export function createServer(): McpServer {
       title: "Lint vestlang",
       description:
         "Run vestlang's syntax and semantic linter against DSL text. The call always answers (envelope `ok: true`); the lint verdict is `errorFree` (true when there are no error-severity diagnostics — valid/storable, matching vestlang_persist), alongside `clean` (true when there are no diagnostics at all) and the `diagnostics` list, each with ruleId, severity, message, and (when available) source location. Non-error diagnostics (warnings, info) are advisory: they appear in `diagnostics` and set `clean` false but do NOT flip `errorFree`.",
-      inputSchema: z.object({ dsl: DSL_INPUT }).strict().shape,
+      inputSchema: z.strictObject({ dsl: DSL_INPUT }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -486,12 +477,10 @@ export function createServer(): McpServer {
       title: "Persist a vesting schedule to a storable artifact",
       description:
         "Compile a vestlang program ONCE into a persisted artifact: the canonical template + firing-free runtime, plus an out-of-band `sidecar` mapping each synthetic event (minted when a combinator/gated/offset start is lowered into a template) to its definition. Storing requires the program be lint-clean of error-severity diagnostics, VALID, and storable as a single `template` in the firing-invariant `interchange` verdict. A program the linter flags with an error (e.g. an unsatisfiable date window) is refused with a message naming the diagnostic. An invalid program — one that over-allocates the grant (more than 100%) — is refused naming the over-allocation, since persisting it would mint an artifact that over-vests on rehydrate. A program whose storable `interchange` shape isn't a single `template` (events-only, unrepresentable, impossible) is likewise refused, naming the status. (A warning is advisory and does NOT block storage.) Also returns the closed-world `resolution` blockers, split into `pending` — advisory pending witnesses still floating at store time (e.g. a gate whose event hasn't fired), which vestlang_rehydrate later resolves — and `dead` — blockers contradicted given the firings recorded so far, which CAN be non-empty for a schedule that is storable firing-blind yet already dead given a recorded firing (a revisable disclosure; both always present). The artifact bakes no firings, so it's firing-invariant by construction — witnesses are re-derived on each rehydrate. Mirrors vestlang_evaluate's input conventions.",
-      inputSchema: z
-        .object({
-          dsl: DSL_INPUT,
-          ...EVAL_CONTEXT_FIELDS,
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        dsl: DSL_INPUT,
+        ...EVAL_CONTEXT_FIELDS,
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -527,23 +516,24 @@ export function createServer(): McpServer {
       title: "Rehydrate a persisted artifact against fired events",
       description:
         "Re-resolve a stored PersistedArtifact (from vestlang_persist) against the world's named-event firings, and report what to do about it. Returns FIVE things: `start_to_apply` — the primary action: the grant's contingent vesting start re-derived on this reload (`{ date }`), or null when its event hasn't fired yet or the grant has no contingent start. It's the instruction to set the grant's vesting start date in the system of record; the stored artifact stays contingent and bakes no date, so this re-emits on every reload where the start resolves — apply it idempotently; `firings_to_apply` — each SYNTHETIC event_condition (an event-held cliff whose event side is richer than a bare id — the later of two events, a gated date) that this reload newly resolved, as `{ event_id, date, definition }` for the operator to apply in the system of record. A BARE real-event condition surfaces nothing here (the SoR already knows that firing from the world you supplied); [] when no synthetic hold resolved; `pending` — the start's recipe still doesn't resolve because its event simply hasn't fired yet (keep waiting), with dead/impossible arms reported SEPARATELY under `dead`, not here; `dead` — the recipe can never resolve given the firings we now know (e.g. the event fired OUTSIDE its window), so stop waiting on it (always present, [] when none); and `projection` — the dated installments from compiling the frozen template against the re-derived start with the supplied grant_quantity (what the record keeper will show once the start is applied; empty while the start is still unresolved). The grant date and day-of-month rule are the conventions frozen in the artifact, so they're read from it; you supply only the newly-fired events and grant_quantity.",
-      inputSchema: z
-        .object({
-          artifact: PERSISTED_ARTIFACT,
-          grant_quantity: z
-            .number()
-            .int("grant_quantity must be a whole number")
-            .min(0, "grant_quantity must be non-negative")
-            .safe("grant_quantity must be within the safe integer range")
-            .describe("Total shares granted, used to size the projection"),
-          events: z
-            .record(z.string().min(1), ISO_DATE)
-            .optional()
-            .describe(
-              `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
-            ),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        artifact: PERSISTED_ARTIFACT,
+        grant_quantity: z
+          .number()
+          .int("grant_quantity must be a whole number")
+          .min(0, "grant_quantity must be non-negative")
+          .max(
+            Number.MAX_SAFE_INTEGER,
+            "grant_quantity must be within the safe integer range",
+          )
+          .describe("Total shares granted, used to size the projection"),
+        events: z
+          .record(z.string().min(1), ISO_DATE)
+          .optional()
+          .describe(
+            `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
+          ),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -576,16 +566,14 @@ export function createServer(): McpServer {
       title: "Add a period to a date",
       description:
         "Return date + (length × unit), applying the VestingDayOfMonth rule for month/year arithmetic (handles month-end, leap years, day-29/30/31 clamping). Use negative length to subtract. Units: days, weeks, months, years.",
-      inputSchema: z
-        .object({
-          date: ISO_DATE.describe("Starting date (YYYY-MM-DD)"),
-          length: z.number().int("length must be a whole number"),
-          unit: PERIOD_UNIT,
-          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
-            `Only applies to months/years. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
-          ),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        date: ISO_DATE.describe("Starting date (YYYY-MM-DD)"),
+        length: z.number().int("length must be a whole number"),
+        unit: PERIOD_UNIT,
+        vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
+          `Only applies to months/years. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
+        ),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -610,13 +598,11 @@ export function createServer(): McpServer {
       title: "Difference between two dates",
       description:
         "Count the calendar days or whole calendar months between two dates. For months, also returns remainder_days (days from the anchor month-boundary to 'to'). Direction is signed: if 'to' is before 'from', the diff is negative. Months are anchored on 'from' — the count is how many whole months 'to' is past 'from's day-of-month — so 'from' is privileged and swapping the two does not simply negate the result near month-ends. E.g. Jan 31 -> Feb 29 is 1 month (Feb 29 is the clamped one-month landing), but Feb 29 -> Jan 31 is 0 (one month before Feb 29 is Jan 29, which Jan 31 has not yet reached).",
-      inputSchema: z
-        .object({
-          from: ISO_DATE,
-          to: ISO_DATE,
-          unit: z.enum(["days", "months"]),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        from: ISO_DATE,
+        to: ISO_DATE,
+        unit: z.enum(["days", "months"]),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -636,19 +622,17 @@ export function createServer(): McpServer {
       title: "Resolve an offset expression to a date",
       description:
         "Resolve a vestlang offset expression (e.g. 'EVENT ipo + 6 months', '+3 months', 'DATE 2025-01-01 - 2 days', 'EARLIER OF (EVENT a, EVENT b)') to a concrete date. Requires grant_date (used for expressions that reference the grant anchor). Named events used in the expression must be in the events map. When the date is committed against an unfired event (e.g. 'EARLIER OF (DATE d, EVENT e)' with e absent), the reply also carries an absenceAssumptions array disclosing that the answer assumes that event stayed absent through the date — a later or backdated firing could move the start earlier.",
-      inputSchema: z
-        .object({
-          expr: z
-            .string()
-            .min(1)
-            .describe(
-              "Offset expression as it would appear after 'VEST FROM' in the DSL.",
-            ),
-          grant_date: ISO_DATE,
-          events: z.record(z.string().min(1), ISO_DATE).optional(),
-          vesting_day_of_month: VESTING_DAY_OF_MONTH.optional(),
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        expr: z
+          .string()
+          .min(1)
+          .describe(
+            "Offset expression as it would appear after 'VEST FROM' in the DSL.",
+          ),
+        grant_date: ISO_DATE,
+        events: z.record(z.string().min(1), ISO_DATE).optional(),
+        vesting_day_of_month: VESTING_DAY_OF_MONTH.optional(),
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -677,12 +661,10 @@ export function createServer(): McpServer {
       title: "Normalize a date under a VestingDayOfMonth rule",
       description:
         "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does 29_OR_LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
-      inputSchema: z
-        .object({
-          date: ISO_DATE,
-          rule: VESTING_DAY_OF_MONTH,
-        })
-        .strict().shape,
+      inputSchema: z.strictObject({
+        date: ISO_DATE,
+        rule: VESTING_DAY_OF_MONTH,
+      }).shape,
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
