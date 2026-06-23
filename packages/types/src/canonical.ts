@@ -1,12 +1,6 @@
 // Canonical vesting IR — the Carta-aligned interchange. The single shared home
 // for these types; `@vestlang/core` imports them back (type-only).
 //
-// Kept consistent with the OCF-Composed-Schemas canonical vesting schema:
-// https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/blob/main/canonical/vesting/types.ts
-// The optional-`schedule` shape below (a pure milestone carries no time grid)
-// converges with the OCF side via OCF-Composed-Schemas PR #130; until that merges,
-// this repo's shape is the reference.
-//
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
 // with no adaptation. So the field names stay snake_case (`period_type`,
 // `event_id`) to match the canonical wire form exactly —
