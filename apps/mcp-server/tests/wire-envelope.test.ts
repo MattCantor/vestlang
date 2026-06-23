@@ -66,7 +66,6 @@ const corruptArtifact = (eventId: string, definition: string) => ({
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -293,7 +292,6 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
             statements: [
               {
                 order: 0,
-                vesting_base: { type: "DATE" },
                 occurrences: 4,
                 period: 1,
                 period_type: "MONTHS",

@@ -5,10 +5,10 @@
 // https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/blob/main/canonical/vesting/types.ts
 //
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
-// with no adaptation. So the field names stay snake_case (`vesting_base`,
-// `period_type`, `event_id`, `realized_fraction`) to match the canonical wire
-// form exactly — any divergence would force the OCF↔core bridge `@vestlang/core`
-// exists to delete.
+// with no adaptation. So the field names stay snake_case (`period_type`,
+// `event_id`, `realized_fraction`) to match the canonical wire form exactly —
+// any divergence would force the OCF↔core bridge `@vestlang/core` exists to
+// delete.
 
 import type { Numeric, OCTDate } from "./helpers.js";
 import type { VestingDayOfMonth } from "./oct_types.js";
@@ -26,7 +26,6 @@ export interface VestingScheduleTemplate {
 
 export interface VestingStatement {
   order: number; // 1-based sequence position
-  vesting_base: TemplateVestingBase; // anchor: always the hoisted per-grant date
   occurrences: number; // integer >= 1; number of vesting events in segment
   period: number; // integer >= 0; length of one installment, in period_type units
   period_type: PeriodType;
@@ -47,27 +46,15 @@ export interface VestingStatement {
   percentage: Numeric;
 }
 
-// How a VestingStatement's schedule is anchored. Every statement takes its start
-// from the one per-grant date hoisted to VestingRuntime.startDate; the canonical
-// template has no other anchor. A contingent start (the calendar date isn't known
-// until a named event fires) is still a DATE base — its startDate is the
+// Anchoring is implicit: every statement takes its start from the one per-grant
+// date hoisted to VestingRuntime.startDate, chained by `order`. The canonical
+// template carries no per-statement anchor. A contingent start (the calendar date
+// isn't known until a named event fires) is no exception — its startDate is the
 // far-future CONTINGENT_START_SENTINEL, and the contingency itself lives
 // out-of-band in a reserved `evt:start` sidecar entry that vestlang re-derives on
-// reload (see packages/evaluator/src/resolve/rehydrate.ts). Carta — the
-// ingestion target — has exactly one date-typed vestingStartDate per grant and no
-// event-typed vesting start, so an event-anchored base has nothing to land in.
-//
-// A single-element union for now: kept as a `TemplateVestingBase` alias (rather
-// than inlining `{ type: "DATE" }`) so the canonical shape can grow another anchor
-// later without a wide rename.
-//
-// Named `Template*` to distinguish it from the DSL/AST `VestingBase` family
-// (`./ast.ts`), which preserves a syntactic `value: string`.
-export type TemplateVestingBase = TemplateVestingBaseDate;
-
-export interface TemplateVestingBaseDate {
-  type: "DATE";
-}
+// reload (see packages/evaluator/src/resolve/rehydrate.ts). Carta — the ingestion
+// target — has exactly one date-typed vestingStartDate per grant and no
+// event-typed vesting start, which is why the anchor is always that one date.
 
 export interface Fraction {
   numerator: number; // integer

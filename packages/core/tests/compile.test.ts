@@ -9,7 +9,6 @@ import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 const sumAmounts = (events: { amount: string }[]): number =>
   events.reduce((acc, e) => acc + Number(e.amount), 0);
 
-const DATE_BASE = { type: "DATE" as const };
 const startJan2025: VestingRuntime = { startDate: "2025-01-01" };
 
 describe("compile — standard 4yr/1mo with 25% cliff", () => {
@@ -18,7 +17,6 @@ describe("compile — standard 4yr/1mo with 25% cliff", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
@@ -69,7 +67,6 @@ describe("compile — non-standard 30% cliff", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
@@ -103,7 +100,6 @@ describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
     num: number,
   ): VestingScheduleTemplate["statements"][number] => ({
     order,
-    vesting_base: DATE_BASE,
     occurrences: 1,
     period: 12,
     period_type: "MONTHS",
@@ -131,7 +127,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 48,
           period: 1,
           period_type: "MONTHS",
@@ -152,7 +147,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
@@ -179,7 +173,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -207,7 +200,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 7,
           period_type: "DAYS",
@@ -231,7 +223,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 6,
           period: 1,
           period_type: "MONTHS",
@@ -256,7 +247,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 12,
           period_type: "MONTHS",
@@ -264,7 +254,6 @@ describe("compile — additional DATE-anchored cases", () => {
         },
         {
           order: 2,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 12,
           period_type: "MONTHS",
@@ -287,7 +276,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 12,
           period_type: "MONTHS",
@@ -295,7 +283,6 @@ describe("compile — additional DATE-anchored cases", () => {
         },
         {
           order: 2,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 12,
           period_type: "MONTHS",
@@ -314,7 +301,6 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 12,
           period_type: "MONTHS",
@@ -349,7 +335,6 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences,
         period: 1,
         period_type: "MONTHS",
@@ -433,7 +418,6 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 0,
           period_type: "MONTHS",
@@ -459,7 +443,6 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -491,7 +474,6 @@ describe("compile — over-allocated template hits the kernel's cast bound (R2-B
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 1,
         period: 12,
         period_type: "MONTHS",
@@ -526,7 +508,6 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 1,
         period: 1,
         period_type: "MONTHS",
@@ -534,7 +515,6 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
       },
       {
         order: 2,
-        vesting_base: DATE_BASE,
         occurrences: 2,
         period: 1,
         period_type: "MONTHS",
@@ -549,7 +529,6 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 3,
         period: 1,
         period_type: "MONTHS",
@@ -602,7 +581,6 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
@@ -616,7 +594,6 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
@@ -715,7 +692,6 @@ describe("compile — contingent-start sentinel skip (AC 10)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 48,
         period: 1,
         period_type: "MONTHS",
@@ -782,7 +758,6 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: DATE_BASE,
         occurrences: 12,
         period: 1,
         period_type: "MONTHS",
@@ -825,7 +800,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
@@ -851,7 +825,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
@@ -874,7 +847,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 48,
           period: 1,
           period_type: "MONTHS",
@@ -899,7 +871,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
@@ -907,7 +878,6 @@ describe("compile — boundary hardening", () => {
         },
         {
           order: 2,
-          vesting_base: DATE_BASE,
           occurrences: 12,
           period: 1,
           period_type: "MONTHS",
@@ -936,7 +906,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 1,
           period_type: "MONTHS",
@@ -944,7 +913,6 @@ describe("compile — boundary hardening", () => {
         },
         {
           order: 2,
-          vesting_base: DATE_BASE,
           occurrences: 1,
           period: 30,
           period_type: "DAYS",
@@ -967,7 +935,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -986,7 +953,6 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          vesting_base: DATE_BASE,
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",

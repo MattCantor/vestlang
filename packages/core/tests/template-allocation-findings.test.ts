@@ -14,7 +14,6 @@ const oneStatementTemplate = (numerator: number, denominator: number) => ({
   statements: [
     {
       order: 1,
-      vesting_base: { type: "DATE" as const },
       occurrences: 1,
       period: 12,
       period_type: "MONTHS" as const,
@@ -69,7 +68,6 @@ describe("templateAllocationFindings (AC#5)", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" as const },
           occurrences: 1,
           period: 12,
           period_type: "MONTHS" as const,
@@ -77,7 +75,6 @@ describe("templateAllocationFindings (AC#5)", () => {
         },
         {
           order: 2,
-          vesting_base: { type: "DATE" as const },
           occurrences: 1,
           period: 12,
           period_type: "MONTHS" as const,

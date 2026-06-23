@@ -35,7 +35,6 @@ describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 0, // every occurrence lands on the start date
         period_type: "MONTHS",

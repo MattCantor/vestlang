@@ -12,13 +12,12 @@ import {
 import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
 // A well-formed graded template: two chained DATE statements, with an on-grid
-// cliff on the first. (The canonical base is DATE-only now.)
+// cliff on the first.
 const validTemplate: VestingScheduleTemplate = {
   id: "tmpl-1",
   statements: [
     {
       order: 1,
-      vesting_base: { type: "DATE" },
       occurrences: 48,
       period: 1,
       period_type: "MONTHS",
@@ -31,7 +30,6 @@ const validTemplate: VestingScheduleTemplate = {
     },
     {
       order: 2,
-      vesting_base: { type: "DATE" },
       occurrences: 1,
       period: 0,
       period_type: "MONTHS",
@@ -47,7 +45,6 @@ const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
   statements: [
     {
       order: 1,
-      vesting_base: { type: "DATE" },
       occurrences,
       period: 1,
       period_type: "MONTHS",
@@ -119,7 +116,6 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -138,7 +134,6 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 1,
           period: 1,
           period_type: "MONTHS",
@@ -146,7 +141,6 @@ describe("validateVestingScheduleTemplate", () => {
         },
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 1,
           period: 1,
           period_type: "MONTHS",
@@ -166,7 +160,6 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -195,7 +188,6 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
@@ -218,7 +210,6 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 1,
           period: 1,
           // @ts-expect-error — exercising the runtime guard with an invalid value
@@ -229,25 +220,6 @@ describe("validateVestingScheduleTemplate", () => {
     });
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0].period_type");
-  });
-
-  it("rejects an EVENT base (the canonical base is DATE-only)", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
-        {
-          order: 1,
-          // @ts-expect-error — an EVENT base no longer exists on TemplateVestingBase
-          vesting_base: { type: "EVENT", event_id: "ipo" },
-          occurrences: 1,
-          period: 0,
-          period_type: "MONTHS",
-          percentage: "1",
-        },
-      ],
-    });
-    expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain("statements[0].vesting_base.type");
   });
 
   it("assertValidVestingScheduleTemplate throws on invalid input", () => {
@@ -387,7 +359,6 @@ describe("validateStatement — percentage bounds", () => {
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -433,7 +404,6 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -485,7 +455,6 @@ describe("validateVestingRuntime — held event_condition is valid (#255 AC16)",
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",

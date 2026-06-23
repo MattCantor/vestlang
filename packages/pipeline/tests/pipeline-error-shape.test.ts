@@ -116,7 +116,6 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 3,
           period_type: "MONTHS",
@@ -175,7 +174,6 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",

@@ -209,9 +209,6 @@ describe("resolveToCore — atomic unfired EVENT → contingent template", () =>
     // A DATE statement on the contingent-start sentinel; the recipe to re-derive the
     // real start lives under the reserved `evt:start` key.
     expect(result.template.statements).toHaveLength(1);
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.sourceMap["evt:start"].definition).toContain("ipo");
     expect(result.runtime.eventFirings ?? []).toEqual([]);
@@ -563,9 +560,6 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     const result = resolveToCore(program, ctx21());
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.sourceMap["evt:start"].definition).toContain("ipo");
     expect(result.template.statements[0].cliff).toEqual({
@@ -623,9 +617,6 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     const result = resolveToCore(program, ctx21());
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.template.statements[0].cliff).toEqual({
       length: 12,

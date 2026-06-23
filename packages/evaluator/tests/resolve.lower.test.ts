@@ -76,7 +76,8 @@ describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", 
     if (result.kind !== "template") return;
     expect(result.template.statements).toHaveLength(1);
     const s = result.template.statements[0];
-    expect(s.vesting_base).toEqual({ type: "DATE" });
+    // Anchoring is implicit now — lowering emits no per-statement base field.
+    expect(s).not.toHaveProperty("vesting_base");
     expect(s.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
@@ -114,9 +115,6 @@ describe("resolveToCore — graded 5/15/40/40 chained over 4 years", () => {
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements).toHaveLength(4);
-    expect(
-      result.template.statements.every((s) => s.vesting_base.type === "DATE"),
-    ).toBe(true);
     expect(result.runtime.startDate).toBe("2025-01-01");
   });
 
@@ -148,9 +146,6 @@ describe("resolveToCore — EVENT-anchored portion (fired → a dated start)", (
     const result = resolveToCore(program, ctxInput({ ipo: "2026-04-01" }));
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe("2026-04-01");
     expect(result.sourceMap).toEqual({});
   });
@@ -184,9 +179,6 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     );
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.sourceMap["evt:start"].definition).toMatch(/ipo/);
     expect(result.sourceMap["evt:start"].definition).toMatch(/\+1 month/);
@@ -228,9 +220,6 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     );
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(result.runtime.startDate).toBe("2024-04-01");
     expect(result.sourceMap).toEqual({});
   });

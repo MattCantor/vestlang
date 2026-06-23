@@ -144,7 +144,6 @@ describe("runRehydrate (AC#5)", () => {
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 1,
               period_type: "MONTHS",
@@ -267,7 +266,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 3,
           period_type: "MONTHS",
@@ -314,7 +312,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 1,
               period: 12,
               period_type: "MONTHS",
@@ -322,7 +319,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
             },
             {
               order: 2,
-              vesting_base: { type: "DATE" },
               occurrences: 1,
               period: 12,
               period_type: "MONTHS",
@@ -350,7 +346,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 1,
               period: 12,
               period_type: "MONTHS",
@@ -358,7 +353,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
             },
             {
               order: 2,
-              vesting_base: { type: "DATE" },
               occurrences: 1,
               period: 12,
               period_type: "MONTHS",
@@ -385,7 +379,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 2,
               period: 6,
               period_type: "MONTHS",
@@ -417,7 +410,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              vesting_base: { type: "DATE" },
               occurrences: 4,
               period: 3,
               period_type: "MONTHS",
@@ -463,7 +455,6 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
         statements: [
           {
             order: 1,
-            vesting_base: { type: "DATE" },
             occurrences: 1,
             period: 12,
             period_type: "MONTHS",
@@ -495,7 +486,6 @@ describe("runRehydrate guards the reserved namespace + the contingency marker", 
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
