@@ -118,6 +118,21 @@ export const numericToFraction = (n: Numeric): Fraction => {
   return { numerator: Number(num), denominator: Number(den) };
 };
 
+// Like numericToFraction but returns null instead of throwing when the value
+// is malformed or can't be held exactly as a number-based Fraction (past
+// MAX_SAFE) — for boundary code that must refuse gracefully, not crash. A
+// well-formed but oversized Numeric (e.g. "99999999999999999999") passes the
+// grammar but can't round-trip through a number, so it lands here as null.
+export const tryNumericToFraction = (n: Numeric): Fraction | null => {
+  if (!isNumeric(n)) return null;
+  const { scaledValue, scale } = parseDecimal(n);
+  const g = bigGcd(scaledValue, scale);
+  const num = scaledValue / g;
+  const den = scale / g;
+  if (bigAbs(num) > MAX_SAFE || bigAbs(den) > MAX_SAFE) return null;
+  return { numerator: Number(num), denominator: Number(den) };
+};
+
 /**
  * Write a non-negative `Fraction` as a stored `Numeric`, in minimal canonical
  * form (no trailing zeros, no needless decimal point: 1/2 → "0.5", 1/1 → "1").

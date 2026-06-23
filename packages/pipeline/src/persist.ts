@@ -286,9 +286,25 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
   // over-vesting stream never materializes. The check reads the template alone
   // (firing-independent), so it runs before any witness re-resolution. Sharing the
   // evaluator's primitive keeps this rule and persist's in lockstep.
-  const allocationErrors = errorFindings(
-    templateAllocationFindings(input.artifact.template, input.grant_quantity),
-  );
+  // Summing the stored percentages parses each Numeric back to a fraction, which
+  // throws on a well-formed but oversized one (past MAX_SAFE) on a hand-edited or
+  // foreign artifact. Catch it here and refuse structurally rather than letting it
+  // surface as an uncaught protocol error.
+  let allocationErrors;
+  try {
+    allocationErrors = errorFindings(
+      templateAllocationFindings(input.artifact.template, input.grant_quantity),
+    );
+  } catch {
+    return {
+      ok: false,
+      error: {
+        ruleId: "rehydrate-malformed-percentage",
+        message:
+          "Cannot rehydrate: a stored percentage is not a representable Numeric value. The artifact appears to be damaged; supply one built by vestlang_persist.",
+      },
+    };
+  }
   if (allocationErrors.length > 0) {
     return {
       ok: false,

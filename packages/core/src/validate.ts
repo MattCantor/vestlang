@@ -11,7 +11,7 @@ import type {
 import {
   isNumeric,
   isValidCalendarDate,
-  numericToFraction,
+  tryNumericToFraction,
 } from "@vestlang/utils";
 import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
 
@@ -69,17 +69,26 @@ const validateCliff = (
   }
   // percentage is stored as an OCF Numeric decimal and is a share of the
   // statement, so once it parses it must lie in [0, 1]. Shape-check the string
-  // first; only then parse and bound-check the value.
+  // first; then parse (non-throwing — an oversized-but-well-formed Numeric must
+  // be refused, not crash the validator) and bound-check the value.
   if (!isNumeric(c.percentage)) {
     errors.push({
       path: `${path}.percentage`,
       message: "must be an OCF Numeric string",
     });
-  } else if (!numericInUnitInterval(c.percentage)) {
-    errors.push({
-      path: `${path}.percentage`,
-      message: "must be in the closed interval [0, 1]",
-    });
+  } else {
+    const f = tryNumericToFraction(c.percentage);
+    if (f === null) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "is too large to represent exactly",
+      });
+    } else if (!fractionInUnitInterval(f)) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "must be in the closed interval [0, 1]",
+      });
+    }
   }
 };
 
@@ -152,11 +161,21 @@ const validateStatement = (
       path: `${path}.percentage`,
       message: "must be an OCF Numeric string",
     });
-  } else if (numericToFraction(s.percentage).numerator < 0) {
-    errors.push({
-      path: `${path}.percentage`,
-      message: "must be >= 0",
-    });
+  } else {
+    // Non-throwing parse: a well-formed but oversized Numeric must be refused
+    // here, not crash the validator (this runs on untrusted wire input).
+    const f = tryNumericToFraction(s.percentage);
+    if (f === null) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "is too large to represent exactly",
+      });
+    } else if (f.numerator < 0) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "must be >= 0",
+      });
+    }
   }
   if (s.cliff) {
     validateCliff(s.cliff, `${path}.cliff`, errors);
@@ -239,13 +258,6 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
   // numerator/denominator <= 1 ⇔ numerator <= denominator
   return f.numerator <= f.denominator;
 };
-
-// A stored Numeric percentage lies in [0, 1]. Parse to the exact rational and
-// reuse the fraction bound check, so the decimal and the fraction paths can't
-// disagree on where the interval edges sit. The caller has already confirmed the
-// string is a well-formed Numeric.
-const numericInUnitInterval = (n: string): boolean =>
-  fractionInUnitInterval(numericToFraction(n));
 
 /**
  * Validates the per-grant runtime data passed to the compiler against the

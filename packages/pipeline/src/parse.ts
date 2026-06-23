@@ -43,6 +43,7 @@ type PersistError = { ruleId: "persist-not-storable"; message: string };
 type RehydrateError =
   | { ruleId: "rehydrate-missing-grant-date"; message: string }
   | { ruleId: "rehydrate-over-allocation"; message: string }
+  | { ruleId: "rehydrate-malformed-percentage"; message: string }
   | { ruleId: "rehydrate-corrupt-definition"; message: string }
   | { ruleId: "rehydrate-missing-start-marker"; message: string }
   | { ruleId: "rehydrate-namespace-violation"; message: string };

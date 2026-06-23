@@ -452,6 +452,37 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     });
     expect(out.projection).toBeDefined();
   });
+
+  it("refuses a well-formed but oversized stored percentage rather than crashing (#359)", () => {
+    // The percentage passes the OCF Numeric grammar but is far too large to hold
+    // exactly as a number-based Fraction, so summing it throws. The allocation
+    // gate must catch that and refuse structurally, not surface a protocol error.
+    const oversized: PersistedArtifact = {
+      template: {
+        id: "t1",
+        statements: [
+          {
+            order: 1,
+            vesting_base: { type: "DATE" },
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+            percentage: "99999999999999999999",
+          },
+        ],
+      },
+      runtime: { grantDate: "2025-01-01", startDate: "2025-01-01" },
+    };
+    let r: ReturnType<typeof runRehydrate> | undefined;
+    expect(() => {
+      r = runRehydrate({ artifact: oversized, grant_quantity: 1000 });
+    }).not.toThrow();
+    expect(r).toBeDefined();
+    if (!r) return;
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.ruleId).toBe("rehydrate-malformed-percentage");
+  });
 });
 
 describe("runRehydrate guards the reserved namespace + the contingency marker", () => {

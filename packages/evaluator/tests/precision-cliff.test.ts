@@ -87,4 +87,24 @@ describe("over-precise cliff — the precision guard (#359 AC7)", () => {
       result.findings.some((f) => f.kind === "precision-insufficient"),
     ).toBe(false);
   });
+
+  it("at a huge grant the cliff is not-representable — a finding with no recommendation", () => {
+    // The same 1/3 cliff against 30,000,000,000 shares. At that size the window
+    // around the intended count is narrower than 10⁻¹⁰, so no ≤10-place decimal
+    // lands it: the analyzer's verdict is not-representable, and the finding
+    // carries the inferred 1/3 but no recommended decimal.
+    const result = resolveToCore(program(), {
+      grantDate: "2025-01-01",
+      events: {},
+      grantQuantity: 30000000000,
+    });
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    const f = precision[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.inferred).toEqual({ numerator: 1, denominator: 3 });
+    expect(f.recommended).toBeUndefined();
+  });
 });
