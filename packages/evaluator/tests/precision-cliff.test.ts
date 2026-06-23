@@ -71,6 +71,11 @@ describe("over-precise cliff — the precision guard (#359 AC7)", () => {
     expect(f.percentage).toBe("0.3333333333");
     expect(f.inferred).toEqual({ numerator: 1, denominator: 3 });
     expect(f.recommended).toBe("0.33334");
+    // #384 — the template arm's per-statement basis is unchanged: a 100% statement
+    // covers the whole grant, so floor(1 × 36000) = 36000. (Asserting it here pins
+    // that the shared cliff-analysis helper didn't shift the template-arm basis.)
+    expect(f.shareCount).toBe(36000);
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
   });
 
   it("a terminating cliff percentage emits no precision finding", () => {

@@ -7,6 +7,7 @@
 import type {
   ResolutionContextInput,
   Finding,
+  Fraction,
   Numeric,
   Program,
   UnresolvedInstallment,
@@ -64,13 +65,19 @@ export const resolveToCore = (
 
   // The precision guard: a stored percentage is now a Numeric decimal, so a
   // repeating share can only be written truncated. Run the analyzer over the
-  // built template's stored decimals and warn when the truncation misallocates
-  // at this grant size. Only a template carries stored Numeric percentages —
-  // the events/unresolved arms keep exact internal fractions — so the guard runs
-  // only on an ok build.
+  // stored decimals and warn when the truncation misallocates at this grant size.
+  //
+  // A template (ok build) carries stored Numeric percentages for both the
+  // statement and its cliff, so it analyzes both. The events / unresolved arms
+  // keep exact internal fractions for the statement, but a *resolved* cliff still
+  // stores its percentage as a truncated Numeric that the live projection reads
+  // back (`classify.ts` grids it through `numericToFraction`). So those arms run a
+  // cliff-only pass over the resolutions, warning on the same truncation the
+  // template arm catches — but only for cliffs the projection actually
+  // materializes.
   const precision = build.ok
     ? precisionFindings(build.template, totalShares)
-    : [];
+    : cliffPrecisionFindings(build.resolutions, totalShares);
 
   let verdict: ResolveVerdict;
   if (build.ok) {
@@ -176,21 +183,75 @@ const precisionFindings = (
     pushPrecisionFinding(findings, s.percentage, grant, ["statements", i]);
 
     if (s.cliff) {
-      // floor(stmtFraction × grant): the shares this statement covers, which the
-      // cliff takes a percentage of.
-      const stmtShares = Math.floor(
-        (stmtFraction.numerator * grant) / stmtFraction.denominator,
-      );
-      if (stmtShares > 0) {
-        pushPrecisionFinding(findings, s.cliff.percentage, stmtShares, [
-          "statements",
-          i,
-          "cliff",
-        ]);
-      }
+      analyzeCliff(findings, s.cliff.percentage, stmtFraction, grant, [
+        "statements",
+        i,
+        "cliff",
+      ]);
     }
   });
   return findings;
+};
+
+// The cliff-only precision pass for a non-template (events / unresolved) build.
+// A template stores the statement percentage as a Numeric too, but these arms
+// keep an exact internal fraction for it — only the *cliff* percentage stored on
+// a RESOLVED cliff round-trips through the truncating Numeric and is read back by
+// the live projection. So we analyze only the cliff, against the same
+// per-statement share basis the template arm uses (the cliff's percentage is a
+// share of its own statement).
+//
+// Gated to cliffs the projection actually materializes. `classify.ts`'s
+// `expandResolution` reads a cliff's stored decimal only when the statement's
+// start is itself dated (RESOLVED or a committed EARLIER_OF floor); a RESOLVED
+// cliff sitting under a still-pending start (a same-unit duration cliff lowered
+// while its event start is unfired) is never read, so its decimal can't
+// misallocate anything live — warning there would be a false positive. We mirror
+// that gate exactly: fire only when the cliff resolved AND the start is dated.
+const cliffPrecisionFindings = (
+  resolutions: StmtResolution[],
+  grant: number,
+): Finding[] => {
+  if (grant <= 0) return [];
+  const findings: Finding[] = [];
+  resolutions.forEach((r, i) => {
+    const startDated =
+      r.start.state === "RESOLVED" || r.start.state === "COMMITTED";
+    if (r.cliff.state === "RESOLVED" && startDated) {
+      analyzeCliff(findings, r.cliff.cliff.percentage, r.percentage, grant, [
+        "statements",
+        i,
+        "cliff",
+      ]);
+    }
+  });
+  return findings;
+};
+
+// Analyze one cliff's stored decimal against its statement's share basis. A
+// cliff's percentage is a share *of its own statement*, so the basis is the
+// shares that statement covers: floor(stmtFraction × grant). The basis must be
+// positive — `analyzePrecision` throws on a non-positive share count, and a
+// statement that covers no shares has no cliff to misallocate — so a zero basis
+// is skipped silently.
+//
+// Shared by the template arm (which passes `numericToFraction(s.percentage)` as
+// the statement fraction) and the non-template cliff pass (which passes the exact
+// internal `r.percentage`), so both compute the basis and map the analyzer's
+// verdict to a finding through one code path.
+const analyzeCliff = (
+  findings: Finding[],
+  cliffPercentage: Numeric,
+  stmtFraction: Fraction,
+  grant: number,
+  path: (string | number)[],
+): void => {
+  const stmtShares = Math.floor(
+    (stmtFraction.numerator * grant) / stmtFraction.denominator,
+  );
+  if (stmtShares > 0) {
+    pushPrecisionFinding(findings, cliffPercentage, stmtShares, path);
+  }
 };
 
 // Convert the analyzer's BigInt fraction to the number-based Fraction the Finding
