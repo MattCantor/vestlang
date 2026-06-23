@@ -562,7 +562,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     if (result.kind !== "template") return;
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(result.sourceMap["evt:start"].definition).toContain("ipo");
-    expect(result.template.statements[0].cliff).toEqual({
+    expect(result.template.statements[0].schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -618,7 +618,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(result.template.statements[0].cliff).toEqual({
+    expect(result.template.statements[0].schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -687,7 +687,7 @@ describe("resolveToCore — an event-held cliff stores as a template, held until
     expect(result.template.statements[0].event_condition).toEqual({
       event_id: "ipo",
     });
-    expect(result.template.statements[0].cliff).toBeUndefined();
+    expect(result.template.statements[0].schedule?.cliff).toBeUndefined();
     // Held: compiling the template against the firing-free interchange runtime
     // releases nothing (AC 5/7).
     const compiled = compile(
@@ -1453,7 +1453,7 @@ describe("resolveToCore — AC 6: LATER OF(12 months, EVENT ipo) fold point", ()
     // The discriminating assertion: the stored shape carries BOTH halves.
     const s = result.template.statements[0];
     expect(s.event_condition).toEqual({ event_id: "ipo" });
-    expect(s.cliff).toEqual({
+    expect(s.schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",

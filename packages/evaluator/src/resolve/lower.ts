@@ -794,17 +794,45 @@ export const buildTemplate = (
       }
     }
 
-    statements.push({
-      order: i + 1,
-      occurrences,
-      period: length,
-      period_type: type,
-      // The internal share is an exact Fraction; the stored field is a Numeric
-      // decimal, so render it at the write boundary.
-      percentage: fractionToNumeric(r.percentage),
-      ...(cliff ? { cliff } : {}),
-      ...(event_condition ? { event_condition } : {}),
-    });
+    // The internal share is an exact Fraction; the stored field is a Numeric
+    // decimal, so render it at the write boundary.
+    const percentage = fractionToNumeric(r.percentage);
+
+    // A *pure milestone* — vests entirely on its event hold, with no time grid —
+    // stores with no `schedule`. The omission predicate is a three-way conjunction,
+    // and all three clauses are load-bearing:
+    //   - event_condition present: a schedule-less statement must still vest on
+    //     something, so a milestone always has the event hold;
+    //   - no time cliff: a floored milestone (`CLIFF LATER OF(12 months, EVENT ipo)`)
+    //     carries an EVENT_HELD baseline and must keep its schedule so the floor
+    //     date survives;
+    //   - degenerate one-lump grid (occurrences === 1 && period === 0): a hybrid
+    //     (`OVER 48 EVERY 1 CLIFF EVENT ipo`) keeps its full 48-occurrence schedule —
+    //     keying on the grid SHAPE here, not on `(event_condition && !cliff)`, is
+    //     what keeps the hybrid's schedule intact.
+    // The degenerate grid the milestone would otherwise carry is eliminated from
+    // STORAGE only; the compiler re-synthesizes the one-lump params to fold a
+    // milestone on the shared grid kernel (compile.ts), by design.
+    if (
+      event_condition !== undefined &&
+      cliff === undefined &&
+      occurrences === 1 &&
+      length === 0
+    ) {
+      statements.push({ order: i + 1, percentage, event_condition });
+    } else {
+      statements.push({
+        order: i + 1,
+        percentage,
+        schedule: {
+          occurrences,
+          period: length,
+          period_type: type,
+          ...(cliff ? { cliff } : {}),
+        },
+        ...(event_condition ? { event_condition } : {}),
+      });
+    }
   }
 
   const runtime: VestingRuntime = {

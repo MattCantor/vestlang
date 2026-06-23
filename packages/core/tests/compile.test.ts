@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
 import { addPeriod, CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
 import { fractionToNumeric } from "@vestlang/utils";
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import type {
+  VestingRuntime,
+  VestingScheduleTemplate,
+  VestingSchedule,
+} from "@vestlang/types";
 
 // Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).
 
@@ -17,13 +21,15 @@ describe("compile — standard 4yr/1mo with 25% cliff", () => {
     statements: [
       {
         order: 1,
-        occurrences: 48,
-        period: 1,
-        period_type: "MONTHS",
-        cliff: {
-          length: 12,
+        schedule: {
+          occurrences: 48,
+          period: 1,
           period_type: "MONTHS",
-          percentage: "0.25",
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: "0.25",
+          },
         },
         percentage: "1",
       },
@@ -67,13 +73,15 @@ describe("compile — non-standard 30% cliff", () => {
     statements: [
       {
         order: 1,
-        occurrences: 48,
-        period: 1,
-        period_type: "MONTHS",
-        cliff: {
-          length: 12,
+        schedule: {
+          occurrences: 48,
+          period: 1,
           period_type: "MONTHS",
-          percentage: "0.3",
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: "0.3",
+          },
         },
         percentage: "1",
       },
@@ -100,9 +108,11 @@ describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
     num: number,
   ): VestingScheduleTemplate["statements"][number] => ({
     order,
-    occurrences: 1,
-    period: 12,
-    period_type: "MONTHS",
+    schedule: {
+      occurrences: 1,
+      period: 12,
+      period_type: "MONTHS",
+    },
     percentage: fractionToNumeric({ numerator: num, denominator: 20 }),
   });
   const template: VestingScheduleTemplate = {
@@ -127,9 +137,11 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 48,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 48,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
@@ -147,13 +159,15 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 12,
+          schedule: {
+            occurrences: 12,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "1",
+            cliff: {
+              length: 12,
+              period_type: "MONTHS",
+              percentage: "1",
+            },
           },
           percentage: "1",
         },
@@ -173,13 +187,15 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 75,
-            period_type: "DAYS",
-            percentage: "0.5",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+            cliff: {
+              length: 75,
+              period_type: "DAYS",
+              percentage: "0.5",
+            },
           },
           percentage: "1",
         },
@@ -200,9 +216,11 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 7,
-          period_type: "DAYS",
+          schedule: {
+            occurrences: 4,
+            period: 7,
+            period_type: "DAYS",
+          },
           percentage: "1",
         },
       ],
@@ -223,9 +241,11 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 6,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 6,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
@@ -247,16 +267,20 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
         {
           order: 2,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
       ],
@@ -276,16 +300,20 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+          },
           percentage: "0",
         },
         {
           order: 2,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
@@ -301,9 +329,11 @@ describe("compile — additional DATE-anchored cases", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
@@ -329,16 +359,18 @@ describe("compile — additional DATE-anchored cases", () => {
 describe("compile — fixed cliff honors its percentage at the left edge", () => {
   const monthly = (
     occurrences: number,
-    cliff: VestingScheduleTemplate["statements"][number]["cliff"],
+    cliff: VestingSchedule["cliff"],
   ): VestingScheduleTemplate => ({
     id: "t1",
     statements: [
       {
         order: 1,
-        occurrences,
-        period: 1,
-        period_type: "MONTHS",
-        ...(cliff ? { cliff } : {}),
+        schedule: {
+          occurrences,
+          period: 1,
+          period_type: "MONTHS",
+          ...(cliff ? { cliff } : {}),
+        },
         percentage: "1",
       },
     ],
@@ -418,13 +450,15 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 0,
-          period_type: "MONTHS",
-          cliff: {
-            length: 0,
+          schedule: {
+            occurrences: 4,
+            period: 0,
             period_type: "MONTHS",
-            percentage: "0.25",
+            cliff: {
+              length: 0,
+              period_type: "MONTHS",
+              percentage: "0.25",
+            },
           },
           percentage: "1",
         },
@@ -443,13 +477,15 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 0,
+          schedule: {
+            occurrences: 4,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "0.25",
+            cliff: {
+              length: 0,
+              period_type: "MONTHS",
+              percentage: "0.25",
+            },
           },
           percentage: "1",
         },
@@ -474,9 +510,11 @@ describe("compile — over-allocated template hits the kernel's cast bound (R2-B
     statements: [
       {
         order: 1,
-        occurrences: 1,
-        period: 12,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
+        },
         percentage: "1.5",
       },
     ],
@@ -508,16 +546,20 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 1,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 1,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "0.3333333333",
       },
       {
         order: 2,
-        occurrences: 2,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 2,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "0.6666666666",
       },
     ],
@@ -529,9 +571,11 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 3,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 3,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -581,9 +625,11 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 48,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 48,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -594,13 +640,15 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 48,
-        period: 1,
-        period_type: "MONTHS",
-        cliff: {
-          length: 12,
+        schedule: {
+          occurrences: 48,
+          period: 1,
           period_type: "MONTHS",
-          percentage: "0.25",
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: "0.25",
+          },
         },
         percentage: "1",
       },
@@ -692,13 +740,15 @@ describe("compile — contingent-start sentinel skip (AC 10)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 48,
-        period: 1,
-        period_type: "MONTHS",
-        cliff: {
-          length: 12,
+        schedule: {
+          occurrences: 48,
+          period: 1,
           period_type: "MONTHS",
-          percentage: "0.25",
+          cliff: {
+            length: 12,
+            period_type: "MONTHS",
+            percentage: "0.25",
+          },
         },
         percentage: "1",
       },
@@ -758,9 +808,11 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 12,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -800,13 +852,15 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 24,
+          schedule: {
+            occurrences: 12,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "0.25",
+            cliff: {
+              length: 24,
+              period_type: "MONTHS",
+              percentage: "0.25",
+            },
           },
           percentage: "1",
         },
@@ -825,13 +879,15 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 24,
+          schedule: {
+            occurrences: 12,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "1",
+            cliff: {
+              length: 24,
+              period_type: "MONTHS",
+              percentage: "1",
+            },
           },
           percentage: "1",
         },
@@ -847,13 +903,15 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 48,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 12,
+          schedule: {
+            occurrences: 48,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "0.25",
+            cliff: {
+              length: 12,
+              period_type: "MONTHS",
+              percentage: "0.25",
+            },
           },
           percentage: "1",
         },
@@ -871,20 +929,24 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 12,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
         {
           order: 2,
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 13,
+          schedule: {
+            occurrences: 12,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "0.25",
+            cliff: {
+              length: 13,
+              period_type: "MONTHS",
+              percentage: "0.25",
+            },
           },
           percentage: "0.5",
         },
@@ -906,20 +968,24 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
         {
           order: 2,
-          occurrences: 1,
-          period: 30,
-          period_type: "DAYS",
-          cliff: {
-            length: 1,
-            period_type: "MONTHS",
-            percentage: "0.5",
+          schedule: {
+            occurrences: 1,
+            period: 30,
+            period_type: "DAYS",
+            cliff: {
+              length: 1,
+              period_type: "MONTHS",
+              percentage: "0.5",
+            },
           },
           percentage: "0.5",
         },
@@ -935,9 +1001,11 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "-0.5",
         },
       ],
@@ -953,9 +1021,11 @@ describe("compile — boundary hardening", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],

@@ -12,9 +12,11 @@ const artifactWith = (percentage: unknown) => ({
     statements: [
       {
         order: 1,
-        occurrences: 1,
-        period: 12,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
+        },
         percentage,
       },
     ],
@@ -48,5 +50,64 @@ describe("PERSISTED_ARTIFACT — Numeric percentage on the wire (#359 AC8)", () 
     expect(
       PERSISTED_ARTIFACT.safeParse(artifactWith("0.12345678901")).success,
     ).toBe(false);
+  });
+});
+
+// Issue #390 AC8 — the wire schema is a `z.union` of two `.strict()` arms that
+// enforces the optional-schedule invariant on untrusted input. The
+// `satisfies z.ZodType<PersistedArtifact>` pin is loose (Zod variance), so these
+// safeParse cases are the load-bearing guard, not the typecheck.
+describe("PERSISTED_ARTIFACT — optional-schedule invariant (#390 AC8)", () => {
+  const artifact = (statement: unknown) => ({
+    template: { id: "t", statements: [statement] },
+    runtime: { startDate: "2025-01-01" },
+  });
+
+  it("accepts a persisted pure milestone (no schedule, has event_condition)", () => {
+    const res = PERSISTED_ARTIFACT.safeParse(
+      artifact({
+        order: 1,
+        percentage: "1",
+        event_condition: { event_id: "ipo" },
+      }),
+    );
+    expect(res.success).toBe(true);
+  });
+
+  it("accepts a scheduled statement that also carries an event_condition (hybrid)", () => {
+    const res = PERSISTED_ARTIFACT.safeParse(
+      artifact({
+        order: 1,
+        percentage: "1",
+        schedule: { occurrences: 48, period: 1, period_type: "MONTHS" },
+        event_condition: { event_id: "ipo" },
+      }),
+    );
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects the neither-corner (no schedule, no event_condition)", () => {
+    const res = PERSISTED_ARTIFACT.safeParse(
+      artifact({ order: 1, percentage: "1" }),
+    );
+    expect(res.success).toBe(false);
+  });
+
+  it("rejects a milestone arm carrying a stray schedule key (the .strict() guard)", () => {
+    // This object has both an event_condition AND a schedule, so it can only match
+    // the scheduled arm — and there it is a valid hybrid. To exercise the
+    // milestone arm's `.strict()` rejection of a stray key, smuggle a non-schema
+    // key: only the milestone arm (no extra keys) and the scheduled arm (schedule
+    // required) exist, so an event-only statement with an unexpected key matches
+    // neither.
+    const res = PERSISTED_ARTIFACT.safeParse(
+      artifact({
+        order: 1,
+        percentage: "1",
+        event_condition: { event_id: "ipo" },
+        bogus: true,
+      }),
+    );
+    expect(res.success).toBe(false);
   });
 });

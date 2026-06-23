@@ -144,9 +144,11 @@ describe("runRehydrate (AC#5)", () => {
           statements: [
             {
               order: 1,
-              occurrences: 4,
-              period: 1,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 4,
+                period: 1,
+                period_type: "MONTHS",
+              },
               percentage: "1",
             },
           ],
@@ -266,9 +268,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 3,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 3,
+            period_type: "MONTHS",
+          },
           percentage: "1.25",
         },
       ],
@@ -312,16 +316,20 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              occurrences: 1,
-              period: 12,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 1,
+                period: 12,
+                period_type: "MONTHS",
+              },
               percentage: "0.75",
             },
             {
               order: 2,
-              occurrences: 1,
-              period: 12,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 1,
+                period: 12,
+                period_type: "MONTHS",
+              },
               percentage: "0.75",
             },
           ],
@@ -346,16 +354,20 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              occurrences: 1,
-              period: 12,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 1,
+                period: 12,
+                period_type: "MONTHS",
+              },
               percentage: "0.5",
             },
             {
               order: 2,
-              occurrences: 1,
-              period: 12,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 1,
+                period: 12,
+                period_type: "MONTHS",
+              },
               percentage: "0.5",
             },
           ],
@@ -379,9 +391,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              occurrences: 2,
-              period: 6,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 2,
+                period: 6,
+                period_type: "MONTHS",
+              },
               percentage: "0.5",
             },
           ],
@@ -410,9 +424,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
           statements: [
             {
               order: 1,
-              occurrences: 4,
-              period: 3,
-              period_type: "MONTHS",
+              schedule: {
+                occurrences: 4,
+                period: 3,
+                period_type: "MONTHS",
+              },
               percentage: "1.25",
             },
           ],
@@ -455,9 +471,11 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
         statements: [
           {
             order: 1,
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
+            schedule: {
+              occurrences: 1,
+              period: 12,
+              period_type: "MONTHS",
+            },
             percentage: "99999999999999999999",
           },
         ],
@@ -486,9 +504,11 @@ describe("runRehydrate guards the reserved namespace + the contingency marker", 
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
@@ -727,7 +747,7 @@ describe("runPersist/runRehydrate — event_condition round-trip (#255)", () => 
     });
     const stmt = persisted.artifact.template.statements[0];
     expect(stmt.event_condition).toEqual({ event_id: "ipo" });
-    expect(stmt.cliff).toBeUndefined();
+    expect(stmt.schedule?.cliff).toBeUndefined();
     // No sidecar: a bare real event needs no recipe.
     expect(persisted.artifact.sidecar).toBeUndefined();
 

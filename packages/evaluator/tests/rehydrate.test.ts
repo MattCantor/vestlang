@@ -216,9 +216,11 @@ const corruptStartArtifact = (
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -270,9 +272,11 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -315,9 +319,11 @@ describe("rehydrate — namespace violation: a non-reserved sidecar key", () => 
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],

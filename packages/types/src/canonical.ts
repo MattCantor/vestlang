@@ -3,6 +3,9 @@
 //
 // Kept consistent with the OCF-Composed-Schemas canonical vesting schema:
 // https://github.com/Open-Cap-Table-Coalition/OCF-Composed-Schemas/blob/main/canonical/vesting/types.ts
+// The optional-`schedule` shape below (a pure milestone carries no time grid)
+// converges with the OCF side via OCF-Composed-Schemas PR #130; until that merges,
+// this repo's shape is the reference.
 //
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
 // with no adaptation. So the field names stay snake_case (`period_type`,
@@ -24,27 +27,56 @@ export interface VestingScheduleTemplate {
   statements: VestingStatement[]; // chained implicitly by order (DATE statements only)
 }
 
-export interface VestingStatement {
-  order: number; // 1-based sequence position
+// The time grid of a vesting statement — the periodic installments and an
+// optional cliff carved out of them. Optional on the statement: a *pure
+// milestone* (a slice that vests purely on an `event_condition`, with no time
+// schedule) omits this block entirely, so "no schedule" reads as absence rather
+// than as a degenerate one-installment grid. A `cliff` lives *inside* the
+// schedule because a cliff carves a grid — with no grid there is nothing to
+// carve — so a cliff never floats free of a schedule.
+export interface VestingSchedule {
   occurrences: number; // integer >= 1; number of vesting events in segment
   period: number; // integer >= 0; length of one installment, in period_type units
   period_type: PeriodType;
   cliff?: Cliff;
-  // An event that must fire before this statement's grid releases. This is how an
-  // event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT ipo)`)
-  // stores: the time baseline, if any, lands in `cliff`, and the event hold lands
-  // here. It tracks Carta's HYBRID tranche — a dated schedule carrying an
-  // EVENT_NON_MARKET performanceCondition. The `event_id` names the gating event:
-  // a real user event for a bare `CLIFF EVENT e`, or a reserved synthetic `evt:<n>`
-  // whose recipe lives in the sidecar when the event side is richer than a single
-  // bare id (multiple events, an offset, a gate). Until the event fires the whole
-  // grid is held; once it does, the projection folds at max(cliff date, firing).
-  event_condition?: { event_id: string };
+}
+
+// A canonical vesting statement: `order` and `percentage` always; then exactly one
+// of two shapes. A *scheduled* statement carries a `schedule` (DATE or HYBRID) and
+// may also carry an `event_condition`; a *pure milestone* carries an
+// `event_condition` and no `schedule`. The union makes the neither-corner — neither
+// a schedule nor an event_condition — unrepresentable rather than merely
+// validator-caught.
+export type VestingStatement = {
+  order: number; // 1-based sequence position
   // Share of the total grant this vesting statement covers, stored as an OCF
   // `Numeric` decimal string (the interchange holds a fixed-point decimal, not a
   // rational). The engine parses it back to an exact Fraction at every read.
   percentage: Numeric;
-}
+} & (
+  | {
+      // The time grid (with its optional cliff). Present on DATE and HYBRID
+      // statements; a scheduled statement may also carry an `event_condition`.
+      schedule: VestingSchedule;
+      // An event that must fire before this statement's grid releases. This is how
+      // an event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT
+      // ipo)`) stores: the time baseline, if any, lands in `schedule.cliff`, and the
+      // event hold lands here. It tracks Carta's HYBRID tranche — a dated schedule
+      // carrying an EVENT_NON_MARKET performanceCondition. The `event_id` names the
+      // gating event: a real user event for a bare `CLIFF EVENT e`, or a reserved
+      // synthetic `evt:<n>` whose recipe lives in the sidecar when the event side is
+      // richer than a single bare id (multiple events, an offset, a gate). Until the
+      // event fires the whole grid is held; once it does, the projection folds at
+      // max(schedule.cliff date, firing).
+      event_condition?: { event_id: string };
+    }
+  | {
+      // A pure milestone: no time schedule, so the slice vests entirely on the
+      // event hold. `schedule?: never` forbids a stray schedule on this arm.
+      schedule?: never;
+      event_condition: { event_id: string };
+    }
+);
 
 // Anchoring is implicit: every statement takes its start from the one per-grant
 // date hoisted to VestingRuntime.startDate, chained by `order`. The canonical

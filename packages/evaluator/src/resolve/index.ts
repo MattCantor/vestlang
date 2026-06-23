@@ -182,8 +182,11 @@ const precisionFindings = (
     const stmtFraction = numericToFraction(s.percentage);
     pushPrecisionFinding(findings, s.percentage, grant, ["statements", i]);
 
-    if (s.cliff) {
-      analyzeCliff(findings, s.cliff.percentage, stmtFraction, grant, [
+    // The cliff now lives inside the optional `schedule` block; a pure milestone
+    // has neither, so there is nothing to analyze.
+    const cliff = s.schedule?.cliff;
+    if (cliff) {
+      analyzeCliff(findings, cliff.percentage, stmtFraction, grant, [
         "statements",
         i,
         "cliff",

@@ -78,7 +78,7 @@ describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", 
     const s = result.template.statements[0];
     // Anchoring is implicit now — lowering emits no per-statement base field.
     expect(s).not.toHaveProperty("vesting_base");
-    expect(s.cliff).toEqual({
+    expect(s.schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -262,8 +262,8 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     );
     // The frozen template is the same statement shape on both sides; the rehydrated
     // (projection-only) runtime reproduces the live resolution's dated projection.
-    expect(after.template.statements[0].period_type).toBe(
-      before.template.statements[0].period_type,
+    expect(after.template.statements[0].schedule!.period_type).toBe(
+      before.template.statements[0].schedule!.period_type,
     );
     expect(compile(before.template, 100000, runtime)).toEqual(
       compile(after.template, 100000, after.runtime),

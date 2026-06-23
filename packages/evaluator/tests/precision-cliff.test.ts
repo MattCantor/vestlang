@@ -32,7 +32,7 @@ describe("over-precise cliff — the stored template (#359 AC5)", () => {
     if (result.kind !== "template") return;
     const stmt = result.template.statements[0];
     expect(stmt.percentage).toBe("1");
-    expect(stmt.cliff?.percentage).toBe("0.3333333333");
+    expect(stmt.schedule!.cliff?.percentage).toBe("0.3333333333");
   });
 
   it("compiles to [11999, 12000, 12001] — the cliff lump floors low, the total holds", () => {

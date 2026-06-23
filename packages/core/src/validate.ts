@@ -5,6 +5,7 @@ import type {
   Fraction,
   PeriodType,
   VestingRuntime,
+  VestingSchedule,
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
@@ -76,6 +77,34 @@ const validateCliff = (
   }
 };
 
+const validateSchedule = (
+  sch: VestingSchedule,
+  path: string,
+  errors: ValidationError[],
+): void => {
+  if (!isPositiveInt(sch.occurrences)) {
+    errors.push({
+      path: `${path}.occurrences`,
+      message: "must be an integer >= 1",
+    });
+  }
+  if (!isNonNegativeInt(sch.period)) {
+    errors.push({
+      path: `${path}.period`,
+      message: "must be an integer >= 0",
+    });
+  }
+  if (!PERIOD_TYPES.includes(sch.period_type)) {
+    errors.push({
+      path: `${path}.period_type`,
+      message: `must be one of ${PERIOD_TYPES.join(", ")}`,
+    });
+  }
+  if (sch.cliff) {
+    validateCliff(sch.cliff, `${path}.cliff`, errors);
+  }
+};
+
 const validateStatement = (
   s: VestingStatement,
   path: string,
@@ -83,24 +112,6 @@ const validateStatement = (
 ): void => {
   if (!isPositiveInt(s.order)) {
     errors.push({ path: `${path}.order`, message: "must be an integer >= 1" });
-  }
-  if (!isPositiveInt(s.occurrences)) {
-    errors.push({
-      path: `${path}.occurrences`,
-      message: "must be an integer >= 1",
-    });
-  }
-  if (!isNonNegativeInt(s.period)) {
-    errors.push({
-      path: `${path}.period`,
-      message: "must be an integer >= 0",
-    });
-  }
-  if (!PERIOD_TYPES.includes(s.period_type)) {
-    errors.push({
-      path: `${path}.period_type`,
-      message: `must be one of ${PERIOD_TYPES.join(", ")}`,
-    });
   }
   // The statement's share of the grant, stored as an OCF Numeric decimal. A
   // negative share is never meaningful — it makes the allocator emit negative
@@ -129,8 +140,9 @@ const validateStatement = (
       });
     }
   }
-  if (s.cliff) {
-    validateCliff(s.cliff, `${path}.cliff`, errors);
+  // The grid lives in an optional `schedule` block; validate it when present.
+  if (s.schedule !== undefined) {
+    validateSchedule(s.schedule, `${path}.schedule`, errors);
   }
   // The event hold: a shape check only. `event_id` must be a non-empty string —
   // that's all this layer can know. An unfired event_condition (no matching firing
@@ -147,6 +159,16 @@ const validateStatement = (
         message: "must be a non-empty string",
       });
     }
+  }
+  // The structural invariant: a statement must carry a `schedule`, an
+  // `event_condition`, or both. The neither-corner — a slice with no time grid and
+  // nothing to vest on — is illegal. The type forbids it, but this runs on
+  // untrusted wire input where the type guarantee doesn't hold.
+  if (s.schedule === undefined && s.event_condition === undefined) {
+    errors.push({
+      path,
+      message: "must carry a schedule, an event_condition, or both",
+    });
   }
 };
 
@@ -172,10 +194,15 @@ export const validateVestingScheduleTemplate = (
       validateStatement(s, `statements[${i}]`, errors);
     });
 
-    const totalOccurrences = t.statements.reduce(
-      (sum, s) => sum + (isPositiveInt(s.occurrences) ? s.occurrences : 0),
-      0,
-    );
+    // A schedule-less statement (a pure milestone) is one installment; a scheduled
+    // statement contributes its grid's occurrence count.
+    const totalOccurrences = t.statements.reduce((sum, s) => {
+      if (s.schedule === undefined) return sum + 1;
+      return (
+        sum +
+        (isPositiveInt(s.schedule.occurrences) ? s.schedule.occurrences : 0)
+      );
+    }, 0);
     if (totalOccurrences > MAX_INSTALLMENTS) {
       errors.push({
         path: "statements",

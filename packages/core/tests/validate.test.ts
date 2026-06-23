@@ -18,21 +18,25 @@ const validTemplate: VestingScheduleTemplate = {
   statements: [
     {
       order: 1,
-      occurrences: 48,
-      period: 1,
-      period_type: "MONTHS",
-      cliff: {
-        length: 12,
+      schedule: {
+        occurrences: 48,
+        period: 1,
         period_type: "MONTHS",
-        percentage: "0.25",
+        cliff: {
+          length: 12,
+          period_type: "MONTHS",
+          percentage: "0.25",
+        },
       },
       percentage: "0.75",
     },
     {
       order: 2,
-      occurrences: 1,
-      period: 0,
-      period_type: "MONTHS",
+      schedule: {
+        occurrences: 1,
+        period: 0,
+        period_type: "MONTHS",
+      },
       percentage: "0.25",
     },
   ],
@@ -45,9 +49,11 @@ const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
   statements: [
     {
       order: 1,
-      occurrences,
-      period: 1,
-      period_type: "MONTHS",
+      schedule: {
+        occurrences,
+        period: 1,
+        period_type: "MONTHS",
+      },
       percentage: "1",
     },
   ],
@@ -116,9 +122,11 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+          },
           // Scientific notation isn't OCF Numeric — the boundary rejects it.
           percentage: "1.5e-3",
         },
@@ -134,16 +142,20 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
         {
           order: 1,
-          occurrences: 1,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 1,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "0.5",
         },
       ],
@@ -160,14 +172,16 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: -1,
-            // @ts-expect-error — exercising the runtime guard with an invalid unit
-            period_type: "WEEKS",
-            percentage: "0.25",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+            cliff: {
+              length: -1,
+              // @ts-expect-error — exercising the runtime guard with an invalid unit
+              period_type: "WEEKS",
+              percentage: "0.25",
+            },
           },
           percentage: "1",
         },
@@ -176,8 +190,8 @@ describe("validateVestingScheduleTemplate", () => {
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toEqual(
       expect.arrayContaining([
-        "statements[0].cliff.length",
-        "statements[0].cliff.period_type",
+        "statements[0].schedule.cliff.length",
+        "statements[0].schedule.cliff.period_type",
       ]),
     );
   });
@@ -188,20 +202,24 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: {
-            length: 2,
+          schedule: {
+            occurrences: 4,
+            period: 1,
             period_type: "MONTHS",
-            percentage: "1.5",
+            cliff: {
+              length: 2,
+              period_type: "MONTHS",
+              percentage: "1.5",
+            },
           },
           percentage: "1",
         },
       ],
     });
     expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain("statements[0].cliff.percentage");
+    expect(pathsOf(result.errors)).toContain(
+      "statements[0].schedule.cliff.percentage",
+    );
   });
 
   it("rejects an unknown period_type", () => {
@@ -210,16 +228,20 @@ describe("validateVestingScheduleTemplate", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 1,
-          // @ts-expect-error — exercising the runtime guard with an invalid value
-          period_type: "WEEKS",
+          schedule: {
+            occurrences: 1,
+            period: 1,
+            // @ts-expect-error — exercising the runtime guard with an invalid value
+            period_type: "WEEKS",
+          },
           percentage: "1",
         },
       ],
     });
     expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain("statements[0].period_type");
+    expect(pathsOf(result.errors)).toContain(
+      "statements[0].schedule.period_type",
+    );
   });
 
   it("assertValidVestingScheduleTemplate throws on invalid input", () => {
@@ -339,9 +361,11 @@ describe("validateStatement — percentage bounds", () => {
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: p,
       },
     ],
@@ -384,9 +408,11 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
         // Untrusted input may carry a shape the static type forbids.
         event_condition: event_condition as { event_id: string },
@@ -435,9 +461,11 @@ describe("validateVestingRuntime — held event_condition is valid (#255 AC16)",
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
         event_condition: { event_id: "ipo" },
       },
@@ -455,5 +483,67 @@ describe("validateVestingRuntime — held event_condition is valid (#255 AC16)",
       eventFirings: [{ event_id: "unrelated", date: "2026-01-01" }],
     };
     expect(validateVestingRuntime(runtime, conditionTemplate).valid).toBe(true);
+  });
+});
+
+// Issue #390 AC7 — the optional-schedule invariant. A statement must carry a
+// schedule, an event_condition, or both; the neither-corner is rejected. A
+// schedule-less statement with an event_condition (a pure milestone) validates, and
+// counts as one installment toward the cap.
+describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)", () => {
+  it("accepts a schedule-less statement that has an event_condition (pure milestone)", () => {
+    const result = validateVestingScheduleTemplate({
+      id: "milestone",
+      statements: [
+        { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
+      ],
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects a statement with neither a schedule nor an event_condition", () => {
+    const result = validateVestingScheduleTemplate({
+      id: "neither",
+      statements: [
+        // The static type forbids this corner; the validator guards it on untrusted
+        // wire input where the type guarantee doesn't hold.
+        { order: 1, percentage: "1" } as never,
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("statements[0]");
+    expect(
+      result.errors.some((e) =>
+        /must carry a schedule, an event_condition, or both/.test(e.message),
+      ),
+    ).toBe(true);
+  });
+
+  it("counts a schedule-less statement as one installment toward the cap", () => {
+    // MAX_INSTALLMENTS scheduled occurrences PLUS one schedule-less milestone is
+    // MAX + 1 — over the cap by exactly the milestone's single installment.
+    const result = validateVestingScheduleTemplate({
+      id: "cap-with-milestone",
+      statements: [
+        { ...oneStatement(MAX_INSTALLMENTS).statements[0], order: 1 },
+        { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
+      ],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
+      true,
+    );
+  });
+
+  it("a milestone just under the cap (MAX − 1 scheduled + 1 milestone = MAX) is accepted", () => {
+    const result = validateVestingScheduleTemplate({
+      id: "cap-edge",
+      statements: [
+        { ...oneStatement(MAX_INSTALLMENTS - 1).statements[0], order: 1 },
+        { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
+      ],
+    });
+    expect(result.valid).toBe(true);
   });
 });
