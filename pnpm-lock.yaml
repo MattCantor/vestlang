@@ -192,6 +192,9 @@ importers:
         specifier: ^4.0
         version: 4.3.5
     devDependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
@@ -445,6 +448,9 @@ importers:
       '@vestlang/utils':
         specifier: workspace:*
         version: link:../utils
+      zod:
+        specifier: ^4.0
+        version: 4.3.5
     devDependencies:
       rimraf:
         specifier: ^6.0.1
@@ -548,6 +554,9 @@ importers:
       '@vestlang/primitives':
         specifier: workspace:*
         version: link:../primitives
+      zod:
+        specifier: ^4.0
+        version: 4.3.5
     devDependencies:
       '@vestlang/dsl':
         specifier: workspace:*

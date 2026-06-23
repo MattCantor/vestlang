@@ -1,20 +1,16 @@
 // Structural + runtime validation for the canonical vesting IR.
+//
+// The template structure is no longer hand-checked here: the shape and its rules
+// live once in `@vestlang/primitives`' shared Zod schema, which the MCP server's
+// persisted-artifact validator parses against too. This file parses a template
+// against that schema and maps the result back to the `{ valid, errors[] }`
+// shape consumers expect — zod stays an implementation detail behind that surface.
+// The runtime validator is a different shape (it cross-checks against the
+// template) and stays hand-rolled here.
 
-import type {
-  Cliff,
-  Fraction,
-  PeriodType,
-  VestingRuntime,
-  VestingSchedule,
-  VestingScheduleTemplate,
-  VestingStatement,
-} from "@vestlang/types";
-import {
-  isNumeric,
-  isValidCalendarDate,
-  tryNumericToFraction,
-} from "@vestlang/utils";
-import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
+import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import { isValidCalendarDate } from "@vestlang/utils";
+import { TEMPLATE, zodIssuesToValidationErrors } from "@vestlang/primitives";
 
 export interface ValidationError {
   path: string;
@@ -26,152 +22,6 @@ export interface ValidationResult {
   errors: ValidationError[];
 }
 
-const PERIOD_TYPES: ReadonlyArray<PeriodType> = ["DAYS", "MONTHS", "YEARS"];
-
-const isInteger = (n: unknown): n is number =>
-  typeof n === "number" && Number.isInteger(n);
-
-const isPositiveInt = (n: unknown): n is number => isInteger(n) && n > 0;
-
-const isNonNegativeInt = (n: unknown): n is number => isInteger(n) && n >= 0;
-
-const validateCliff = (
-  c: Cliff,
-  path: string,
-  errors: ValidationError[],
-): void => {
-  if (!isNonNegativeInt(c.length)) {
-    errors.push({
-      path: `${path}.length`,
-      message: "must be an integer >= 0",
-    });
-  }
-  if (!PERIOD_TYPES.includes(c.period_type)) {
-    errors.push({
-      path: `${path}.period_type`,
-      message: `must be one of ${PERIOD_TYPES.join(", ")}`,
-    });
-  }
-  // percentage is stored as an OCF Numeric decimal and is a share of the
-  // statement, so once it parses it must lie in [0, 1]. Shape-check the string
-  // first; then parse (non-throwing — an oversized-but-well-formed Numeric must
-  // be refused, not crash the validator) and bound-check the value.
-  if (!isNumeric(c.percentage)) {
-    errors.push({
-      path: `${path}.percentage`,
-      message: "must be an OCF Numeric string",
-    });
-  } else {
-    const f = tryNumericToFraction(c.percentage);
-    if (f === null) {
-      errors.push({
-        path: `${path}.percentage`,
-        message: "is too large to represent exactly",
-      });
-    } else if (!fractionInUnitInterval(f)) {
-      errors.push({
-        path: `${path}.percentage`,
-        message: "must be in the closed interval [0, 1]",
-      });
-    }
-  }
-};
-
-const validateSchedule = (
-  sch: VestingSchedule,
-  path: string,
-  errors: ValidationError[],
-): void => {
-  if (!isPositiveInt(sch.occurrences)) {
-    errors.push({
-      path: `${path}.occurrences`,
-      message: "must be an integer >= 1",
-    });
-  }
-  if (!isNonNegativeInt(sch.period)) {
-    errors.push({
-      path: `${path}.period`,
-      message: "must be an integer >= 0",
-    });
-  }
-  if (!PERIOD_TYPES.includes(sch.period_type)) {
-    errors.push({
-      path: `${path}.period_type`,
-      message: `must be one of ${PERIOD_TYPES.join(", ")}`,
-    });
-  }
-  if (sch.cliff) {
-    validateCliff(sch.cliff, `${path}.cliff`, errors);
-  }
-};
-
-const validateStatement = (
-  s: VestingStatement,
-  path: string,
-  errors: ValidationError[],
-): void => {
-  if (!isPositiveInt(s.order)) {
-    errors.push({ path: `${path}.order`, message: "must be an integer >= 1" });
-  }
-  // The statement's share of the grant, stored as an OCF Numeric decimal. A
-  // negative share is never meaningful — it makes the allocator emit negative
-  // installments — so reject it here. Over 1 is *not* rejected: the evaluator
-  // represents an over-allocating clause as a statement whose percentage exceeds
-  // 1 and surfaces it as an over-allocation finding rather than a hard error, so
-  // the upper bound stays a finding's job, not the validator's.
-  if (!isNumeric(s.percentage)) {
-    errors.push({
-      path: `${path}.percentage`,
-      message: "must be an OCF Numeric string",
-    });
-  } else {
-    // Non-throwing parse: a well-formed but oversized Numeric must be refused
-    // here, not crash the validator (this runs on untrusted wire input).
-    const f = tryNumericToFraction(s.percentage);
-    if (f === null) {
-      errors.push({
-        path: `${path}.percentage`,
-        message: "is too large to represent exactly",
-      });
-    } else if (f.numerator < 0) {
-      errors.push({
-        path: `${path}.percentage`,
-        message: "must be >= 0",
-      });
-    }
-  }
-  // The grid lives in an optional `schedule` block; validate it when present.
-  if (s.schedule !== undefined) {
-    validateSchedule(s.schedule, `${path}.schedule`, errors);
-  }
-  // The event hold: a shape check only. `event_id` must be a non-empty string —
-  // that's all this layer can know. An unfired event_condition (no matching firing
-  // in the runtime) is VALID, the held state; we never cross-check the firing here,
-  // in either direction. Real-vs-synthetic id membership isn't this validator's job
-  // (it sees only template + runtime, no sidecar/world): a synthetic id's backing
-  // is the save-path dangling-pointer check, and a bare real id simply resolves
-  // against the world (unresolved = held, not an error).
-  if (s.event_condition !== undefined) {
-    const ec = s.event_condition as { event_id?: unknown };
-    if (typeof ec.event_id !== "string" || ec.event_id.length === 0) {
-      errors.push({
-        path: `${path}.event_condition.event_id`,
-        message: "must be a non-empty string",
-      });
-    }
-  }
-  // The structural invariant: a statement must carry a `schedule`, an
-  // `event_condition`, or both. The neither-corner — a slice with no time grid and
-  // nothing to vest on — is illegal. The type forbids it, but this runs on
-  // untrusted wire input where the type guarantee doesn't hold.
-  if (s.schedule === undefined && s.event_condition === undefined) {
-    errors.push({
-      path,
-      message: "must carry a schedule, an event_condition, or both",
-    });
-  }
-};
-
 /**
  * Structural validation for a canonical VestingScheduleTemplate. Returns a
  * { valid, errors[] } result that consumers (the compiler, the OCF validator)
@@ -181,61 +31,12 @@ const validateStatement = (
 export const validateVestingScheduleTemplate = (
   t: VestingScheduleTemplate,
 ): ValidationResult => {
-  const errors: ValidationError[] = [];
-
-  if (typeof t.id !== "string" || t.id.length === 0) {
-    errors.push({ path: "id", message: "must be a non-empty string" });
+  const result = TEMPLATE.safeParse(t);
+  if (result.success) {
+    return { valid: true, errors: [] };
   }
-
-  if (!Array.isArray(t.statements) || t.statements.length === 0) {
-    errors.push({ path: "statements", message: "must be a non-empty array" });
-  } else {
-    t.statements.forEach((s, i) => {
-      validateStatement(s, `statements[${i}]`, errors);
-    });
-
-    // A schedule-less statement (a pure milestone) is one installment; a scheduled
-    // statement contributes its grid's occurrence count.
-    const totalOccurrences = t.statements.reduce((sum, s) => {
-      if (s.schedule === undefined) return sum + 1;
-      return (
-        sum +
-        (isPositiveInt(s.schedule.occurrences) ? s.schedule.occurrences : 0)
-      );
-    }, 0);
-    if (totalOccurrences > MAX_INSTALLMENTS) {
-      errors.push({
-        path: "statements",
-        message: installmentCapMessage(totalOccurrences),
-      });
-    }
-
-    const ordersSeen = new Map<number, number[]>();
-    t.statements.forEach((s, i) => {
-      if (isPositiveInt(s.order)) {
-        const indices = ordersSeen.get(s.order) ?? [];
-        indices.push(i);
-        ordersSeen.set(s.order, indices);
-      }
-    });
-    for (const [order, indices] of ordersSeen) {
-      if (indices.length > 1) {
-        errors.push({
-          path: "statements",
-          message: `duplicate order ${order} at indices [${indices.join(", ")}]`,
-        });
-      }
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-};
-
-const fractionInUnitInterval = (f: Fraction): boolean => {
-  // Valid fractions reach this point (denominator >= 1).
-  if (f.numerator < 0) return false;
-  // numerator/denominator <= 1 ⇔ numerator <= denominator
-  return f.numerator <= f.denominator;
+  const errors = zodIssuesToValidationErrors(result.error.issues, t);
+  return { valid: false, errors };
 };
 
 /**

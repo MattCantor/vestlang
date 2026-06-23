@@ -12,3 +12,4 @@ export * from "./fold.js";
 export * from "./kernel.js";
 export * from "./window.js";
 export * from "./limits.js";
+export * from "./canonical-schema.js";

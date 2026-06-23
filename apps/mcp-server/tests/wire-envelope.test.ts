@@ -268,13 +268,24 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
   });
 
   // rehydrate's four refusal modes. Missing-grant-date is reachable by stripping
-  // the stored grant date; the other three need a hand-built artifact.
+  // the stored grant date; the other three need a hand-built artifact. The
+  // template itself must be schema-valid (a non-empty statements array) — the
+  // refusal is about the runtime, not the template.
   describe("rehydrate refusal modes (ruleId now on the wire)", () => {
     it("rehydrate-missing-grant-date — stored grant date stripped", async () => {
       const client = await connectClient();
       const res = await call(client, "vestlang_rehydrate", {
         artifact: {
-          template: { id: "t1", statements: [] },
+          template: {
+            id: "t1",
+            statements: [
+              {
+                order: 1,
+                percentage: "1",
+                event_condition: { event_id: "ipo" },
+              },
+            ],
+          },
           runtime: { startDate: "2025-01-01" },
         },
         grant_quantity: 400,
@@ -510,10 +521,17 @@ describe("#345 AC#6 — refusal message bytes are unchanged", () => {
       'Only a single-template program is storable as a persisted artifact; this program\'s storable form is "events-only". Adjust the schedule so it collapses to a single canonical template.',
     );
 
-    // rehydrate — rehydrate-missing-grant-date (#293 hardened message)
+    // rehydrate — rehydrate-missing-grant-date (#293 hardened message). The
+    // template is schema-valid (non-empty statements); only the runtime's stored
+    // grant date is missing.
     const rehydrate = await call(client, "vestlang_rehydrate", {
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: {
+          id: "t1",
+          statements: [
+            { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
+          ],
+        },
         runtime: { startDate: "2025-01-01" },
       },
       grant_quantity: 400,

@@ -19,7 +19,8 @@
   },
   "dependencies": {
     "@vestlang/types": "workspace:*",
-    "@vestlang/utils": "workspace:*"
+    "@vestlang/utils": "workspace:*",
+    "zod": "^4.0"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",

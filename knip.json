@@ -2,5 +2,10 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreWorkspaces": ["apps/docs"],
   "ignore": ["docs/**"],
-  "ignoreDependencies": ["prettier-plugin-pegjs"]
+  "ignoreDependencies": ["prettier-plugin-pegjs"],
+  "workspaces": {
+    "packages/vestlang": {
+      "ignoreDependencies": ["zod"]
+    }
+  }
 }

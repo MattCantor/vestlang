@@ -24,5 +24,9 @@ export default defineConfig({
   // `require("@vestlang/primitives")` / `require("@vestlang/utils")` (which would
   // throw for OCF-Tools). Keeping them devDependencies already makes tsup bundle
   // them; this is explicit so a tsup default change can't externalize them.
-  noExternal: ["@vestlang/primitives", "@vestlang/utils"],
+  // `zod` rides in transitively through `@vestlang/primitives`' shared canonical
+  // schema. Inline it too, so the published CJS never emits a bare
+  // `require("zod")` (which would throw for OCF-Tools, which doesn't depend on
+  // zod) and core keeps shipping no runtime dependency.
+  noExternal: ["@vestlang/primitives", "@vestlang/utils", "zod"],
 });
