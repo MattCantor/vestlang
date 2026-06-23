@@ -25,6 +25,7 @@ import {
   type GridCliff,
   type RawEvent,
 } from "@vestlang/primitives";
+import { numericToFraction } from "@vestlang/utils";
 import {
   assertValidVestingRuntime,
   assertValidVestingScheduleTemplate,
@@ -94,7 +95,8 @@ const expandAnchored = (
     cliff = {
       kind: "fixed",
       date: baselineDate,
-      percentage: statement.cliff.percentage,
+      // Stored as a Numeric decimal; the kernel works in exact rational.
+      percentage: numericToFraction(statement.cliff.percentage),
     };
   } else {
     cliff = { kind: "none" };
@@ -106,7 +108,7 @@ const expandAnchored = (
     period: statement.period,
     periodType: statement.period_type,
     occurrences: statement.occurrences,
-    stmtFraction: statement.percentage,
+    stmtFraction: numericToFraction(statement.percentage),
     statementOrder: statement.order,
     dom,
     cliff,

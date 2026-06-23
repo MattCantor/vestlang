@@ -255,11 +255,16 @@ describe("inferSchedule — superposition", () => {
     // one quarter past the last quarterly tranche lands in April, but the monthly
     // run starts in February. The segments overlap rather than abut, so this isn't
     // one forward chain — it stays two stacked grids (PLUS), not a THEN chain.
+    //
+    // Amounts give each grid a terminating share of the total: quarterly
+    // 8000/20000 = 2/5, monthly 12000/20000 = 3/5. Percentages store as truncated
+    // Numeric decimals, so the original 5/11 + 6/11 split (repeating) would not
+    // round-trip; 2/5 + 3/5 stores exactly.
     const tranches: TrancheInput[] = [
-      { date: d("2024-04-01"), amount: 2500 },
-      { date: d("2024-07-01"), amount: 2500 },
-      { date: d("2024-10-01"), amount: 2500 },
-      { date: d("2025-01-01"), amount: 2500 },
+      { date: d("2024-04-01"), amount: 2000 },
+      { date: d("2024-07-01"), amount: 2000 },
+      { date: d("2024-10-01"), amount: 2000 },
+      { date: d("2025-01-01"), amount: 2000 },
       ...monthly("2025-02-01", 12, 1000),
     ];
 

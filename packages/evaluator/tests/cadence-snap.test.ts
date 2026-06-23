@@ -111,7 +111,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     expect(stmt.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
   });
 
@@ -142,7 +142,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     expect(s.interchange.template.statements[0].cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
   });
 

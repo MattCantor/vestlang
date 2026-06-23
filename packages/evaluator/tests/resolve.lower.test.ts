@@ -80,7 +80,7 @@ describe("resolveToCore — single-statement monthly-48 with a 12-month cliff", 
     expect(s.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
     expect(result.runtime.startDate).toBe("2025-01-01");
   });
@@ -293,10 +293,8 @@ describe("resolveToCore — QUANTITY amount lowers to a portion of the grant", (
     ];
     const result = resolveToCore(program, ctxInput());
     if (result.kind !== "template") throw new Error("expected template");
-    expect(result.template.statements[0].percentage).toEqual({
-      numerator: 1,
-      denominator: 4,
-    });
+    // 25000/100000 = 1/4, stored as the exact Numeric "0.25".
+    expect(result.template.statements[0].percentage).toBe("0.25");
   });
 
   it("QUANTITY against a zero-share grant lowers to 0/1, not a degenerate 1/0", () => {
@@ -311,10 +309,7 @@ describe("resolveToCore — QUANTITY amount lowers to a portion of the grant", (
     ];
     const result = resolveToCore(program, ctxInput({}, 0));
     if (result.kind !== "template") throw new Error("expected template");
-    expect(result.template.statements[0].percentage).toEqual({
-      numerator: 0,
-      denominator: 1,
-    });
+    expect(result.template.statements[0].percentage).toBe("0");
     expect(result.findings).toEqual([]);
   });
 });

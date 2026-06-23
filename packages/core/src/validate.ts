@@ -8,7 +8,11 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { isValidCalendarDate } from "@vestlang/utils";
+import {
+  isNumeric,
+  isValidCalendarDate,
+  tryNumericToFraction,
+} from "@vestlang/utils";
 import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
 
 export interface ValidationError {
@@ -63,17 +67,28 @@ const validateCliff = (
       message: `must be one of ${PERIOD_TYPES.join(", ")}`,
     });
   }
-  validateFraction(c.percentage, `${path}.percentage`, errors);
-  // percentage is a share of the statement, so it must lie in [0, 1].
-  if (
-    isInteger(c.percentage.numerator) &&
-    isPositiveInt(c.percentage.denominator) &&
-    !fractionInUnitInterval(c.percentage)
-  ) {
+  // percentage is stored as an OCF Numeric decimal and is a share of the
+  // statement, so once it parses it must lie in [0, 1]. Shape-check the string
+  // first; then parse (non-throwing — an oversized-but-well-formed Numeric must
+  // be refused, not crash the validator) and bound-check the value.
+  if (!isNumeric(c.percentage)) {
     errors.push({
       path: `${path}.percentage`,
-      message: "must be in the closed interval [0, 1]",
+      message: "must be an OCF Numeric string",
     });
+  } else {
+    const f = tryNumericToFraction(c.percentage);
+    if (f === null) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "is too large to represent exactly",
+      });
+    } else if (!fractionInUnitInterval(f)) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "must be in the closed interval [0, 1]",
+      });
+    }
   }
 };
 
@@ -135,17 +150,32 @@ const validateStatement = (
       message: `must be one of ${PERIOD_TYPES.join(", ")}`,
     });
   }
-  validateFraction(s.percentage, `${path}.percentage`, errors);
-  // A negative share is never meaningful — it makes the allocator emit negative
+  // The statement's share of the grant, stored as an OCF Numeric decimal. A
+  // negative share is never meaningful — it makes the allocator emit negative
   // installments — so reject it here. Over 1 is *not* rejected: the evaluator
   // represents an over-allocating clause as a statement whose percentage exceeds
   // 1 and surfaces it as an over-allocation finding rather than a hard error, so
   // the upper bound stays a finding's job, not the validator's.
-  if (isInteger(s.percentage.numerator) && s.percentage.numerator < 0) {
+  if (!isNumeric(s.percentage)) {
     errors.push({
       path: `${path}.percentage`,
-      message: "must be >= 0",
+      message: "must be an OCF Numeric string",
     });
+  } else {
+    // Non-throwing parse: a well-formed but oversized Numeric must be refused
+    // here, not crash the validator (this runs on untrusted wire input).
+    const f = tryNumericToFraction(s.percentage);
+    if (f === null) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "is too large to represent exactly",
+      });
+    } else if (f.numerator < 0) {
+      errors.push({
+        path: `${path}.percentage`,
+        message: "must be >= 0",
+      });
+    }
   }
   if (s.cliff) {
     validateCliff(s.cliff, `${path}.cliff`, errors);

@@ -200,6 +200,12 @@ const CORPUS: CorpusCase[] = [
     // Cliff and monthly head, then the cadence itself changes — the tail vests
     // quarterly. The handoff from monthly to quarterly lands cleanly on the grid,
     // so this is still a single schedule that just changes cadence.
+    //
+    // Amounts are picked so every segment's share of the total terminates as a
+    // decimal: head 600/800 = 3/4, tail 200/800 = 1/4, and the cliff lump
+    // 300/600 = 1/2 of its statement. Percentages store as truncated Numeric
+    // strings, so a repeating split (e.g. 2/3 + 1/3) would lose a share and the
+    // inferred CLIFF/THEN chain wouldn't round-trip.
     id: "C4",
     witness: "cliff + monthly head, then a quarterly tail",
     tranches: [
@@ -207,10 +213,10 @@ const CORPUS: CorpusCase[] = [
       { date: "2024-03-01", amount: 100 },
       { date: "2024-04-01", amount: 100 },
       { date: "2024-05-01", amount: 100 },
-      { date: "2024-08-01", amount: 150 },
-      { date: "2024-11-01", amount: 150 },
+      { date: "2024-08-01", amount: 100 },
+      { date: "2024-11-01", amount: 100 },
     ],
-    grant: 900,
+    grant: 800,
     grantDate: "2023-11-01",
   },
   {

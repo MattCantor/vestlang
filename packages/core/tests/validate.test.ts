@@ -25,9 +25,9 @@ const validTemplate: VestingScheduleTemplate = {
       cliff: {
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 12, denominator: 48 },
+        percentage: "0.25",
       },
-      percentage: { numerator: 3, denominator: 4 },
+      percentage: "0.75",
     },
     {
       order: 2,
@@ -35,7 +35,7 @@ const validTemplate: VestingScheduleTemplate = {
       occurrences: 1,
       period: 0,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     },
   ],
 };
@@ -51,7 +51,7 @@ const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
       occurrences,
       period: 1,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 1 },
+      percentage: "1",
     },
   ],
 });
@@ -113,7 +113,7 @@ describe("validateVestingScheduleTemplate", () => {
     expect(pathsOf(result.errors)).toContain("statements");
   });
 
-  it("rejects a bad fraction (non-integer numerator, denominator < 1)", () => {
+  it("rejects a malformed percentage string (not an OCF Numeric)", () => {
     const result = validateVestingScheduleTemplate({
       id: "x",
       statements: [
@@ -123,17 +123,13 @@ describe("validateVestingScheduleTemplate", () => {
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",
-          percentage: { numerator: 1.5, denominator: 0 },
+          // Scientific notation isn't OCF Numeric — the boundary rejects it.
+          percentage: "1.5e-3",
         },
       ],
     });
     expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toEqual(
-      expect.arrayContaining([
-        "statements[0].percentage.numerator",
-        "statements[0].percentage.denominator",
-      ]),
-    );
+    expect(pathsOf(result.errors)).toContain("statements[0].percentage");
   });
 
   it("rejects duplicate order", () => {
@@ -146,7 +142,7 @@ describe("validateVestingScheduleTemplate", () => {
           occurrences: 1,
           period: 1,
           period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
+          percentage: "0.5",
         },
         {
           order: 1,
@@ -154,7 +150,7 @@ describe("validateVestingScheduleTemplate", () => {
           occurrences: 1,
           period: 1,
           period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
+          percentage: "0.5",
         },
       ],
     });
@@ -178,9 +174,9 @@ describe("validateVestingScheduleTemplate", () => {
             length: -1,
             // @ts-expect-error — exercising the runtime guard with an invalid unit
             period_type: "WEEKS",
-            percentage: { numerator: 1, denominator: 4 },
+            percentage: "0.25",
           },
-          percentage: { numerator: 1, denominator: 1 },
+          percentage: "1",
         },
       ],
     });
@@ -206,9 +202,9 @@ describe("validateVestingScheduleTemplate", () => {
           cliff: {
             length: 2,
             period_type: "MONTHS",
-            percentage: { numerator: 3, denominator: 2 },
+            percentage: "1.5",
           },
-          percentage: { numerator: 1, denominator: 1 },
+          percentage: "1",
         },
       ],
     });
@@ -227,7 +223,7 @@ describe("validateVestingScheduleTemplate", () => {
           period: 1,
           // @ts-expect-error — exercising the runtime guard with an invalid value
           period_type: "WEEKS",
-          percentage: { numerator: 1, denominator: 1 },
+          percentage: "1",
         },
       ],
     });
@@ -246,7 +242,7 @@ describe("validateVestingScheduleTemplate", () => {
           occurrences: 1,
           period: 0,
           period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 1 },
+          percentage: "1",
         },
       ],
     });
@@ -386,10 +382,7 @@ describe("validateVestingRuntime", () => {
 });
 
 describe("validateStatement — percentage bounds", () => {
-  const withStatementPercentage = (p: {
-    numerator: number;
-    denominator: number;
-  }): VestingScheduleTemplate => ({
+  const withStatementPercentage = (p: string): VestingScheduleTemplate => ({
     id: "tmpl-pct",
     statements: [
       {
@@ -404,8 +397,9 @@ describe("validateStatement — percentage bounds", () => {
   });
 
   it("rejects a negative statement percentage", () => {
+    // A well-formed Numeric, but the parsed value is negative — rejected.
     const result = validateVestingScheduleTemplate(
-      withStatementPercentage({ numerator: -1, denominator: 2 }),
+      withStatementPercentage("-0.5"),
     );
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0].percentage");
@@ -413,7 +407,7 @@ describe("validateStatement — percentage bounds", () => {
 
   it("accepts a statement percentage of exactly 1", () => {
     const result = validateVestingScheduleTemplate(
-      withStatementPercentage({ numerator: 1, denominator: 1 }),
+      withStatementPercentage("1"),
     );
     expect(result.valid).toBe(true);
   });
@@ -422,7 +416,7 @@ describe("validateStatement — percentage bounds", () => {
   // reject — a single clause above 1 stays structurally valid here.
   it("accepts a statement percentage above 1 (over-allocation is a finding)", () => {
     const result = validateVestingScheduleTemplate(
-      withStatementPercentage({ numerator: 3, denominator: 2 }),
+      withStatementPercentage("1.5"),
     );
     expect(result.valid).toBe(true);
   });
@@ -443,7 +437,7 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 1 },
+        percentage: "1",
         // Untrusted input may carry a shape the static type forbids.
         event_condition: event_condition as { event_id: string },
       },
@@ -495,7 +489,7 @@ describe("validateVestingRuntime — held event_condition is valid (#255 AC16)",
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 1 },
+        percentage: "1",
         event_condition: { event_id: "ipo" },
       },
     ],

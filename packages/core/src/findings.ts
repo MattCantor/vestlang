@@ -1,7 +1,10 @@
 // Template-space allocation diagnostics for the canonical interchange.
 
 import type { Finding, VestingScheduleTemplate } from "@vestlang/types";
-import { allocationFindingsFromFractions } from "@vestlang/utils";
+import {
+  allocationFindingsFromFractions,
+  numericToFraction,
+} from "@vestlang/utils";
 
 // The over/under-allocation check, run against a stored template rather than a
 // live resolution: sum the statements' share-of-grant fractions and classify.
@@ -18,6 +21,8 @@ export const templateAllocationFindings = (
   totalShares: number,
 ): Finding[] =>
   allocationFindingsFromFractions(
-    template.statements.map((s) => s.percentage),
+    // Stored percentages are Numeric decimals; parse each to its exact rational
+    // before summing so the over/under boundary is computed in exact arithmetic.
+    template.statements.map((s) => numericToFraction(s.percentage)),
     totalShares,
   );

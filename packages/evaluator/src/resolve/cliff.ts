@@ -31,7 +31,7 @@ import type {
 } from "@vestlang/types";
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/primitives";
-import { fracReduce } from "@vestlang/utils";
+import { fractionToNumeric } from "@vestlang/utils";
 import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../interpret/selectors.js";
 import { pickedDate } from "../interpret/utils.js";
@@ -220,7 +220,7 @@ const timeCliffAt = (
   return {
     length,
     period_type,
-    percentage: fracReduce({ numerator: m, denominator: occurrences }),
+    percentage: fractionToNumeric({ numerator: m, denominator: occurrences }),
   };
 };
 
@@ -549,7 +549,7 @@ const relativeDurationCliff = (
   return {
     length: off.value,
     period_type: off.unit,
-    percentage: fracReduce({ numerator: m, denominator: occurrences }),
+    percentage: fractionToNumeric({ numerator: m, denominator: occurrences }),
   };
 };
 

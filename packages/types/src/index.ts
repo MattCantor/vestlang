@@ -17,7 +17,14 @@ export type {
   StoredTerms,
   VestingRuntime,
 } from "./canonical.js";
-export type { TwoOrMore, SelectorTag, Selector, OCTDate } from "./helpers.js";
+export type {
+  TwoOrMore,
+  SelectorTag,
+  Selector,
+  OCTDate,
+  Numeric,
+} from "./helpers.js";
+export { NUMERIC_PATTERN_SOURCE, NUMERIC_PATTERN } from "./helpers.js";
 export type {
   ConstraintTag,
   VBaseTag,

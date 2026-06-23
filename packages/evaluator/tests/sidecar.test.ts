@@ -215,7 +215,7 @@ describe("toPersisted — save-path partition tripwire", () => {
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 1 },
+        percentage: "1",
       },
     ],
   });
@@ -309,7 +309,7 @@ describe("toPersisted — save-path partition tripwire", () => {
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 1 },
+        percentage: "1",
         event_condition: { event_id: eventId },
       },
     ],

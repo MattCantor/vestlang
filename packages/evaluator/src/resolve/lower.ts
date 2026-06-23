@@ -22,6 +22,7 @@ import type {
   OCTDate,
 } from "@vestlang/types";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
+import { fractionToNumeric } from "@vestlang/utils";
 import type {
   Cliff,
   Fraction,
@@ -801,7 +802,9 @@ export const buildTemplate = (
       occurrences,
       period: length,
       period_type: type,
-      percentage: r.percentage,
+      // The internal share is an exact Fraction; the stored field is a Numeric
+      // decimal, so render it at the write boundary.
+      percentage: fractionToNumeric(r.percentage),
       ...(cliff ? { cliff } : {}),
       ...(event_condition ? { event_condition } : {}),
     });

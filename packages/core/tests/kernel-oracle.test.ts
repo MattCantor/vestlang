@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { fractionToNumeric } from "@vestlang/utils";
 import { compile } from "../src/compile";
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 
@@ -41,9 +42,9 @@ describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
         cliff: {
           length: 0, // cliff also on the start date
           period_type: "MONTHS",
-          percentage: { numerator, denominator },
+          percentage: fractionToNumeric({ numerator, denominator }),
         },
-        percentage: { numerator: 1, denominator: 1 },
+        percentage: "1",
       },
     ],
   });

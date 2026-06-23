@@ -571,7 +571,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     expect(result.template.statements[0].cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
     expect(result.runtime.eventFirings ?? []).toEqual([]);
     expect(
@@ -630,7 +630,7 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     expect(result.template.statements[0].cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
     // The combinator gate is externalized as the one reserved evt:start recipe.
     expect(Object.keys(result.sourceMap)).toEqual(["evt:start"]);
@@ -1465,7 +1465,7 @@ describe("resolveToCore — AC 6: LATER OF(12 months, EVENT ipo) fold point", ()
     expect(s.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
-      percentage: { numerator: 1, denominator: 4 },
+      percentage: "0.25",
     });
     const events = compile(result.template, result.totalShares, result.runtime);
     // The lump folds at max(12mo baseline, firing) = 2026-01-01 (the baseline wins).

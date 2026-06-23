@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { templateAllocationFindings } from "@vestlang/core";
+import { fractionToNumeric } from "@vestlang/utils";
 
 // templateAllocationFindings re-runs the over/under-allocation check against a
 // stored template, so a persisted artifact can be re-validated without
@@ -17,7 +18,7 @@ const oneStatementTemplate = (numerator: number, denominator: number) => ({
       occurrences: 1,
       period: 12,
       period_type: "MONTHS" as const,
-      percentage: { numerator, denominator },
+      percentage: fractionToNumeric({ numerator, denominator }),
     },
   ],
 });
@@ -72,7 +73,7 @@ describe("templateAllocationFindings (AC#5)", () => {
           occurrences: 1,
           period: 12,
           period_type: "MONTHS" as const,
-          percentage: { numerator: 3, denominator: 4 },
+          percentage: "0.75",
         },
         {
           order: 2,
@@ -80,7 +81,7 @@ describe("templateAllocationFindings (AC#5)", () => {
           occurrences: 1,
           period: 12,
           period_type: "MONTHS" as const,
-          percentage: { numerator: 3, denominator: 4 },
+          percentage: "0.75",
         },
       ],
     };

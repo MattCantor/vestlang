@@ -25,5 +25,16 @@ export const formatFinding = (f: Finding): string => {
       return `over-allocates the grant to ${formatPct(f.sum)} (${fmt(f.sum)}) — not a valid schedule`;
     case "under-allocation":
       return `allocates only ${formatPct(f.sum)} (${fmt(f.sum)}) of the grant`;
+    case "precision-insufficient": {
+      // The stored decimal can't write the intended fraction precisely enough to
+      // allocate to the right whole-share count at this grant size. Name the
+      // fraction we inferred and, when one exists, the shorter decimal that lands
+      // it; the recommended decimal is absent only when even ten places can't.
+      const meant = `${fmt(f.inferred)} (${formatPct(f.inferred)})`;
+      const fix = f.recommended
+        ? `; store \`${f.recommended}\` to allocate it correctly`
+        : ` and no ≤10-place decimal allocates it correctly`;
+      return `stored percentage \`${f.percentage}\` is too imprecise for ${f.shareCount} shares — it reads as ${meant}${fix}`;
+    }
   }
 };

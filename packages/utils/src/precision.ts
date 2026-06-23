@@ -21,6 +21,12 @@
 // `number` rounds; the analyzer's own `bigint` arithmetic below keeps it exact.
 // (It deliberately does not route through `fractions.ts`, whose helpers convert
 // back to a `number`-based Fraction and throw past MAX_SAFE_INTEGER.)
+//
+// The OCF grammar and its parse/render primitives live in `numeric.ts` (the one
+// home for what a Numeric is); this file imports them and adds only the
+// analyzer-specific search.
+
+import { parseDecimal, renderFixed, terminates } from "./numeric.js";
 
 /** A reduced fraction carried in BigInt so large denominators stay exact. */
 export interface InferredFraction {
@@ -66,13 +72,9 @@ export type PrecisionVerdict =
       offBy: bigint;
     };
 
-// The OCF `Numeric` shape this analyzer accepts: an optional sign, integer part,
-// and up to ten fractional digits. No scientific notation. The 10-place ceiling
-// is what makes the not-representable verdict reachable at all.
-const NUMERIC_PATTERN = /^[+-]?[0-9]+(\.[0-9]{1,10})?$/;
-
 // Most fractional decimals only matter up to ten places; tie this to the OCF
-// ceiling so the window search and the closest-value search share one bound.
+// ceiling (the grammar's max fractional digits) so the window search and the
+// closest-value search share one bound.
 const MAX_PLACES = 10n;
 
 const abs = (v: bigint): bigint => (v < 0n ? -v : v);
@@ -149,24 +151,6 @@ const simplestInHalfOpen = (
   return inner.denominator < left.denominator ? inner : left;
 };
 
-// A reduced fraction terminates as a decimal iff its denominator's only prime
-// factors are 2 and 5. Strip both and check what's left.
-const terminates = (denominator: bigint): boolean => {
-  let d = denominator;
-  while (d % 2n === 0n) d /= 2n;
-  while (d % 5n === 0n) d /= 5n;
-  return d === 1n;
-};
-
-// Render an integer numerator over 10^places as a fixed-point decimal string:
-// leading "0." for sub-1 values, exactly `places` fractional digits. Built from
-// the integer alone — no float division — so it stays exact.
-const renderFixed = (numerator: bigint, places: number): string => {
-  const padded = numerator.toString().padStart(places + 1, "0");
-  const cut = padded.length - places;
-  return `${padded.slice(0, cut)}.${padded.slice(cut)}`;
-};
-
 const RANGE_ERROR = "analyzePrecision: shareCount must be a positive integer";
 
 // shareCount mirrors allocate.ts's floorSharesAt guard: a `number` must be a
@@ -185,35 +169,6 @@ const toShareCount = (shareCount: number | bigint): bigint => {
   return BigInt(shareCount);
 };
 
-interface ParsedDecimal {
-  places: number;
-  // The decimal as an exact fraction: scaledValue / 10^places.
-  scaledValue: bigint;
-  scale: bigint;
-}
-
-const parseDecimal = (decimal: string): ParsedDecimal => {
-  if (!NUMERIC_PATTERN.test(decimal)) {
-    throw new Error(
-      `analyzePrecision: decimal must be an OCF Numeric string (got ${JSON.stringify(decimal)})`,
-    );
-  }
-  // The pattern admits a leading sign; a vesting percentage can't be negative.
-  // Reject any explicit minus — including the "-0" forms — so the sign rule has
-  // no special case for zero.
-  if (decimal.startsWith("-")) {
-    throw new Error(
-      `analyzePrecision: decimal must be non-negative (got ${decimal})`,
-    );
-  }
-  const unsigned = decimal.replace(/^[+-]/, "");
-  const [intPart, fracPart = ""] = unsigned.split(".");
-  const places = fracPart.length;
-  const scaledValue = BigInt(intPart + fracPart);
-  const scale = 10n ** BigInt(places);
-  return { places, scaledValue, scale };
-};
-
 /**
  * Analyze a percentage decimal against a share count: infer the likely intended
  * fraction and report whether the written decimal still allocates to the right
@@ -228,6 +183,14 @@ export const analyzePrecision = (
   shareCount: number | bigint,
 ): PrecisionVerdict => {
   const n = toShareCount(shareCount);
+  // The shared grammar admits a leading sign, but a vesting percentage can't be
+  // negative — reject any explicit minus (including the "-0" forms) so the
+  // analyzer's share math never sees a negative supplied value.
+  if (decimal.startsWith("-")) {
+    throw new Error(
+      `analyzePrecision: decimal must be non-negative (got ${decimal})`,
+    );
+  }
   const { places, scaledValue, scale } = parseDecimal(decimal);
 
   // No fractional digits: there is no truncation to second-guess.

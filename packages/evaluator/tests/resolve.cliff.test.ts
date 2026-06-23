@@ -36,7 +36,7 @@ describe("lowerCliff", () => {
       cliff: {
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 4 },
+        percentage: "0.25",
       },
     });
   });
@@ -51,7 +51,7 @@ describe("lowerCliff", () => {
       cliff: {
         length: 75, // 2025-01-01 + 75 days = 2025-03-17
         period_type: "DAYS",
-        percentage: { numerator: 1, denominator: 2 },
+        percentage: "0.5",
       },
     });
   });
@@ -164,7 +164,7 @@ describe("lowerCliff", () => {
       cliff: {
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 4 },
+        percentage: "0.25",
       },
       cliffDate: "2026-01-01",
       event: { kind: "bare", eventId: "ipo" },
@@ -189,7 +189,7 @@ describe("lowerCliff", () => {
       expect(result.cliff).toEqual({
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 4 },
+        percentage: "0.25",
       });
       expect(result.firing).toBeUndefined(); // held — the whole grid, including the lump
     }
@@ -286,7 +286,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
       cliff: {
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 4 },
+        percentage: "0.25",
       },
     });
   });
@@ -299,7 +299,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
       cliff: {
         length: 7,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 8 }, // 3/24
+        percentage: "0.125", // 3/24
       },
     });
   });
@@ -312,7 +312,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
       cliff: {
         length: 90,
         period_type: "DAYS",
-        percentage: { numerator: 1, denominator: 4 }, // 3/12
+        percentage: "0.25", // 3/12
       },
     });
   });
@@ -362,7 +362,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
       cliff: {
         length: 12,
         period_type: "MONTHS",
-        percentage: { numerator: 1, denominator: 4 },
+        percentage: "0.25",
       },
       event: { kind: "bare", eventId: "ipo" },
     });
