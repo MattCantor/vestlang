@@ -216,7 +216,6 @@ const corruptStartArtifact = (
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -271,7 +270,6 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -317,7 +315,6 @@ describe("rehydrate — namespace violation: a non-reserved sidecar key", () => 
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",

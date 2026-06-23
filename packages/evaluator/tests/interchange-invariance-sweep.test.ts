@@ -453,9 +453,6 @@ describe("interchange — nested committed disclosures do not reach the storable
       // The storable start is the contingent sentinel + an `evt:start` recipe, not
       // a committed date — the firing-blind path never commits, so nothing
       // absence-disclosure-shaped rode up into the storable verdict.
-      expect(out.interchange.template.statements[0].vesting_base).toEqual({
-        type: "DATE",
-      });
       expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
       expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
     });

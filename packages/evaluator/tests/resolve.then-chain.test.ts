@@ -119,9 +119,6 @@ describe("resolveToCore — date-origin THEN chain → template", () => {
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     expect(result.template.statements).toHaveLength(4);
-    expect(
-      result.template.statements.every((s) => s.vesting_base.type === "DATE"),
-    ).toBe(true);
     expect(result.runtime.startDate).toBe("2025-01-01");
   });
 
@@ -810,10 +807,6 @@ describe("resolveToCore — two portions, ipo and ipo + 12mo (aligned collapse)"
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.template.statements.map((s) => s.vesting_base)).toEqual([
-      { type: "DATE" },
-      { type: "DATE" },
-    ]);
     expect(result.runtime.startDate).toBe("2026-06-01");
     expect(result.sourceMap).toEqual({});
   });

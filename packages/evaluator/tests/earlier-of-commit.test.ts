@@ -140,13 +140,10 @@ describe("#251 AC5 — interchange unchanged for the start case", () => {
       prog(HEADLINE),
       ctx({ events: { ipo: "2024-03-01" } }),
     );
-    // Firing-blind: a contingent-start template (DATE base on the sentinel + the
-    // one reserved `evt:start` recipe).
+    // Firing-blind: a contingent-start template (start on the sentinel + the one
+    // reserved `evt:start` recipe).
     if (blind.interchange.status !== "template")
       throw new Error("expected interchange template");
-    expect(blind.interchange.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
     expect(blind.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(blind.interchange.sourceMap)).toEqual(["evt:start"]);
     // Invariant to whether ipo fired.

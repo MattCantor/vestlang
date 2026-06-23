@@ -12,7 +12,6 @@ const artifactWith = (percentage: unknown) => ({
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 1,
         period: 12,
         period_type: "MONTHS",

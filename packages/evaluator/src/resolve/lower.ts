@@ -720,12 +720,10 @@ export const buildTemplate = (
     // the start itself still lowers as a plain dated anchor below.
     blockers.push(...disclosuresOf(r.start));
 
-    // Every statement is a DATE base (canonical has no other anchor). On the
-    // contingent path the cursor stays the sentinel — the projection's
-    // sentinel-skip / re-derived start handles dating — so we only run the
+    // Anchoring is implicit — every statement dates off the one hoisted start. On
+    // the contingent path the cursor stays the sentinel (the projection's
+    // sentinel-skip / re-derived start handles dating), so we only run the
     // cursor/eq continuation check on the dated path.
-    const vesting_base: VestingStatement["vesting_base"] = { type: "DATE" };
-
     if (!hasContingentStart) {
       // A resolved/committed dated start. (A pending head can't appear here — the
       // contingent branch owns those — so the remaining non-dated cases are the
@@ -798,7 +796,6 @@ export const buildTemplate = (
 
     statements.push({
       order: i + 1,
-      vesting_base,
       occurrences,
       period: length,
       period_type: type,

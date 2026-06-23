@@ -294,8 +294,8 @@ export const rehydrate = (
   // re-resolves its sidecar recipe (→ the later of two events, a gated date). The
   // resolved firing rides onto `runtime.eventFirings`, the channel core.compile
   // reads to fold the cliff at max(cliff date, firing). One firing per id (two
-  // statements may hold on the same event). Scanned over `event_condition.event_id`
-  // — NOT the (DATE-only) `vesting_base` — so the cliff hold is actually found.
+  // statements may hold on the same event). Scanned over `event_condition.event_id`,
+  // the only event channel a statement carries, so the cliff hold is actually found.
   const firings = new Map<string, OCTDate>();
   const conditionIds = new Set<string>();
   for (const stmt of template.statements) {

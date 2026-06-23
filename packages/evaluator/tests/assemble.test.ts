@@ -231,7 +231,6 @@ describe("assemble — atomic unfired EVENT start: classify on the spec", () => 
     // The template holds a DATE statement on the contingent-start sentinel; the
     // recipe to re-derive the real start lives under the reserved `evt:start` key.
     expect(out.template.statements).toHaveLength(1);
-    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
     expect(out.sourceMap["evt:start"].definition).toContain("ipo");
@@ -324,7 +323,6 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
       throw new Error(`expected template, got ${out.status}`);
     // One DATE statement on the contingent-start sentinel.
     expect(out.template.statements).toHaveLength(1);
-    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     // No witness — the contingent start hasn't fired.
     expect(out.runtime.eventFirings ?? []).toEqual([]);
@@ -367,7 +365,6 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     const res = schedule.resolution;
     if (res.status !== "template")
       throw new Error(`expected template, got ${res.status}`);
-    expect(res.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(res.runtime.startDate).toBe("2030-01-01");
     expect(Object.keys(res.sourceMap)).toHaveLength(0);
     // The committed-arm disclosure: ipo assumed absent, surfaced in pending and as
@@ -383,7 +380,6 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     const ix = schedule.interchange;
     if (ix.status !== "template")
       throw new Error(`expected interchange template, got ${ix.status}`);
-    expect(ix.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(ix.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(ix.sourceMap)).toEqual(["evt:start"]);
   });
@@ -412,7 +408,6 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     const s = out.template.statements[0];
-    expect(s.vesting_base).toEqual({ type: "DATE" });
     expect(s.occurrences).toBe(48);
     expect(s.period).toBe(1);
     expect(s.period_type).toBe("MONTHS");
@@ -452,7 +447,6 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.template.statements[0].vesting_base.type).toBe("DATE");
     expect(out.sourceMap).toEqual({});
   });
 });
@@ -509,7 +503,6 @@ describe("assemble — gated atomic start → contingent start (evt:start)", () 
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     // The guard must survive into the stored recipe, not be dropped.
     expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
@@ -530,7 +523,6 @@ describe("assemble — gated atomic start → contingent start (evt:start)", () 
     );
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
-    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
     expect(out.sourceMap["evt:start"].definition).toMatch(/BEFORE/);
@@ -554,7 +546,6 @@ describe("assemble — gated atomic start → contingent start (evt:start)", () 
     // A bare event start is a contingent start too: DATE base on the sentinel, with
     // the bare `EVENT a` recipe under `evt:start` — no direct event-named base
     // (which no longer exists).
-    expect(out.template.statements[0].vesting_base).toEqual({ type: "DATE" });
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
     expect(out.sourceMap["evt:start"].definition).toContain("a");

@@ -117,12 +117,9 @@ describe("mcp-server / persistence tool pair", () => {
 
     expect(res.isError).toBeFalsy();
     const out = res.structuredContent as unknown as PersistOutput;
-    // A storable DATE-base template: the contingent start rides the sentinel
-    // startDate and its recipe lives out-of-band under `evt:start`.
+    // A storable template: the contingent start rides the sentinel startDate and
+    // its recipe lives out-of-band under `evt:start`.
     expect(out.artifact.template.statements.length).toBeGreaterThan(0);
-    expect(out.artifact.template.statements[0]).toMatchObject({
-      vesting_base: { type: "DATE" },
-    });
     expect(out.artifact.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(out.artifact.sidecar).toBeDefined();
     const sourceMap = out.artifact.sidecar!.vestlang;
@@ -662,7 +659,6 @@ describe("mcp-server / persistence tool pair", () => {
         statements: [
           {
             order: 0,
-            vesting_base: { type: "DATE" },
             occurrences: 4,
             period: 1,
             period_type: "MONTHS",
@@ -900,7 +896,6 @@ describe("mcp-server / persistence tool pair", () => {
       statements: [
         {
           order: 1,
-          vesting_base: { type: "DATE" },
           occurrences: 4,
           period: 1,
           period_type: "MONTHS",

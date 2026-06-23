@@ -103,10 +103,7 @@ const plainStmt = (): Statement => ({
 describe("sidecar — round-trips through JSON + rehydration with the recipe preserved", () => {
   it("carries the evt:start recipe verbatim from emit to re-derived start", () => {
     const stored = storedArtifact();
-    // The stored template is the contingent placeholder: DATE base on the sentinel.
-    expect(stored.template.statements[0].vesting_base).toEqual({
-      type: "DATE",
-    });
+    // The stored template is the contingent placeholder: the start sits on the sentinel.
     expect(stored.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(stored.sourceMap)).toEqual(["evt:start"]);
 
@@ -161,7 +158,7 @@ describe("sidecar — dropping a contingent artifact's sidecar is a damaged arti
       runtime: stored.runtime,
     };
 
-    // The template is still structurally valid canonical (DATE base + a real
+    // The template is still structurally valid canonical (anchored on a real
     // far-future startDate).
     expect(() =>
       assertValidVestingScheduleTemplate(dropped.template),
@@ -211,7 +208,6 @@ describe("toPersisted — save-path partition tripwire", () => {
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",
@@ -305,7 +301,6 @@ describe("toPersisted — save-path partition tripwire", () => {
     statements: [
       {
         order: 1,
-        vesting_base: { type: "DATE" },
         occurrences: 4,
         period: 1,
         period_type: "MONTHS",

@@ -40,10 +40,6 @@ const CLIFF = z
   })
   .strict();
 
-// DATE-only: the canonical base anchors every statement on the one hoisted
-// per-grant start (a contingent start is a DATE base on the sentinel startDate).
-const TEMPLATE_VESTING_BASE = z.object({ type: z.literal("DATE") }).strict();
-
 // The event hold on a statement's grid: the gating event's id (a real user event,
 // or a reserved synthetic `evt:<n>` whose recipe lives in the sidecar). Carta's
 // HYBRID performanceCondition, stored on the wire.
@@ -52,7 +48,6 @@ const EVENT_CONDITION = z.object({ event_id: z.string().min(1) }).strict();
 const VESTING_STATEMENT = z
   .object({
     order: z.number().int(),
-    vesting_base: TEMPLATE_VESTING_BASE,
     occurrences: z.number().int().min(1),
     period: z.number().int().min(0),
     period_type: PERIOD_TYPE,

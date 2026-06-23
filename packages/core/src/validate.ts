@@ -92,37 +92,6 @@ const validateCliff = (
   }
 };
 
-const validateVestingBase = (
-  base: VestingStatement["vesting_base"],
-  path: string,
-  errors: ValidationError[],
-): void => {
-  if (!base || typeof base !== "object") {
-    errors.push({ path, message: "is required and must be an object" });
-    return;
-  }
-  // The canonical base is DATE-only: every statement anchors on the one hoisted
-  // per-grant start (a contingent start is a DATE base on the sentinel). An EVENT
-  // base — or any other type — has no home, so it's rejected. Read `type`
-  // structurally: the input is untrusted (hand-built / foreign artifacts), so it
-  // can carry a value the static type says is impossible.
-  const baseType = (base as { type?: unknown }).type;
-  if (baseType !== "DATE") {
-    errors.push({
-      path: `${path}.type`,
-      message: 'must be "DATE"',
-    });
-    return;
-  }
-  // No extra fields permitted; specifically, a stray event_id is wrong.
-  if ("event_id" in base) {
-    errors.push({
-      path: `${path}.event_id`,
-      message: 'must not be present on a vesting_base with type "DATE"',
-    });
-  }
-};
-
 const validateStatement = (
   s: VestingStatement,
   path: string,
@@ -131,7 +100,6 @@ const validateStatement = (
   if (!isPositiveInt(s.order)) {
     errors.push({ path: `${path}.order`, message: "must be an integer >= 1" });
   }
-  validateVestingBase(s.vesting_base, `${path}.vesting_base`, errors);
   if (!isPositiveInt(s.occurrences)) {
     errors.push({
       path: `${path}.occurrences`,
