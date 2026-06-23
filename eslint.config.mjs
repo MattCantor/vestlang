@@ -143,6 +143,31 @@ export default tseslint.config(
     },
   },
 
+  // Zod 4 idiom guard for the mcp-server source: `.strict()` and `.safe()` are
+  // soft (un-deprecated) hints in zod 4.3.5, so nothing else fails if the old
+  // forms survive a migration. Ban the member-call callees here so a regression
+  // trips `pnpm lint`. The `.safe` selector matches `obj.safe()` but not
+  // `obj.safeParse()` (different property name), so tests calling `.safeParse`
+  // are unaffected — and this is scoped to src only regardless.
+  {
+    files: ["apps/mcp-server/src/**"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='strict']",
+          message:
+            "Use z.strictObject({…}) instead of z.object({…}).strict() (Zod 4).",
+        },
+        {
+          selector: "CallExpression[callee.property.name='safe']",
+          message:
+            "`.safe()` is deprecated in Zod 4; use .int().max(Number.MAX_SAFE_INTEGER, …).",
+        },
+      ],
+    },
+  },
+
   // Tests legitimately poke at loosely-typed parse output and build partial
   // fixtures, so the type-flow `no-unsafe-*` rules add ceremony there without
   // real safety gain. Relax them in test files only (`no-explicit-any` stays on).
