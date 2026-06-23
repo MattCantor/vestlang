@@ -7,13 +7,19 @@
 import type {
   ResolutionContextInput,
   Finding,
+  Numeric,
   Program,
   UnresolvedInstallment,
+  VestingScheduleTemplate,
 } from "@vestlang/types";
 import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { programInstallmentTotal } from "@vestlang/walk";
-import { allocationFindingsFromFractions } from "@vestlang/utils";
+import {
+  allocationFindingsFromFractions,
+  analyzePrecision,
+  numericToFraction,
+} from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
@@ -55,6 +61,16 @@ export const resolveToCore = (
   const resolutions = resolveStatements(program, ctx);
 
   const build = buildTemplate(resolutions, ctx);
+
+  // The precision guard: a stored percentage is now a Numeric decimal, so a
+  // repeating share can only be written truncated. Run the analyzer over the
+  // built template's stored decimals and warn when the truncation misallocates
+  // at this grant size. Only a template carries stored Numeric percentages —
+  // the events/unresolved arms keep exact internal fractions — so the guard runs
+  // only on an ok build.
+  const precision = build.ok
+    ? precisionFindings(build.template, totalShares)
+    : [];
 
   let verdict: ResolveVerdict;
   if (build.ok) {
@@ -118,7 +134,7 @@ export const resolveToCore = (
 
   return {
     ...verdict,
-    findings: allocationFindings(resolutions, totalShares),
+    findings: [...allocationFindings(resolutions, totalShares), ...precision],
   };
 };
 
@@ -138,6 +154,89 @@ const allocationFindings = (
     resolutions.map((r) => r.percentage),
     totalShares,
   );
+
+// Run the precision analyzer over a built template's stored Numeric percentages
+// and emit a warning finding for any that misallocates at the grant size.
+//
+// Share-count basis (the v1 semantics):
+//   - a statement's percentage is a share of the whole grant → analyze against
+//     `grant`;
+//   - a cliff's percentage is a share *of its own statement*, so analyze against
+//     that statement's share basis, floor(stmtFraction × grant). For a single
+//     100% statement this is just the grant, matching the analyzer's own
+//     (0.3333…, 36000) example.
+const precisionFindings = (
+  template: VestingScheduleTemplate,
+  grant: number,
+): Finding[] => {
+  if (grant <= 0) return [];
+  const findings: Finding[] = [];
+  template.statements.forEach((s, i) => {
+    const stmtFraction = numericToFraction(s.percentage);
+    pushPrecisionFinding(findings, s.percentage, grant, ["statements", i]);
+
+    if (s.cliff) {
+      // floor(stmtFraction × grant): the shares this statement covers, which the
+      // cliff takes a percentage of.
+      const stmtShares = Math.floor(
+        (stmtFraction.numerator * grant) / stmtFraction.denominator,
+      );
+      if (stmtShares > 0) {
+        pushPrecisionFinding(findings, s.cliff.percentage, stmtShares, [
+          "statements",
+          i,
+          "cliff",
+        ]);
+      }
+    }
+  });
+  return findings;
+};
+
+// Convert the analyzer's BigInt fraction to the number-based Fraction the Finding
+// carries. The inferred fraction is small for every case the guard surfaces (1/3
+// and the like), so this never loses precision in practice.
+const inferredToFraction = (f: {
+  numerator: bigint;
+  denominator: bigint;
+}): { numerator: number; denominator: number } => ({
+  numerator: Number(f.numerator),
+  denominator: Number(f.denominator),
+});
+
+// Analyze one stored decimal against its share basis; on a misallocates /
+// not-representable verdict, push the warning. The other verdicts (exact,
+// terminating, precise-enough, too-complex) are silent — the decimal is faithful
+// enough, or the analyzer declines to second-guess it.
+const pushPrecisionFinding = (
+  findings: Finding[],
+  percentage: Numeric,
+  shareCount: number,
+  path: (string | number)[],
+): void => {
+  const verdict = analyzePrecision(percentage, shareCount);
+  if (verdict.kind === "misallocates") {
+    findings.push({
+      kind: "precision-insufficient",
+      severity: "warning",
+      percentage,
+      shareCount,
+      inferred: inferredToFraction(verdict.inferred),
+      recommended: verdict.recommended,
+      path,
+    });
+  } else if (verdict.kind === "not-representable") {
+    findings.push({
+      kind: "precision-insufficient",
+      severity: "warning",
+      percentage,
+      shareCount,
+      inferred: inferredToFraction(verdict.inferred),
+      // No ≤10-place decimal lands the intended count — leave recommended unset.
+      path,
+    });
+  }
+};
 
 export {
   rehydrate,

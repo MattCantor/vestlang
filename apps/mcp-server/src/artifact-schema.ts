@@ -10,19 +10,21 @@ import {
   VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
-import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
+import {
+  NUMERIC_PATTERN_SOURCE,
+  VESTING_DAY_OF_MONTH_VALUES,
+} from "@vestlang/types";
 import { ISO_DATE } from "./iso-date.js";
 
 /* ------------------------
  * Zod schemas for the artifact (the rehydrate tool's input)
  * ------------------------ */
 
-const FRACTION = z
-  .object({
-    numerator: z.number().int(),
-    denominator: z.number().int().min(1),
-  })
-  .strict();
+// A stored percentage is an OCF Numeric decimal string, validated against the
+// single shared grammar from @vestlang/types. This rejects the old
+// {numerator,denominator} object, scientific notation, and >10-place strings on
+// untrusted wire input — the same shape validate.ts enforces.
+const NUMERIC = z.string().regex(new RegExp(NUMERIC_PATTERN_SOURCE));
 
 const PERIOD_TYPE = z.enum(["DAYS", "MONTHS", "YEARS"]);
 
@@ -34,7 +36,7 @@ const CLIFF = z
   .object({
     length: z.number().int().min(0),
     period_type: PERIOD_TYPE,
-    percentage: FRACTION,
+    percentage: NUMERIC,
   })
   .strict();
 
@@ -56,7 +58,7 @@ const VESTING_STATEMENT = z
     period_type: PERIOD_TYPE,
     cliff: CLIFF.optional(),
     event_condition: EVENT_CONDITION.optional(),
-    percentage: FRACTION,
+    percentage: NUMERIC,
   })
   .strict();
 
