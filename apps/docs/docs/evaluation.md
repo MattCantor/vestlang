@@ -15,7 +15,7 @@ interface EvaluatedSchedule {
   interchange: InterchangeVerdict; // storable floor — never reads firings
   resolution: EvaluatedScheduleVerdict; // resolves-to — closed-world, reads events
   absenceAssumptions: AbsenceAssumption[]; // events the resolves-to reading leans on
-  findings: Finding[]; // allocation problems (over / under)
+  findings: Finding[]; // allocation problems (over / under) + precision warnings (a stored percentage too coarse to allocate exactly)
 }
 ```
 
