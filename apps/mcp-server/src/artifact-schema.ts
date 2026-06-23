@@ -4,83 +4,29 @@
 // then consumes. The shapes mirror the canonical interchange (`@vestlang/types`)
 // and the evaluator's sidecar family. Only the schema lives here; the persist /
 // rehydrate orchestration moved to `@vestlang/pipeline`.
+//
+// The canonical *template* (and its scalars) is no longer declared here — it's
+// imported from the one shared schema in `@vestlang/primitives`, so this surface
+// can't drift from the compiler's. The wrapper, the runtime, the sidecar, and the
+// ISO-date scalar stay local: the runtime is a *firing-free* shape this server
+// owns, and the wrapper carries the `satisfies`/`.describe` the MCP server needs.
 
 import { z } from "zod";
 import {
   VESTLANG_SIDECAR_NAMESPACE,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
-import {
-  NUMERIC_PATTERN_SOURCE,
-  VESTING_DAY_OF_MONTH_VALUES,
-} from "@vestlang/types";
+import { TEMPLATE } from "@vestlang/primitives";
+import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
 import { ISO_DATE } from "./iso-date.js";
 
 /* ------------------------
  * Zod schemas for the artifact (the rehydrate tool's input)
  * ------------------------ */
 
-// A stored percentage is an OCF Numeric decimal string, validated against the
-// single shared grammar from @vestlang/types. This rejects the old
-// {numerator,denominator} object, scientific notation, and >10-place strings on
-// untrusted wire input — the same shape validate.ts enforces.
-const NUMERIC = z.string().regex(new RegExp(NUMERIC_PATTERN_SOURCE));
-
-const PERIOD_TYPE = z.enum(["DAYS", "MONTHS", "YEARS"]);
-
 // The OCT VestingDayOfMonth enum, as it rides in a stored runtime — derived from
 // the canonical value array so a dropped value fails typecheck here too.
 const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
-
-const CLIFF = z.strictObject({
-  length: z.number().int().min(0),
-  period_type: PERIOD_TYPE,
-  percentage: NUMERIC,
-});
-
-// The event hold on a statement's grid: the gating event's id (a real user event,
-// or a reserved synthetic `evt:<n>` whose recipe lives in the sidecar). Carta's
-// HYBRID performanceCondition, stored on the wire.
-const EVENT_CONDITION = z.strictObject({ event_id: z.string().min(1) });
-
-// The time grid (with its optional cliff). Present on a scheduled statement;
-// absent on a pure milestone.
-const SCHEDULE = z.strictObject({
-  occurrences: z.number().int().min(1),
-  period: z.number().int().min(0),
-  period_type: PERIOD_TYPE,
-  cliff: CLIFF.optional(),
-});
-
-// A statement is one of two shapes, mirroring the canonical union. A `z.union` of
-// two strict-object arms is what actually enforces the invariant on untrusted wire
-// input: the `satisfies z.ZodType<PersistedArtifact>` pin is loose (Zod variance
-// would let a too-wide flat schema satisfy it while still admitting the illegal
-// neither-corner). A flat object with a `.refine()` would not forbid a stray
-// `schedule` on a milestone; the milestone arm's strict object does.
-const VESTING_STATEMENT = z.union([
-  // Scheduled (DATE / HYBRID): `schedule` required, `event_condition` optional.
-  z.strictObject({
-    // 1-based sequence position — mirrors core validate.ts (`>= 1`) and the
-    // canonical interchange (OCF VestingStatement.order, minimum: 1).
-    order: z.number().int().min(1),
-    schedule: SCHEDULE,
-    event_condition: EVENT_CONDITION.optional(),
-    percentage: NUMERIC,
-  }),
-  // Pure milestone: `event_condition` required, no `schedule` key (the strict
-  // object rejects one).
-  z.strictObject({
-    order: z.number().int().min(1),
-    event_condition: EVENT_CONDITION,
-    percentage: NUMERIC,
-  }),
-]);
-
-const TEMPLATE = z.strictObject({
-  id: z.string(),
-  statements: z.array(VESTING_STATEMENT),
-});
 
 // The stored runtime is `StoredTerms` — firing-free by construction (eventFirings
 // is unrepresentable on the type). The schema mirrors that: there is no
@@ -105,7 +51,8 @@ const SIDECAR = z.strictObject({
 
 // `satisfies z.ZodType<PersistedArtifact>` pins the schema to the canonical type:
 // drift between this wire schema and `@vestlang/evaluator`'s `PersistedArtifact`
-// fails typecheck rather than slipping through silently.
+// fails typecheck rather than slipping through silently. The nested `template` is
+// the shared Mini schema; a full-zod object accepts a Mini child at runtime.
 export const PERSISTED_ARTIFACT = z
   .strictObject({
     template: TEMPLATE,

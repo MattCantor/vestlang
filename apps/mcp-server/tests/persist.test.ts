@@ -741,7 +741,14 @@ describe("mcp-server / persistence tool pair", () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
-        template: { id: "t1", statements: [] },
+        // The template is schema-valid (a non-empty statements array); the
+        // refusal is about the runtime's missing stored grant date.
+        template: {
+          id: "t1",
+          statements: [
+            { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
+          ],
+        },
         runtime: { startDate: "2025-01-01" },
       },
       grant_quantity: 400,
@@ -980,11 +987,20 @@ describe("mcp-server / persistence tool pair", () => {
   // tool inputs already enforce — single-sourced from one ISO_DATE. Pin both stored
   // runtime date sites so a partial swap can't pass: a regex-only schema would
   // accept these lexically-shaped impossibles and only die deep inside core.
+  // A schema-valid template (non-empty statements) so the only thing the schema
+  // can object to is the runtime date — the check this test is pinning.
+  const datedMilestoneTemplate = {
+    id: "t1",
+    statements: [
+      { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
+    ],
+  };
+
   it("rejects an impossible runtime.grantDate at the schema boundary", async () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: datedMilestoneTemplate,
         runtime: { grantDate: "2025-02-31" },
       },
       grant_quantity: 400,
@@ -996,7 +1012,7 @@ describe("mcp-server / persistence tool pair", () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: datedMilestoneTemplate,
         runtime: { grantDate: "2025-01-01", startDate: "2025-13-01" },
       },
       grant_quantity: 400,
@@ -1012,7 +1028,7 @@ describe("mcp-server / persistence tool pair", () => {
     const client = await connectClient();
     const res = await rehydrateRaw(client, {
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: datedMilestoneTemplate,
         runtime: {
           grantDate: "2025-01-01",
           eventFirings: [{ event_id: "ipo", date: "2025-01-31" }],
