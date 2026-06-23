@@ -17,7 +17,6 @@ import type {
   ImpossibleInstallment,
   Installment,
   NonTemplateReason,
-  OCTDate,
   SourceMap,
   UnresolvedInstallment,
 } from "@vestlang/types";
@@ -70,12 +69,9 @@ export type ResolveVerdict =
 export type ClassifiedVerdict = Exclude<ResolveVerdict, { kind: "template" }>;
 
 // The verdict plus what the resolver learned about the schedule as a whole,
-// independent of which arm it landed in:
-//   - `findings`  — allocation problems (over-/under-allocation).
-//   - `cliffDate` — the schedule's earliest placeable cliff date, or null.
-// Both sit on the wrapper, not in each arm, because they describe the schedule as
-// written, and both ride onward onto EvaluatedSchedule the same way.
+// independent of which arm it landed in: the allocation `findings`
+// (over-/under-allocation). They sit on the wrapper, not in each arm, because they
+// describe the schedule as written, and ride onward onto EvaluatedSchedule.
 export type ResolveResult = ResolveVerdict & {
   findings: Finding[];
-  cliffDate: OCTDate | null;
 };

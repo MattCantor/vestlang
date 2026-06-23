@@ -13,9 +13,6 @@ export interface VestedResult {
   unvested: Installment[];
   impossible: Installment[];
   unresolved: number; // quantity not yet schedulable
-  // The schedule's cliff date, carried alongside the partition so the summary
-  // can read it without re-evaluating. A property of the schedule, not the as-of.
-  cliffDate: OCTDate | null;
 }
 
 /**
@@ -28,7 +25,7 @@ function partitionAsOf(
   installments: Installment[],
   asOf: OCTDate,
   fallbackQuantity: number,
-): Omit<VestedResult, "cliffDate"> {
+): VestedResult {
   const vested: Installment[] = [];
   const unvested: Installment[] = [];
   const impossible: Installment[] = [];
@@ -84,12 +81,9 @@ export function evaluateProgramAsOf(
     (n, s) => n + draw(amountToFraction(s.amount, ctx.grantQuantity)),
     0,
   );
-  return {
-    ...partitionAsOf(
-      schedule.resolution.installments,
-      ctx.asOf,
-      programQuantity,
-    ),
-    cliffDate: schedule.cliffDate,
-  };
+  return partitionAsOf(
+    schedule.resolution.installments,
+    ctx.asOf,
+    programQuantity,
+  );
 }

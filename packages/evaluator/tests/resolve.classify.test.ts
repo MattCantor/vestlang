@@ -224,7 +224,7 @@ describe("resolveToCore — atomic unfired EVENT → contingent template", () =>
 });
 
 describe("resolveToCore — event-held cliff is now a template (#255)", () => {
-  it("LATER_OF over unfired events → template, held (no projection, no cliff date)", () => {
+  it("LATER_OF over unfired events → template, held (no projection)", () => {
     // A `CLIFF LATER OF(EVENT a, EVENT b)` now stores as a synthetic event_condition
     // rather than falling out as unresolved — the held grid projects nothing.
     const cliff: VestingNodeExpr<"VESTING_START"> = {
@@ -252,8 +252,6 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
     // The statement carries a synthetic event_condition; the whole grid is held.
     expect(result.template.statements[0].event_condition).toBeDefined();
     expect(result.blockers.length).toBeGreaterThan(0);
-    // Unfired → no placeable fold point.
-    expect(result.cliffDate).toBeNull();
   });
 
   it("synthetic event_condition hold discloses on the real events, never the minted id", () => {
@@ -403,8 +401,6 @@ describe("resolveToCore — impossible (lossless rollup of all-void)", () => {
     ];
     const result = resolveToCore(program, ctxInput()); // ipo, c unfired
     expect(result.kind).toBe("template");
-    // Neither the start nor the event cliff has fired → no cliff date.
-    expect(result.cliffDate).toBeNull();
   });
 
   it("[void, pending] → unresolved (the pending half can still vest)", () => {
@@ -577,8 +573,6 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
       period_type: "MONTHS",
       percentage: { numerator: 1, denominator: 4 },
     });
-    // Start event unfired → the cliff has a duration but no anchor to land on.
-    expect(result.cliffDate).toBeNull();
     expect(result.runtime.eventFirings ?? []).toEqual([]);
     expect(
       result.blockers.some(
@@ -597,11 +591,9 @@ describe("resolveToCore — pending event-anchored start + duration cliff (#21)"
     ];
     const result = resolveToCore(program, ctx21({ ipo: "2025-06-01" }));
     if (result.kind !== "template") throw new Error("expected template");
-    // The cliff date is the resolved start (the firing) plus the 12-month cliff,
-    // matching where compile lands the lump below.
-    expect(result.cliffDate).toBe("2026-06-01");
     const events = compile(result.template, result.totalShares, result.runtime);
-    // 1-year cliff lump on start + 1yr, then 36 monthly installments.
+    // 1-year cliff lump on start + 1yr (firing + 12 months), then 36 monthly
+    // installments.
     expect(events).toHaveLength(37);
     expect(events[0]).toEqual({ date: "2026-06-01", amount: "12000" });
     expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(48000);
@@ -716,8 +708,6 @@ describe("resolveToCore — an event-held cliff stores as a template, held until
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "ipo" },
     ]);
-    // The cliff's own event hasn't fired → no fold point.
-    expect(result.cliffDate).toBeNull();
   });
 
   it("fired → template; the projection folds the proportional holdback lump", () => {
@@ -731,8 +721,6 @@ describe("resolveToCore — an event-held cliff stores as a template, held until
     expect(result.runtime.eventFirings).toEqual([
       { event_id: "ipo", date: "2026-06-01" },
     ]);
-    // cliffDate = the fold point (the firing itself, no time baseline).
-    expect(result.cliffDate).toBe("2026-06-01");
     // 17 monthly tranches fall at or before the firing → one 1,700-share lump on
     // the firing date, then 100/month. Compiling against the firing-carrying
     // runtime reproduces today's fired-event lump.
@@ -835,13 +823,12 @@ describe("resolveToCore — event cliff at the grid edges (proportional)", () =>
 
     const out = evaluateProgram(program, ctx);
     expect(out.resolution.status).toBe("template");
-    // cliffDate is the fold point (the firing); the lump itself has no effect
-    // because nothing accrued by then, so the grid still vests evenly (AC 15).
-    expect(out.cliffDate).toBe("2024-06-01");
     // An event-held cliff is storable now — both verdicts read template.
     expect(out.interchange.status).toBe("template");
 
     if (result.kind !== "template") return;
+    // The lump has no effect because nothing accrued by the firing, so the grid
+    // still vests evenly (AC 15).
     const grid = compile(result.template, result.totalShares, result.runtime);
     expect(grid).toHaveLength(48);
     expect(grid[0]).toEqual({ date: "2025-02-01", amount: "100" });
@@ -931,8 +918,8 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.cliffDate).toBe("2025-07-01");
     const events = compile(result.template, result.totalShares, result.runtime);
+    // The lump stands: 10,000 accrues by the firing and folds at 2025-07-01.
     expect(events[0]).toEqual({ date: "2025-07-01", amount: "10000" });
     expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(120000);
   });
@@ -949,7 +936,6 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
       result.runtime,
     );
     expect(compiled).toEqual([]);
-    expect(result.cliffDate).toBeNull();
     expect(result.blockers).toEqual([
       { type: "EVENT_NOT_YET_OCCURRED", event: "fda" },
     ]);
@@ -1017,7 +1003,6 @@ describe("resolveToCore — the no-effect guard keys on the effective date", () 
     const result = resolveToCore(program, ctx);
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
-    expect(result.cliffDate).toBe("2024-02-10");
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(200);
   });
@@ -1456,10 +1441,10 @@ describe("resolveToCore — AC 6: LATER OF(12 months, EVENT ipo) fold point", ()
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
     const events = compile(result.template, result.totalShares, result.runtime);
+    // The lump folds at max(12mo=2026-01-01, ipo=2027-07-01) = the firing.
     expect(events[0]).toEqual({ date: "2027-07-01", amount: "3000" });
     expect(events).toHaveLength(19); // 1 lump + 18 monthly
     expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);
-    expect(result.cliffDate).toBe("2027-07-01"); // max(12mo=2026-01-01, ipo)
   });
 
   // The NON-DISCRIMINATING projection (ipo ≤ month 12 → 1,200 @ month 12) is
@@ -1482,9 +1467,8 @@ describe("resolveToCore — AC 6: LATER OF(12 months, EVENT ipo) fold point", ()
       period_type: "MONTHS",
       percentage: { numerator: 1, denominator: 4 },
     });
-    // The fold point is max(12mo baseline, firing) = 2026-01-01 (the baseline wins).
-    expect(result.cliffDate).toBe("2026-01-01");
     const events = compile(result.template, result.totalShares, result.runtime);
+    // The lump folds at max(12mo baseline, firing) = 2026-01-01 (the baseline wins).
     expect(events[0]).toEqual({ date: "2026-01-01", amount: "1200" });
     expect(events).toHaveLength(37); // 1 lump + 36 monthly
     expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(4800);

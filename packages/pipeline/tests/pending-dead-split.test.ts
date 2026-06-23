@@ -281,11 +281,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
     expect(p.dead).toBe(true);
     expect(p.representable).toBe(false);
 
-    // No event is assumed absent (the waiting `ipo` gate dropped), the cliff resolves
-    // to no date (it's a contradiction, not an event cliff), and every installment is
-    // marked unreachable.
+    // No event is assumed absent (the waiting `ipo` gate dropped), and every
+    // installment is marked unreachable (it's a contradiction, not an event cliff).
     expect(s.absenceAssumptions).toEqual([]);
-    expect(s.cliffDate).toBeNull();
     expect(
       s.resolution.installments.every((i) => i.state === "IMPOSSIBLE"),
     ).toBe(true);

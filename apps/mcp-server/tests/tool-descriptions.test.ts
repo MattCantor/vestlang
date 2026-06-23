@@ -55,6 +55,15 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
   });
 });
 
+describe("mcp-server / vestlang_evaluate_as_of description (#379)", () => {
+  it("no longer advertises a cliff field in the summary roll-up", async () => {
+    // The vestigial cliff-date summary field was removed, so the tool description
+    // must not promise a cliff in its roll-up.
+    const description = await descriptionOf("vestlang_evaluate_as_of");
+    expect(description).not.toContain("cliff");
+  });
+});
+
 describe("mcp-server / server INSTRUCTIONS error-shape paragraph (#296, AC#8)", () => {
   it("no longer enumerates only the two syntax/evaluation ruleIds", async () => {
     const client = await connectedClient();

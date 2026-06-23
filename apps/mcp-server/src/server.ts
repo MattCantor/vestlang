@@ -374,7 +374,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting as of a date",
       description:
-        "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date, cliff). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. For the verdicts and storability flags, use vestlang_evaluate.",
+        "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. For the verdicts and storability flags, use vestlang_evaluate.",
       inputSchema: z
         .object({
           dsl: DSL_INPUT,

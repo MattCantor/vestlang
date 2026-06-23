@@ -17,10 +17,6 @@ export interface Summary {
   next_vest_date: OCTDate | null;
   next_vest_amount: number | null;
   fully_vested_date: OCTDate | null;
-  // The schedule's cliff date (start + cliff duration, or a fired event cliff's
-  // effective date), not whatever has happened to vest by `as_of`. Null when there
-  // is no cliff, or it can't be placed yet. See EvaluatedSchedule.cliffDate.
-  cliff_date: OCTDate | null;
 }
 
 const sum = (xs: Installment[]) => xs.reduce((a, x) => a + x.amount, 0);
@@ -72,7 +68,6 @@ export function computeSummary(
     next_vest_date,
     next_vest_amount,
     fully_vested_date,
-    cliff_date: result.cliffDate,
   };
 }
 

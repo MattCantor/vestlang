@@ -461,20 +461,4 @@ export interface EvaluatedSchedule {
   resolution: EvaluatedScheduleVerdict;
   absenceAssumptions: AbsenceAssumption[];
   findings: Finding[];
-  /**
-   * When the schedule's cliff lump lands — read off the closed-world resolution.
-   * For a duration cliff it's the statement's start plus the cliff length, using
-   * the engine's own date arithmetic (so month-end clamping matches the dated
-   * projection); for a fired event cliff it's the event's effective date. With
-   * several cliffed statements it's the earliest such date.
-   *
-   * Null when there is no cliff, or no cliff can be placed yet — a pending start
-   * anchor or an unfired event cliff. Independent of the as-of date.
-   *
-   * This is the cliff as written, before the grant-date fold a back-dated start
-   * imposes on payment: a cliff that lands pre-grant still reports its raw date
-   * here, because folding it onto the grant date is a payment overlay, not a
-   * change to the schedule's cliff.
-   */
-  cliffDate: OCTDate | null;
 }
