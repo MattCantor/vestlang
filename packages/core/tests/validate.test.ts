@@ -124,7 +124,7 @@ describe("validateVestingScheduleTemplate", () => {
           period: 1,
           period_type: "MONTHS",
           // Scientific notation isn't OCF Numeric — the boundary rejects it.
-          percentage: "1.5e-3" as unknown as string,
+          percentage: "1.5e-3",
         },
       ],
     });

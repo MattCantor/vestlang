@@ -69,7 +69,9 @@ describe("fractionToNumeric — render an exact rational to a Numeric (AC3)", ()
   });
 
   it("throws on a negative input (the producers never pass one)", () => {
-    expect(() => fractionToNumeric({ numerator: -1, denominator: 2 })).toThrow();
+    expect(() =>
+      fractionToNumeric({ numerator: -1, denominator: 2 }),
+    ).toThrow();
   });
 
   it("round-trips a terminating fraction exactly", () => {
