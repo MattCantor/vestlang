@@ -296,26 +296,6 @@ describe("validateVestingRuntime", () => {
     ).toBe(true);
   });
 
-  it("rejects a realized_fraction outside [0, 1]", () => {
-    const result = validateVestingRuntime(
-      {
-        startDate: "2024-01-01",
-        eventFirings: [
-          {
-            event_id: "ipo",
-            date: "2026-01-01",
-            realized_fraction: { numerator: 3, denominator: 2 },
-          },
-        ],
-      },
-      validTemplate,
-    );
-    expect(result.valid).toBe(false);
-    expect(pathsOf(result.errors)).toContain(
-      "eventFirings[0].realized_fraction",
-    );
-  });
-
   it("assertValidVestingRuntime throws on invalid input", () => {
     expect(() => assertValidVestingRuntime({}, validTemplate)).toThrow(
       /Invalid VestingRuntime/,

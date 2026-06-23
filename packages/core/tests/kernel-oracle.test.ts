@@ -16,8 +16,7 @@ const sum = (events: { amount: string }[]): number =>
   events.reduce((acc, e) => acc + Number(e.amount), 0);
 
 // (The former "event payout scaled by a realized fraction" oracle is gone: the
-// canonical base is DATE-only now, so there is no event-anchored statement and no
-// realized_fraction multiplier on the projection path.)
+// canonical base is DATE-only now, so there is no event-anchored statement.)
 
 // A degenerate-but-reachable schedule: zero spacing (period 0, every occurrence on
 // the start date) under a zero-length cliff (so the cliff also lands on the start).
