@@ -50,7 +50,7 @@ exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + mo
     "singles": 0,
     "uniforms": 1,
   },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 300 VEST OVER 6 months EVERY 3 months",
+  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 200 VEST OVER 6 months EVERY 3 months",
   "residual": 0,
   "status": "template",
 }

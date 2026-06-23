@@ -85,12 +85,19 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
   // Family 3: a rate change whose handoff falls on a short month. The chain's
   // grid springs back to the month's last day; written as THEN the tail carries
   // no start of its own, so the clamp can't strand it off the running grid.
+  //
+  // The head (200 of 800 = 1/4) and tail (600 of 800 = 3/4) are terminating
+  // shares, so the inferred THEN chain stores both percentages exactly and
+  // round-trips. A split into thirds wouldn't: each statement's percentage stores
+  // as a truncated Numeric decimal, the re-evaluated chain wouldn't reproduce the
+  // stream, and the inferrer would (correctly) fall back to independent dated
+  // amounts instead of a THEN chain.
   it("recovers a month-end-clamped THEN chain that runEvaluate accepts", () => {
     const monthEnd: TrancheInput[] = [
       { date: "2023-12-31", amount: 100 },
       { date: "2024-01-31", amount: 100 },
-      { date: "2024-02-29", amount: 200 },
-      { date: "2024-03-31", amount: 200 },
+      { date: "2024-02-29", amount: 300 },
+      { date: "2024-03-31", amount: 300 },
     ];
     const { dsl, result } = inferThenEvaluate(monthEnd, "2023-11-30");
     expect(dsl).toContain("THEN");

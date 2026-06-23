@@ -125,9 +125,14 @@ const SHAPES: Shape[] = [
     events: [],
   },
   {
+    // Terminating shares (1/4, 3/4). A THEN chain lowers to one canonical
+    // template, so each statement's percentage is stored as a Numeric decimal; a
+    // repeating share like 1/3 would truncate and lose a share off the
+    // telescoped total (that precision loss is exercised by the precision-guard
+    // tests). Terminating shares store exactly, so the chain still conserves.
     name: "THEN chain, event head",
-    dsl: "1/3 VEST FROM EVENT ipo OVER 1 month EVERY 1 month THEN 2/3 VEST OVER 1 month EVERY 1 month",
-    amounts: [P(1, 3), P(2, 3)],
+    dsl: "1/4 VEST FROM EVENT ipo OVER 1 month EVERY 1 month THEN 3/4 VEST OVER 1 month EVERY 1 month",
+    amounts: [P(1, 4), P(3, 4)],
     events: ["ipo"],
   },
   {
@@ -137,9 +142,12 @@ const SHAPES: Shape[] = [
     events: ["ipo"],
   },
   {
+    // Terminating shares (1/4, 3/4): see "THEN chain, event head" above — a
+    // template stores Numeric decimals, so the chain conserves only when the
+    // shares terminate.
     name: "THEN chain, cliffed tail",
-    dsl: "1/3 VEST FROM EVENT ipo OVER 1 month EVERY 1 month THEN 2/3 VEST OVER 12 months EVERY 1 month CLIFF vestingStart + 3 months",
-    amounts: [P(1, 3), P(2, 3)],
+    dsl: "1/4 VEST FROM EVENT ipo OVER 1 month EVERY 1 month THEN 3/4 VEST OVER 12 months EVERY 1 month CLIFF vestingStart + 3 months",
+    amounts: [P(1, 4), P(3, 4)],
     events: ["ipo"],
   },
   {

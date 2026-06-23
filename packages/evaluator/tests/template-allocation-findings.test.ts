@@ -54,7 +54,15 @@ describe("template vs resolution allocation findings agree (AC#5)", () => {
 
     expect(fromResolution).toHaveLength(1);
     expect(fromTemplate).toHaveLength(1);
-    expect(fromTemplate[0].kind).toBe(fromResolution[0].kind);
-    expect(fromTemplate[0].sum).toEqual(fromResolution[0].sum);
+    const t = fromTemplate[0];
+    const r = fromResolution[0];
+    expect(t.kind).toBe(r.kind);
+    // Both are over-allocation findings (filtered / produced as such), so they
+    // carry a `sum`. Narrow before reading it — Finding is a wider union now.
+    if (t.kind === "over-allocation" && r.kind === "over-allocation") {
+      expect(t.sum).toEqual(r.sum);
+    } else {
+      throw new Error("expected both findings to be over-allocation");
+    }
   });
 });

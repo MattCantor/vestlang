@@ -275,7 +275,7 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
         cliff: {
           length: 2,
           period_type: "MONTHS",
-          percentage: { numerator: 1, denominator: 2 },
+          percentage: "0.5",
         },
       },
     );
@@ -299,10 +299,8 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
       ctxInput({ grantDate: "2024-01-01" }, 4000),
     );
     if (result.kind !== "template") throw new Error("expected template");
-    expect(result.template.statements[0].cliff?.percentage).toEqual({
-      numerator: 1,
-      denominator: 2,
-    });
+    // 2 of 4 occurrences precede the cliff → 1/2, stored as the exact Numeric "0.5".
+    expect(result.template.statements[0].cliff?.percentage).toBe("0.5");
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events[0]).toEqual({ date: "2024-03-31", amount: "2000" });
   });

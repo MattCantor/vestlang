@@ -160,13 +160,19 @@ describe("inferSchedule — sequential recovery end to end", () => {
   it("renders a cliff head handing off to a chained tail", () => {
     // The cliff (head, with its own start) is followed by a THEN tail at a new
     // cadence — one schedule, not a cliff grant plus a separate quarterly grant.
+    //
+    // Amounts give each segment a terminating share of the total (800): head
+    // 600/800 = 3/4, tail 200/800 = 1/4, cliff lump 300/600 = 1/2. Percentages
+    // store as truncated Numeric decimals, so a repeating split would lose a
+    // share and the chain would fall back to a dated PLUS list instead of
+    // CLIFF/THEN.
     const cliffThenQuarterly: TrancheInput[] = [
       { date: "2024-02-01", amount: 300 },
       { date: "2024-03-01", amount: 100 },
       { date: "2024-04-01", amount: 100 },
       { date: "2024-05-01", amount: 100 },
-      { date: "2024-08-01", amount: 150 },
-      { date: "2024-11-01", amount: 150 },
+      { date: "2024-08-01", amount: 100 },
+      { date: "2024-11-01", amount: 100 },
     ];
     const inferred = inferSchedule({
       tranches: cliffThenQuarterly,
@@ -185,11 +191,15 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
   // tail would carry an explicit start that the clamping pushes a day off the
   // running grid, breaking the schedule into two; written as THEN the tail has no
   // date of its own and just continues the grid.
+  // Amounts give each segment a terminating share of the total (600): head
+  // 150/600 = 1/4, tail 450/600 = 3/4. Percentages store as truncated Numeric
+  // decimals, so a repeating split (the original 1/3 + 2/3) would lose a share
+  // and the THEN chain wouldn't round-trip.
   const MONTH_END: TrancheInput[] = [
-    { date: "2023-12-31", amount: 100 },
-    { date: "2024-01-31", amount: 100 },
-    { date: "2024-02-29", amount: 200 },
-    { date: "2024-03-31", amount: 200 },
+    { date: "2023-12-31", amount: 75 },
+    { date: "2024-01-31", amount: 75 },
+    { date: "2024-02-29", amount: 225 },
+    { date: "2024-03-31", amount: 225 },
   ];
   const GRANT = "2023-11-30";
 
@@ -220,7 +230,7 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
     // Jan 29), which no longer lines up with the head's grid (Jan 31). The two
     // statements read as independent grids → events-only.
     const dated =
-      "200 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 400 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
+      "150 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 450 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
     expect(collapse(dated, "31_OR_LAST_DAY_OF_MONTH").resolution.status).toBe(
       "events-only",
     );

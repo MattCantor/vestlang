@@ -84,19 +84,23 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
   // without trouble. The reported residual has to come from the collapse, or a
   // chained candidate could never be scored honestly.
   it("collapse scoring handles a chain the per-statement pass cannot", () => {
+    // Even halves (200 + 200 of 400). The chain's percentages store as Numeric
+    // decimals, so terminating shares keep the collapse residual at zero — a
+    // repeating split (2/3 + 1/3) would truncate and report a one-share residual,
+    // which is real precision loss, not a scoring artifact.
     const dsl =
       "200 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month " +
-      "THEN 100 VEST OVER 2 months EVERY 1 month";
+      "THEN 200 VEST OVER 2 months EVERY 1 month";
     const program = normalizeProgram(parse(dsl));
     const input: TrancheInput[] = [
       { date: "2024-02-01", amount: 100 },
       { date: "2024-03-01", amount: 100 },
-      { date: "2024-04-01", amount: 50 },
-      { date: "2024-05-01", amount: 50 },
+      { date: "2024-04-01", amount: 100 },
+      { date: "2024-05-01", amount: 100 },
     ];
     const ctx: VerifyContext = {
       grantDate: "2024-01-01",
-      totalQuantity: 300,
+      totalQuantity: 400,
       vestingDayOfMonth: DOM,
     };
 
