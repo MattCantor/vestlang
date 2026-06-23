@@ -34,22 +34,6 @@ const isPositiveInt = (n: unknown): n is number => isInteger(n) && n > 0;
 
 const isNonNegativeInt = (n: unknown): n is number => isInteger(n) && n >= 0;
 
-const validateFraction = (
-  f: Fraction,
-  path: string,
-  errors: ValidationError[],
-): void => {
-  if (!isInteger(f.numerator)) {
-    errors.push({ path: `${path}.numerator`, message: "must be an integer" });
-  }
-  if (!isPositiveInt(f.denominator)) {
-    errors.push({
-      path: `${path}.denominator`,
-      message: "must be an integer >= 1",
-    });
-  }
-};
-
 const validateCliff = (
   c: Cliff,
   path: string,
@@ -235,7 +219,6 @@ const fractionInUnitInterval = (f: Fraction): boolean => {
  *     it passes the format check and the compiler's sentinel-skip handles it.
  *   - no duplicate event_id in eventFirings (single firing per event_id)
  *   - dates must be real calendar dates (2025-02-31 is rejected, not rolled)
- *   - realized_fraction (if present) must be a valid Fraction in [0, 1]
  *
  * eventFirings is the event-hold witness channel: a firing here releases the grid
  * of any statement whose `event_condition.event_id` matches. The entries are
@@ -320,24 +303,6 @@ export const validateVestingRuntime = (
             path: `${path}.date`,
             message: "must be a real calendar date (YYYY-MM-DD)",
           });
-        }
-        if (firing?.realized_fraction !== undefined) {
-          validateFraction(
-            firing.realized_fraction,
-            `${path}.realized_fraction`,
-            errors,
-          );
-          // Only check interval bounds if the fraction itself parsed OK.
-          if (
-            isInteger(firing.realized_fraction.numerator) &&
-            isPositiveInt(firing.realized_fraction.denominator) &&
-            !fractionInUnitInterval(firing.realized_fraction)
-          ) {
-            errors.push({
-              path: `${path}.realized_fraction`,
-              message: "must be in the closed interval [0, 1]",
-            });
-          }
         }
       });
 

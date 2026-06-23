@@ -6,7 +6,7 @@
 //
 // The template shape is the *interchange*: OCF/Carta data flows straight in,
 // with no adaptation. So the field names stay snake_case (`period_type`,
-// `event_id`, `realized_fraction`) to match the canonical wire form exactly —
+// `event_id`) to match the canonical wire form exactly —
 // any divergence would force the OCF↔core bridge `@vestlang/core` exists to
 // delete.
 
@@ -112,7 +112,6 @@ interface RuntimeBase {
 interface EventFiring {
   event_id: string;
   date: OCTDate;
-  realized_fraction?: Fraction;
 }
 
 // What a *stored* artifact's runtime holds. A persisted artifact is firing-
