@@ -111,3 +111,47 @@ describe("PERSISTED_ARTIFACT — optional-schedule invariant (#390 AC8)", () => 
     expect(res.success).toBe(false);
   });
 });
+
+// `order` is a 1-based sequence position, so the wire schema rejects order < 1 —
+// mirroring core validate.ts (`>= 1`) and the canonical interchange (OCF
+// VestingStatement.order, minimum: 1). Enforced on both union arms.
+describe("PERSISTED_ARTIFACT — order is 1-based (>= 1)", () => {
+  const artifact = (statement: unknown) => ({
+    template: { id: "t", statements: [statement] },
+    runtime: { startDate: "2025-01-01" },
+  });
+  const milestone = (order: number) => ({
+    order,
+    percentage: "1",
+    event_condition: { event_id: "ipo" },
+  });
+  const scheduled = (order: number) => ({
+    order,
+    percentage: "1",
+    schedule: { occurrences: 1, period: 12, period_type: "MONTHS" },
+  });
+
+  it("rejects order 0 on both arms", () => {
+    expect(PERSISTED_ARTIFACT.safeParse(artifact(milestone(0))).success).toBe(
+      false,
+    );
+    expect(PERSISTED_ARTIFACT.safeParse(artifact(scheduled(0))).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a negative order", () => {
+    expect(PERSISTED_ARTIFACT.safeParse(artifact(milestone(-1))).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts order 1", () => {
+    expect(PERSISTED_ARTIFACT.safeParse(artifact(milestone(1))).success).toBe(
+      true,
+    );
+    expect(PERSISTED_ARTIFACT.safeParse(artifact(scheduled(1))).success).toBe(
+      true,
+    );
+  });
+});

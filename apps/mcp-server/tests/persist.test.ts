@@ -700,7 +700,7 @@ describe("mcp-server / persistence tool pair", () => {
         id: "t1",
         statements: [
           {
-            order: 0,
+            order: 1,
             schedule: {
               occurrences: 4,
               period: 1,

@@ -293,7 +293,7 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
             id: "t1",
             statements: [
               {
-                order: 0,
+                order: 1,
                 schedule: {
                   occurrences: 4,
                   period: 1,
