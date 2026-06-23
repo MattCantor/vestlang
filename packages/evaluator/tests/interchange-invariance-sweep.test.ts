@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from "vitest";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import type {
   Amount,
   ResolutionContextInput,
@@ -509,5 +510,54 @@ describe("interchange — firing-free programs tie the two verdicts together", (
           "template",
     );
     expect(witnesses.length).toBeGreaterThan(0);
+  });
+});
+
+// Issue #390 AC9 — the firing-blind interchange build of a pure milestone is ALSO
+// schedule-less. The milestone-omit predicate lives in the shared `buildTemplate`,
+// so it fires on the storable floor too, not only on the resolution verdict. The
+// schedule-less template must still be a valid VestingScheduleTemplate.
+describe("interchange — a pure milestone is schedule-less on the storable floor (#390 AC9)", () => {
+  // `VEST CLIFF EVENT ipo` — a one-lump grid whose cliff is a bare event, which
+  // lowers to a pure milestone (event_condition, no schedule).
+  const pureMilestone: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseGrantDate()), {
+      type: "MONTHS",
+      length: 0,
+      occurrences: 1,
+      cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+    }),
+  ];
+
+  it("the interchange template omits the schedule and carries the event_condition", () => {
+    const out = evaluateProgram(pureMilestone, ctxWith({}));
+    if (out.interchange.status !== "template")
+      throw new Error(
+        `expected interchange template, got ${out.interchange.status}`,
+      );
+    const s = out.interchange.template.statements[0];
+    expect(s.schedule).toBeUndefined();
+    expect(s.event_condition).toEqual({ event_id: "ipo" });
+  });
+
+  it("the schedule-less interchange template passes assertValidVestingScheduleTemplate", () => {
+    const out = evaluateProgram(pureMilestone, ctxWith({}));
+    if (out.interchange.status !== "template")
+      throw new Error(
+        `expected interchange template, got ${out.interchange.status}`,
+      );
+    // Bind the narrowed template to a local before the closure — the narrowing
+    // doesn't survive a property access inside the nested arrow.
+    const { template } = out.interchange;
+    expect(() => assertValidVestingScheduleTemplate(template)).not.toThrow();
+  });
+
+  it("the storable floor is firing-invariant across firing contexts", () => {
+    const none = evaluateProgram(pureMilestone, ctxWith({})).interchange;
+    const fired = evaluateProgram(
+      pureMilestone,
+      ctxWith({ ipo: "2026-06-01" }),
+    ).interchange;
+    expect(fired).toEqual(none);
   });
 });

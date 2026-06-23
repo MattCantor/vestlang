@@ -34,13 +34,15 @@ describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 0, // every occurrence lands on the start date
-        period_type: "MONTHS",
-        cliff: {
-          length: 0, // cliff also on the start date
+        schedule: {
+          occurrences: 4,
+          period: 0, // every occurrence lands on the start date
           period_type: "MONTHS",
-          percentage: fractionToNumeric({ numerator, denominator }),
+          cliff: {
+            length: 0, // cliff also on the start date
+            period_type: "MONTHS",
+            percentage: fractionToNumeric({ numerator, denominator }),
+          },
         },
         percentage: "1",
       },

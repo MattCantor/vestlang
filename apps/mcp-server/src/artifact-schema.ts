@@ -43,15 +43,39 @@ const CLIFF = z.strictObject({
 // HYBRID performanceCondition, stored on the wire.
 const EVENT_CONDITION = z.strictObject({ event_id: z.string().min(1) });
 
-const VESTING_STATEMENT = z.strictObject({
-  order: z.number().int(),
+// The time grid (with its optional cliff). Present on a scheduled statement;
+// absent on a pure milestone.
+const SCHEDULE = z.strictObject({
   occurrences: z.number().int().min(1),
   period: z.number().int().min(0),
   period_type: PERIOD_TYPE,
   cliff: CLIFF.optional(),
-  event_condition: EVENT_CONDITION.optional(),
-  percentage: NUMERIC,
 });
+
+// A statement is one of two shapes, mirroring the canonical union. A `z.union` of
+// two strict-object arms is what actually enforces the invariant on untrusted wire
+// input: the `satisfies z.ZodType<PersistedArtifact>` pin is loose (Zod variance
+// would let a too-wide flat schema satisfy it while still admitting the illegal
+// neither-corner). A flat object with a `.refine()` would not forbid a stray
+// `schedule` on a milestone; the milestone arm's strict object does.
+const VESTING_STATEMENT = z.union([
+  // Scheduled (DATE / HYBRID): `schedule` required, `event_condition` optional.
+  z.strictObject({
+    // 1-based sequence position — mirrors core validate.ts (`>= 1`) and the
+    // canonical interchange (OCF VestingStatement.order, minimum: 1).
+    order: z.number().int().min(1),
+    schedule: SCHEDULE,
+    event_condition: EVENT_CONDITION.optional(),
+    percentage: NUMERIC,
+  }),
+  // Pure milestone: `event_condition` required, no `schedule` key (the strict
+  // object rejects one).
+  z.strictObject({
+    order: z.number().int().min(1),
+    event_condition: EVENT_CONDITION,
+    percentage: NUMERIC,
+  }),
+]);
 
 const TEMPLATE = z.strictObject({
   id: z.string(),

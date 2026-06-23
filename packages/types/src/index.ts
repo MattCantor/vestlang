@@ -10,6 +10,7 @@ export type {
   PeriodType,
   VestingScheduleTemplate,
   VestingStatement,
+  VestingSchedule,
   Fraction,
   Cliff,
   StoredTerms,

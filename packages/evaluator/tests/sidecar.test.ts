@@ -208,9 +208,11 @@ describe("toPersisted — save-path partition tripwire", () => {
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
       },
     ],
@@ -301,9 +303,11 @@ describe("toPersisted — save-path partition tripwire", () => {
     statements: [
       {
         order: 1,
-        occurrences: 4,
-        period: 1,
-        period_type: "MONTHS",
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
         percentage: "1",
         event_condition: { event_id: eventId },
       },

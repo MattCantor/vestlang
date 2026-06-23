@@ -14,9 +14,11 @@ const oneStatementTemplate = (numerator: number, denominator: number) => ({
   statements: [
     {
       order: 1,
-      occurrences: 1,
-      period: 12,
-      period_type: "MONTHS" as const,
+      schedule: {
+        occurrences: 1,
+        period: 12,
+        period_type: "MONTHS" as const,
+      },
       percentage: fractionToNumeric({ numerator, denominator }),
     },
   ],
@@ -68,16 +70,20 @@ describe("templateAllocationFindings (AC#5)", () => {
       statements: [
         {
           order: 1,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS" as const,
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS" as const,
+          },
           percentage: "0.75",
         },
         {
           order: 2,
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS" as const,
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS" as const,
+          },
           percentage: "0.75",
         },
       ],

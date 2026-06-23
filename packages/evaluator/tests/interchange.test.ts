@@ -627,7 +627,9 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
     // The tail's grid-unit duration cliff survives onto the second statement.
-    expect(out.interchange.template.statements[1].cliff).toBeDefined();
+    expect(
+      out.interchange.template.statements[1].schedule!.cliff,
+    ).toBeDefined();
   });
 
   // A months cliff over a days grid can't be placed until the firing is known —

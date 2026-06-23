@@ -108,7 +108,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     const stmt = s.interchange.template.statements[0];
     // The bare 12-month cliff over a 48-month grid is 12/48 = 1/4; the typed
     // Fraction is stored in reduced form.
-    expect(stmt.cliff).toEqual({
+    expect(stmt.schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -139,7 +139,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     });
     expect(s.interchange.status).toBe("template");
     if (s.interchange.status !== "template") return; // narrow
-    expect(s.interchange.template.statements[0].cliff).toEqual({
+    expect(s.interchange.template.statements[0].schedule!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",

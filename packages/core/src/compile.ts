@@ -67,14 +67,18 @@ const expandAnchored = (
   firingFor: (eventId: string) => OCTDate | undefined,
   origin: OCTDate = anchor,
 ): RawEvent[] => {
+  // Narrow once on `schedule` presence. A pure milestone carries no time grid in
+  // storage, so the kernel folds it on the degenerate one-lump params — a single
+  // installment at `anchor + 0` (the `period_type` is inert at `period: 0`, so its
+  // value is arbitrary but must be supplied). A scheduled statement reads its grid
+  // and cliff straight off `statement.schedule`.
+  const schedule = statement.schedule;
+  const grid = schedule ?? { occurrences: 1, period: 0, period_type: "DAYS" };
+  const cliffSpec = schedule?.cliff;
+
   // The time baseline date, when the statement carries a time cliff.
-  const baselineDate = statement.cliff
-    ? addPeriod(
-        anchor,
-        statement.cliff.length,
-        statement.cliff.period_type,
-        dom,
-      )
+  const baselineDate = cliffSpec
+    ? addPeriod(anchor, cliffSpec.length, cliffSpec.period_type, dom)
     : undefined;
 
   let cliff: GridCliff;
@@ -82,6 +86,8 @@ const expandAnchored = (
     const firing = firingFor(statement.event_condition.event_id);
     if (firing === undefined) {
       // Held: the event hasn't fired, so the whole grid waits on it. Emit nothing.
+      // A pure milestone always takes this path while unfired (it projects nothing
+      // until the event arrives).
       return [];
     }
     // Fired: one proportional cliff at max(baseline, firing). The baseline date (if
@@ -91,12 +97,12 @@ const expandAnchored = (
       kind: "proportional",
       date: baselineDate !== undefined ? laterOf(baselineDate, firing) : firing,
     };
-  } else if (statement.cliff && baselineDate !== undefined) {
+  } else if (cliffSpec && baselineDate !== undefined) {
     cliff = {
       kind: "fixed",
       date: baselineDate,
       // Stored as a Numeric decimal; the kernel works in exact rational.
-      percentage: numericToFraction(statement.cliff.percentage),
+      percentage: numericToFraction(cliffSpec.percentage),
     };
   } else {
     cliff = { kind: "none" };
@@ -105,9 +111,9 @@ const expandAnchored = (
   return expandGrid({
     anchor,
     origin,
-    period: statement.period,
-    periodType: statement.period_type,
-    occurrences: statement.occurrences,
+    period: grid.period,
+    periodType: grid.period_type,
+    occurrences: grid.occurrences,
     stmtFraction: numericToFraction(statement.percentage),
     statementOrder: statement.order,
     dom,
@@ -154,11 +160,20 @@ const expandStatement = (
   // anchor landed off the start day, the origin pulls the grid back onto it.
   const origin = runtime.startDate as OCTDate;
   const events = expandAnchored(statement, anchor, dom, firingFor, origin);
+  // A pure milestone carries no schedule, so it advances the chain cursor by the
+  // same degenerate one-lump params the kernel folds it on: 1 × 0 steps the cursor
+  // by zero, the correct milestone handoff. The `period_type` is inert at
+  // `period: 0` but must be supplied for the now-absent grid fields to typecheck.
+  const grid = statement.schedule ?? {
+    occurrences: 1,
+    period: 0,
+    period_type: "DAYS",
+  };
   const nextCursor = advanceCursor(
     anchor,
-    statement.occurrences,
-    statement.period,
-    statement.period_type,
+    grid.occurrences,
+    grid.period,
+    grid.period_type,
     dom,
     origin,
   );

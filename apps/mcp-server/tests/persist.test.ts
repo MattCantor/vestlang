@@ -244,6 +244,48 @@ describe("mcp-server / persistence tool pair", () => {
     expect(total).toBe(1200);
   });
 
+  // Issue #390 AC8 — a pure milestone (`VEST CLIFF EVENT ipo`) persists as a
+  // schedule-less statement and survives the Zod gate on rehydrate. It vests
+  // entirely on the event hold, so it has no time grid and no sidecar; its
+  // event_condition names a real user event the record keeper owns.
+  it("persists and rehydrates a pure milestone (schedule-less, event_condition)", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl: "VEST CLIFF EVENT ipo",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    // The stored statement is schedule-less — absence means absence, no degenerate
+    // one-installment grid — and carries the event hold.
+    const stmt = persisted.artifact.template.statements[0] as {
+      schedule?: unknown;
+      event_condition?: unknown;
+    };
+    expect(stmt.schedule).toBeUndefined();
+    expect(stmt.event_condition).toEqual({ event_id: "ipo" });
+    // A bare real event needs no synthetic recipe, so no sidecar.
+    expect(persisted.artifact.sidecar).toBeUndefined();
+
+    // Rehydrate before the event fires: the milestone is held, so it projects
+    // nothing and discloses the wait. The Zod gate (the union + .strict()) accepted
+    // the schedule-less artifact — proven by the call not erroring.
+    const held = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 1000,
+    });
+    expect(held.projection).toEqual([]);
+    expect(held.pending.length).toBeGreaterThan(0);
+
+    // Rehydrate with ipo fired: the whole slice folds at the firing date.
+    const fired = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 1000,
+      events: { ipo: "2026-06-01" },
+    });
+    expect(fired.projection).toEqual([{ date: "2026-06-01", amount: 1000 }]);
+    expect(fired.pending).toHaveLength(0);
+  });
+
   // A bare named EVENT start (`VEST FROM EVENT ipo …`) is a contingent start: it
   // lowers to a DATE-base template on the sentinel startDate, with its `EVENT ipo`
   // recipe externalized under the reserved `evt:start` sidecar key. The event is
@@ -658,10 +700,12 @@ describe("mcp-server / persistence tool pair", () => {
         id: "t1",
         statements: [
           {
-            order: 0,
-            occurrences: 4,
-            period: 1,
-            period_type: "MONTHS",
+            order: 1,
+            schedule: {
+              occurrences: 4,
+              period: 1,
+              period_type: "MONTHS",
+            },
             percentage: "1",
           },
         ],
@@ -896,9 +940,11 @@ describe("mcp-server / persistence tool pair", () => {
       statements: [
         {
           order: 1,
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
+          schedule: {
+            occurrences: 4,
+            period: 1,
+            period_type: "MONTHS",
+          },
           percentage: "1",
         },
       ],
