@@ -76,3 +76,26 @@ describe("the sibling-blind statement-percentage warning dissolves (#415)", () =
     expect(precision).toHaveLength(0);
   });
 });
+
+describe("the cliff precision pass survives the statement-pass removal (#413 AC6)", () => {
+  // Dropping the sibling-blind statement-percentage pass must NOT take the cliff
+  // pass with it: a cliff percentage is a share of its OWN statement, floored
+  // independently, and can still misallocate within its basis. OVER 36 EVERY 12
+  // CLIFF 12 puts a third of the grant on the cliff date, stored "0.3333333333",
+  // and floor(0.3333333333 × 36000) = 11999 ≠ 12000 — so the cliff finding fires.
+  it("a template-arm cliff still emits its precision-insufficient finding", () => {
+    const cliffed = normalizeProgram(
+      parse("VEST OVER 36 months EVERY 12 months CLIFF 12 months"),
+    );
+    const result = resolveToCore(cliffed, {
+      grantDate: "2025-01-01",
+      events: {},
+      grantQuantity: 36000,
+    });
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    expect(precision[0].path).toEqual(["statements", 0, "cliff"]);
+  });
+});

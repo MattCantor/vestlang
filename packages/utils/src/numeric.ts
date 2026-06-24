@@ -179,17 +179,8 @@ export const fractionToNumeric = (f: Fraction): Numeric => {
 };
 
 // The 10-place grid the apportionment works on: one stored `Numeric` is an
-// integer numerator over 10^GRID_PLACES.
-const GRID_PLACES = MAX_PLACES;
-const GRID = 10n ** BigInt(GRID_PLACES);
-
-// Render a grid numerator (over 10^GRID_PLACES) as a minimal-form `Numeric` —
-// the same trailing-zero strip `fractionToNumeric` produces, so a value that
-// terminates short of ten places keeps its short form ("0.5", "1").
-const gridToNumeric = (numerator: bigint): Numeric => {
-  if (numerator % GRID === 0n) return (numerator / GRID).toString();
-  return renderFixed(numerator, GRID_PLACES).replace(/0+$/, "");
-};
+// integer numerator over 10^MAX_PLACES.
+const GRID = 10n ** BigInt(MAX_PLACES);
 
 /**
  * Apportion a schedule's statement share `Fraction`s to stored `Numeric`s
@@ -274,5 +265,11 @@ export const apportionStored = (fractions: Fraction[]): Numeric[] => {
     for (let j = 0; j < bumps; j++) numerators[order[j]] += 1n;
   }
 
-  return numerators.map(gridToNumeric);
+  // Render each grid numerator (over 10^10) through the same Numeric boundary
+  // every other stored share goes through, so it lands in minimal canonical form
+  // ("0.5", "1") identically. Both the numerator (≤ 10^10) and 10^10 sit under
+  // MAX_SAFE_INTEGER, so the Number() casts are exact.
+  return numerators.map((n) =>
+    fractionToNumeric({ numerator: Number(n), denominator: Number(GRID) }),
+  );
 };
