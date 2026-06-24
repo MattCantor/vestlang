@@ -16,6 +16,7 @@
   "scripts": {
     "build": "rimraf dist && tsc -p tsconfig.json",
     "test": "vitest",
+    "test:mutation": "stryker run",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -29,6 +30,8 @@
     "@vestlang/walk": "workspace:*"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

@@ -284,6 +284,12 @@ importers:
         specifier: workspace:*
         version: link:../walk
     devDependencies:
+      '@stryker-mutator/core':
+        specifier: ^9.6.1
+        version: 9.6.1(@types/node@24.5.2)
+      '@stryker-mutator/vitest-runner':
+        specifier: ^9.6.1
+        version: 9.6.1(@stryker-mutator/core@9.6.1(@types/node@24.5.2))(vitest@3.2.4(@types/debug@4.1.12)(@types/node@24.5.2)(jiti@2.7.0)(lightningcss@1.30.2)(terser@5.44.0)(tsx@4.20.5)(yaml@2.9.0))
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
