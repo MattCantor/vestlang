@@ -94,7 +94,13 @@ export type SymbolicDate =
   // reads START + 1 period, matching the resolved grid (gridDate's at(i + 1)).
   | { type: "START_PLUS"; unit: PeriodTag; steps: number }
   | { type: "UNRESOLVED_VESTING_START" }
-  | { type: "UNRESOLVED_CLIFF"; date: OCTDate };
+  // `date` keeps its honest grid (cadence) position — the tranche's spot in the
+  // accrual breakdown, NOT a claim it can vest then. `floor` (optional) is the
+  // earliest it could actually land: the resolved time-arm `cliffDate` of a
+  // `LATER OF` cliff (nothing releases before that lower bound). Absent when the
+  // cliff is a bare `CLIFF EVENT e` with no time arm — there's no known floor to
+  // disclose, so the key is omitted rather than defaulted.
+  | { type: "UNRESOLVED_CLIFF"; date: OCTDate; floor?: OCTDate };
 
 /* ------------------------
  * Blockers

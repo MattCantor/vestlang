@@ -159,7 +159,7 @@ A cliff gated on an event still stores as one template — a time `cliff` plus t
 - **interchange: `template`** — the schedule is storable as written; the event hold lives in `event_condition`.
 - **resolution: `template`** — but `pending: true`, because `milestone` hasn't fired (blocker `EVENT_NOT_YET_OCCURRED`).
 
-The installments are emitted symbolically until `milestone` fires (see [Partial knowledge](#partial-knowledge-for-later-of)). The `LATER OF` floor — nothing can vest before the 12-month mark — holds when the schedule is realized, but the unfired symbolic dates currently display at their raw grid positions, not lifted to that floor (so the first row reads `2025-04-01`, below the `2026-01-01` floor). What those pending dates _should_ surface is the open question tracked in [#447](https://github.com/MattCantor/vestlang/issues/447).
+The installments are emitted symbolically until `milestone` fires (see [Partial knowledge](#partial-knowledge-for-later-of)). The `LATER OF` floor — nothing can vest before the 12-month mark — holds when the schedule is realized. The unfired symbolic dates keep their honest grid positions (so the first row's `date` reads `2025-04-01`), and each one _also_ discloses that floor as `floor: 2026-01-01` — the earliest it could land. The cadence date and the floor are both machine-readable, neither pretending to be the unknown true vesting date.
 
 ### `impossible`
 
@@ -207,8 +207,10 @@ A **symbolic date** takes one of three forms:
 ```ts
 { type: "UNRESOLVED_VESTING_START" }                           // the start itself is unknown
 { type: "START_PLUS", unit: "DAYS" | "MONTHS", steps: number } // a known offset from an unknown start
-{ type: "UNRESOLVED_CLIFF", date: OCTDate }                    // grid date known, cliff gate unfired
+{ type: "UNRESOLVED_CLIFF", date: OCTDate, floor?: OCTDate }   // grid date known, cliff gate unfired
 ```
+
+On `UNRESOLVED_CLIFF`, `date` is the cadence (grid) position — the tranche's spot in the accrual breakdown, not a claim it can vest then. `floor` (optional) is the earliest it could actually land: the resolved time-arm date of a `LATER OF` cliff, below which nothing can release. It's present only when a `LATER OF` time arm has resolved; a bare `CLIFF EVENT e` has no time arm, so it carries no floor and the key is omitted (see [Partial knowledge](#partial-knowledge-for-later-of)).
 
 The **`unresolved` blockers**:
 
@@ -273,15 +275,15 @@ When a `LATER OF` selector has some but not all items resolved, the resolved ite
   CLIFF LATER OF (+12 months, EVENT milestone)
 ```
 
-With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so the resolved floor still constrains the outcome: when the schedule is realized, nothing vests before that 12-month mark. The schedule stores and resolves as a `template`, with `milestone` outstanding (`pending: true`). Every installment is emitted symbolically, blocked on `EVENT milestone`:
+With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so the resolved floor still constrains the outcome: when the schedule is realized, nothing vests before that 12-month mark. The schedule stores and resolves as a `template`, with `milestone` outstanding (`pending: true`). Every installment is emitted symbolically, blocked on `EVENT milestone`, and each one **discloses the floor** — the `2026-01-01` lower bound — alongside its honest cadence date:
 
-| Amount | Symbolic date                              | State      | Unresolved     |
-| ------ | ------------------------------------------ | ---------- | -------------- |
-| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-04-01 }` | UNRESOLVED | EVENT milestone |
-| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-07-01 }` | UNRESOLVED | EVENT milestone |
-| …      | … _(through 2029-01-01)_                   | …          | …              |
+| Amount | Symbolic date                                                  | State      | Unresolved     |
+| ------ | -------------------------------------------------------------- | ---------- | -------------- |
+| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-04-01, floor: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
+| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-07-01, floor: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
+| …      | … _(through 2029-01-01, all floor 2026-01-01)_                 | …          | …              |
 
-A wrinkle worth flagging: those `UNRESOLVED_CLIFF` dates currently display at their _raw grid positions_ (the first reads `2025-04-01`), not lifted to the `2026-01-01` floor the `LATER OF` guarantees — and no absence assumption is surfaced for the floor. The floor still binds at realization; it just isn't reflected in the pending symbolic dates today. Whether those dates should be raised to the floor (or otherwise signal it) is the open question tracked in [#447](https://github.com/MattCantor/vestlang/issues/447).
+The `date` keeps its **honest grid position** — the tranche's spot in the accrual breakdown — and is deliberately _not_ lifted to the floor: neither the raw cadence date nor the floor is the true vesting date (that stays unknown until `milestone` fires), so folding the date onto the floor would falsely claim the floor _is_ the date. Disclosing the floor surfaces the one hard fact we have — the earliest anything could land — while leaving the per-cadence breakdown intact. The `floor` is present only because the `LATER OF` has a resolved time arm; a bare `CLIFF EVENT milestone` (no time side) has no known lower bound, so it omits the `floor` key entirely.
 
 ### Vesting start before grant date
 

@@ -113,4 +113,26 @@ describe("makeTranches", () => {
       date: "2024-03-01",
     });
   });
+
+  // #447: an optional `floor` rides through to the symbolic date when given, and
+  // the key is omitted entirely when absent (no defaulting, no `floor: undefined`).
+  it("makeUnresolvedCliffInstallment stamps an optional floor, omitting the key when absent", () => {
+    const withFloor = makeUnresolvedCliffInstallment(
+      "2025-02-01",
+      5,
+      "2026-01-01",
+    );
+    expect(withFloor.symbolicDate).toEqual({
+      type: "UNRESOLVED_CLIFF",
+      date: "2025-02-01",
+      floor: "2026-01-01",
+    });
+
+    const noFloor = makeUnresolvedCliffInstallment("2025-02-01", 5);
+    expect(noFloor.symbolicDate).toEqual({
+      type: "UNRESOLVED_CLIFF",
+      date: "2025-02-01",
+    });
+    expect("floor" in noFloor.symbolicDate).toBe(false);
+  });
 });
