@@ -80,8 +80,9 @@ keeper *store* for this" and "what does it *resolve to* right now" are different
 
 - **`interchange`** — the **storable** verdict, computed *without reading firings*, so a
   later event can never change it. Values: `template`, `events-only`, `unrepresentable`
-  (no storable form even as bare events — today an event-anchored cliff), `impossible`
-  (a structural contradiction).
+  (no storable form even as bare events — a cross-unit deferred cliff, or a `THEN` tail
+  behind an unfired start; an event-anchored cliff is *not* one of these — it stores as a
+  `template`), `impossible` (a structural contradiction).
 - **`resolution`** — the **resolves-to** verdict, given the events currently known.
   Values: `template`, `events-only`, `unresolved` (pending on an unfired event),
   `impossible`.
@@ -213,11 +214,12 @@ All grants below use a grant date of **2025-01-01**. Outputs are produced by the
 
 37 installments, telescoping to exactly 4,800.
 
-### Event-gated cliff → resolves to `template` when fired, `unresolved` when not
+### Event-gated cliff → a pending `template` until the IPO fires
 
 `VEST OVER 4 years EVERY 1 month CLIFF LATER OF (+12 months, EVENT ipo)` over 4,800 shares.
-The cliff is the *later* of 12 months and the IPO. (Storable verdict: `unrepresentable` —
-an event-anchored cliff has no fixed-duration template form, so it can't be stored as one.)
+The cliff is the *later* of 12 months and the IPO. (Both verdicts are `template`: an
+event-held cliff stores as a time `cliff` plus the gate in `event_condition`, so it has a
+storable form — it's just held pending until the event arrives.)
 
 **IPO fired on 2026-06-15** → the cliff lands there; everything before it lumps:
 
@@ -227,13 +229,15 @@ an event-anchored cliff has no fixed-duration template form, so it can't be stor
 | 100 | 2026-07-01 | RESOLVED |
 | … | … | … |
 
-**IPO not yet fired** → the +12-month floor is only a *lower bound* (the IPO can only push
-the cliff later), so nothing is asserted as vested:
+**IPO not yet fired** → `pending: true`, every installment emitted symbolically. The
++12-month floor is a *lower bound* the IPO can only push later, so it binds at realization —
+but the pending symbolic dates currently sit at their raw grid positions, not lifted to that
+floor (what they should show is an open question, [#447](https://github.com/MattCantor/vestlang/issues/447)):
 
 | Amount | Symbolic date | State | Unresolved |
 |---:|:---|:---|:---|
-| 1,200 | `{ UNRESOLVED_CLIFF, 2026-01-01 }` | UNRESOLVED | `EVENT ipo` |
-| 100 | `{ UNRESOLVED_CLIFF, 2026-02-01 }` | UNRESOLVED | `EVENT ipo` |
+| 100 | `{ UNRESOLVED_CLIFF, 2025-02-01 }` | UNRESOLVED | `EVENT ipo` |
+| 100 | `{ UNRESOLVED_CLIFF, 2025-03-01 }` | UNRESOLVED | `EVENT ipo` |
 | … | … | … | … |
 
 …with a blocker: `{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }`. Supply the event —
@@ -285,8 +289,9 @@ month — the 1st and the 15th — `0.5 VEST FROM DATE 2024-01-01 OVER 4 months 
 | … | … *(6 more, alternating)* | … |
 
 Both verdicts `events-only` — *"Two independent absolute-date vesting grids on one grant."*
-(An event-anchored cliff, `CLIFF EVENT ipo`, is the other genuine case — but it splits by
-lens: `events-only` to resolve, `unrepresentable` to store.)
+(More than one distinct start origin on a grant is the other genuine `events-only` case.
+An event-anchored cliff, `CLIFF EVENT ipo`, is *not* one — it now stores and resolves as a
+`template`, the event hold riding in the cliff's `event_condition`.)
 
 ### The inverse: tranches → DSL
 
