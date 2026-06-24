@@ -59,6 +59,30 @@ describe("runResolveOffset", () => {
     expect(r).toEqual({ ok: true, date: "2025-04-01" });
   });
 
+  // #402: a bare offset with two-or-more terms used to error at the second `+`.
+  // It now resolves the same as the anchored `grantDate + 20 days + 1 month`:
+  // months-first off the grant date, so 2025-01-31 + 1 month clamps to 2025-02-28,
+  // then + 20 days lands on 2025-03-20.
+  it("resolves a multi-term bare offset relative to grant_date (#402)", () => {
+    const r = runResolveOffset({
+      expr: "+20 days +1 month",
+      grant_date: "2025-01-31",
+    });
+    expect(r).toEqual({ ok: true, date: "2025-03-20" });
+  });
+
+  it("a multi-term bare offset matches its anchored equivalent (#402)", () => {
+    const bare = runResolveOffset({
+      expr: "+20 days +1 month",
+      grant_date: "2025-01-31",
+    });
+    const anchored = runResolveOffset({
+      expr: "grantDate + 20 days + 1 month",
+      grant_date: "2025-01-31",
+    });
+    expect(bare).toEqual(anchored);
+  });
+
   it("surfaces parse errors", () => {
     const r = runResolveOffset({
       expr: "this is not vestlang",

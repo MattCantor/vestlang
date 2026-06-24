@@ -285,6 +285,52 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     ]);
   });
 
+  // #402: a bare, anchorless offset of two-or-more terms used to error at the
+  // second `+` (only the single-term `+3 months` parsed). It now aggregates the
+  // same way an anchored node does — months-first — over an implicit grantDate
+  // base, so the bare form and the written-out `grantDate + …` form agree.
+  it("aggregates a multi-term bare offset over an implicit grantDate base (#402)", () => {
+    const s = first(`VEST FROM +20 days +1 month`);
+    const start = s.expr.vesting_start;
+    expect(start).toEqual({
+      type: "NODE",
+      base: { type: "GRANT_DATE" },
+      offsets: [
+        { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+      ],
+    });
+    // Byte-identical to the explicitly-anchored form.
+    const anchored = first(`VEST FROM grantDate + 20 days + 1 month`);
+    expect(start).toEqual(anchored.expr.vesting_start);
+  });
+
+  it("leaves the single-term bare offset as a bare DURATION (#402)", () => {
+    // The normalizer anchors this to the slot's system base; keep it a Duration
+    // so that path stays single-term and untouched.
+    const s = first(`VEST FROM +3 months`);
+    expect(s.expr.vesting_start).toEqual({
+      type: "DURATION",
+      value: 3,
+      unit: "MONTHS",
+      sign: "PLUS",
+    });
+  });
+
+  it("aggregates a multi-term bare cliff over an implicit vestingStart base (#402)", () => {
+    const s = first(
+      `VEST OVER 12 months EVERY 1 month CLIFF 20 days + 1 month`,
+    );
+    expect(s.expr.periodicity.cliff).toEqual({
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [
+        { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+      ],
+    });
+  });
+
   it("enforces SQL precedence: AND binds tighter than OR in `A AND B OR C`", () => {
     const s = first(
       `VEST FROM EVENT X BEFORE EVENT A AND BEFORE EVENT B OR BEFORE EVENT C`,
