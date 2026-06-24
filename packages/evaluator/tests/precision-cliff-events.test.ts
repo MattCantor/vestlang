@@ -146,61 +146,132 @@ describe("#384 — events-arm cliff precision guard", () => {
   });
 });
 
-// These two pin a KNOWN-IMPERFECT behaviour, not desired correctness. The
-// per-statement guard sizes the cliff against floor(stmtFraction × grant) and does
-// a double floor (floor(cliffPct × floor(stmtFraction × grant))), while the events
-// arm realizes the lump through one running cumulative at grant scale (a single
-// floor) and is path-dependent on sibling ordering. The two diverge when
-// stmtFraction × grant is non-integer (a "lossy basis"), so the per-statement
-// verdict can both warn when the realized lump is actually correct and stay silent
-// when it actually truncates. Closing this gap is deferred — see the follow-up
-// issue on precision-guard basis fidelity (it affects the template arm identically,
-// it just isn't exercised there because every template-arm test uses a 100%
-// statement, where floor(1 × grant) = grant and the basis is exact). These tests
-// exist so the gap stays visible and can't silently drift.
-describe("#384 — lossy-basis characterization (known imperfect, see basis-fidelity follow-up)", () => {
+// #386 — the guard's verdict now reproduces the realizer's grant-scale lump (one
+// floor of stmtFraction × dec(cliff) × grant), so a lossy basis (stmtFraction ×
+// grant non-integer) no longer fools it in either direction. Both cliffs here LEAD
+// their merged position — the sibling grid starts 2021-06-01, well after the cliff
+// date — so the exact grant-scale single-floor verdict applies. (These two were
+// #384 characterization tests pinning the old double-floor behaviour; flipped to
+// correctness here, the gap they tracked is closed.)
+describe("#386 — lossy-basis cliff precision (the grant-scale verdict)", () => {
   const isResolved = (i: { state: string }): i is ResolvedInstallment =>
     i.state === "RESOLVED";
 
-  it("AC7a: false positive — the guard warns though the realized lump is correct (grant 72001)", () => {
-    // floor(0.5 × 72001) = 36000 basis, the same as at 72000, so the guard still
-    // reads "0.3333333333" as misallocating by one. But the realized events-arm
-    // lump lands the correct 12,000: the warning here is a false positive.
+  it("AC7a: false positive killed — the correct lump draws no warning (grant 72001)", () => {
+    // floor(0.5 × 72001) = 36000 was the old basis, double-flooring "0.3333333333"
+    // to 11,999 and warning. The realized leading lump is floor(0.5 × 0.3333333333 ×
+    // 72001) = 12,000 = floor(0.5 × 1/3 × 72001) — exact — so the grant-scale verdict
+    // is now SILENT (verified by vestlang_evaluate: lump 12,000 on 2020-02-01).
     const result = resolveToCore(prog(CANONICAL), baseCtx(72001));
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
 
-    // The guard warns (the per-statement double-floor verdict).
-    expect(precisionFindings(result)).toHaveLength(1);
+    expect(precisionFindings(result)).toHaveLength(0);
 
-    // But the realized first-statement cliff lump is the correct 12,000 — the
-    // first installment of the first grid. (The single-cumulative allocation at
-    // grant scale doesn't lose the share the per-statement basis does.)
+    // The allocation is byte-identical — this is a warning-only change.
     const resolved = result.installments.filter(isResolved);
     const firstGridLump = resolved.find((i) => i.date === "2020-02-01");
     expect(firstGridLump?.amount).toBe(12000);
   });
 
-  it("AC7b: false negative — the guard is silent though the realized lump truncates (grant 1005)", () => {
-    // A 2/3 cliff ("0.6666666666") on a 1/2 statement. floor(0.5 × 1005) = 502
-    // basis; floor("0.6666666666" × 502) equals floor(2/3 × 502) = 334, so the
-    // per-statement verdict is "precise enough" and stays silent. The realized
-    // events-arm lump, however, lands one share off the exact-fraction ideal — the
-    // gap the guard cannot see from a per-statement basis.
+  it("AC7b: false negative killed — the truncating lump now warns (grant 1005)", () => {
+    // A 2/3 cliff ("0.6666666666") on a 1/2 statement. The realized leading lump is
+    // floor(0.5 × 0.6666666666 × 1005) = 334, but the exact-fraction ideal is
+    // floor(0.5 × 2/3 × 1005) = 335 — the stored decimal drops a share. The old
+    // per-statement double floor (floor(2/3 × 502) = 334 = floor(0.5 × 1005)-basis)
+    // matched the realized 334 and stayed silent; the grant-scale verdict sees 334 ≠
+    // 335 and now WARNS. (vestlang_evaluate: lump 334 on 2020-03-01.)
     const dsl =
       "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 2 months PLUS 0.5 VEST FROM DATE 2021-06-01 OVER 3 months EVERY 1 month";
     const result = resolveToCore(prog(dsl), baseCtx(1005));
     expect(result.kind).toBe("events");
     if (result.kind !== "events") return;
 
-    // The guard stays silent.
-    expect(precisionFindings(result)).toHaveLength(0);
+    const findings = precisionFindings(result);
+    expect(findings).toHaveLength(1);
+    const f = findings[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
+    expect(f.percentage).toBe("0.6666666666");
+    // Leading lump → the exact-path finding carries a real recommendation, not the
+    // conservative shape.
+    expect(f.conservative).toBeUndefined();
 
-    // The realized first-statement cliff lump (the first installment of the first
-    // grid) is 334 — pinned as characterization of the current allocation.
+    // Allocation byte-identical.
     const resolved = result.installments.filter(isResolved);
     const firstGridLump = resolved.find((i) => i.date === "2020-03-01");
     expect(firstGridLump?.amount).toBe(334);
+  });
+});
+
+// #386 AC3 — the non-leading (path-dependent) cliff. When a sibling event sorts
+// strictly before the cliff lump, the realized lump depends on what vested ahead of
+// it (the same 2/3-on-1/2 cliff lumps 334 leading, 335 with one sibling preceding,
+// 334 with two), so no per-statement basis is exact. The guard errs conservative: it
+// warns whenever it can't prove the stored decimal exact, accepting an over-warn to
+// guarantee it never stays silent on a real loss — but stays SILENT when the decimal
+// IS provably exact (a terminating cliff), so the over-warn doesn't become an
+// unconditional warn.
+describe("#386 — non-leading cliff is warned conservatively (AC3)", () => {
+  const isResolved = (i: { state: string }): i is ResolvedInstallment =>
+    i.state === "RESOLVED";
+
+  // Statement 1 (no cliff, order 1) emits an event on 2020-02-01; statement 2's 2/3
+  // cliff lump lands on 2020-03-01. In the global (date, order, occurrence) walk the
+  // 2020-02-01 event sorts before the lump → non-leading. Two absolute-date grids →
+  // events arm. (vestlang_evaluate: stmt-2 lump 334 on 2020-03-01.)
+  const NON_LEADING =
+    "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 2 months";
+
+  it("warns conservatively with recommended omitted and a path-dependent message", () => {
+    const result = resolveToCore(prog(NON_LEADING), baseCtx(1005));
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+
+    const findings = precisionFindings(result);
+    expect(findings).toHaveLength(1);
+    const f = findings[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    // The cliff is statement 2 (index 1).
+    expect(f.path).toEqual(["statements", 1, "cliff"]);
+    expect(f.percentage).toBe("0.6666666666");
+    // The conservative shape: recommended omitted (the leading-basis recommendation
+    // wouldn't match the path-dependent lump), conservative flag set — distinguishing
+    // it from a not-representable finding, which also has no recommended. (The
+    // distinct rendered message is asserted in pipeline's findings.test.ts, the home
+    // of formatFinding — evaluator can't import pipeline without a dependency cycle.)
+    expect(f.recommended).toBeUndefined();
+    expect(f.conservative).toBe(true);
+  });
+
+  it("leaves the allocation byte-identical (warning-only)", () => {
+    const result = resolveToCore(prog(NON_LEADING), baseCtx(1005));
+    if (result.kind !== "events") return;
+    const resolved = result.installments.filter(isResolved);
+    // The stmt-2 cliff lump on 2020-03-01 is the 334 the realizer folds there.
+    const lump = resolved.find(
+      (i) => i.date === "2020-03-01" && i.amount === 334,
+    );
+    expect(lump).toBeDefined();
+  });
+
+  // The silent leg of the conservative rule: a non-leading lump with a *terminating*
+  // cliff decimal draws NO warning. Statement 2's cliff is a clean 1/2 ("0.5") — an
+  // OVER-2/CLIFF-1-month grid folds 1 of 2 occurrences — and statement 1's first
+  // installment sorts before it (same date 2020-02-01, lower order), so the lump is
+  // non-leading. A terminating decimal is provably exact, so the guard stays silent
+  // even on the conservative branch. (This pins that "warn unless provably exact" is
+  // not an unconditional warn — a regression dropping the exact/terminating early
+  // return would fail here while every other non-leading test still passed.)
+  const NON_LEADING_TERMINATING =
+    "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2020-01-01 OVER 2 months EVERY 1 month CLIFF 1 month";
+
+  it("stays silent for a non-leading lump whose cliff decimal terminates", () => {
+    const result = resolveToCore(prog(NON_LEADING_TERMINATING), baseCtx(1005));
+    expect(result.kind).toBe("events");
+    expect(precisionFindings(result)).toHaveLength(0);
   });
 });
 
@@ -306,6 +377,45 @@ describe("#384 — unresolved-arm resolved-sibling cliff precision (AC9)", () =>
       grantQuantity: 72000,
     });
     expect(result.kind).toBe("unresolved");
+    expect(precisionFindings(result)).toHaveLength(0);
+  });
+});
+
+// #386 — an EVENT_HELD cliff is EXCLUDED from the precision pass entirely. The
+// precision guard only sizes a cliff whose lump is folded from the *stored decimal*.
+// An EVENT_HELD cliff is never that lump: fired, it folds proportionally (the lump =
+// pre-cliff occurrences / N, computed from grid accrual — the stored decimal is never
+// read, so it can't mis-round); unfired, the grid is held and no lump materializes at
+// all. So a precision warning on an EVENT_HELD cliff is a pure false positive — the
+// exact failure this issue exists to kill — and the pass gates on `state === "RESOLVED"`.
+describe("#386 — EVENT_HELD cliffs are excluded (no false positive)", () => {
+  // `CLIFF LATER OF(1 month, EVENT m)` decomposes into a time baseline (the 1/3 cliff,
+  // stored "0.3333333333") + an event hold. The time arm's decimal is over-precise and
+  // WOULD warn if analyzed, but the realized lump folds proportionally, so it must not.
+  it("a fired event-held cliff's over-precise time baseline draws no finding", () => {
+    const dsl =
+      "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF LATER OF(1 month, EVENT m) PLUS 0.5 VEST FROM DATE 2021-06-01 OVER 3 months EVERY 1 month";
+    const result = resolveToCore(prog(dsl), {
+      grantDate: "2019-01-01",
+      events: { m: "2020-02-15" }, // m fired
+      grantQuantity: 72000,
+    });
+    expect(result.kind).toBe("events");
+    expect(precisionFindings(result)).toHaveLength(0);
+  });
+
+  // The same hold left unfired — the grid is held, the cliff lump never materializes,
+  // so its stored decimal can't misallocate anything. (The materialize gate keys on the
+  // start date, which IS dated here, so the EVENT_HELD state-gate is what excludes it.)
+  it("an unfired event-held cliff's time baseline draws no finding", () => {
+    const dsl =
+      "0.5 VEST FROM DATE 2020-01-01 OVER 36 months EVERY 12 months CLIFF LATER OF(12 months, EVENT ipo) PLUS 0.5 VEST FROM DATE 2021-06-01 OVER 12 months EVERY 1 month";
+    const result = resolveToCore(prog(dsl), {
+      grantDate: "2019-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 36000,
+    });
+    expect(result.kind).toBe("events");
     expect(precisionFindings(result)).toHaveLength(0);
   });
 });

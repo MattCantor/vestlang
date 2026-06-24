@@ -207,4 +207,80 @@ describe("analyzePrecision", () => {
     const b = analyzePrecision("0.0208", 48000);
     if (b.kind === "misallocates") expect(b.recommended).toBe("0.02084");
   });
+
+  // #386 — the optional basisScale. The cliff precision guard calls the analyzer
+  // with N = grant and basisScale = stmtFraction, so the analyzer's single floor
+  // becomes floor(decimal × stmtNum × grant / stmtDen) — the realizer's grant-scale
+  // leading lump — instead of pre-flooring the statement share count.
+  describe("basisScale (the rational share basis)", () => {
+    // A number-based Fraction (the public `@vestlang/types` shape the analyzer's
+    // basisScale param takes), distinct from the BigInt `frac` used for `inferred`.
+    const bf = (numerator: number, denominator: number) => ({
+      numerator,
+      denominator,
+    });
+
+    // The default and an explicit 1/1 are byte-identical to the no-basis path.
+    it("defaults to 1/1 and an explicit 1/1 matches the unscaled call", () => {
+      const bare = analyzePrecision("0.3333", 36000);
+      expect(analyzePrecision("0.3333", 36000, bf(1, 1))).toEqual(bare);
+    });
+
+    // The AC7a false positive: at basisScale 1/2 and N = 72001 the single floor is
+    // floor(1/3 × 1/2 × 72001) for both the supplied decimal and the intended
+    // fraction — 12000 == 12000 — so the verdict is precise-enough, NOT a warning.
+    // The old pre-floored basis (floor(1/2 × 72001) = 36000) double-floored to
+    // 11999 and would have misallocated.
+    it("kills the AC7a false positive at a lossy basis (1/3 cliff, 1/2 stmt, N 72001)", () => {
+      const v = analyzePrecision("0.3333333333", 72001, bf(1, 2));
+      expect(v.kind).toBe("precise-enough");
+      if (v.kind === "precise-enough") {
+        expect(v.inferred).toEqual(frac(1n, 3n));
+      }
+    });
+
+    // The AC7b false negative: realized lump floor(2/3-dec × 1/2 × 1005) = 334, but
+    // the exact-fraction ideal floor(2/3 × 1/2 × 1005) = 335 — they differ, so the
+    // verdict misallocates where the pre-floored basis (floor(1/2 × 1005) = 502,
+    // floor(2/3 × 502) = 334 = the realized lump) stayed silent.
+    it("catches the AC7b false negative at a lossy basis (2/3 cliff, 1/2 stmt, N 1005)", () => {
+      const v = analyzePrecision("0.6666666666", 1005, bf(1, 2));
+      expect(v.kind).toBe("misallocates");
+      if (v.kind === "misallocates") {
+        expect(v.suppliedShares).toBe(334n);
+        expect(v.intendedShares).toBe(335n);
+        expect(v.inferred).toEqual(frac(2n, 3n));
+      }
+    });
+
+    // The reported `inferred` reads the decimal alone, so the basis scale doesn't
+    // move it; and the recommended window search runs against the same rational
+    // basis. The AC1 case (1/3 cliff, 1/2 stmt, N 72000) still recommends 0.33334.
+    it("recommends against the scaled basis (AC1: 0.33334 at 1/2 of 72000)", () => {
+      const v = analyzePrecision("0.3333333333", 72000, bf(1, 2));
+      expect(v.kind).toBe("misallocates");
+      if (v.kind === "misallocates") {
+        expect(v.intendedShares).toBe(12000n);
+        expect(v.recommended).toBe("0.33334");
+      }
+    });
+
+    // The precondition: a non-positive or non-integer basis numerator/denominator
+    // throws, mirroring the shareCount guard. A zero numerator means the basis
+    // covers no shares — the caller skips it, it never reaches the analyzer.
+    it("throws on a non-positive or non-integer basis part", () => {
+      expect(() => analyzePrecision("0.5", 100, bf(0, 2))).toThrow(
+        /basisScale/,
+      );
+      expect(() => analyzePrecision("0.5", 100, bf(-1, 2))).toThrow(
+        /basisScale/,
+      );
+      expect(() => analyzePrecision("0.5", 100, bf(1, 0))).toThrow(
+        /basisScale/,
+      );
+      expect(() => analyzePrecision("0.5", 100, bf(1.5, 2))).toThrow(
+        /basisScale/,
+      );
+    });
+  });
 });

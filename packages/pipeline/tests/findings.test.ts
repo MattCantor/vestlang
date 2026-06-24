@@ -59,4 +59,27 @@ describe("formatFinding", () => {
         "it reads as 1/3 (33%) and no ≤10-place decimal allocates it correctly",
     );
   });
+
+  it("renders a conservative (non-leading) finding as a path-dependent warning", () => {
+    // #386 — a non-leading cliff lump: a sibling vests before it, so the realized
+    // share is path-dependent and no fixed decimal is provably right. recommended is
+    // omitted (same field-absent shape as not-representable), but `conservative`
+    // flips the wording so it doesn't read as the not-representable claim.
+    const f: Finding = {
+      kind: "precision-insufficient",
+      severity: "warning",
+      percentage: "0.6666666666",
+      shareCount: 502,
+      inferred: { numerator: 2, denominator: 3 },
+      conservative: true,
+      path: ["statements", 1, "cliff"],
+    };
+    expect(formatFinding(f)).toBe(
+      "stored percentage `0.6666666666` is too imprecise for 502 shares — " +
+        "it reads as 2/3 (67%) and the cliff lump is not first in line, so the " +
+        "stored decimal may drop a share",
+    );
+    // It must NOT read as the not-representable claim even though recommended is absent.
+    expect(formatFinding(f)).not.toContain("no ≤10-place decimal");
+  });
 });

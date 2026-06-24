@@ -277,6 +277,8 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
           period_type: "MONTHS",
           percentage: "0.5",
         },
+        // #386 — the retained cliff date: 2024-01-31 + 2 months, clamped to 03-31.
+        cliffDate: "2024-03-31",
       },
     );
   });

@@ -113,3 +113,172 @@ describe("over-precise cliff — the precision guard (#359 AC7)", () => {
     expect(f.recommended).toBeUndefined();
   });
 });
+
+// #386 AC5 — the template arm exercised at a NON-100% statement and a lossy grant.
+// Every #359 case above uses a 100% statement, where floor(1 × grant) = grant and
+// the per-statement basis is already exact — so the template arm never hit the
+// double-floor bug. A single < 100% statement routes to the template arm too (an
+// under-allocation is legal), and at a lossy grant its cliff exposes the same
+// false negative the events arm did at AC7b.
+describe("over-precise cliff — the template arm at a lossy basis (#386 AC5)", () => {
+  // A 0.5 statement, 2/3 cliff, grant 1005. floor(0.5 × 1005) = 502 is the lossy
+  // basis (0.5 × 1005 = 502.5). The realized leading lump is
+  // floor(0.5 × 0.6666666666 × 1005) = 334, but the exact-fraction ideal is
+  // floor(0.5 × 2/3 × 1005) = 335 — the stored decimal drops a share. The old
+  // double-floor verdict (floor(2/3 × 502) = 334) matched the realized 334 and
+  // stayed silent; the grant-scale verdict sees 334 ≠ 335 and WARNS.
+  // (vestlang_evaluate: status template, lump 334 on 2020-03-01.)
+  const DSL_LOSSY =
+    "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 2 months";
+  const lossyCtx = {
+    grantDate: "2019-01-01",
+    events: {},
+    grantQuantity: 1005,
+  };
+
+  it("routes to the template arm and warns where the old per-statement basis was silent", () => {
+    const result = resolveToCore(normalizeProgram(parse(DSL_LOSSY)), lossyCtx);
+    expect(result.kind).toBe("template");
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    const f = precision[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
+    expect(f.percentage).toBe("0.6666666666");
+    expect(f.inferred).toEqual({ numerator: 2, denominator: 3 });
+    // The reported basis stays the integer statement-share count floor(0.5 × 1005).
+    expect(f.shareCount).toBe(502);
+    // A single statement → its cliff lump leads (nothing precedes it), so this is
+    // the exact grant-scale path, not the conservative one.
+    expect(f.conservative).toBeUndefined();
+  });
+
+  it("leaves the allocation byte-identical — the realized lump is still 334", () => {
+    const result = resolveToCore(normalizeProgram(parse(DSL_LOSSY)), lossyCtx);
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    const onCliff = events.filter((e) => e.date === "2020-03-01");
+    expect(onCliff.map((e) => Number(e.amount))).toEqual([334]);
+    // Cross-check the live path agrees.
+    const schedule = evaluateProgram(
+      normalizeProgram(parse(DSL_LOSSY)),
+      lossyCtx,
+    );
+    if (schedule.resolution.status !== "template")
+      throw new Error("expected template");
+    const lump = schedule.resolution.installments
+      .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+      .find((i) => i.date === "2020-03-01");
+    expect(lump?.amount).toBe(334);
+  });
+});
+
+// #386 — a contingent-start template (a pending-event head that still lowers to a
+// stored template via the sentinel start) with a RESOLVED bare-duration cliff keeps
+// its cliff warning. The template arm must NOT adopt the events-arm materialize gate:
+// a vestlang-blind reader holds the stored template and could materialize it once the
+// event fires, and a bare-duration cliff's lump IS sized from the stored decimal, so
+// its truncation is still worth flagging. The lump's cliff date is unknown (anchor-free
+// deferred lowering), so it routes to the conservative branch.
+//
+// (This is a RESOLVED cliff — `CLIFF 12 months` lowers anchor-free to a duration cliff
+// with no event hold. An EVENT_HELD cliff is a different shape, excluded entirely; see
+// the next describe block.)
+describe("over-precise cliff — a contingent-start template keeps its warning (#386)", () => {
+  it("warns conservatively (recommended omitted) rather than going silent", () => {
+    const dsl =
+      "VEST FROM EVENT ipo OVER 36 months EVERY 12 months CLIFF 12 months";
+    const result = resolveToCore(normalizeProgram(parse(dsl)), {
+      grantDate: "2025-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 36000,
+    });
+    expect(result.kind).toBe("template");
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    const f = precision[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
+    expect(f.percentage).toBe("0.3333333333");
+    // The conservative shape: no cliff date to prove leading → warn, recommended
+    // omitted, conservative flagged. (It still warns — the regression guard.)
+    expect(f.conservative).toBe(true);
+    expect(f.recommended).toBeUndefined();
+  });
+});
+
+// #386 — an EVENT_HELD cliff is excluded from the precision pass on the template arm
+// too. `CLIFF LATER OF(12 months, EVENT ipo)` stores its time baseline in the
+// template's `schedule.cliff` (the Carta baseline) plus an `event_condition` hold, so
+// the old `s.schedule?.cliff` template-arm read WOULD have analyzed that decimal. But
+// the realizer never sizes the lump from it (held until ipo fires, then proportional),
+// so analyzing it is a false positive. The RESOLVED-only gate excludes it — this is
+// the AC that FLIPPED from "keeps its warning" once the realizer was ground-truthed.
+describe("over-precise event-held cliff baseline is excluded (#386)", () => {
+  it("draws no precision finding even though the time baseline is over-precise", () => {
+    const dsl =
+      "VEST FROM DATE 2025-01-01 OVER 36 months EVERY 12 months CLIFF LATER OF(12 months, EVENT ipo)";
+    const result = resolveToCore(normalizeProgram(parse(dsl)), {
+      grantDate: "2025-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 36000,
+    });
+    expect(result.kind).toBe("template");
+    // The stored template DOES carry the over-precise baseline decimal...
+    if (result.kind === "template") {
+      expect(result.template.statements[0].schedule?.cliff?.percentage).toBe(
+        "0.3333333333",
+      );
+    }
+    // ...but the precision pass does NOT warn on it (the lump is proportional / held).
+    expect(
+      result.findings.some((f) => f.kind === "precision-insufficient"),
+    ).toBe(false);
+  });
+});
+
+// #386 — the template-arm basis must be the STORED, apportioned statement percentage
+// (what the realizer multiplies by, `compile.ts`), NOT the exact internal fraction.
+// #443's schedule-whole apportionment can bump a non-terminating share by an ulp, so
+// the two diverge for a multi-statement non-terminating schedule. A THEN chain of
+// three 1/3 statements at grant 72000 stores the cliff statement at "0.3333333334"
+// (bumped). The realizer's leading cliff lump is floor(0.3333333334 × 0.3333333333 ×
+// 72000) = 8000 = the exact ideal (no share lost; BigInt-verified). With the exact 1/3
+// basis the guard would wrongly see floor(1/3 × 0.3333333333 × 72000) = 7999 ≠ 8000 and
+// emit a false positive recommending "0.33334" (which would itself misallocate). Using
+// the stored basis, supplied = intended = 8000 → silent.
+//
+// (We don't compile() this template here: the stored "0.3333333334" × cliff
+// "0.3333333333" product overflows the exact-integer allocator's MAX_SAFE_INTEGER
+// guard — a separate engine limit. The guard's silence is the load-bearing assertion,
+// and `resolveToCore` runs the guard without compiling.)
+describe("template-arm basis matches the realizer's stored percentage (#386)", () => {
+  const THEN_THIRDS =
+    "1/3 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month";
+
+  it("draws no spurious leading warning when the realized lump equals the ideal", () => {
+    const ctx2 = {
+      grantDate: "2019-01-01",
+      events: {},
+      grantQuantity: 72000,
+    };
+    const result = resolveToCore(normalizeProgram(parse(THEN_THIRDS)), ctx2);
+    expect(result.kind).toBe("template");
+    // The cliff statement's stored percentage is the apportionment-bumped 0.3333333334
+    // — distinct from the exact 1/3, which is the whole point.
+    if (result.kind === "template") {
+      expect(result.template.statements[0].percentage).toBe("0.3333333334");
+    }
+    // No share is lost (realized lump 8000 = ideal), so the guard must stay silent —
+    // sizing against the stored 0.3333333334 basis, not the exact 1/3.
+    expect(
+      result.findings.some((f) => f.kind === "precision-insufficient"),
+    ).toBe(false);
+  });
+});

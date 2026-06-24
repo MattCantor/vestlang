@@ -54,7 +54,13 @@ type EventSide =
 
 export type LoweredCliff =
   | { state: "NONE" }
-  | { state: "RESOLVED"; cliff: Cliff }
+  // A resolved time cliff. `cliffDate` is the absolute date lowering already
+  // computed for the anchored path (the date the lump folds on) — carried so the
+  // precision guard can read it instead of re-deriving it via addPeriod. It is
+  // an internal eval-time field only; the stored canonical `Cliff` stays
+  // { length, period_type, percentage } and never sees it. Absent on the
+  // deferred (anchor-free) path, which has no concrete date.
+  | { state: "RESOLVED"; cliff: Cliff; cliffDate?: OCTDate }
   // An event-held cliff. The grid is held until the event fires; the storable
   // form is the optional time `cliff` (the Carta baseline) plus the `event`
   // hold. In resolution mode the resolved firing rides on `firing` (and the time
@@ -355,7 +361,9 @@ export const lowerCliff = (
     occurrences,
     dom,
   );
-  return cliff ? { state: "RESOLVED", cliff } : { state: "NONE" };
+  // Carry the absolute cliff date the precision guard's leading test reads (so it
+  // never re-derives it). Internal only — it never reaches the stored Cliff.
+  return cliff ? { state: "RESOLVED", cliff, cliffDate } : { state: "NONE" };
 };
 
 // Lower an event-referencing cliff to a time baseline + an `event_condition`. The
