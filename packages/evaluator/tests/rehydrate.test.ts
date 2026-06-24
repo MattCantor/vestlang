@@ -297,6 +297,14 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
     expect(isRehydrateMissingStartMarkerError(thrown)).toBe(true);
   });
 
+  it("the missing-start-marker guard rejects unrelated errors and non-errors", () => {
+    // The guard keys on the `name` tag, not just `instanceof Error`, so a plain
+    // Error (or a non-Error) must not be mistaken for it.
+    expect(isRehydrateMissingStartMarkerError(new Error("nope"))).toBe(false);
+    expect(isRehydrateMissingStartMarkerError("not an error")).toBe(false);
+    expect(isRehydrateMissingStartMarkerError(undefined)).toBe(false);
+  });
+
   it("a plain dated artifact (real startDate, no recipe) rehydrates cleanly", () => {
     const result = rehydrate(
       sentinelNoRecipe(),
