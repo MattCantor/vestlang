@@ -38,6 +38,9 @@ describe("lowerCliff", () => {
         period_type: "MONTHS",
         percentage: "0.25",
       },
+      // #386 — the anchored path retains the absolute cliff date for the precision
+      // guard's leading test: 2025-01-01 + 12 months.
+      cliffDate: "2026-01-01",
     });
   });
 
@@ -53,6 +56,8 @@ describe("lowerCliff", () => {
         period_type: "DAYS",
         percentage: "0.5",
       },
+      // #386 — the retained absolute cliff date (the resolved cliff date itself).
+      cliffDate: "2025-03-17",
     });
   });
 

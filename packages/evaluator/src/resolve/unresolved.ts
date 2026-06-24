@@ -30,8 +30,15 @@ const EMPTY: InstallmentSet = { installments: [], blockers: [] };
 
 // A start that settled to a concrete date: a plain RESOLVED, or an EARLIER_OF that
 // committed to its floor. Both materialize through the dated path, so every dated-
-// vs-pending split below keys on this rather than on "=== RESOLVED".
-const isDatedStart = (r: StmtResolution): boolean =>
+// vs-pending split keys on this rather than on "=== RESOLVED". A type guard, so a
+// caller that passed it can then read `start.date` off the narrowed start.
+type DatedStart = Extract<
+  StmtResolution["start"],
+  { state: "RESOLVED" | "COMMITTED" }
+>;
+export const isDatedStart = (
+  r: StmtResolution,
+): r is StmtResolution & { start: DatedStart } =>
   r.start.state === "RESOLVED" || r.start.state === "COMMITTED";
 
 // A portion is "void" when nothing can ever vest from it: a contradictory start,

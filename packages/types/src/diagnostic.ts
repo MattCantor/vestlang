@@ -79,15 +79,25 @@ export type Finding =
   | {
       kind: "precision-insufficient";
       severity: "warning";
-      // The stored decimal as written, and the share count it was analyzed
-      // against (a statement's basis is the grant; a cliff's is its statement's
-      // share of the grant).
+      // The stored decimal as written, and the share count reported to the human.
+      // The verdict itself runs at grant scale (one floor of stmtFraction × decimal
+      // × grant, reproducing the realizer's lump); the reported `shareCount` stays
+      // the statement's share of the grant — floor(stmtFraction × grant) — so the
+      // message ("too imprecise for N shares") names the basis the reader thinks in.
       percentage: Numeric;
       shareCount: number;
       // The fraction the analyzer inferred the author meant, e.g. 1/3.
       inferred: Fraction;
       // The shortest decimal that allocates to the intended count. Undefined when
-      // no ≤10-place decimal lands it (the analyzer's not-representable verdict).
+      // no ≤10-place decimal lands it (the analyzer's not-representable verdict),
+      // and deliberately omitted on a `conservative` finding (see below).
       recommended?: Numeric;
+      // True when the cliff lump is NOT first in line at its merged position — a
+      // sibling vests before it, so the realized lump is path-dependent and no
+      // stored decimal is provably exact. The guard then warns conservatively
+      // (preferring an over-warn to a silent share loss) and makes no `recommended`
+      // claim it can't stand behind. The renderer words this differently from a
+      // not-representable finding (which also has no `recommended`).
+      conservative?: boolean;
       path?: NodePath;
     };

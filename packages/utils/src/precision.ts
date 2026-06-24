@@ -34,6 +34,13 @@ export interface InferredFraction {
   denominator: bigint;
 }
 
+/** An exact rational the analyzer can scale its share basis by, before its own
+ *  floor. `num`/`den` are positive integers (a share fraction's m/N). */
+export interface BasisScale {
+  num: number;
+  den: number;
+}
+
 /**
  * The analyzer's verdict — a tagged union so each outcome names itself rather
  * than collapsing to a yes/no warning.
@@ -152,6 +159,8 @@ const simplestInHalfOpen = (
 };
 
 const RANGE_ERROR = "analyzePrecision: shareCount must be a positive integer";
+const BASIS_ERROR =
+  "analyzePrecision: basisScale.num and .den must be positive integers";
 
 // shareCount mirrors allocate.ts's floorSharesAt guard: a `number` must be a
 // safe integer (Number.isInteger would admit 2^53 + 2, which the BigInt cast
@@ -169,6 +178,26 @@ const toShareCount = (shareCount: number | bigint): bigint => {
   return BigInt(shareCount);
 };
 
+// The optional basis scale, validated and cast to BigInt the same way shareCount
+// is. Default 1/1 leaves every existing caller's math byte-identical. Both parts
+// must be positive integers — a zero numerator means the basis covers no shares
+// and must be skipped at the caller, never reach the analyzer.
+const toBasisScale = (
+  basisScale: BasisScale | undefined,
+): { bnum: bigint; bden: bigint } => {
+  if (basisScale === undefined) return { bnum: 1n, bden: 1n };
+  const { num, den } = basisScale;
+  if (
+    !Number.isSafeInteger(num) ||
+    !Number.isSafeInteger(den) ||
+    num <= 0 ||
+    den <= 0
+  ) {
+    throw new Error(`${BASIS_ERROR} (got ${num}/${den})`);
+  }
+  return { bnum: BigInt(num), bden: BigInt(den) };
+};
+
 /**
  * Analyze a percentage decimal against a share count: infer the likely intended
  * fraction and report whether the written decimal still allocates to the right
@@ -176,13 +205,25 @@ const toShareCount = (shareCount: number | bigint): bigint => {
  *
  * @param decimal     A non-negative OCF `Numeric` string (≤10 decimal places).
  * @param shareCount  A positive integer (number must be a safe integer).
- * @throws if `decimal` is out of domain or `shareCount` is not a positive integer.
+ * @param basisScale  Optional exact rational the share basis is scaled by before
+ *                    the analyzer's own floor — `floor(x · basisScale · N)` rather
+ *                    than `floor(x · N)`. Defaults to 1/1 (no scaling). A cliff
+ *                    guard passes `N = grant` and `basisScale = stmtFraction` so the
+ *                    one floor reproduces the realizer's grant-scale leading lump
+ *                    `floor(stmtFraction · decimal · grant)` instead of double-flooring
+ *                    a pre-floored per-statement count. `inferred`, the simplicity cap,
+ *                    and `terminates` read the decimal alone, so the reported fraction
+ *                    is unaffected by the basis scale.
+ * @throws if `decimal` is out of domain, `shareCount` is not a positive integer, or
+ *         `basisScale` has a non-positive part.
  */
 export const analyzePrecision = (
   decimal: string,
   shareCount: number | bigint,
+  basisScale?: BasisScale,
 ): PrecisionVerdict => {
   const n = toShareCount(shareCount);
+  const { bnum, bden } = toBasisScale(basisScale);
   // The shared grammar admits a leading sign, but a vesting percentage can't be
   // negative — reject any explicit minus (including the "-0" forms) so the
   // analyzer's share math never sees a negative supplied value.
@@ -222,21 +263,28 @@ export const analyzePrecision = (
   }
 
   // The two whole-share counts: what the written decimal allocates, and what the
-  // inferred fraction would. Both are exact floors of a product.
-  const suppliedShares = (scaledValue * n) / scale;
-  const intendedShares = (p * n) / q;
+  // inferred fraction would — each an exact floor of a product, scaled by the
+  // basis (default 1/1). At basisScale = stmtFraction and N = grant these are the
+  // realizer's grant-scale leading lump and its exact-fraction ideal.
+  const suppliedShares = (scaledValue * bnum * n) / (scale * bden);
+  const intendedShares = (p * bnum * n) / (q * bden);
   if (suppliedShares === intendedShares) {
     return { kind: "precise-enough", inferred };
   }
 
-  // Window search: find the shortest k-place decimal x with floor(x·N) ==
-  // intendedShares, i.e. x ∈ [intendedShares/N, (intendedShares+1)/N). The
-  // smallest k-place decimal ≥ the lower bound is ceil(intendedShares·10^k / N)
-  // over 10^k; it fits iff it stays below the upper bound. First k wins.
+  // Window search: find the shortest k-place decimal x with
+  // floor(x · basisScale · N) == intendedShares, i.e. x lands the same lump the
+  // intended fraction does against the same scaled basis. Writing B = bnum·N and
+  // D = bden, the fit is M ≤ x·B/D < M+1; the smallest k-place x ≥ the lower bound
+  // has numerator ceil(M·10^k·D / B), and it fits iff numerator·B < (M+1)·10^k·D.
+  // First k wins. (At basisScale = 1/1 this is exactly the old ceil(M·10^k / N).)
+  const basisProduct = bnum * n; // B
   for (let k = 1n; k <= MAX_PLACES; k++) {
     const kScale = 10n ** k;
-    const numerator = (intendedShares * kScale + n - 1n) / n; // ceil(M·10^k / N)
-    if (numerator * n < (intendedShares + 1n) * kScale) {
+    // ceil(M·10^k·D / B)
+    const numerator =
+      (intendedShares * kScale * bden + basisProduct - 1n) / basisProduct;
+    if (numerator * basisProduct < (intendedShares + 1n) * kScale * bden) {
       return {
         kind: "misallocates",
         inferred,
@@ -251,15 +299,15 @@ export const analyzePrecision = (
   // No ≤10-place decimal lands in the window — it is narrower than 10⁻¹⁰, which
   // only happens at very large share counts. Report the closest storable value
   // instead: among all 10-place decimals, the one minimizing the share miss
-  // |floor(x·N) − intendedShares|, ties going to the lower value (prefer
-  // under-allocation). The miss is monotone around intendedShares/N, so the
-  // winner sits within a couple of grid steps of that point.
+  // |floor(x · basisScale · N) − intendedShares|, ties going to the lower value
+  // (prefer under-allocation). The miss is monotone around the target, so the
+  // winner sits within a couple of grid steps of it.
   const grid = 10n ** MAX_PLACES;
-  const center = (intendedShares * grid) / n; // floor(M·10^10 / N)
+  const center = (intendedShares * grid * bden) / basisProduct; // floor(M·10^10·D / B)
   let best: { numerator: bigint; offBy: bigint } | null = null;
   for (let j = center - 3n; j <= center + 3n; j++) {
     if (j < 0n || j >= grid) continue;
-    const offBy = (j * n) / grid - intendedShares;
+    const offBy = (j * basisProduct) / (grid * bden) - intendedShares;
     const distance = abs(offBy);
     if (
       best === null ||

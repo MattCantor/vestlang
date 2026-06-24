@@ -113,3 +113,100 @@ describe("over-precise cliff — the precision guard (#359 AC7)", () => {
     expect(f.recommended).toBeUndefined();
   });
 });
+
+// #386 AC5 — the template arm exercised at a NON-100% statement and a lossy grant.
+// Every #359 case above uses a 100% statement, where floor(1 × grant) = grant and
+// the per-statement basis is already exact — so the template arm never hit the
+// double-floor bug. A single < 100% statement routes to the template arm too (an
+// under-allocation is legal), and at a lossy grant its cliff exposes the same
+// false negative the events arm did at AC7b.
+describe("over-precise cliff — the template arm at a lossy basis (#386 AC5)", () => {
+  // A 0.5 statement, 2/3 cliff, grant 1005. floor(0.5 × 1005) = 502 is the lossy
+  // basis (0.5 × 1005 = 502.5). The realized leading lump is
+  // floor(0.5 × 0.6666666666 × 1005) = 334, but the exact-fraction ideal is
+  // floor(0.5 × 2/3 × 1005) = 335 — the stored decimal drops a share. The old
+  // double-floor verdict (floor(2/3 × 502) = 334) matched the realized 334 and
+  // stayed silent; the grant-scale verdict sees 334 ≠ 335 and WARNS.
+  // (vestlang_evaluate: status template, lump 334 on 2020-03-01.)
+  const DSL_LOSSY =
+    "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 2 months";
+  const lossyCtx = {
+    grantDate: "2019-01-01",
+    events: {},
+    grantQuantity: 1005,
+  };
+
+  it("routes to the template arm and warns where the old per-statement basis was silent", () => {
+    const result = resolveToCore(normalizeProgram(parse(DSL_LOSSY)), lossyCtx);
+    expect(result.kind).toBe("template");
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    const f = precision[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
+    expect(f.percentage).toBe("0.6666666666");
+    expect(f.inferred).toEqual({ numerator: 2, denominator: 3 });
+    // The reported basis stays the integer statement-share count floor(0.5 × 1005).
+    expect(f.shareCount).toBe(502);
+    // A single statement → its cliff lump leads (nothing precedes it), so this is
+    // the exact grant-scale path, not the conservative one.
+    expect(f.conservative).toBeUndefined();
+  });
+
+  it("leaves the allocation byte-identical — the realized lump is still 334", () => {
+    const result = resolveToCore(normalizeProgram(parse(DSL_LOSSY)), lossyCtx);
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    const onCliff = events.filter((e) => e.date === "2020-03-01");
+    expect(onCliff.map((e) => Number(e.amount))).toEqual([334]);
+    // Cross-check the live path agrees.
+    const schedule = evaluateProgram(
+      normalizeProgram(parse(DSL_LOSSY)),
+      lossyCtx,
+    );
+    if (schedule.resolution.status !== "template")
+      throw new Error("expected template");
+    const lump = schedule.resolution.installments
+      .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+      .find((i) => i.date === "2020-03-01");
+    expect(lump?.amount).toBe(334);
+  });
+});
+
+// #386 — a contingent-start template (a pending-event head that still lowers to a
+// stored template via the sentinel start) keeps its cliff warning. The template arm
+// must NOT adopt the events-arm materialize gate: a vestlang-blind reader holds the
+// stored template and could materialize it once the event fires, so the cliff
+// decimal's truncation is still worth flagging. The lump's cliff date is unknown
+// (anchor-free deferred lowering), so it routes to the conservative branch.
+describe("over-precise cliff — a contingent-start template keeps its warning (#386)", () => {
+  it("warns conservatively (recommended omitted) rather than going silent", () => {
+    // FROM EVENT ipo (unfired) → the start hoists to the sentinel, so the program is
+    // still a `template`. The 1/3 cliff is a 12-month duration lowered anchor-free
+    // (no cliff date), so the leading test can't prove it leads → conservative.
+    const dsl =
+      "VEST FROM EVENT ipo OVER 36 months EVERY 12 months CLIFF 12 months";
+    const result = resolveToCore(normalizeProgram(parse(dsl)), {
+      grantDate: "2025-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 36000,
+    });
+    expect(result.kind).toBe("template");
+    const precision = result.findings.filter(
+      (f) => f.kind === "precision-insufficient",
+    );
+    expect(precision).toHaveLength(1);
+    const f = precision[0];
+    if (f.kind !== "precision-insufficient") throw new Error("wrong kind");
+    expect(f.severity).toBe("warning");
+    expect(f.path).toEqual(["statements", 0, "cliff"]);
+    expect(f.percentage).toBe("0.3333333333");
+    // The conservative shape: no cliff date to prove leading → warn, recommended
+    // omitted, conservative flagged. (It still warns — the regression guard.)
+    expect(f.conservative).toBe(true);
+    expect(f.recommended).toBeUndefined();
+  });
+});

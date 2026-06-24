@@ -35,12 +35,19 @@ export const formatFinding = (f: Finding): string => {
     case "precision-insufficient": {
       // The stored decimal can't write the intended fraction precisely enough to
       // allocate to the right whole-share count at this grant size. Name the
-      // fraction we inferred and, when one exists, the shorter decimal that lands
-      // it; the recommended decimal is absent only when even ten places can't.
+      // fraction we inferred and the fix. Three tails, all sharing one absent
+      // `recommended` shape but meaning different things, so the wording splits:
+      //   - conservative: the lump isn't first in line, so the realized share is
+      //     path-dependent and no fixed decimal is provably right — a warning, not
+      //     a "no decimal works" claim.
+      //   - recommended present: store this shorter decimal to land it correctly.
+      //   - recommended absent (and not conservative): even ten places can't.
       const meant = `${fmt(f.inferred)} (${formatPct(f.inferred)})`;
-      const fix = f.recommended
-        ? `; store \`${f.recommended}\` to allocate it correctly`
-        : ` and no ≤10-place decimal allocates it correctly`;
+      const fix = f.conservative
+        ? ` and the cliff lump is not first in line, so the stored decimal may drop a share`
+        : f.recommended
+          ? `; store \`${f.recommended}\` to allocate it correctly`
+          : ` and no ≤10-place decimal allocates it correctly`;
       return `stored percentage \`${f.percentage}\` is too imprecise for ${f.shareCount} shares — it reads as ${meant}${fix}`;
     }
   }

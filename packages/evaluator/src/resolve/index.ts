@@ -6,26 +6,34 @@
 
 import type {
   ResolutionContextInput,
+  Cliff,
   Finding,
   Fraction,
-  Numeric,
+  OCTDate,
   Program,
   UnresolvedInstallment,
-  VestingScheduleTemplate,
 } from "@vestlang/types";
-import { installmentCapMessage, MAX_INSTALLMENTS } from "@vestlang/primitives";
+import {
+  installmentCapMessage,
+  lt,
+  MAX_INSTALLMENTS,
+} from "@vestlang/primitives";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { programInstallmentTotal } from "@vestlang/walk";
 import {
   allocationFindingsFromFractions,
   analyzePrecision,
-  numericToFraction,
 } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
+import type { LoweredCliff } from "./cliff.js";
 import { classify } from "./classify.js";
-import { unresolvedInstallments, symbolicClaims } from "./unresolved.js";
+import {
+  isDatedStart,
+  unresolvedInstallments,
+  symbolicClaims,
+} from "./unresolved.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
 /** Bound the installments a program will materialize, before any resolution or
@@ -63,21 +71,26 @@ export const resolveToCore = (
 
   const build = buildTemplate(resolutions, ctx);
 
-  // The precision guard: a stored percentage is now a Numeric decimal, so a
-  // repeating share can only be written truncated. Run the analyzer over the
-  // stored decimals and warn when the truncation misallocates at this grant size.
+  // The precision guard: a cliff percentage is stored as a Numeric decimal, so a
+  // repeating share like 1/3 can only be written truncated, and at some grant
+  // sizes that truncation costs the cliff lump a share. Run the analyzer over the
+  // stored cliff decimals and warn when the truncation misallocates the lump the
+  // realizer actually folds on the cliff date. (The statement percentage isn't
+  // analyzed any more — #443 apportions it schedule-whole, so the single-cumulative
+  // allocator conserves the grant by construction.)
   //
-  // A template (ok build) carries stored Numeric percentages for both the
-  // statement and its cliff, so it analyzes both. The events / unresolved arms
-  // keep exact internal fractions for the statement, but a *resolved* cliff still
-  // stores its percentage as a truncated Numeric that the live projection reads
-  // back (`classify.ts` grids it through `numericToFraction`). So those arms run a
-  // cliff-only pass over the resolutions, warning on the same truncation the
-  // template arm catches — but only for cliffs the projection actually
-  // materializes.
-  const precision = build.ok
-    ? precisionFindings(build.template, totalShares)
-    : cliffPrecisionFindings(build.resolutions, totalShares);
+  // Both arms run the same cliff pass over the per-statement `resolutions` — the
+  // resolutions carry both the lowered cliff (its stored decimal and retained cliff
+  // date) and the sibling start dates the leading test needs. The arms differ only
+  // in the materialize gate: a non-template build (events / unresolved) reads the
+  // cliff decimal back through the *live* projection, so it warns only for cliffs
+  // under a dated start (a resolved cliff sitting under a still-pending start never
+  // materializes live — warning there would be a false positive). A template build
+  // is the storable form a vestlang-blind reader could materialize at any time, so
+  // it warns on every analyzable cliff, dated start or not.
+  const precision = cliffPrecisionFindings(resolutions, totalShares, {
+    materializeGate: !build.ok,
+  });
 
   let verdict: ResolveVerdict;
   if (build.ok) {
@@ -162,100 +175,94 @@ const allocationFindings = (
     totalShares,
   );
 
-// Run the precision analyzer over a built template's stored Numeric CLIFF
-// percentages and emit a warning finding for any that misallocates at the grant
-// size.
+// The cliff precision pass, run over the per-statement `resolutions` for both
+// arms. A cliff percentage is a share *of its own statement* — it never
+// participates in #443's grant-whole apportionment — so its truncated decimal can
+// still cost the cliff lump a share within its statement's basis. The realizer
+// folds that lump on the cliff date through one running cumulative at grant scale,
+// so the guard sizes its verdict the same way: `analyzePrecision` runs with
+// `N = grant` and `basisScale = stmtFraction`, one floor at grant scale, which
+// reproduces the realized leading lump `floor(stmtFraction × decimal × grant)`.
 //
-// The statement percentages are no longer analyzed here. They're now apportioned
-// across the whole schedule (`apportionStored` in lower.ts), so the stored set sums
-// to the exact total and the single-cumulative allocator conserves the grant by
-// construction — there is nothing per statement to warn about, and a sibling-blind
-// per-statement check would be incoherent anyway (no decimal can hit 1/3 × 30000 =
-// 10000 on its own). A cliff percentage, by contrast, is a share *of its own
-// statement* (not a grant claim, so it never participates in that apportionment),
-// and its truncated decimal can still misallocate within its statement's basis —
-// floor(stmtFraction × grant) — so that pass stays.
-const precisionFindings = (
-  template: VestingScheduleTemplate,
-  grant: number,
-): Finding[] => {
-  if (grant <= 0) return [];
-  const findings: Finding[] = [];
-  template.statements.forEach((s, i) => {
-    // The cliff now lives inside the optional `schedule` block; a pure milestone
-    // has neither, so there is nothing to analyze.
-    const cliff = s.schedule?.cliff;
-    if (cliff) {
-      const stmtFraction = numericToFraction(s.percentage);
-      analyzeCliff(findings, cliff.percentage, stmtFraction, grant, [
-        "statements",
-        i,
-        "cliff",
-      ]);
-    }
-  });
-  return findings;
-};
-
-// The cliff-only precision pass for a non-template (events / unresolved) build.
-// A template stores the statement percentage as a Numeric too, but these arms
-// keep an exact internal fraction for it — only the *cliff* percentage stored on
-// a RESOLVED cliff round-trips through the truncating Numeric and is read back by
-// the live projection. So we analyze only the cliff, against the same
-// per-statement share basis the template arm uses (the cliff's percentage is a
-// share of its own statement).
-//
-// Gated to cliffs the projection actually materializes. `classify.ts`'s
-// `expandResolution` reads a cliff's stored decimal only when the statement's
-// start is itself dated (RESOLVED or a committed EARLIER_OF floor); a RESOLVED
-// cliff sitting under a still-pending start (a same-unit duration cliff lowered
-// while its event start is unfired) is never read, so its decimal can't
-// misallocate anything live — warning there would be a false positive. We mirror
-// that gate exactly: fire only when the cliff resolved AND the start is dated.
+// `materializeGate` distinguishes the arms. A non-template build's cliff is read
+// back through the *live* projection (`classify.ts`'s `expandResolution`), which
+// reads the stored decimal only when the start is dated (RESOLVED / committed
+// floor) — so the gate skips a cliff under a still-pending start (it never
+// materializes live; warning there would be a false positive). A template build is
+// the storable form a vestlang-blind reader could materialize at any time, so it
+// runs the gate open — every analyzable cliff is checked, including a
+// contingent-start template's tail cliff whose start is still pending.
 const cliffPrecisionFindings = (
   resolutions: StmtResolution[],
   grant: number,
+  opts: { materializeGate: boolean },
 ): Finding[] => {
   if (grant <= 0) return [];
   const findings: Finding[] = [];
   resolutions.forEach((r, i) => {
-    const startDated =
-      r.start.state === "RESOLVED" || r.start.state === "COMMITTED";
-    if (r.cliff.state === "RESOLVED" && startDated) {
-      analyzeCliff(findings, r.cliff.cliff.percentage, r.percentage, grant, [
-        "statements",
-        i,
-        "cliff",
-      ]);
-    }
+    if (opts.materializeGate && !isDatedStart(r)) return;
+
+    // The analyzable cliff: a RESOLVED time cliff, or an EVENT_HELD cliff's time
+    // baseline (the Carta baseline that lands in the stored `schedule.cliff` and is
+    // read back the same way). Both carry the stored decimal and, where one exists,
+    // the absolute cliff date the leading test reads. An EVENT_HELD lump folds at
+    // max(cliffDate, firing) with the firing unknown, so it can never be proved
+    // leading — it always takes the conservative path.
+    const analyzable = analyzableCliff(r.cliff);
+    if (!analyzable) return;
+
+    const leading =
+      analyzable.kind === "RESOLVED" &&
+      leads(analyzable.cliffDate, i, resolutions);
+
+    pushCliffFinding(findings, analyzable.cliff, r.percentage, grant, leading, [
+      "statements",
+      i,
+      "cliff",
+    ]);
   });
   return findings;
 };
 
-// Analyze one cliff's stored decimal against its statement's share basis. A
-// cliff's percentage is a share *of its own statement*, so the basis is the
-// shares that statement covers: floor(stmtFraction × grant). The basis must be
-// positive — `analyzePrecision` throws on a non-positive share count, and a
-// statement that covers no shares has no cliff to misallocate — so a zero basis
-// is skipped silently.
-//
-// Shared by the template arm (which passes `numericToFraction(s.percentage)` as
-// the statement fraction) and the non-template cliff pass (which passes the exact
-// internal `r.percentage`), so both compute the basis and map the analyzer's
-// verdict to a finding through one code path.
-const analyzeCliff = (
-  findings: Finding[],
-  cliffPercentage: Numeric,
-  stmtFraction: Fraction,
-  grant: number,
-  path: (string | number)[],
-): void => {
-  const stmtShares = Math.floor(
-    (stmtFraction.numerator * grant) / stmtFraction.denominator,
-  );
-  if (stmtShares > 0) {
-    pushPrecisionFinding(findings, cliffPercentage, stmtShares, path);
+// The stored cliff and its absolute date, pulled off the lowered form — or
+// undefined for a cliff with no stored time baseline to analyze (NONE,
+// UNRESOLVED, IMPOSSIBLE, or a bare event hold with no time arm).
+type AnalyzableCliff =
+  | { kind: "RESOLVED"; cliff: Cliff; cliffDate: OCTDate | undefined }
+  | { kind: "EVENT_HELD"; cliff: Cliff };
+
+const analyzableCliff = (cliff: LoweredCliff): AnalyzableCliff | undefined => {
+  if (cliff.state === "RESOLVED") {
+    return { kind: "RESOLVED", cliff: cliff.cliff, cliffDate: cliff.cliffDate };
   }
+  if (cliff.state === "EVENT_HELD" && cliff.cliff !== undefined) {
+    return { kind: "EVENT_HELD", cliff: cliff.cliff };
+  }
+  return undefined;
+};
+
+// The leading test: statement `i`'s cliff lump leads its merged position iff no
+// event from any *other* materializing statement can sort before it. A statement
+// never produces an event before its own start, so a sibling's start date is a
+// sound lower bound on its earliest event; the lump leads iff its date is strictly
+// earlier than every materializing sibling's start. On any tie, any sibling at or
+// before the lump, or an unknown cliff date, treat it as non-leading (conservative).
+// A sibling counts only when it materializes dated events (start RESOLVED or
+// COMMITTED) — the same gate the realizer applies; a pending/void sibling
+// contributes no dated event and can't precede the lump.
+const leads = (
+  cliffDate: OCTDate | undefined,
+  i: number,
+  resolutions: StmtResolution[],
+): boolean => {
+  if (cliffDate === undefined) return false;
+  return resolutions.every((other, j) => {
+    if (j === i) return true;
+    // Only a materializing sibling can contribute a dated event; a pending/void one
+    // can't precede the lump, so it doesn't constrain the leading test.
+    if (!isDatedStart(other)) return true;
+    return lt(cliffDate, other.start.date);
+  });
 };
 
 // Convert the analyzer's BigInt fraction to the number-based Fraction the Finding
@@ -269,38 +276,90 @@ const inferredToFraction = (f: {
   denominator: Number(f.denominator),
 });
 
-// Analyze one stored decimal against its share basis; on a misallocates /
-// not-representable verdict, push the warning. The other verdicts (exact,
-// terminating, precise-enough, too-complex) are silent — the decimal is faithful
-// enough, or the analyzer declines to second-guess it.
-const pushPrecisionFinding = (
+// Analyze one cliff's stored decimal and, when it misallocates the lump, push the
+// warning. Two values flow in separately: the verdict runs at grant scale
+// (`N = grant`, `basisScale = stmtFraction`), while the Finding reports the integer
+// statement-share count `floor(stmtFraction × grant)` for the human message. The
+// zero-basis skip (a statement covering no shares has no cliff lump to misallocate)
+// is kept alongside the analyzer's positive-numerator precondition.
+//
+// Leading vs non-leading splits the verdict reading:
+//   - Leading (the lump sorts first, vestedSoFar = 0): the grant-scale single floor
+//     is exact, so the analyzer's verdict is trusted directly — `misallocates` /
+//     `not-representable` warn, everything else is silent. This kills both the false
+//     positive and the false negative.
+//   - Non-leading (a sibling vests before the lump, so the realized lump is
+//     path-dependent): no per-statement basis is exact, so the guard errs
+//     conservative — warn unless the decimal is *provably* exact for the cliff
+//     (`exact` / `terminating` / `too-complex`, where the decimal carries no
+//     truncated rounding intent). `precise-enough` is no longer a proof here, so it
+//     warns. The conservative finding omits `recommended` (the leading-basis
+//     recommendation wouldn't match the path-dependent lump) and is flagged
+//     `conservative` so the message reads as a path-dependent warning, not a
+//     not-representable one.
+const pushCliffFinding = (
   findings: Finding[],
-  percentage: Numeric,
-  shareCount: number,
+  cliff: Cliff,
+  stmtFraction: Fraction,
+  grant: number,
+  leading: boolean,
   path: (string | number)[],
 ): void => {
-  const verdict = analyzePrecision(percentage, shareCount);
-  if (verdict.kind === "misallocates") {
+  const shareCount = Math.floor(
+    (stmtFraction.numerator * grant) / stmtFraction.denominator,
+  );
+  if (shareCount <= 0) return;
+
+  const percentage = cliff.percentage;
+  const verdict = analyzePrecision(percentage, grant, {
+    num: stmtFraction.numerator,
+    den: stmtFraction.denominator,
+  });
+
+  if (leading) {
+    // Trust the grant-scale verdict directly: only the two warning kinds fire, and
+    // they differ in just one field — `misallocates` carries the shorter decimal,
+    // `not-representable` can't (no ≤10-place decimal lands it), so it stays unset.
+    if (
+      verdict.kind !== "misallocates" &&
+      verdict.kind !== "not-representable"
+    ) {
+      return;
+    }
     findings.push({
       kind: "precision-insufficient",
       severity: "warning",
       percentage,
       shareCount,
       inferred: inferredToFraction(verdict.inferred),
-      recommended: verdict.recommended,
+      ...(verdict.kind === "misallocates" && {
+        recommended: verdict.recommended,
+      }),
       path,
     });
-  } else if (verdict.kind === "not-representable") {
-    findings.push({
-      kind: "precision-insufficient",
-      severity: "warning",
-      percentage,
-      shareCount,
-      inferred: inferredToFraction(verdict.inferred),
-      // No ≤10-place decimal lands the intended count — leave recommended unset.
-      path,
-    });
+    return;
   }
+
+  // Non-leading: warn unless the decimal is provably exact for the cliff. `exact`
+  // never carries an `inferred` field (no fractional digits), and there's nothing
+  // to warn about, so it's silent here too.
+  if (
+    verdict.kind === "exact" ||
+    verdict.kind === "terminating" ||
+    verdict.kind === "too-complex"
+  ) {
+    return;
+  }
+  findings.push({
+    kind: "precision-insufficient",
+    severity: "warning",
+    percentage,
+    shareCount,
+    inferred: inferredToFraction(verdict.inferred),
+    // Path-dependent lump — no leading-basis recommendation can be trusted.
+    conservative: true,
+    path,
+  });
 };
 
 export {
