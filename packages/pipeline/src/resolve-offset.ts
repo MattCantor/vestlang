@@ -118,9 +118,10 @@ export function runResolveOffset(
   // `+100000000 days`) must propagate and throw, the same as everywhere else.
   const result = resolveVestingStart(stmt.expr.vesting_start, ctx);
   if (result.resolved) {
-    // Render each bare { eventId, through } into a sentence (same wording the
-    // evaluate path uses), but only put the key on the wire when there's something
-    // to disclose — a fully-resolved anchor keeps the plain { ok: true, date }.
+    // Render each disclosure into a sentence (same wording the evaluate path uses),
+    // but only put the key on the wire when there's something to disclose — a
+    // fully-resolved anchor keeps the plain { ok: true, date }. The structured fields
+    // (eventId, through, direction, inclusive) ride along via the spread.
     if (result.assumptions.length === 0) {
       return { ok: true, date: result.date };
     }

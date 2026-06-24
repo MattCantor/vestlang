@@ -36,9 +36,9 @@ describe("resolveVestingStart", () => {
   });
 
   // #325 — a committed EARLIER OF (date arm resolved, event arm unfired) settles to
-  // its floor AND surfaces the assumption it leans on: `ipo` stayed absent through
-  // the floor date. The assumption is the bare { eventId, through } pair; the
-  // pipeline layer adds the rendered message.
+  // its floor AND surfaces the assumption it leans on: `ipo` stayed absent on/before
+  // the floor date (an EARLIER OF watches the before side, exclusive). The pipeline
+  // layer adds the rendered message.
   it("surfaces the absence assumption on a committed EARLIER OF", () => {
     const expr: VestingNodeExpr = {
       type: "NODE_EARLIER_OF",
@@ -52,7 +52,14 @@ describe("resolveVestingStart", () => {
     expect(res).toEqual({
       resolved: true,
       date: "2024-06-01",
-      assumptions: [{ eventId: "ipo", through: "2024-06-01" }],
+      assumptions: [
+        {
+          eventId: "ipo",
+          through: "2024-06-01",
+          direction: "before",
+          inclusive: false,
+        },
+      ],
     });
   });
 

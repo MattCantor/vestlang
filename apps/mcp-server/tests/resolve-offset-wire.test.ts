@@ -99,7 +99,9 @@ describe("mcp-server / vestlang_resolve_offset wire shape (AC#6)", () => {
         {
           eventId: "ipo",
           through: "2024-06-01",
-          message: "ipo did not occur on/before 2024-06-01",
+          direction: "before",
+          inclusive: false,
+          message: "ipo did not occur before 2024-06-01",
         },
       ],
     });

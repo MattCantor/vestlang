@@ -1,5 +1,8 @@
-import type { ResolutionContext, OCTDate } from "@vestlang/types";
-import { addMonthsRule as addMonthsRulePrimitive } from "@vestlang/primitives";
+import type { Offsets, ResolutionContext, OCTDate } from "@vestlang/types";
+import {
+  addDays,
+  addMonthsRule as addMonthsRulePrimitive,
+} from "@vestlang/primitives";
 
 // Date math lives once, in @vestlang/primitives (dependency-free, UTC-safe
 // stepping, exact ISO-string comparison). Everything — including the evaluator's
@@ -31,3 +34,29 @@ export const addMonthsRule = (
  */
 export const addMonthsExact = (iso: OCTDate, months: number): OCTDate =>
   addMonthsRulePrimitive(iso, months);
+
+/**
+ * Walk an offset list onto a date. A DAYS offset is the same exact calendar step
+ * everywhere; a MONTHS offset is stepped by `monthStep` — the caller passes the
+ * cadence stepper (`addMonthsRule`, policy-aware) or the exact one (`addMonthsExact`),
+ * so this loop never reads the day-of-month policy itself. `negate` flips every
+ * offset's sign, which inverts the whole displacement: it's how the disclosure path
+ * recovers the boundary a *raw* event firing flips at from a gated-event offset (the
+ * negation of `EVENT ipo - 6 months` shifts the subject date `+6 months`). The
+ * forward walk and its negated inverse are the same step modulo sign, so they live
+ * here once rather than in two near-identical loops.
+ */
+export const stepByOffsets = (
+  base: OCTDate,
+  offsets: Offsets,
+  monthStep: (d: OCTDate, n: number) => OCTDate,
+  negate = false,
+): OCTDate => {
+  let d = base;
+  for (const o of offsets) {
+    const magnitude = o.sign === "PLUS" ? o.value : -o.value;
+    const signed = negate ? -magnitude : magnitude;
+    d = o.unit === "MONTHS" ? monthStep(d, signed) : addDays(d, signed);
+  }
+  return d;
+};

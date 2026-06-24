@@ -208,13 +208,22 @@ describe("toScheduleView", () => {
     const view = toScheduleView(
       stub({
         status: "template",
-        absenceAssumptions: [{ eventId: "ipo", through: "2025-01-01" }],
+        absenceAssumptions: [
+          {
+            eventId: "ipo",
+            through: "2025-01-01",
+            direction: "before",
+            inclusive: true,
+          },
+        ],
       }),
     );
     expect(view.absenceAssumptions).toHaveLength(1);
     const [a] = view.absenceAssumptions;
     expect(a.eventId).toBe("ipo"); // structured fields preserved
     expect(a.through).toBe("2025-01-01");
+    expect(a.direction).toBe("before");
+    expect(a.inclusive).toBe(true);
     expect(a.message).toBe("ipo did not occur on/before 2025-01-01");
   });
 

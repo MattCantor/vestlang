@@ -1,4 +1,5 @@
 import type {
+  AbsenceDescriptor,
   EvaluationMode,
   OCTDate,
   ResolutionContext,
@@ -144,6 +145,12 @@ type SelectorPolicy = {
   partialEmit: boolean; // LATER_OF: emit the known floor while staying open
   earlierCommits: boolean; // EARLIER_OF: commit to the resolved floor (mode-gated)
   impossibleArmPoisons: boolean; // LATER_OF is universal: one dead arm sinks the whole selector
+  // The relation a pending arm's disclosure guards against. A pending arm could only
+  // pull an EARLIER_OF's floor *earlier* (the dangerous firing is on/before the
+  // settled date) and push a LATER_OF's floor *later* (on/after). Both reduce with a
+  // strict `lt` (a tie keeps the incumbent), so the settled date itself is benign —
+  // exclusive either way.
+  disclosure: AbsenceDescriptor;
 };
 
 const EARLIER_POLICY: SelectorPolicy = {
@@ -152,6 +159,7 @@ const EARLIER_POLICY: SelectorPolicy = {
   partialEmit: false,
   earlierCommits: true,
   impossibleArmPoisons: false,
+  disclosure: { direction: "before", inclusive: false },
 };
 
 const LATER_POLICY: SelectorPolicy = {
@@ -160,6 +168,7 @@ const LATER_POLICY: SelectorPolicy = {
   partialEmit: true,
   earlierCommits: false,
   impossibleArmPoisons: true,
+  disclosure: { direction: "after", inclusive: false },
 };
 
 /** Build the IMPOSSIBLE node a selector reports when dead arms sink it. */
@@ -213,7 +222,11 @@ function handleSelector<T extends Schedule | VestingNode>(
   // commit, so the harvest is empty there and this stays RESOLVED.)
   if (policy.selectorIsSatisfied(live)) {
     const { picked, date } = reduceBest(settled, policy.selector);
-    const disclosures = withBoundary(collectBlockers(live), date);
+    const disclosures = withBoundary(
+      collectBlockers(live),
+      date,
+      policy.disclosure,
+    );
     if (disclosures.length > 0)
       return {
         type: "PICKED",
@@ -235,7 +248,11 @@ function handleSelector<T extends Schedule | VestingNode>(
     // Flat, not wrapped in an UNRESOLVED_SELECTOR like the partial-LATER_OF branch
     // below: the selector committed, so the pending arms are absence assumptions on
     // a settled pick, not evidence that the selector is still unresolved.
-    const disclosures = withBoundary(collectBlockers(live), date);
+    const disclosures = withBoundary(
+      collectBlockers(live),
+      date,
+      policy.disclosure,
+    );
     return {
       type: "PICKED",
       picked,
@@ -249,8 +266,13 @@ function handleSelector<T extends Schedule | VestingNode>(
     const best = reduceBest(settled, policy.selector);
     // The latest arm settled so far is the answer only as long as the arms we're
     // still waiting on don't land even later. So its date is the boundary we're
-    // assuming each of those pending events stays absent through.
-    const stamped = withBoundary(collectBlockers(live), best.date);
+    // assuming each of those pending events stays absent through — and a firing
+    // *after* it is the dangerous one (it would push the floor later).
+    const stamped = withBoundary(
+      collectBlockers(live),
+      best.date,
+      policy.disclosure,
+    );
     return {
       type: "PICKED",
       picked: best.picked,

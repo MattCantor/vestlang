@@ -100,17 +100,36 @@ export type SymbolicDate =
  * Blockers
  * ------------------------ */
 
+// The relation an absence disclosure guards against, separate from the boundary
+// date itself (`through`). A watch-list entry isn't just "event X stayed absent
+// through date D" — the dangerous firing of X lands on one *side* of D, and that
+// side is what a consumer must re-check:
+//   - `direction` — which way a firing has to fall to move the result. `before`:
+//     a firing on/before the boundary is the dangerous one (a `BEFORE` gate, or an
+//     EARLIER OF whose pending arm could land earlier). `after`: a firing on/after
+//     is dangerous (an `AFTER` gate, or a LATER OF whose pending arm could land
+//     later and shift the grid).
+//   - `inclusive` — whether the boundary day itself is dangerous. For a gate this
+//     is the complement of "did the gate admit the boundary day": a non-strict gate
+//     admits it (benign, exclusive), a strict gate excludes it (dangerous,
+//     inclusive). The two selectors compare strictly, so their boundary day is
+//     always benign (exclusive).
+export interface AbsenceDescriptor {
+  direction: "before" | "after";
+  inclusive: boolean;
+}
+
 export type UnresolvedBlocker =
-  | {
+  | ({
       type: "EVENT_NOT_YET_OCCURRED";
       event: string;
       // Set when this pending event was checked against a known date — a gate's
-      // "before/after <date>" or the date a LATER OF already settled on. It's the
-      // latest date we're taking the event to still be absent on/before; that's
-      // what feeds the schedule's absence-assumption disclosure. Left off when the
-      // event is simply awaited with nothing to compare it to (a bare FROM EVENT).
+      // boundary or the date a LATER OF already settled on. It's the boundary the
+      // schedule's absence-assumption disclosure reports the event stayed absent
+      // against. Left off when the event is simply awaited with nothing to compare
+      // it to (a bare FROM EVENT) — then the descriptor fields below are absent too.
       through?: OCTDate;
-    }
+    } & Partial<AbsenceDescriptor>)
   | {
       type: "UNRESOLVED_SELECTOR";
       selector: SelectorTag;
@@ -435,10 +454,13 @@ export type InterchangeVerdict =
  * say, "vested" often quietly assumes some event hasn't happened yet; this records
  * that assumption so it can be disclosed and watched.
  *
- * `through` is inclusive: the claim is "`eventId` did not occur on or before this
- * date."
+ * The claim is direction-aware, not single-polarity: `through` is the boundary date,
+ * and `direction` + `inclusive` (the `AbsenceDescriptor`) say which side of it a
+ * dangerous firing of `eventId` falls — so a consumer re-checks the side that could
+ * actually flip the answer (a `BEFORE`/EARLIER OF watch is the on/before side, an
+ * `AFTER`/LATER OF watch the on/after side).
  */
-export interface AbsenceAssumption {
+export interface AbsenceAssumption extends AbsenceDescriptor {
   eventId: string;
   through: OCTDate;
 }

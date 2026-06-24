@@ -241,7 +241,9 @@ describe("runResolveOffset", () => {
         {
           eventId: "ipo",
           through: "2024-06-01",
-          message: "ipo did not occur on/before 2024-06-01",
+          direction: "before",
+          inclusive: false,
+          message: "ipo did not occur before 2024-06-01",
         },
       ],
     });
@@ -319,7 +321,13 @@ describe("runResolveOffset", () => {
         {
           eventId: "e",
           through: "2024-09-01",
-          message: "e did not occur on/before 2024-09-01",
+          // Decision 3: the outer LATER OF re-stamps the inner EARLIER OF's blocker
+          // but must NOT blunt its before/exclusive relation to the selector's
+          // coarser after — the inner descriptor is preserved, only the boundary
+          // widens to the outer-fold date.
+          direction: "before",
+          inclusive: false,
+          message: "e did not occur before 2024-09-01",
         },
       ],
     });
