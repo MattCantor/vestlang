@@ -51,8 +51,13 @@ const BASE: OCTDate = "2025-06-01";
 const EARLIER: OCTDate = "2025-01-01";
 const LATER: OCTDate = "2025-12-31";
 
-// The representable-range edges; toISO rejects anything past these.
-const MAX: OCTDate = "9999-12-31";
+// Near the representable-range edges. The very ceiling, 9999-12-31, is the
+// reserved contingent-start sentinel and the grammar refuses it as a DATE literal
+// (#409), so a DSL-routed cell can't use it; 9999-12-30 is the highest gate base
+// these cells can express. The witness-overflow regression (a STRICTLY AFTER gate
+// whose lower edge sits at the true last representable day) is exercised directly,
+// off the DSL, in packages/primitives/tests/window.test.ts.
+const NEAR_MAX: OCTDate = "9999-12-30";
 const MIN: OCTDate = "0001-01-01";
 
 const CELLS: Cell[] = [
@@ -85,15 +90,25 @@ const CELLS: Cell[] = [
   { anchor: BASE, base: BASE, relation: "AFTER", strict: true, dead: true },
   { anchor: LATER, base: BASE, relation: "AFTER", strict: true, dead: false },
 
-  // Date-range edges — the gate bound sits on an extreme date while the anchor
+  // Date-range edges — the gate bound sits near an extreme date while the anchor
   // stays normal, so every cell is dead (anchor nowhere near the bound) and the
-  // evaluator never projects a schedule off the end of the range. The first is
-  // the regression guard: a STRICTLY AFTER gate on the max date drives the
-  // linter's emptiness witness to step one day past the last representable date
-  // — it must short-circuit, not overflow. The others round out boundary
-  // coverage (the bare max path, and the bottom-of-range mirror).
-  { anchor: EARLIER, base: MAX, relation: "AFTER", strict: true, dead: true },
-  { anchor: EARLIER, base: MAX, relation: "AFTER", strict: false, dead: true },
+  // evaluator never projects a schedule off the end of the range. These round out
+  // boundary coverage (a near-max AFTER gate, strict and bare, and the
+  // bottom-of-range BEFORE mirror).
+  {
+    anchor: EARLIER,
+    base: NEAR_MAX,
+    relation: "AFTER",
+    strict: true,
+    dead: true,
+  },
+  {
+    anchor: EARLIER,
+    base: NEAR_MAX,
+    relation: "AFTER",
+    strict: false,
+    dead: true,
+  },
   { anchor: LATER, base: MIN, relation: "BEFORE", strict: true, dead: true },
   { anchor: LATER, base: MIN, relation: "BEFORE", strict: false, dead: true },
 ];

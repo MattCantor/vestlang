@@ -13,7 +13,10 @@ import type {
   VestingRuntime,
   VestingScheduleTemplate,
 } from "@vestlang/types";
-import { isValidCalendarDate } from "@vestlang/utils";
+import {
+  isContingentStartSentinel,
+  isValidCalendarDate,
+} from "@vestlang/utils";
 import { TEMPLATE, zodIssuesToValidationErrors } from "@vestlang/primitives";
 
 import { templateAllocationFindings } from "./findings";
@@ -174,6 +177,14 @@ export const validateVestingRuntime = (
         path: "grantDate",
         message: "must be a real calendar date (YYYY-MM-DD)",
       });
+    } else if (isContingentStartSentinel(runtime.grantDate)) {
+      // The sentinel is legitimate ONLY on startDate (the contingent-start
+      // marker). On grantDate it's a user-supplied collision with that reserved
+      // placeholder — refuse it, matching the evaluator's input-boundary guard.
+      errors.push({
+        path: "grantDate",
+        message: `${runtime.grantDate} is a reserved value and cannot be used as a date`,
+      });
     }
   }
 
@@ -205,6 +216,14 @@ export const validateVestingRuntime = (
           errors.push({
             path: `${path}.date`,
             message: "must be a real calendar date (YYYY-MM-DD)",
+          });
+        } else if (isContingentStartSentinel(firing.date)) {
+          // A fired event's date is a schedule input, not the contingent-start
+          // marker — the sentinel here is a reserved-value collision, same as on
+          // grantDate above.
+          errors.push({
+            path: `${path}.date`,
+            message: `${firing.date} is a reserved value and cannot be used as a date`,
           });
         }
       });

@@ -6,10 +6,8 @@ import {
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
 } from "../src/validate";
-import {
-  CONTINGENT_START_SENTINEL,
-  MAX_INSTALLMENTS,
-} from "@vestlang/primitives";
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
 
 // A well-formed graded template: two chained DATE statements, with an on-grid
@@ -354,6 +352,37 @@ describe("validateVestingRuntime", () => {
     );
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("eventFirings[0].date");
+  });
+
+  // #409: the sentinel is a real calendar date, so it passes the format check —
+  // but it's reserved storage-only for startDate (the contingent-start marker). On
+  // grantDate and firing dates it's a user-supplied collision; the compile-path
+  // validator must refuse it there, mirroring the evaluator's input boundary.
+  it("rejects the reserved sentinel as the grantDate (startDate stays accepted)", () => {
+    const result = validateVestingRuntime(
+      { startDate: "2024-01-01", grantDate: CONTINGENT_START_SENTINEL },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("grantDate");
+    expect(result.errors.some((e) => /reserved value/.test(e.message))).toBe(
+      true,
+    );
+  });
+
+  it("rejects the reserved sentinel as a firing date", () => {
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: [{ event_id: "ipo", date: CONTINGENT_START_SENTINEL }],
+      },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].date");
+    expect(result.errors.some((e) => /reserved value/.test(e.message))).toBe(
+      true,
+    );
   });
 });
 

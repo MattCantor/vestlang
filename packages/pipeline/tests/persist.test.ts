@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { PersistedArtifact } from "@vestlang/evaluator";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import {
   runPersist,
   runRehydrate,
@@ -252,6 +252,58 @@ describe("runRehydrate (AC#5)", () => {
     // The bare EVENT start re-derives to its firing as the contingent start.
     expect(out.firings_to_apply).toEqual([]);
     expect(out.start_to_apply).toEqual({ date: "2025-01-31" });
+  });
+});
+
+// #409: persisting `VEST FROM DATE 9999-12-31` used to throw an uncaught internal
+// invariant error (the literal collided with the stored contingent-start sentinel).
+// The grammar now refuses the literal at parse, so runPersist returns a clean
+// structured refusal — never an uncaught throw — and a legitimate contingent-start
+// program (whose STORED startDate is genuinely the sentinel) still round-trips.
+describe("reserved contingent-start sentinel (#409)", () => {
+  it("Repro 3: persisting `VEST FROM DATE 9999-12-31` refuses cleanly, not throws", () => {
+    let result: ReturnType<typeof runPersist> | undefined;
+    expect(() => {
+      result = runPersist({
+        dsl: "VEST FROM DATE 9999-12-31 OVER 48 months EVERY 1 month",
+        grant_date: "2025-01-01",
+        grant_quantity: 1000,
+      });
+    }).not.toThrow();
+    expect(result?.ok).toBe(false);
+    if (result && !result.ok) {
+      // Refused at parse: the grammar's reserved-value diagnostic, surfaced as the
+      // pipeline's syntax-error arm — not an internal invariant throw.
+      expect(result.error.ruleId).toBe("syntax-error");
+      expect(result.error.message).toMatch(/reserved/);
+      expect(result.error.message).toMatch(/9999-12-31/);
+    }
+  });
+
+  it("Preservation: a legitimate contingent-start program persists with the sentinel startDate and rehydrates from an ordinary firing", () => {
+    // BARE_EVENT_DSL has a contingent (event) start, so its stored runtime.startDate
+    // is genuinely the sentinel — the value must stay accepted end-to-end.
+    const persisted = persistOk({
+      dsl: BARE_EVENT_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 400,
+    });
+    expect(persisted.artifact.runtime.startDate).toBe(
+      CONTINGENT_START_SENTINEL,
+    );
+
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 400,
+      events: { ipo: "2025-01-31" }, // an ORDINARY firing date
+    });
+    // The stored artifact keeps the sentinel; the projection-only runtime takes the
+    // re-derived real start.
+    expect(persisted.artifact.runtime.startDate).toBe(
+      CONTINGENT_START_SENTINEL,
+    );
+    expect(out.start_to_apply).toEqual({ date: "2025-01-31" });
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(400);
   });
 });
 

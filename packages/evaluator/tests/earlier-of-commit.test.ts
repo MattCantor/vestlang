@@ -4,7 +4,7 @@
 // commits. These crystallize the issue's numbered acceptance criteria.
 
 import { describe, it, expect } from "vitest";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type { AsOfContextInput, Blocker } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";

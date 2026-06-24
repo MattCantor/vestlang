@@ -5,7 +5,7 @@
 // closed-world verdict exactly where the canonical schema can't hold something.
 
 import { describe, it, expect } from "vitest";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type {
   Amount,
   ResolutionContextInput,

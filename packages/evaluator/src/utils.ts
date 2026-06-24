@@ -7,7 +7,10 @@ import {
   AsOfContext,
   AsOfContextInput,
 } from "@vestlang/types";
-import { isValidCalendarDate } from "@vestlang/utils";
+import {
+  isContingentStartSentinel,
+  isValidCalendarDate,
+} from "@vestlang/utils";
 
 // One builder over both context flavors: hand it a structure (no-`asOf`) input
 // and you get a `ResolutionContext` back; hand it an as-of input and the `asOf`
@@ -64,12 +67,28 @@ export function createEvaluationContext(
     }
   };
 
+  // The contingent-start sentinel (9999-12-31) is a real calendar date, so it
+  // sails past checkDate — but it's reserved storage-only as the placeholder for a
+  // start whose date isn't known yet. A user who supplies it as a schedule INPUT
+  // (the grant date, or a fired event's date) would collide with that placeholder,
+  // so reject it here with its own reserved-value message. `asOf` is a read/query
+  // date, not a schedule input, so it's deliberately not policed for the sentinel.
+  const checkNotReserved = (label: string, value: unknown): void => {
+    if (typeof value === "string" && isContingentStartSentinel(value)) {
+      dateErrors.push(
+        `${label}: ${value} is a reserved value and cannot be used as a date`,
+      );
+    }
+  };
+
   checkDate("grantDate", input.grantDate);
+  checkNotReserved("grantDate", input.grantDate);
   // An `undefined` event is "named but not yet fired" — a meaningful absence,
   // not a bad date — so only the fired ones get checked.
   for (const [key, value] of Object.entries(input.events)) {
     if (value !== undefined) {
       checkDate(`events.${key}`, value);
+      checkNotReserved(`events.${key}`, value);
     }
   }
   // `asOf` only exists on the as-of overload, which funnels through here too.

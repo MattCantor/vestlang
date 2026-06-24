@@ -3,7 +3,7 @@ import type {
   StoredTerms,
   VestingScheduleTemplate,
 } from "@vestlang/types";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 
 // The reserved namespace for synthetic ("stand-in") sidecar ids. The colon is the
 // load-bearing part: the DSL Ident rule (packages/dsl/src/grammar/40-anchors.peggy)

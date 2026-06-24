@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isValidCalendarDate, todayISO } from "../src/dates";
+import {
+  CONTINGENT_START_SENTINEL,
+  isContingentStartSentinel,
+  isValidCalendarDate,
+  todayISO,
+} from "../src/dates";
 
 describe("isValidCalendarDate", () => {
   it("accepts real dates, including the leap day", () => {
@@ -42,6 +47,19 @@ describe("isValidCalendarDate", () => {
   it("applies the centennial leap rule", () => {
     expect(isValidCalendarDate("2000-02-29")).toBe(true); // div by 400
     expect(isValidCalendarDate("1900-02-29")).toBe(false); // div by 100, not 400
+  });
+});
+
+describe("isContingentStartSentinel", () => {
+  it("is true for the reserved sentinel value", () => {
+    expect(isContingentStartSentinel(CONTINGENT_START_SENTINEL)).toBe(true);
+    expect(isContingentStartSentinel("9999-12-31")).toBe(true);
+  });
+
+  it("is false for an ordinary date", () => {
+    expect(isContingentStartSentinel("2025-01-01")).toBe(false);
+    // A neighbouring real far-future date is not reserved.
+    expect(isContingentStartSentinel("9999-12-30")).toBe(false);
   });
 });
 

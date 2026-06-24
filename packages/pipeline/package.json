@@ -23,7 +23,6 @@
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
-    "@vestlang/primitives": "workspace:*",
     "@vestlang/recover": "workspace:*",
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*"

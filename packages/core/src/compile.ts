@@ -20,12 +20,11 @@ import {
   addPeriod,
   advanceCursor,
   allocateEvents,
-  CONTINGENT_START_SENTINEL,
   expandGrid,
   type GridCliff,
   type RawEvent,
 } from "@vestlang/primitives";
-import { numericToFraction } from "@vestlang/utils";
+import { CONTINGENT_START_SENTINEL, numericToFraction } from "@vestlang/utils";
 import {
   assertValidVestingRuntime,
   assertValidVestingScheduleTemplate,

@@ -12,7 +12,7 @@ import {
   assertValidVestingScheduleTemplate,
   compileToInstallments,
 } from "@vestlang/core";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import { evaluateStatement } from "../src/evaluate";
 import {
   VESTLANG_SIDECAR_NAMESPACE,

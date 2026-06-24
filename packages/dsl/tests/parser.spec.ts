@@ -274,6 +274,40 @@ describe("Date literals", () => {
       );
     }
   });
+
+  // #409: the contingent-start sentinel (9999-12-31) IS a real calendar date, so
+  // it passes the impossible-date check above — but it's the reserved storage
+  // placeholder, so the grammar must refuse a user-supplied literal of it with a
+  // distinct reserved-value message (not "not a valid calendar date"). Previously
+  // it parsed fine and silently vested zero shares.
+  it("rejects the reserved contingent-start sentinel as a DATE literal", () => {
+    expect(() => parse(`VEST FROM DATE 9999-12-31`)).toThrowError(/reserved/);
+    expect(() => parse(`VEST FROM DATE 9999-12-31`)).toThrowError(/9999-12-31/);
+  });
+
+  it("the sentinel's message is distinct from the not-a-valid-date message", () => {
+    expect(() => parse(`VEST FROM DATE 9999-12-31`)).not.toThrowError(
+      /not a valid calendar date/,
+    );
+  });
+
+  // The DateLiteral rule is shared by every literal-DATE position, so one grammar
+  // guard covers them all — not just the start anchor.
+  it("rejects the sentinel in a gate reference (… AFTER DATE 9999-12-31)", () => {
+    expect(() =>
+      parse(
+        `VEST FROM EVENT ipo AFTER DATE 9999-12-31 OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/reserved/);
+  });
+
+  it("rejects the sentinel in a selector arm (EARLIER OF (…, DATE 9999-12-31))", () => {
+    expect(() =>
+      parse(
+        `VEST FROM EARLIER OF (DATE 2027-01-01, DATE 9999-12-31) OVER 12 months EVERY 1 month`,
+      ),
+    ).toThrowError(/reserved/);
+  });
 });
 
 describe("System event protections", () => {

@@ -36,7 +36,7 @@ import type {
   VestingRuntime,
   VestingScheduleTemplate,
 } from "@vestlang/types";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
