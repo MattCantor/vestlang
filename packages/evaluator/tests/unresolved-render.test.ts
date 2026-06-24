@@ -99,6 +99,95 @@ describe("partial LATER OF cliff holds the whole grid (the floor is the hold)", 
       ),
     ).toBe(true);
   });
+
+  // Disclose-the-floor (#447): each held tranche carries the resolved `+12 months`
+  // arm as its `floor` (the earliest it could land), while its cadence `date` stays
+  // at the honest grid position — NOT folded onto the floor. The anti-fold pin
+  // (#447 AC 4) lives in the same test: it must fail if a future change re-folds.
+  it("discloses the floor on each held tranche while keeping cadence dates honest", () => {
+    const program = normalizeProgram(parse(DSL));
+    const { resolution } = evaluateProgram(program, {
+      grantDate: "2025-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 4800,
+    });
+
+    expect(resolution.status).toBe("template");
+    if (resolution.status !== "template") return;
+
+    const symbolic = resolution.installments.map((i) =>
+      i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
+        ? i.symbolicDate
+        : undefined,
+    );
+
+    // Every held tranche carries floor = the +12mo mark (2026-01-01).
+    expect(symbolic.every((s) => s?.floor === "2026-01-01")).toBe(true);
+
+    // The first held tranche keeps its honest cadence date (2025-02-01 off a
+    // monthly grid from the 2025-01-01 start) AND discloses the floor; the grid
+    // runs through 2029-01-01, never collapsed onto the floor.
+    expect(symbolic[0]).toEqual({
+      type: "UNRESOLVED_CLIFF",
+      date: "2025-02-01",
+      floor: "2026-01-01",
+    });
+    expect(symbolic[symbolic.length - 1]?.date).toBe("2029-01-01");
+
+    // The fold guard: the early cadence dates sit strictly BELOW the floor — if a
+    // future change folded the grid onto the floor, none would (the whole pre-floor
+    // run would collapse to 2026-01-01). The first eleven months are all below it.
+    const belowFloor = symbolic
+      .map((s) => s?.date)
+      .filter((d) => d !== undefined && d < "2026-01-01");
+    expect(belowFloor).toEqual([
+      "2025-02-01",
+      "2025-03-01",
+      "2025-04-01",
+      "2025-05-01",
+      "2025-06-01",
+      "2025-07-01",
+      "2025-08-01",
+      "2025-09-01",
+      "2025-10-01",
+      "2025-11-01",
+      "2025-12-01",
+    ]);
+  });
+});
+
+// Bare `CLIFF EVENT e` — no time arm at all, so no known floor. The held tranches
+// render WITHOUT a `floor` key (#447 AC 3, the negative pin defending the field's
+// optionality). The cadence dates are unchanged from a no-cliff grid.
+describe("bare event cliff holds the grid with no floor disclosed", () => {
+  const DSL =
+    "VEST FROM grantDate OVER 48 months EVERY 1 month CLIFF EVENT board";
+
+  it("renders every held UNRESOLVED_CLIFF tranche with the floor key absent", () => {
+    const program = normalizeProgram(parse(DSL));
+    const { resolution } = evaluateProgram(program, {
+      grantDate: "2025-01-01",
+      events: {}, // board unfired → the event hold stands
+      grantQuantity: 4800,
+    });
+
+    expect(resolution.status).toBe("template");
+    if (resolution.status !== "template") return;
+
+    const symbolic = resolution.installments.map((i) =>
+      i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
+        ? i.symbolicDate
+        : undefined,
+    );
+    // Every tranche is an UNRESOLVED_CLIFF, and none carries a `floor` key — the
+    // `in` check (rather than `=== undefined`) also defends against a regression
+    // that defaulted the key to `floor: undefined`.
+    expect(symbolic.every((s) => s !== undefined && !("floor" in s))).toBe(
+      true,
+    );
+    // Honest cadence dates, unchanged from the no-cliff grid.
+    expect(symbolic[0]?.date).toBe("2025-02-01");
+  });
 });
 
 // A resolved start with a gated event cliff (`CLIFF EVENT board BEFORE DATE …`)

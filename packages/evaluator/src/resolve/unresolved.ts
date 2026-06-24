@@ -210,7 +210,17 @@ export const unresolvedInstallments = (
         r.cliff.event.kind === "bare"
           ? [{ type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.event.eventId }]
           : [];
-      return makeUnresolvedCliffSchedule(dates, amounts, blocker);
+      // Disclose the cliff floor on each held tranche: a `LATER OF` cliff whose
+      // time arm resolved carries that date as `cliffDate` (the earliest anything
+      // could land), so surface it as the tranche's `floor` without disturbing its
+      // honest cadence `date`. A bare `CLIFF EVENT e` has no time arm, so
+      // `cliffDate` is undefined and the floor is simply omitted.
+      return makeUnresolvedCliffSchedule(
+        dates,
+        amounts,
+        blocker,
+        r.cliff.cliffDate,
+      );
     }
     case "UNRESOLVED": {
       const { shape, blockers } = r.cliff;

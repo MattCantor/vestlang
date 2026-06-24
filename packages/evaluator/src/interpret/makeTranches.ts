@@ -100,14 +100,24 @@ export function makeUnresolvedVestingStartSchedule(
 // Exported for the partial-LATER-OF fold in resolve/unresolved.ts, which builds
 // the cliff installments itself rather than going through the schedule scaffold.
 // The caller carries the blockers on the surrounding InstallmentSet.
+//
+// `floor` (optional) is the cliff's disclosed lower bound — the earliest the
+// tranche could land (a resolved `LATER OF` time-arm date). Threaded through to
+// the symbolic date, with the key omitted when absent so a bare `CLIFF EVENT e`
+// (no time arm, no known floor) carries no `floor`.
 export function makeUnresolvedCliffInstallment(
   date: OCTDate,
   amount: number,
+  floor?: OCTDate,
 ): UnresolvedInstallment {
   return {
     state: "UNRESOLVED",
     amount,
-    symbolicDate: { type: "UNRESOLVED_CLIFF", date },
+    symbolicDate: {
+      type: "UNRESOLVED_CLIFF",
+      date,
+      ...(floor ? { floor } : {}),
+    },
   };
 }
 
@@ -115,8 +125,9 @@ export function makeUnresolvedCliffSchedule(
   dates: OCTDate[],
   amounts: number[],
   blockers: (UnresolvedBlocker | ImpossibleBlocker)[],
+  floor?: OCTDate,
 ): InstallmentSet {
   return makeSchedule(amounts, blockers, (i, amount) =>
-    makeUnresolvedCliffInstallment(dates[i], amount),
+    makeUnresolvedCliffInstallment(dates[i], amount, floor),
   );
 }

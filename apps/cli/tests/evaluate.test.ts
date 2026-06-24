@@ -44,6 +44,40 @@ describe("evaluate action", () => {
     expect(out).not.toContain("ipo did not occur on/before");
   });
 
+  // #447 (AC5): a held `LATER OF` cliff discloses its floor in the symbolic-date
+  // cell. The floor rides through `JSON.stringify(item.symbolicDate)`, so the
+  // printed table contains the resolved +12mo lower bound.
+  it("prints the disclosed floor for a held LATER OF cliff", () => {
+    spies = spyConsoleAndExit();
+    evaluate(
+      [
+        "VEST FROM grantDate OVER 48 months EVERY 1 month " +
+          "CLIFF LATER OF(vestingStart + 12 months, EVENT ipo)",
+      ],
+      // ipo unfired (no --event), so the whole grid is held symbolically.
+      { quantity: "4800", grantDate: "2025-01-01", event: {} },
+    );
+    const out = spies.stdout();
+    expect(out).toContain("UNRESOLVED_CLIFF");
+    // The grant-date start grids the first cadence at 2025-02-01, floored at the
+    // +12mo mark; both appear verbatim in the stringified symbolic date.
+    expect(out).toContain('"floor":"2026-01-01"');
+    expect(out).toContain('"date":"2025-02-01"');
+  });
+
+  // #447 (AC3/AC5): a bare `CLIFF EVENT e` has no time arm, so no floor — the
+  // held tranches' symbolic dates carry no `floor` key in the printed cell.
+  it("prints no floor for a held bare-event cliff", () => {
+    spies = spyConsoleAndExit();
+    evaluate(
+      ["VEST FROM grantDate OVER 48 months EVERY 1 month CLIFF EVENT board"],
+      { quantity: "4800", grantDate: "2025-01-01", event: {} },
+    );
+    const out = spies.stdout();
+    expect(out).toContain("UNRESOLVED_CLIFF");
+    expect(out).not.toContain("floor");
+  });
+
   it("routes an invalid quantity through fail() — error: line, exit 1", () => {
     spies = spyConsoleAndExit();
     expect(() =>
