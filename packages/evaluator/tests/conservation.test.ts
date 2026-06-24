@@ -6,9 +6,9 @@
 // the telescope); when T > 1 the dated path delivers uncapped under the error
 // finding while the symbolic side claims exactly the gap to the grant.
 //
-// `unresolved` already folds IMPOSSIBLE amounts in (partitionAsOf pushes them
-// to both buckets), so the equation is vested + unvested + unresolved —
-// impossible is asserted as a subset, never added.
+// The as-of partition keeps four disjoint buckets — vested, unvested,
+// impossible, and the not-yet-schedulable `unresolved` tally — so the
+// conservation equation sums all four.
 
 import { describe, it, expect } from "vitest";
 import { parse } from "@vestlang/dsl";
@@ -376,19 +376,24 @@ function checkCell(
 
   // The as-of partition at three dates. The total is asOf-invariant (resolution
   // never reads asOf; only the vested/unvested split moves) and vested grows
-  // monotonically. IMPOSSIBLE amounts already ride inside `unresolved` —
-  // partitionAsOf folds them into both buckets — so they are asserted as a
-  // subset, never added on top.
+  // monotonically. The four buckets are disjoint, so impossible amounts are
+  // added into the total alongside vested, unvested, and unresolved.
   let priorVested = -1;
   for (const asOf of AS_OFS) {
     const r = evaluateProgramAsOf(program, { ...base, asOf });
     const asOfLabel = `${label}\n  asOf:   ${asOf}${partitionLabel(r)}`;
-    const total = sumAmounts(r.vested) + sumAmounts(r.unvested) + r.unresolved;
+    const total =
+      sumAmounts(r.vested) +
+      sumAmounts(r.unvested) +
+      sumAmounts(r.impossible) +
+      r.unresolved;
 
     if (fracCmp(T, ONE) <= 0) {
       expect(total, asOfLabel).toBe(floorSharesAt(grant, T));
     } else {
-      expect(r.unresolved, asOfLabel).toBe(
+      // Over-allocation: the symbolic-and-impossible side claims exactly the gap
+      // the dated tranches left to the grant.
+      expect(sumAmounts(r.impossible) + r.unresolved, asOfLabel).toBe(
         Math.max(grant - (sumAmounts(r.vested) + sumAmounts(r.unvested)), 0),
       );
     }
@@ -399,9 +404,10 @@ function checkCell(
         sumAmounts(schedule.resolution.installments),
       );
     }
-    expect(sumAmounts(r.impossible), asOfLabel).toBeLessThanOrEqual(
-      r.unresolved,
-    );
+    // Impossible is its own bucket now, not a slice of unresolved — both stay
+    // non-negative.
+    expect(sumAmounts(r.impossible), asOfLabel).toBeGreaterThanOrEqual(0);
+    expect(r.unresolved, asOfLabel).toBeGreaterThanOrEqual(0);
     expect(sumAmounts(r.vested), asOfLabel).toBeGreaterThanOrEqual(priorVested);
     priorVested = sumAmounts(r.vested);
   }
@@ -615,7 +621,9 @@ describe("conservation invariant — spot values (R2-T1)", () => {
     expect(sumAmounts(unresolved)).toBe(66);
     const r = evaluateProgramAsOf(program, ctx);
     expect(sumAmounts(r.impossible)).toBe(34);
-    expect(r.unresolved).toBe(100); // IMPOSSIBLE folded in
+    expect(r.unresolved).toBe(66); // only the live pending clause
+    // The two buckets stay disjoint and together cover the grant.
+    expect(sumAmounts(r.impossible) + r.unresolved).toBe(100);
   });
 
   // 9. All-void clamps: two windows both violated, resolution status impossible.
@@ -640,10 +648,13 @@ describe("conservation invariant — spot values (R2-T1)", () => {
     ]);
     const r = evaluateProgramAsOf(program, ctx);
     expect(sumAmounts(r.impossible)).toBe(100);
-    expect(r.unresolved).toBe(100);
-    expect(sumAmounts(r.vested) + sumAmounts(r.unvested) + r.unresolved).toBe(
-      100,
-    );
+    expect(r.unresolved).toBe(0); // all impossible, nothing left to schedule
+    expect(
+      sumAmounts(r.vested) +
+        sumAmounts(r.unvested) +
+        sumAmounts(r.impossible) +
+        r.unresolved,
+    ).toBe(100);
   });
 
   // 10. Two full-grant quantities clamp to [100, 0]: over-allocation, symbolic

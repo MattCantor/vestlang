@@ -38,8 +38,9 @@ function partitionAsOf(
   for (const t of installments) {
     switch (t.state) {
       case "IMPOSSIBLE":
+        // An impossible tranche is its own bucket — counting it here too would
+        // double it, since the summary folds `unresolved` into total_unvested.
         impossible.push(t);
-        unresolved += t.amount;
         break;
       case "UNRESOLVED":
         unresolved += t.amount;
