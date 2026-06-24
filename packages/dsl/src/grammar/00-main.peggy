@@ -44,6 +44,16 @@
   function mkVestingStart() { return { type: "VESTING_START" }; }
   function mkQuantity(q) { return { type: "QUANTITY", value: q };
   }
+  // A literal whose magnitude can't be held exactly as a number (past 2^53−1) is
+  // rejected at parse, not silently rounded. Shared by every numeric-literal site —
+  // the Integer rule (share counts, fraction terms, durations) checks the digit
+  // string, PortionDecimal checks the implied 10^n denominator — so the threshold and
+  // message live in one place. The generic wording covers all of them.
+  function assertSafeInteger(big) {
+    if (big > 9007199254740991n) {
+      error("integer literal exceeds the safe integer range (maximum 9007199254740991)");
+    }
+  }
   function gcd(a, b) {
     a = Math.abs(a);
     b = Math.abs(b);
