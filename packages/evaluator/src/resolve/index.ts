@@ -12,6 +12,7 @@ import type {
   OCTDate,
   Program,
   UnresolvedInstallment,
+  VestingScheduleTemplate,
 } from "@vestlang/types";
 import {
   installmentCapMessage,
@@ -23,11 +24,11 @@ import { programInstallmentTotal } from "@vestlang/walk";
 import {
   allocationFindingsFromFractions,
   analyzePrecision,
+  numericToFraction,
 } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
-import type { LoweredCliff } from "./cliff.js";
 import { classify } from "./classify.js";
 import {
   isDatedStart,
@@ -35,6 +36,23 @@ import {
   symbolicClaims,
 } from "./unresolved.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
+
+// The template arm's stored statement fractions, index-aligned to the resolutions
+// (order = i+1). A cliff's basis on this arm must be the *stored* statement decimal
+// the realizer multiplies by (`compile.ts`), not the exact internal fraction —
+// #443's apportionment can bump a non-terminating share by an ulp, so the two
+// diverge for multi-statement non-terminating schedules. A statement with no cliff
+// (or a pure milestone) yields `undefined`; only cliff statements read it.
+const storedStmtFractions = (
+  template: VestingScheduleTemplate,
+  count: number,
+): (Fraction | undefined)[] => {
+  const byOrder = new Map<number, Fraction>();
+  for (const s of template.statements) {
+    byOrder.set(s.order, numericToFraction(s.percentage));
+  }
+  return Array.from({ length: count }, (_, i) => byOrder.get(i + 1));
+};
 
 /** Bound the installments a program will materialize, before any resolution or
  *  per-occurrence build. The count is structural (`programInstallmentTotal` from
@@ -81,15 +99,21 @@ export const resolveToCore = (
   //
   // Both arms run the same cliff pass over the per-statement `resolutions` — the
   // resolutions carry both the lowered cliff (its stored decimal and retained cliff
-  // date) and the sibling start dates the leading test needs. The arms differ only
-  // in the materialize gate: a non-template build (events / unresolved) reads the
-  // cliff decimal back through the *live* projection, so it warns only for cliffs
-  // under a dated start (a resolved cliff sitting under a still-pending start never
-  // materializes live — warning there would be a false positive). A template build
-  // is the storable form a vestlang-blind reader could materialize at any time, so
-  // it warns on every analyzable cliff, dated start or not.
+  // date) and the sibling start dates the leading test needs. They differ in two
+  // ways. (1) The materialize gate: a non-template build (events / unresolved) reads
+  // the cliff decimal back through the *live* projection, so it warns only for cliffs
+  // under a dated start (a resolved cliff under a still-pending start never
+  // materializes live — a warning there would be a false positive). A template build
+  // is the storable form a vestlang-blind reader could materialize at any time, so it
+  // runs the gate open. (2) The statement basis: the template realizer multiplies the
+  // cliff by the *stored* statement decimal (`compile.ts`), the events realizer by the
+  // exact `r.percentage` (`classify.ts`) — so on the template arm the guard's basis is
+  // the stored, apportioned percentage, read off the built template by `order`.
   const precision = cliffPrecisionFindings(resolutions, totalShares, {
     materializeGate: !build.ok,
+    storedStmtFractions: build.ok
+      ? storedStmtFractions(build.template, resolutions.length)
+      : undefined,
   });
 
   let verdict: ResolveVerdict;
@@ -195,50 +219,43 @@ const allocationFindings = (
 const cliffPrecisionFindings = (
   resolutions: StmtResolution[],
   grant: number,
-  opts: { materializeGate: boolean },
+  opts: {
+    materializeGate: boolean;
+    // The template arm's stored, schedule-whole-apportioned statement percentages,
+    // index-aligned to `resolutions` (order = i+1). The cliff basis must match the
+    // fraction the *realizer* multiplies by: the template realizer reads the stored
+    // decimal (`compile.ts`), so on that arm the basis is this stored value, not the
+    // exact internal fraction. Absent on the events / unresolved arm, whose realizer
+    // (`classify.ts`) multiplies by the exact `r.percentage`.
+    storedStmtFractions?: (Fraction | undefined)[];
+  },
 ): Finding[] => {
   if (grant <= 0) return [];
   const findings: Finding[] = [];
   resolutions.forEach((r, i) => {
     if (opts.materializeGate && !isDatedStart(r)) return;
 
-    // The analyzable cliff: a RESOLVED time cliff, or an EVENT_HELD cliff's time
-    // baseline (the Carta baseline that lands in the stored `schedule.cliff` and is
-    // read back the same way). Both carry the stored decimal and, where one exists,
-    // the absolute cliff date the leading test reads. An EVENT_HELD lump folds at
-    // max(cliffDate, firing) with the firing unknown, so it can never be proved
-    // leading — it always takes the conservative path.
-    const analyzable = analyzableCliff(r.cliff);
-    if (!analyzable) return;
+    // Only a RESOLVED time cliff is analyzed. An EVENT_HELD cliff is excluded: a
+    // fired one folds proportionally (the lump = pre/N from grid accrual, the stored
+    // decimal is never read), and an unfired one materializes no lump at all — so its
+    // stored decimal can't misallocate anything, and a warning there would be the
+    // exact false positive this guard exists to prevent. (NONE / UNRESOLVED /
+    // IMPOSSIBLE have no stored time cliff to read.)
+    if (r.cliff.state !== "RESOLVED") return;
 
-    const leading =
-      analyzable.kind === "RESOLVED" &&
-      leads(analyzable.cliffDate, i, resolutions);
+    // The cliff's statement basis: the stored fraction on the template arm (matching
+    // the realizer), else the exact `r.percentage`.
+    const stmtFraction = opts.storedStmtFractions?.[i] ?? r.percentage;
 
-    pushCliffFinding(findings, analyzable.cliff, r.percentage, grant, leading, [
+    const leading = leads(r.cliff.cliffDate, i, resolutions);
+
+    pushCliffFinding(findings, r.cliff.cliff, stmtFraction, grant, leading, [
       "statements",
       i,
       "cliff",
     ]);
   });
   return findings;
-};
-
-// The stored cliff and its absolute date, pulled off the lowered form — or
-// undefined for a cliff with no stored time baseline to analyze (NONE,
-// UNRESOLVED, IMPOSSIBLE, or a bare event hold with no time arm).
-type AnalyzableCliff =
-  | { kind: "RESOLVED"; cliff: Cliff; cliffDate: OCTDate | undefined }
-  | { kind: "EVENT_HELD"; cliff: Cliff };
-
-const analyzableCliff = (cliff: LoweredCliff): AnalyzableCliff | undefined => {
-  if (cliff.state === "RESOLVED") {
-    return { kind: "RESOLVED", cliff: cliff.cliff, cliffDate: cliff.cliffDate };
-  }
-  if (cliff.state === "EVENT_HELD" && cliff.cliff !== undefined) {
-    return { kind: "EVENT_HELD", cliff: cliff.cliff };
-  }
-  return undefined;
 };
 
 // The leading test: statement `i`'s cliff lump leads its merged position iff no

@@ -207,10 +207,12 @@ describe("#386 — lossy-basis cliff precision (the grant-scale verdict)", () =>
 
 // #386 AC3 — the non-leading (path-dependent) cliff. When a sibling event sorts
 // strictly before the cliff lump, the realized lump depends on what vested ahead of
-// it (here 334 leading, 335 with one sibling preceding, 334 with two — see the
-// contract), so no per-statement basis is exact. The guard errs conservative: it
+// it (the same 2/3-on-1/2 cliff lumps 334 leading, 335 with one sibling preceding,
+// 334 with two), so no per-statement basis is exact. The guard errs conservative: it
 // warns whenever it can't prove the stored decimal exact, accepting an over-warn to
-// guarantee it never stays silent on a real loss.
+// guarantee it never stays silent on a real loss — but stays SILENT when the decimal
+// IS provably exact (a terminating cliff), so the over-warn doesn't become an
+// unconditional warn.
 describe("#386 — non-leading cliff is warned conservatively (AC3)", () => {
   const isResolved = (i: { state: string }): i is ResolvedInstallment =>
     i.state === "RESOLVED";
@@ -253,6 +255,23 @@ describe("#386 — non-leading cliff is warned conservatively (AC3)", () => {
       (i) => i.date === "2020-03-01" && i.amount === 334,
     );
     expect(lump).toBeDefined();
+  });
+
+  // The silent leg of the conservative rule: a non-leading lump with a *terminating*
+  // cliff decimal draws NO warning. Statement 2's cliff is a clean 1/2 ("0.5") — an
+  // OVER-2/CLIFF-1-month grid folds 1 of 2 occurrences — and statement 1's first
+  // installment sorts before it (same date 2020-02-01, lower order), so the lump is
+  // non-leading. A terminating decimal is provably exact, so the guard stays silent
+  // even on the conservative branch. (This pins that "warn unless provably exact" is
+  // not an unconditional warn — a regression dropping the exact/terminating early
+  // return would fail here while every other non-leading test still passed.)
+  const NON_LEADING_TERMINATING =
+    "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month PLUS 0.5 VEST FROM DATE 2020-01-01 OVER 2 months EVERY 1 month CLIFF 1 month";
+
+  it("stays silent for a non-leading lump whose cliff decimal terminates", () => {
+    const result = resolveToCore(prog(NON_LEADING_TERMINATING), baseCtx(1005));
+    expect(result.kind).toBe("events");
+    expect(precisionFindings(result)).toHaveLength(0);
   });
 });
 
@@ -358,6 +377,45 @@ describe("#384 — unresolved-arm resolved-sibling cliff precision (AC9)", () =>
       grantQuantity: 72000,
     });
     expect(result.kind).toBe("unresolved");
+    expect(precisionFindings(result)).toHaveLength(0);
+  });
+});
+
+// #386 — an EVENT_HELD cliff is EXCLUDED from the precision pass entirely. The
+// precision guard only sizes a cliff whose lump is folded from the *stored decimal*.
+// An EVENT_HELD cliff is never that lump: fired, it folds proportionally (the lump =
+// pre-cliff occurrences / N, computed from grid accrual — the stored decimal is never
+// read, so it can't mis-round); unfired, the grid is held and no lump materializes at
+// all. So a precision warning on an EVENT_HELD cliff is a pure false positive — the
+// exact failure this issue exists to kill — and the pass gates on `state === "RESOLVED"`.
+describe("#386 — EVENT_HELD cliffs are excluded (no false positive)", () => {
+  // `CLIFF LATER OF(1 month, EVENT m)` decomposes into a time baseline (the 1/3 cliff,
+  // stored "0.3333333333") + an event hold. The time arm's decimal is over-precise and
+  // WOULD warn if analyzed, but the realized lump folds proportionally, so it must not.
+  it("a fired event-held cliff's over-precise time baseline draws no finding", () => {
+    const dsl =
+      "0.5 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF LATER OF(1 month, EVENT m) PLUS 0.5 VEST FROM DATE 2021-06-01 OVER 3 months EVERY 1 month";
+    const result = resolveToCore(prog(dsl), {
+      grantDate: "2019-01-01",
+      events: { m: "2020-02-15" }, // m fired
+      grantQuantity: 72000,
+    });
+    expect(result.kind).toBe("events");
+    expect(precisionFindings(result)).toHaveLength(0);
+  });
+
+  // The same hold left unfired — the grid is held, the cliff lump never materializes,
+  // so its stored decimal can't misallocate anything. (The materialize gate keys on the
+  // start date, which IS dated here, so the EVENT_HELD state-gate is what excludes it.)
+  it("an unfired event-held cliff's time baseline draws no finding", () => {
+    const dsl =
+      "0.5 VEST FROM DATE 2020-01-01 OVER 36 months EVERY 12 months CLIFF LATER OF(12 months, EVENT ipo) PLUS 0.5 VEST FROM DATE 2021-06-01 OVER 12 months EVERY 1 month";
+    const result = resolveToCore(prog(dsl), {
+      grantDate: "2019-01-01",
+      events: {}, // ipo unfired
+      grantQuantity: 36000,
+    });
+    expect(result.kind).toBe("events");
     expect(precisionFindings(result)).toHaveLength(0);
   });
 });
