@@ -135,7 +135,7 @@ describe("anti-drift battery — core and mcp agree per template", () => {
     it(`${c.name}: both verdicts are ${c.valid ? "valid" : "invalid"}`, () => {
       const coreVerdict = validateVestingScheduleTemplate(
         c.template as Parameters<typeof validateVestingScheduleTemplate>[0],
-      ).valid;
+      ).structurallyValid;
       const mcpVerdict = PERSISTED_ARTIFACT.safeParse({
         template: c.template,
         runtime: VALID_RUNTIME,

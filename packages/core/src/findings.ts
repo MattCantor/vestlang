@@ -8,10 +8,15 @@ import {
 
 // The over/under-allocation check, run against a stored template rather than a
 // live resolution: sum the statements' share-of-grant fractions and classify.
-// This is what lets a persisted artifact be re-validated on rehydrate without
-// re-resolving it — the authored percentages already carry everything the sum
-// needs. Cliff percentages don't enter: a cliff's percentage is a share *of its
-// own statement*, already bounded to [0,1], not an additional claim on the grant.
+// This is the raw finding primitive behind `validateTemplateAllocatable`, and it
+// answers the question `compile` doesn't — `compile` never certifies
+// allocatability, so pair it with this check (or the wrapping
+// `validateTemplateAllocatable`) when you need to know the template fits the
+// grant. It's also what lets a persisted artifact be re-validated on rehydrate
+// without re-resolving it — the authored percentages already carry everything the
+// sum needs. Cliff percentages don't enter: a cliff's percentage is a share *of
+// its own statement*, already bounded to [0,1], not an additional claim on the
+// grant.
 //
 // It runs the same shared `allocationFindingsFromFractions` primitive the
 // evaluator's resolution-space `allocationFindings` does, so the two paths can't
