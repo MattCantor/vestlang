@@ -275,19 +275,21 @@ function peg$parse(input, options) {
   }
   function peg$f6() {    return "AND";  }
   function peg$f7() {    return "OR";  }
-  function peg$f8(s) {    return parseInt(s, 10);  }
+  function peg$f8(s) {
+    assertSafeInteger(BigInt(s));
+    return parseInt(s, 10);
+  }
   function peg$f9(s) {    return s;  }
   function peg$f10(a) {    return a;  }
   function peg$f11(s) {
-    const value = parseFloat(s);
-    if (value < 0 || value > 1) {
-      error("Decimal portion must be between 0 and 1 inclusive");
-    }
-    const parts = s.startsWith(".") ? ["0", s.slice(1)] : s.split(".");
-    const decimals = (parts[1] ?? "").length;
-    const scale = Math.pow(10, decimals);
-    const numerator = Math.round(value * scale);
-    const denominator = scale;
+    const [ip, fp] = s.startsWith(".") ? ["0", s.slice(1)] : s.split(".");
+    // Denominator is 10^fp.length; past 15 fractional digits that's ≥ 10^16, which
+    // exceeds MAX_SAFE_INTEGER (~9×10^15) and can't be held exactly as a number.
+    // No matching numerator check is needed: the Decimal grammar caps the value at
+    // [0,1], so once the denominator fits, numerator ≤ denominator ≤ 10^15 < MAX_SAFE.
+    assertSafeInteger(10n ** BigInt(fp.length));
+    const numerator = Number(ip + fp);
+    const denominator = 10 ** fp.length;
     return mkPortion(numerator, denominator);
   }
   function peg$f12(n, d) {
@@ -2748,6 +2750,16 @@ function peg$parse(input, options) {
   function mkGrantDate() { return { type: "GRANT_DATE" }; }
   function mkVestingStart() { return { type: "VESTING_START" }; }
   function mkQuantity(q) { return { type: "QUANTITY", value: q };
+  }
+  // A literal whose magnitude can't be held exactly as a number (past 2^53−1) is
+  // rejected at parse, not silently rounded. Shared by every numeric-literal site —
+  // the Integer rule (share counts, fraction terms, durations) checks the digit
+  // string, PortionDecimal checks the implied 10^n denominator — so the threshold and
+  // message live in one place. The generic wording covers all of them.
+  function assertSafeInteger(big) {
+    if (big > 9007199254740991n) {
+      error("integer literal exceeds the safe integer range (maximum 9007199254740991)");
+    }
   }
   function gcd(a, b) {
     a = Math.abs(a);

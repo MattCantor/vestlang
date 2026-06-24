@@ -173,6 +173,87 @@ describe("Amount parsing", () => {
   });
 });
 
+// #400 — reject share counts / portions / fraction terms / durations that can't be
+// held exactly as a number, instead of silently rounding them. The bound lives in the
+// shared `Integer` action plus the portion denominator, so one generic message covers
+// every integer literal kind.
+const SAFE_INT_REJECT = /exceeds the safe integer range/;
+
+describe("Amount precision (#400)", () => {
+  it("rejects a share count above MAX_SAFE_INTEGER", () => {
+    // parseInt would round 9007199254740993 down to ...992 and store it silently.
+    expect(() =>
+      parse(`9007199254740993 VEST OVER 12 months EVERY 1 month`),
+    ).toThrowError(SAFE_INT_REJECT);
+  });
+
+  it("accepts a share count exactly at MAX_SAFE_INTEGER, stored exact", () => {
+    const s = first(`9007199254740991 VEST OVER 12 months EVERY 1 month`);
+    expect(s.amount).toEqual({ type: "QUANTITY", value: 9007199254740991 });
+  });
+
+  it("leaves an ordinary share count unchanged", () => {
+    const s = first(`1000000 VEST OVER 12 months EVERY 1 month`);
+    expect(s.amount).toEqual({ type: "QUANTITY", value: 1000000 });
+  });
+
+  it("rejects an over-precise decimal portion instead of rounding it to 1/1", () => {
+    // 18 fractional digits ⇒ denominator 10^18 — parseFloat used to round to {1,1}.
+    expect(() =>
+      parse(`0.99999999999999999 VEST OVER 12 months EVERY 1 month`),
+    ).toThrowError(SAFE_INT_REJECT);
+  });
+
+  it("rejects a portion whose denominator alone overflows (10^16)", () => {
+    // Distinct from the round-to-1 branch: a tiny value with a 16-digit denominator.
+    expect(() =>
+      parse(`0.0000000000000001 VEST OVER 12 months EVERY 1 month`),
+    ).toThrowError(SAFE_INT_REJECT);
+  });
+
+  it("parses 0.25 to {1,4}, byte-identical with the old float path", () => {
+    const s = first(`0.25 VEST OVER 12 months EVERY 1 month`);
+    expect(s.amount).toEqual({ type: "PORTION", numerator: 1, denominator: 4 });
+  });
+
+  it("parses 0.333 to {333,1000} with no float artifact", () => {
+    const s = first(`0.333 VEST OVER 12 months EVERY 1 month`);
+    expect(s.amount).toEqual({
+      type: "PORTION",
+      numerator: 333,
+      denominator: 1000,
+    });
+  });
+
+  it("leaves an ordinary portion (0.5) unchanged", () => {
+    const s = first(`0.5 VEST OVER 12 months EVERY 1 month`);
+    expect(s.amount).toEqual({ type: "PORTION", numerator: 1, denominator: 2 });
+  });
+
+  // The bound sits in the shared Integer action, so it also guards fraction terms and
+  // duration magnitudes — an over-2^53 numerator or period count is equally uncomputable.
+  it("rejects a fraction term above MAX_SAFE_INTEGER", () => {
+    expect(() =>
+      parse(`99999999999999999/1 VEST OVER 12 months EVERY 1 month`),
+    ).toThrowError(SAFE_INT_REJECT);
+  });
+
+  it("rejects a duration integer above MAX_SAFE_INTEGER", () => {
+    expect(() =>
+      parse(`1 VEST OVER 99999999999999999 months EVERY 1 month`),
+    ).toThrowError(SAFE_INT_REJECT);
+  });
+
+  it("leaves an ordinary duration unchanged", () => {
+    const s = first(`1 VEST OVER 48 months EVERY 12 months`);
+    expect(s.expr.periodicity).toEqual({
+      type: "MONTHS",
+      length: 12,
+      occurrences: 4,
+    });
+  });
+});
+
 describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
   it("parses a single ATOM constraint attached to a node", () => {
     const s = first(`VEST FROM EVENT a BEFORE EVENT b + 10 days`);

@@ -15,17 +15,20 @@ Decimal
 Amount = _ a:(PortionDecimal / Fraction / Quantity) _ { return a; }
 
 
+// Build the portion as an exact rational straight off the digit string — no float.
+// `0.333` is literally 333/1000; parseFloat + Math.round used to mask short-decimal
+// float error, but it also silently rounded 18-nines up to 1/1 and let a 10^16
+// denominator through. The digit-string parse refuses both instead.
 PortionDecimal
   = s:Decimal {
-      const value = parseFloat(s);
-      if (value < 0 || value > 1) {
-        error("Decimal portion must be between 0 and 1 inclusive");
-      }
-      const parts = s.startsWith(".") ? ["0", s.slice(1)] : s.split(".");
-      const decimals = (parts[1] ?? "").length;
-      const scale = Math.pow(10, decimals);
-      const numerator = Math.round(value * scale);
-      const denominator = scale;
+      const [ip, fp] = s.startsWith(".") ? ["0", s.slice(1)] : s.split(".");
+      // Denominator is 10^fp.length; past 15 fractional digits that's ≥ 10^16, which
+      // exceeds MAX_SAFE_INTEGER (~9×10^15) and can't be held exactly as a number.
+      // No matching numerator check is needed: the Decimal grammar caps the value at
+      // [0,1], so once the denominator fits, numerator ≤ denominator ≤ 10^15 < MAX_SAFE.
+      assertSafeInteger(10n ** BigInt(fp.length));
+      const numerator = Number(ip + fp);
+      const denominator = 10 ** fp.length;
       return mkPortion(numerator, denominator);
     }
 
