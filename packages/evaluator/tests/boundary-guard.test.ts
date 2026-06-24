@@ -220,6 +220,44 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
     expect(message).not.toMatch(/Cannot evaluate program:/);
   });
 
+  // #409: the contingent-start sentinel (9999-12-31) is a real calendar date, so
+  // the calendar check waves it through — but it's the reserved storage placeholder.
+  // The grammar refuses a sentinel DATE literal at parse; this backstops a hand-built
+  // AST reaching the evaluator without going through the grammar, in the same shared
+  // collector, in every literal position.
+  it("rejects a sentinel DATE start literal (hand-built AST bypassing the grammar)", () => {
+    expect(() =>
+      evaluateProgram(programWithBadStartDate("9999-12-31"), ctx()),
+    ).toThrow(/reserved value/);
+    expect(() =>
+      evaluateProgram(programWithBadStartDate("9999-12-31"), ctx()),
+    ).toThrow(/9999-12-31/);
+  });
+
+  it("rejects a sentinel DATE literal in a gate reference base", () => {
+    const p = prog(
+      `1000 VEST FROM DATE 2025-01-01 AFTER DATE 2025-06-15 OVER 12 months EVERY 1 month`,
+    );
+    const start = (p[0].expr as { vesting_start?: VestingNodeExpr | null })
+      .vesting_start;
+    if (start?.type !== "NODE" || start.condition?.type !== "ATOM")
+      throw new Error("fixture drift: expected a gated DATE start");
+    setDateValue(start.condition.constraint.base.base, "9999-12-31");
+    expect(() => evaluateProgram(p, ctx())).toThrow(/reserved value/);
+  });
+
+  it("rejects a sentinel DATE literal in a selector arm", () => {
+    const p = prog(
+      `1000 VEST FROM EARLIER OF (DATE 2025-03-01, DATE 2025-06-15) OVER 12 months EVERY 1 month`,
+    );
+    const start = (p[0].expr as { vesting_start?: VestingNodeExpr | null })
+      .vesting_start;
+    if (start?.type !== "NODE_EARLIER_OF" || start.items[1].type !== "NODE")
+      throw new Error("fixture drift: expected an EARLIER OF start");
+    setDateValue(start.items[1].base, "9999-12-31");
+    expect(() => evaluateProgram(p, ctx())).toThrow(/reserved value/);
+  });
+
   // AC7: reuse, not duplication — a malformed-but-non-date program (negative
   // cadence) is rejected by evaluateProgram too, proving the shared collector path.
   it("rejects a malformed non-date program (negative cadence), proving the shared path", () => {

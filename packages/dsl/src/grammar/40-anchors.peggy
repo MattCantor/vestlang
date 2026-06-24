@@ -17,6 +17,13 @@ DateLiteral
       if (!isValidCalendarDate(iso)) {
         error(`"${iso}" is not a valid calendar date`);
       }
+      // 9999-12-31 IS a real calendar date, but it's the reserved contingent-start
+      // sentinel a stored runtime carries — a user-supplied copy would collide with
+      // that placeholder, so refuse it here with its own message (distinct from the
+      // not-a-valid-date one above: this date is valid, just reserved).
+      if (isContingentStartSentinel(iso)) {
+        error(`"${iso}" is a reserved value and cannot be used as a date literal`);
+      }
       return mkDate(iso);
     }
 

@@ -401,9 +401,6 @@ importers:
       '@vestlang/normalizer':
         specifier: workspace:*
         version: link:../normalizer
-      '@vestlang/primitives':
-        specifier: workspace:*
-        version: link:../primitives
       '@vestlang/recover':
         specifier: workspace:*
         version: link:../recover

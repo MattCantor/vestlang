@@ -9,6 +9,37 @@
 
 import type { OCTDate } from "@vestlang/types";
 
+// The storage-only placeholder a contingent vesting start carries in
+// `runtime.startDate`: a blatantly-fake far-future date. A start whose calendar
+// date isn't known until a named event fires can't carry a real date, so it
+// stores this sentinel and holds the real recipe out-of-band in a reserved
+// `evt:start` sidecar entry (re-derived on reload). Consumers may read the VALUE
+// directly — the compiler (to recognize it and emit no dated tranches, since a
+// real run off year 9999 overflows the date math in @vestlang/primitives) and the
+// reload damaged-artifact check — but never the rehydrate OVERRIDE decision, which
+// keys on the presence of the `evt:start` entry, not on this value.
+//
+// 9999-12-31 is the last representable date (primitives' toISO rejects past year
+// 9999), so it is unmistakable AND cannot be stepped forward without throwing —
+// exactly the fail-visible property we want. Named CONTINGENT_START_SENTINEL,
+// distinct from the evaluator's unrelated VESTING_START_LABEL/isVestingStartPlaceholder.
+//
+// It lives here, beside isValidCalendarDate, so the input boundaries that must
+// REFUSE a user-supplied copy of it (the value is a real calendar date, so the
+// calendar check alone waves it through) can reserve it from the same source the
+// storage layer mints it from.
+export const CONTINGENT_START_SENTINEL: OCTDate = "9999-12-31";
+
+/**
+ * True when `d` is the reserved contingent-start placeholder. The user-input
+ * boundaries call this to reject a literal `9999-12-31` a user typed — it is a
+ * real calendar date (isValidCalendarDate accepts it), so it would otherwise
+ * collide silently with the storage sentinel.
+ */
+export function isContingentStartSentinel(d: string): boolean {
+  return d === CONTINGENT_START_SENTINEL;
+}
+
 const daysInMonth = (year: number, month: number): number => {
   // Gregorian leap rule; month is 1-based.
   if (month === 2) {

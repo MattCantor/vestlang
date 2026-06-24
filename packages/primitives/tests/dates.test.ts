@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  CONTINGENT_START_SENTINEL,
   addMonthsRule,
   addDays,
   addPeriod,
@@ -505,16 +504,17 @@ describe("year range — the 0001 and 9999 endpoints are representable", () => {
     expect(addDays("0001-01-01", 5)).toBe("0001-01-06");
   });
 
-  it("accepts 9999-12-31 (range ceiling, the sentinel date)", () => {
+  it("accepts 9999-12-31 (range ceiling, the contingent-start sentinel date)", () => {
     expect(addDays("9999-12-30", 1)).toBe("9999-12-31");
   });
-});
 
-describe("CONTINGENT_START_SENTINEL", () => {
-  it("is the last representable calendar date, 9999-12-31", () => {
-    // Load-bearing: the compiler recognizes a contingent start by this exact
-    // value, and it must be a real-but-unsteppable date (year 9999 overflows the
-    // date math), so a silent change here would break contingent-start storage.
-    expect(CONTINGENT_START_SENTINEL).toBe("9999-12-31");
+  it("cannot step the sentinel date forward — it overflows the range", () => {
+    // Load-bearing for contingent-start storage: the sentinel (9999-12-31, defined
+    // in @vestlang/utils) must be real but unsteppable, so a real run off it fails
+    // visibly rather than silently producing dates.
+    expect(() => addDays("9999-12-31", 1)).toThrow(/representable range/);
+    expect(() => addPeriod("9999-12-31", 1, "MONTHS")).toThrow(
+      /representable range/,
+    );
   });
 });

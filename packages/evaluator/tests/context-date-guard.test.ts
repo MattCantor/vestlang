@@ -130,3 +130,50 @@ describe("context-date guard at the evaluator boundary", () => {
     ).toThrow(/asOf: must be a real calendar date/);
   });
 });
+
+// #409: the contingent-start sentinel (9999-12-31) is a real calendar date, so it
+// slips past the isValidCalendarDate guard above — but as a SCHEDULE INPUT (the
+// grant date, or a fired event's date) it collides with the reserved storage
+// placeholder. Before this guard, `VEST FROM EVENT ipo` with `ipo: 9999-12-31`
+// resolved the start to the sentinel and silently vested zero shares (every verdict
+// green). The context boundary now refuses it with a distinct reserved-value error.
+// `asOf` is a query date, not a schedule input, so it stays unpoliced for this.
+describe("reserved contingent-start sentinel at the evaluator boundary (#409)", () => {
+  // Bare EVENT start, no OVER/EVERY: an OVER schedule off year 9999 would throw a
+  // kernel RangeError that masks this guard, so the repro fixture is deliberately bare.
+  const BARE_EVENT = "VEST FROM EVENT ipo";
+
+  it("rejects a fired event whose date is the reserved sentinel (Repro 2)", () => {
+    expect(() =>
+      evaluateProgram(prog(BARE_EVENT), ctx({ events: { ipo: "9999-12-31" } })),
+    ).toThrow(/events\.ipo: 9999-12-31 is a reserved value/);
+  });
+
+  it("does NOT silently produce a green zero-vest schedule for the sentinel firing", () => {
+    // The pre-fix bug: evaluation succeeded and returned an empty installment set.
+    // The fix turns that into a throw — so any return at all is a regression.
+    expect(() =>
+      evaluateProgram(prog(BARE_EVENT), ctx({ events: { ipo: "9999-12-31" } })),
+    ).toThrow(/reserved value/);
+  });
+
+  it("rejects a grantDate equal to the reserved sentinel", () => {
+    expect(() =>
+      evaluateProgram(prog(SCHEDULE), ctx({ grantDate: "9999-12-31" })),
+    ).toThrow(/grantDate: 9999-12-31 is a reserved value/);
+  });
+
+  it("leaves asOf equal to the sentinel alone (a query date, not a schedule input)", () => {
+    // 9999-12-31 is a real, far-future calendar date; as an observation date it's
+    // harmless, so the guard must not reject it.
+    expect(() =>
+      evaluateProgramAsOf(prog(SCHEDULE), ctx({ asOf: "9999-12-31" })),
+    ).not.toThrow();
+  });
+
+  it("an ordinary far-future firing date is unaffected", () => {
+    expect(() =>
+      evaluateProgram(prog(BARE_EVENT), ctx({ events: { ipo: "9999-12-30" } })),
+    ).not.toThrow();
+  });
+});

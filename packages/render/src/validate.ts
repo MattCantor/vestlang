@@ -17,7 +17,10 @@
 // This is a DSL-AST guard, a different layer from @vestlang/core's validator,
 // which checks the canonical interchange template — don't conflate the two.
 
-import { isValidCalendarDate } from "@vestlang/utils";
+import {
+  isContingentStartSentinel,
+  isValidCalendarDate,
+} from "@vestlang/utils";
 import type {
   Amount,
   ChainedSchedule,
@@ -115,6 +118,13 @@ function validateVestingBase(
         errors.push({
           path: `${path}.value`,
           message: `"${String(base.value)}" is not a valid calendar date (YYYY-MM-DD)`,
+        });
+      } else if (isContingentStartSentinel(base.value)) {
+        // The grammar already refuses the reserved sentinel as a DATE literal; this
+        // backstops a hand-built AST reaching the evaluator without going through it.
+        errors.push({
+          path: `${path}.value`,
+          message: `"${base.value}" is a reserved value and cannot be used as a date literal`,
         });
       }
       break;

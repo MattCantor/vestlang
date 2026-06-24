@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type {
   Amount,
   Blocker,

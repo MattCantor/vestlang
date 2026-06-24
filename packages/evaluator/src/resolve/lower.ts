@@ -22,7 +22,7 @@ import type {
   OCTDate,
 } from "@vestlang/types";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
-import { fractionToNumeric } from "@vestlang/utils";
+import { CONTINGENT_START_SENTINEL, fractionToNumeric } from "@vestlang/utils";
 import type {
   Cliff,
   Fraction,
@@ -32,11 +32,7 @@ import type {
   VestingStatement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
-import {
-  advanceCursor,
-  eq,
-  CONTINGENT_START_SENTINEL,
-} from "@vestlang/primitives";
+import { advanceCursor, eq } from "@vestlang/primitives";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../interpret/selectors.js";
 import { amountToFraction } from "../claims.js";

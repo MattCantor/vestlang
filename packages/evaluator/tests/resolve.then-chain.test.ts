@@ -5,7 +5,8 @@
 
 import { describe, it, expect } from "vitest";
 import { compile } from "@vestlang/core";
-import { addPeriod, CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
+import { addPeriod } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {

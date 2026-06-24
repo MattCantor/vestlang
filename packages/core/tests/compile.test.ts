@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { compile, compileToInstallments } from "../src/compile";
-import { addPeriod, CONTINGENT_START_SENTINEL } from "@vestlang/primitives";
-import { fractionToNumeric } from "@vestlang/utils";
+import { addPeriod } from "@vestlang/primitives";
+import { CONTINGENT_START_SENTINEL, fractionToNumeric } from "@vestlang/utils";
 import type {
   VestingRuntime,
   VestingScheduleTemplate,

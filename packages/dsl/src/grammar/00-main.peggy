@@ -1,5 +1,8 @@
 {{
-  import { isValidCalendarDate } from "@vestlang/utils";
+  import {
+    isContingentStartSentinel,
+    isValidCalendarDate,
+  } from "@vestlang/utils";
 }}
 
 {

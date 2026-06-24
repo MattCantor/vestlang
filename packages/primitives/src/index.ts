@@ -1,10 +1,9 @@
 // `@vestlang/primitives` — the shared engine substrate both the reference
 // compiler (`@vestlang/core`) and the resolution side (`@vestlang/evaluator`) sit
-// on: policy-aware date math (incl. CONTINGENT_START_SENTINEL and
-// satisfiesRelation), the exact-integer allocator, the grid kernel, the
-// anchor-date fold, the static empty-window analysis, and the installment cap.
-// Pure substrate — no compiler, no resolution. Fraction arithmetic lives in
-// `@vestlang/utils`.
+// on: policy-aware date math (incl. satisfiesRelation), the exact-integer
+// allocator, the grid kernel, the anchor-date fold, the static empty-window
+// analysis, and the installment cap. Pure substrate — no compiler, no resolution.
+// Fraction arithmetic and the contingent-start sentinel live in `@vestlang/utils`.
 
 export * from "./dates.js";
 export * from "./allocate.js";
