@@ -22,7 +22,7 @@ import type {
   OCTDate,
 } from "@vestlang/types";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
-import { CONTINGENT_START_SENTINEL, fractionToNumeric } from "@vestlang/utils";
+import { CONTINGENT_START_SENTINEL, apportionStored } from "@vestlang/utils";
 import type {
   Cliff,
   Fraction,
@@ -710,6 +710,17 @@ export const buildTemplate = (
     blockers.push(...headStart.blockers);
   }
 
+  // Lower every statement's share fraction to its stored Numeric AS A SET, not one
+  // at a time: a schedule of exact thirds summing to 1 must store a set that still
+  // sums to 1, or the single-cumulative allocator floors the last share away (the
+  // #413 conservation bug). `apportionStored` truncates each to ten places and hands
+  // the lost ulps back by largest remainder. The array is indexed by loop position
+  // `i` below — every statement here produces exactly one `statements.push`, in this
+  // order, so the index lines up with no realignment.
+  const storedPercentages = apportionStored(
+    resolutions.map((r) => r.percentage),
+  );
+
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
     const { type, length, occurrences } = r.periodicity;
@@ -794,8 +805,9 @@ export const buildTemplate = (
     }
 
     // The internal share is an exact Fraction; the stored field is a Numeric
-    // decimal, so render it at the write boundary.
-    const percentage = fractionToNumeric(r.percentage);
+    // decimal apportioned across the whole schedule above, so read this statement's
+    // share from the schedule-whole set rather than truncating it in isolation.
+    const percentage = storedPercentages[i];
 
     // A *pure milestone* — vests entirely on its event hold, with no time grid —
     // stores with no `schedule`. The omission predicate is a three-way conjunction,

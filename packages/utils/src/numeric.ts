@@ -177,3 +177,102 @@ export const fractionToNumeric = (f: Fraction): Numeric => {
   digits = digits.replace(/0+$/, "");
   return digits.length === 0 ? intPart.toString() : `${intPart}.${digits}`;
 };
+
+// The 10-place grid the apportionment works on: one stored `Numeric` is an
+// integer numerator over 10^GRID_PLACES.
+const GRID_PLACES = MAX_PLACES;
+const GRID = 10n ** BigInt(GRID_PLACES);
+
+// Render a grid numerator (over 10^GRID_PLACES) as a minimal-form `Numeric` —
+// the same trailing-zero strip `fractionToNumeric` produces, so a value that
+// terminates short of ten places keeps its short form ("0.5", "1").
+const gridToNumeric = (numerator: bigint): Numeric => {
+  if (numerator % GRID === 0n) return (numerator / GRID).toString();
+  return renderFixed(numerator, GRID_PLACES).replace(/0+$/, "");
+};
+
+/**
+ * Apportion a schedule's statement share `Fraction`s to stored `Numeric`s
+ * *together*, so the stored set sums to exactly floor(Σf × 10^10)/10^10 — the
+ * closest 10-place representation of the exact total — rather than letting each
+ * statement truncate independently and lose the schedule's last share.
+ *
+ * The problem: `fractionToNumeric` floors each share at ten places on its own, so
+ * three exact thirds become `["0.3333333333"] × 3`, summing to 0.9999999999 — and
+ * the single-cumulative allocator floors that shortfall away, vesting one share
+ * short of the grant. Computed as a set, the lost ulps are handed back.
+ *
+ * Largest-remainder construction, in exact BigInt (the 10^10 grid overflows a
+ * `number`):
+ *   - each statement floors to `g_i = floor(f_i × 10^10)`, leaving an exact
+ *     fractional remainder `rem_i = (f_i × 10^10) − g_i`;
+ *   - `targetTotal = floor(Σ f_i × 10^10)` is the whole-ulp count the exact total
+ *     represents (truncate-toward-zero, matching `fractionToNumeric`);
+ *   - `deficit = targetTotal − Σ g_i` is the shortfall the independent floors lost;
+ *   - hand those `deficit` ulps back one each to the statements with the largest
+ *     remainder, ties broken by ASCENDING statement order (the earliest bumps), so
+ *     the result is deterministic and reads in source order.
+ *
+ * When `deficit ≤ 0` (the shares already sum to ≥ 1 — a literal-decimal author who
+ * under-typed, or an over-allocation the persist gate refuses downstream) or the
+ * array is empty, nothing is handed back: each statement keeps its own floor. The
+ * over-allocation case is caught by the allocation gate, not here, so we never
+ * throw — we faithfully store what was authored and let the gate speak.
+ */
+export const apportionStored = (fractions: Fraction[]): Numeric[] => {
+  if (fractions.length === 0) return [];
+
+  // Per-statement floor numerator on the grid and the exact remainder, kept as a
+  // rational rem/den so remainders across different denominators stay comparable
+  // without a float.
+  const parts = fractions.map((f) => {
+    const num = BigInt(f.numerator);
+    const den = BigInt(f.denominator);
+    if (num < 0n) {
+      throw new Error(
+        `apportionStored: expected a non-negative fraction (got ${f.numerator}/${f.denominator})`,
+      );
+    }
+    if (den <= 0n) {
+      throw new Error(
+        `apportionStored: denominator must be >= 1 (got ${f.denominator})`,
+      );
+    }
+    const scaled = num * GRID; // f × 10^10, exact
+    return { floor: scaled / den, rem: scaled % den, den };
+  });
+
+  // The deficit the independent floors lost is floor(Σ f_i × 10^10) − Σ floor_i,
+  // which is exactly floor(Σ rem_i/den_i): the whole ulps the summed fractional
+  // remainders carry. The remainders sit over different denominators, so add them
+  // on a common denominator (the running rational remN/remD) before flooring — the
+  // sum can cross whole ulps even though each remainder is < 1.
+  let remN = 0n;
+  let remD = 1n;
+  for (const p of parts) {
+    remN = remN * p.den + p.rem * remD;
+    remD *= p.den;
+  }
+  const deficit = remN / remD;
+
+  const numerators = parts.map((p) => p.floor);
+  if (deficit > 0n) {
+    // Rank by descending remainder (rem_i/den_i), ascending index on a tie. Cross-
+    // multiply to compare two rationals without losing precision.
+    const order = parts
+      .map((_, i) => i)
+      .sort((a, b) => {
+        const lhs = parts[a].rem * parts[b].den;
+        const rhs = parts[b].rem * parts[a].den;
+        if (lhs > rhs) return -1;
+        if (lhs < rhs) return 1;
+        return a - b; // tie → earlier statement first
+      });
+    // The deficit is bounded by the statement count (each statement loses < 1 ulp),
+    // so it fits a number for the bump count.
+    const bumps = Math.min(Number(deficit), order.length);
+    for (let j = 0; j < bumps; j++) numerators[order[j]] += 1n;
+  }
+
+  return numerators.map(gridToNumeric);
+};

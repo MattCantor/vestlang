@@ -19,6 +19,13 @@ const fmt = (f: Fraction): string => `${f.numerator}/${f.denominator}`;
 export const errorFindings = (findings: Finding[]): Finding[] =>
   findings.filter((f) => f.severity === "error");
 
+// The complement of errorFindings — the advisory findings a storable schedule
+// still carries (an under-allocation, a residual cliff-precision note). Persist
+// surfaces these in its success envelope rather than dropping them, so the caller
+// sees the warning the error gate let through. One severity split, two readings.
+export const warningFindings = (findings: Finding[]): Finding[] =>
+  findings.filter((f) => f.severity !== "error");
+
 export const formatFinding = (f: Finding): string => {
   switch (f.kind) {
     case "over-allocation":
