@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  CONTINGENT_START_SENTINEL,
   addMonthsRule,
   addDays,
   addPeriod,
@@ -443,5 +444,77 @@ describe("monthsBetween", () => {
       diff: 0,
       remainderDays: 0,
     });
+  });
+
+  // The forward branch that decrements the month count when `to` falls short of
+  // `from`'s clamped day was entirely uncovered — every case above either landed
+  // exactly on a month boundary or had `to`'s day ≥ `from`'s. A whole month from
+  // Jan 31 is Feb 29 (the clamp), so Feb 10 is short of one month: 0 months and
+  // 10 days, not 1 month with a negative remainder.
+  it("forward partial month under a month-end clamp: Jan 31 → Feb 10 is 0 months, 10 days", () => {
+    expect(monthsBetween("2024-01-31", "2024-02-10")).toEqual({
+      diff: 0,
+      remainderDays: 10,
+    });
+  });
+});
+
+// The pickDay policy cases above all step into February, where 29/30/31_OR_LAST
+// collapse onto the same month-end and can't be told apart. These step into
+// longer months, where each policy resolves to a distinct day — pinning that
+// 29_OR_LAST really means 29 (not the 30/31 fall-through) and 30_OR_LAST means 30.
+describe("addMonthsRule — pickDay policies are distinct outside a short month", () => {
+  it("29_OR_LAST resolves to 29 in a 30-day month (not 30)", () => {
+    // Mar 31 + 1mo → April (30 days): 29_OR_LAST picks 29; the 30_OR_LAST
+    // fall-through would pick 30.
+    expect(addMonthsRule("2024-03-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2024-04-29",
+    );
+  });
+
+  it("30_OR_LAST resolves to 30 in a 31-day month (not 31)", () => {
+    // Jan 31 + 2mo → March (31 days): 30_OR_LAST picks 30; the 31_OR_LAST
+    // fall-through would pick 31.
+    expect(addMonthsRule("2024-01-31", 2, "30_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2024-03-30",
+    );
+  });
+
+  it("31_OR_LAST resolves to the full 31 in a 31-day month", () => {
+    expect(addMonthsRule("2024-01-31", 2, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+      "2024-03-31",
+    );
+  });
+});
+
+// advanceCursor steps occurrences × period units. The existing cases use 1 × 1,
+// where × and ÷ coincide, so they don't pin the operator. This steps 4 × 3 = 12
+// months; a ÷ would step 1 (4/3 truncated) and land 11 months early.
+describe("advanceCursor — span is the product occurrences × period", () => {
+  it("4 occurrences × 3-month period steps a full 12 months", () => {
+    expect(advanceCursor("2024-01-15", 4, 3, "MONTHS")).toBe("2025-01-15");
+  });
+});
+
+// The rejection side of the 0001–9999 range (year 0000 / past 9999) is covered
+// in the "year range" block above; these pin the acceptance side — a date sitting
+// exactly on each endpoint round-trips instead of being rejected. 9999-12-31 is
+// also the contingent-start sentinel, so it must stay representable.
+describe("year range — the 0001 and 9999 endpoints are representable", () => {
+  it("accepts a date in year 0001 (range floor)", () => {
+    expect(addDays("0001-01-01", 5)).toBe("0001-01-06");
+  });
+
+  it("accepts 9999-12-31 (range ceiling, the sentinel date)", () => {
+    expect(addDays("9999-12-30", 1)).toBe("9999-12-31");
+  });
+});
+
+describe("CONTINGENT_START_SENTINEL", () => {
+  it("is the last representable calendar date, 9999-12-31", () => {
+    // Load-bearing: the compiler recognizes a contingent start by this exact
+    // value, and it must be a real-but-unsteppable date (year 9999 overflows the
+    // date math), so a silent change here would break contingent-start storage.
+    expect(CONTINGENT_START_SENTINEL).toBe("9999-12-31");
   });
 });

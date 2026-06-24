@@ -4,6 +4,10 @@ dist/
 .DS_Store
 *.log
 
+# Stryker mutation-testing output
+.stryker-tmp/
+**/reports/mutation/
+
 # Stale npm lockfile — this is a pnpm workspace
 package-lock.json
 
