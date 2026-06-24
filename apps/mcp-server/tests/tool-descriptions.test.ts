@@ -78,6 +78,32 @@ describe("mcp-server / vestlang_evaluate_as_of validity channel in description",
   });
 });
 
+describe("mcp-server / compile-does-not-certify-allocatability nudge (#431)", () => {
+  it("vestlang_compile says it is the parse tool, not an allocatability oracle", async () => {
+    const description = await descriptionOf("vestlang_compile");
+    // It is the DSL → AST parse tool; producing the AST does not certify the
+    // schedule fits the grant.
+    expect(description).toMatch(/parse tool/i);
+    expect(description).toMatch(/not an allocatability oracle/i);
+    expect(description).toMatch(/does not certify/i);
+  });
+
+  it("the schedule-producing tools route the over-allocation answer to valid/findings", async () => {
+    for (const tool of [
+      "vestlang_evaluate",
+      "vestlang_evaluate_as_of",
+      "vestlang_vested_between",
+    ]) {
+      const description = await descriptionOf(tool);
+      // The nudge: compiling/evaluating does not by itself certify the schedule
+      // fits the grant — that answer is the valid/findings channel.
+      expect(description, tool).toMatch(/does not by itself certify/i);
+      expect(description, tool).toContain("`valid`");
+      expect(description, tool).toContain("`findings`");
+    }
+  });
+});
+
 describe("mcp-server / server INSTRUCTIONS error-shape paragraph (#296, AC#8)", () => {
   it("no longer enumerates only the two syntax/evaluation ruleIds", async () => {
     const client = await connectedClient();

@@ -61,7 +61,7 @@ const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
 describe("validateVestingScheduleTemplate", () => {
   it("accepts a well-formed template", () => {
     const result = validateVestingScheduleTemplate(validTemplate);
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
@@ -70,7 +70,7 @@ describe("validateVestingScheduleTemplate", () => {
       ...validTemplate,
       id: "",
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("id");
   });
 
@@ -78,14 +78,14 @@ describe("validateVestingScheduleTemplate", () => {
     const result = validateVestingScheduleTemplate(
       oneStatement(MAX_INSTALLMENTS),
     );
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
   });
 
   it("rejects a schedule that expands past the installment cap", () => {
     const result = validateVestingScheduleTemplate(
       oneStatement(MAX_INSTALLMENTS + 1),
     );
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
       true,
     );
@@ -100,7 +100,7 @@ describe("validateVestingScheduleTemplate", () => {
         { ...oneStatement(half).statements[0], order: 2 },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
       true,
     );
@@ -111,7 +111,7 @@ describe("validateVestingScheduleTemplate", () => {
       id: "x",
       statements: [],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements");
   });
 
@@ -131,7 +131,7 @@ describe("validateVestingScheduleTemplate", () => {
         },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0].percentage");
   });
 
@@ -159,7 +159,7 @@ describe("validateVestingScheduleTemplate", () => {
         },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(
       result.errors.some((e) => e.message.includes("duplicate order")),
     ).toBe(true);
@@ -186,7 +186,7 @@ describe("validateVestingScheduleTemplate", () => {
         },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toEqual(
       expect.arrayContaining([
         "statements[0].schedule.cliff.length",
@@ -215,7 +215,7 @@ describe("validateVestingScheduleTemplate", () => {
         },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].schedule.cliff.percentage",
     );
@@ -237,7 +237,7 @@ describe("validateVestingScheduleTemplate", () => {
         },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].schedule.period_type",
     );
@@ -407,7 +407,7 @@ describe("validateStatement — percentage bounds", () => {
     const result = validateVestingScheduleTemplate(
       withStatementPercentage("-0.5"),
     );
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0].percentage");
   });
 
@@ -415,7 +415,7 @@ describe("validateStatement — percentage bounds", () => {
     const result = validateVestingScheduleTemplate(
       withStatementPercentage("1"),
     );
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
   });
 
   // Over-allocation is the evaluator's finding to raise, not the validator's to
@@ -424,7 +424,7 @@ describe("validateStatement — percentage bounds", () => {
     const result = validateVestingScheduleTemplate(
       withStatementPercentage("1.5"),
     );
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
   });
 });
 
@@ -453,14 +453,15 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
 
   it("accepts a well-formed event_condition (bare real id)", () => {
     expect(
-      validateVestingScheduleTemplate(withCondition({ event_id: "ipo" })).valid,
+      validateVestingScheduleTemplate(withCondition({ event_id: "ipo" }))
+        .structurallyValid,
     ).toBe(true);
   });
 
   it("accepts a synthetic event_condition id", () => {
     expect(
       validateVestingScheduleTemplate(withCondition({ event_id: "evt:1" }))
-        .valid,
+        .structurallyValid,
     ).toBe(true);
   });
 
@@ -468,7 +469,7 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
     const result = validateVestingScheduleTemplate(
       withCondition({ event_id: "" }),
     );
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].event_condition.event_id",
     );
@@ -476,7 +477,7 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
 
   it("rejects a non-string event_id", () => {
     const result = validateVestingScheduleTemplate(withCondition({}));
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].event_condition.event_id",
     );
@@ -529,7 +530,7 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
         { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
       ],
     });
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
@@ -542,7 +543,7 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
         { order: 1, percentage: "1" } as never,
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0]");
     expect(
       result.errors.some((e) =>
@@ -561,7 +562,7 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
         { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
       ],
     });
-    expect(result.valid).toBe(false);
+    expect(result.structurallyValid).toBe(false);
     expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
       true,
     );
@@ -575,7 +576,7 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
         { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
       ],
     });
-    expect(result.valid).toBe(true);
+    expect(result.structurallyValid).toBe(true);
   });
 });
 
@@ -691,8 +692,11 @@ describe("validateTemplateAllocatable (#418)", () => {
       },
     ]);
 
-    // The seam, on the SAME object: the structural validator says valid.
-    expect(validateVestingScheduleTemplate(t).valid).toBe(true);
+    // The seam, on the SAME object: the structural validator says the shape is
+    // well-formed (it never bounds the share), yet the allocatability check above
+    // flags it. The structural result has no `valid` to misread — only
+    // `structurallyValid`.
+    expect(validateVestingScheduleTemplate(t).structurallyValid).toBe(true);
   });
 
   it("warns but stays valid on an under-allocating template (a warning does not flip valid)", () => {

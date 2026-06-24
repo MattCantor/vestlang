@@ -3,10 +3,13 @@
 // The template structure is no longer hand-checked here: the shape and its rules
 // live once in `@vestlang/primitives`' shared Zod schema, which the MCP server's
 // persisted-artifact validator parses against too. This file parses a template
-// against that schema and maps the result back to the `{ valid, errors[] }`
-// shape consumers expect — zod stays an implementation detail behind that surface.
-// The runtime validator is a different shape (it cross-checks against the
-// template) and stays hand-rolled here.
+// against that schema and maps the result back to a structural verdict
+// (`structurallyValid` + `errors[]`) — zod stays an implementation detail behind
+// that surface. The structural verdict deliberately carries no `valid` field, so
+// shape-validity can't be misread as allocatability (that answer is
+// `validateTemplateAllocatable`). The runtime validator is a different shape (it
+// cross-checks against the template) and stays hand-rolled here, keeping its own
+// "inputs ok?" `valid`.
 
 import type {
   Finding,
@@ -26,7 +29,27 @@ export interface ValidationError {
   message: string;
 }
 
-export interface ValidationResult {
+/**
+ * The structural-only verdict from `validateVestingScheduleTemplate`. There is
+ * deliberately no field named `valid`: a reader can't mistake shape-validity for
+ * allocatability. `structurallyValid` answers only "is the shape well-formed?";
+ * the `allocation` discriminant records, in the type itself, that over-allocation
+ * was NOT examined here. To learn whether a template fits the grant, call
+ * `validateTemplateAllocatable` — its `valid` does mean "safe to allocate."
+ */
+export interface StructuralValidationResult {
+  structurallyValid: boolean;
+  errors: ValidationError[];
+  allocation: "not-checked";
+}
+
+/**
+ * The runtime-inputs verdict from `validateVestingRuntime`. Its `valid` is a
+ * distinct, legitimate "inputs ok?" predicate — it carries no allocatability
+ * overload, so it keeps the plain `valid` field. (Separated from the structural
+ * verdict only so the structural retype doesn't leak into this path.)
+ */
+export interface RuntimeValidationResult {
   valid: boolean;
   errors: ValidationError[];
 }
@@ -45,36 +68,42 @@ export interface AllocatableValidationResult {
 
 /**
  * Structural validation for a canonical VestingScheduleTemplate. Returns a
- * { valid, errors[] } result that consumers (the compiler, the OCF validator)
- * can use to either bail or map into their own report shape. Schema-only:
- * checks the spec's well-formedness, not runtime inputs.
+ * { structurallyValid, errors[], allocation } result that consumers (the
+ * compiler, the OCF validator) can use to either bail or map into their own
+ * report shape. Schema-only: checks the spec's well-formedness, not runtime
+ * inputs.
  *
- * Heads-up: a structurally valid template can still allocate more than 100% of
- * the grant. The `SHARE_OF_GRANT` percentage deliberately carries no upper
- * bound (it tracks OCF's unbounded `Numeric`), so two statements summing to
- * 150% pass here with `valid: true`. Over-allocation is a *separate* check —
- * `templateAllocationFindings`, or the combined `validateTemplateAllocatable`
- * that runs both passes. Reading this `valid` as "safe to allocate" is a real
- * foot-gun: it doesn't bound the share. When you need an allocatability verdict,
- * call `validateTemplateAllocatable`.
+ * The result carries NO `valid` field on purpose. A structurally valid template
+ * can still allocate more than 100% of the grant — the `SHARE_OF_GRANT`
+ * percentage deliberately carries no upper bound (it tracks OCF's unbounded
+ * `Numeric`), so two statements summing to 150% are well-formed. Naming the
+ * field `structurallyValid` (and tagging `allocation: "not-checked"`) stops a
+ * caller reading shape-validity as "safe to allocate." Over-allocation is a
+ * *separate* check — `templateAllocationFindings`, or the combined
+ * `validateTemplateAllocatable` that runs both passes and whose `valid` does
+ * mean "fits the grant."
  */
 export const validateVestingScheduleTemplate = (
   t: VestingScheduleTemplate,
-): ValidationResult => {
+): StructuralValidationResult => {
   const result = TEMPLATE.safeParse(t);
   if (result.success) {
-    return { valid: true, errors: [] };
+    return { structurallyValid: true, errors: [], allocation: "not-checked" };
   }
   const errors = zodIssuesToValidationErrors(result.error.issues, t);
-  return { valid: false, errors };
+  return { structurallyValid: false, errors, allocation: "not-checked" };
 };
 
 /**
  * Structure *and* allocatability in one verdict — the function to call when
- * `valid` needs to mean "safe to allocate," which the structural validator's
- * `valid` does not (see its note). Runs `validateVestingScheduleTemplate` for
- * the shape, then `templateAllocationFindings` for the over/under-allocation
- * sum, and combines them:
+ * `valid` needs to mean "safe to allocate." This is the allocatability checker:
+ * `compile` / `compileToInstallments` do NOT certify allocatability (they
+ * compile an over-allocating template to an over-vesting stream with no
+ * finding), so pair the compile with this check whenever the answer matters.
+ * The structural validator's `structurallyValid` answers shape only — it never
+ * bounds the share. Runs `validateVestingScheduleTemplate` for the shape, then
+ * `templateAllocationFindings` for the over/under-allocation sum, and combines
+ * them:
  *   - `errors`   — the structural ValidationError[].
  *   - `findings` — the allocation Finding[] (over-allocation = error,
  *                  under-allocation = warning, none at 100% or 0 shares).
@@ -105,7 +134,7 @@ export const validateTemplateAllocatable = (
   totalShares: number,
 ): AllocatableValidationResult => {
   const structural = validateVestingScheduleTemplate(template);
-  if (!structural.valid) {
+  if (!structural.structurallyValid) {
     // Invalid shape is the only input that makes templateAllocationFindings
     // throw (oversized/malformed percentage, non-array statements), so skip it
     // entirely — the structural errors already carry the verdict.
@@ -136,7 +165,7 @@ export const validateTemplateAllocatable = (
 export const validateVestingRuntime = (
   runtime: VestingRuntime,
   template: VestingScheduleTemplate,
-): ValidationResult => {
+): RuntimeValidationResult => {
   const errors: ValidationError[] = [];
 
   // Every canonical statement is DATE-anchored, so a non-empty template needs a
@@ -257,7 +286,7 @@ export const assertValidVestingScheduleTemplate = (
   t: VestingScheduleTemplate,
 ): void => {
   const result = validateVestingScheduleTemplate(t);
-  if (!result.valid) {
+  if (!result.structurallyValid) {
     throw new Error(
       `Invalid VestingScheduleTemplate:\n${formatErrors(result.errors)}`,
     );

@@ -70,4 +70,57 @@ describe("mcp-server / over-allocation surfacing", () => {
     expect(sc.valid).toBe(true);
     expect(sc.findings).toEqual([]);
   });
+
+  // #431 AC4 — the over-allocation guarantee on the OTHER installment-producing
+  // surfaces. evaluate_as_of and vested_between report it through the same
+  // `valid` / `findings` channel as evaluate (this is already true; pinned as a
+  // regression guard so the retype can't silently drop it).
+  it("vestlang_evaluate_as_of reports valid: false with the over-allocation finding", async () => {
+    const client = await connectClient();
+    const res = (await client.callTool({
+      name: "vestlang_evaluate_as_of",
+      arguments: {
+        dsl,
+        grant_date: "2025-01-01",
+        grant_quantity: 1000,
+        as_of: "2027-01-01",
+      },
+    })) as CallResult;
+
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      valid: boolean;
+      findings: Finding[];
+    };
+    expect(sc.valid).toBe(false);
+    expect(sc.findings.some((f) => f.kind === "over-allocation")).toBe(true);
+    expect(
+      sc.findings.find((f) => f.kind === "over-allocation")?.severity,
+    ).toBe("error");
+  });
+
+  it("vestlang_vested_between reports valid: false with the over-allocation finding", async () => {
+    const client = await connectClient();
+    const res = (await client.callTool({
+      name: "vestlang_vested_between",
+      arguments: {
+        dsl,
+        grant_date: "2025-01-01",
+        grant_quantity: 1000,
+        from: "2025-01-01",
+        to: "2027-12-31",
+      },
+    })) as CallResult;
+
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      valid: boolean;
+      findings: Finding[];
+    };
+    expect(sc.valid).toBe(false);
+    expect(sc.findings.some((f) => f.kind === "over-allocation")).toBe(true);
+    expect(
+      sc.findings.find((f) => f.kind === "over-allocation")?.severity,
+    ).toBe("error");
+  });
 });

@@ -1147,3 +1147,62 @@ describe("compile — statement ordering and the zero-share boundary", () => {
     expect(sumAmounts(compile(template, 0, startJan2025))).toBe(0);
   });
 });
+
+// #431 — `compile` / `compileToInstallments` are byte-identical and do NOT clamp.
+// The retype of the structural verdict (and the docstring nudges toward
+// `validateTemplateAllocatable`) must not move the compiled stream. These pins are
+// hand-written literals, not snapshots: a snapshot's first run would write-and-pass
+// and certify nothing, so the output is committed inline and a shift fails loudly.
+describe("compile — byte-identical output and no over-allocation clamp (#431)", () => {
+  // The same two-statement shape the #418 / validate.test.ts allocatability block
+  // uses: each statement a single 12-month lump, distinct order. Reused here so the
+  // 100% and 150% cases line up with the checker's fixtures.
+  const statement = (order: number, percentage: string) => ({
+    order,
+    schedule: {
+      occurrences: 1,
+      period: 12,
+      period_type: "MONTHS" as const,
+    },
+    percentage,
+  });
+  const template = (...percentages: string[]): VestingScheduleTemplate => ({
+    id: "alloc",
+    statements: percentages.map((p, i) => statement(i + 1, p)),
+  });
+  const runtime: VestingRuntime = { startDate: "2024-01-01" };
+  const totalShares = 4800;
+
+  it("100% template — pinned CompiledEvent[] (string amounts)", () => {
+    expect(compile(template("0.75", "0.25"), totalShares, runtime)).toEqual([
+      { date: "2025-01-01", amount: "3600" },
+      { date: "2026-01-01", amount: "1200" },
+    ]);
+  });
+
+  it("100% template — pinned CompiledInstallment[] (number amounts)", () => {
+    expect(
+      compileToInstallments(template("0.75", "0.25"), totalShares, runtime),
+    ).toEqual([
+      { date: "2025-01-01", amount: 3600 },
+      { date: "2026-01-01", amount: 1200 },
+    ]);
+  });
+
+  // No allocatability gate in the compiler: the 150% template compiles to two full
+  // 3600-share lumps (7200 > 4800), exactly as before. If a clamp ever crept into
+  // allocate.ts the second amount would shrink and these literals would fail.
+  it("150% template still compiles to an over-vesting stream — pinned, no clamp", () => {
+    const t150 = template("0.75", "0.75");
+    expect(compile(t150, totalShares, runtime)).toEqual([
+      { date: "2025-01-01", amount: "3600" },
+      { date: "2026-01-01", amount: "3600" },
+    ]);
+    expect(compileToInstallments(t150, totalShares, runtime)).toEqual([
+      { date: "2025-01-01", amount: 3600 },
+      { date: "2026-01-01", amount: 3600 },
+    ]);
+    // 7200 > 4800 totalShares — the over-vesting sum is the proof there's no clamp.
+    expect(sumAmounts(compile(t150, totalShares, runtime))).toBe(7200);
+  });
+});

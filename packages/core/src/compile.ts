@@ -227,9 +227,11 @@ const compileRaw = (
  * Compile to numeric installments ({ date, amount: number }), for extended's
  * downstream rendering.
  *
- * No allocatability check: an over-allocating template (statements summing past
- * 100%) compiles to an over-vesting installment stream with no finding, warning,
- * or throw — the allocator over-vests by design and doesn't clamp. Run
+ * `compile` does not certify allocatability — pair it with
+ * `validateTemplateAllocatable`. There is no allocatability check here: an
+ * over-allocating template (statements summing past 100%) compiles to an
+ * over-vesting installment stream with no finding, warning, or throw — the
+ * allocator over-vests by design and doesn't clamp. Run
  * `validateTemplateAllocatable` / `templateAllocationFindings` first if you need
  * to know whether the template fits the grant.
  */
@@ -243,11 +245,12 @@ export const compileToInstallments = (
  * Compile to OCF/Carta-native vesting events ({ date, amount: string }), the
  * shape OCF-Tools consumes directly.
  *
- * Same caveat as `compileToInstallments`: this validates structure and runtime
- * but not allocatability, so an over-allocating template silently compiles to an
- * over-vesting stream (no finding/warning/throw). A consumer that wants to refuse
- * an over-100% template must call `validateTemplateAllocatable` /
- * `templateAllocationFindings` before compiling.
+ * `compile` does not certify allocatability — pair it with
+ * `validateTemplateAllocatable`. Same caveat as `compileToInstallments`: this
+ * validates structure and runtime but not allocatability, so an over-allocating
+ * template silently compiles to an over-vesting stream (no finding/warning/throw).
+ * A consumer that wants to refuse an over-100% template must call
+ * `validateTemplateAllocatable` / `templateAllocationFindings` before compiling.
  */
 export const compile = (
   template: VestingScheduleTemplate,
