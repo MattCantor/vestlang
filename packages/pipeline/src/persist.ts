@@ -34,13 +34,14 @@ import {
 } from "@vestlang/core";
 import type {
   DeadBlocker,
+  Finding,
   OCTDate,
   UnresolvedBlocker,
   VestingRuntime,
 } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
 import { buildContext } from "./context.js";
-import { errorFindings, formatFinding } from "./findings.js";
+import { errorFindings, warningFindings, formatFinding } from "./findings.js";
 
 // A firing entry as it lives in VestingRuntime.eventFirings. Re-stated locally so
 // the delta logic has one shape. Module-private — it never appears in a public
@@ -70,6 +71,12 @@ export type PersistResult = Result<{
   artifact: PersistedArtifact;
   pending: UnresolvedBlocker[];
   dead: DeadBlocker[];
+  // The schedule's warning-severity findings, carried to the caller. Error
+  // findings already gate the refuse path above, so anything here is advisory: a
+  // schedule that under-allocates the grant (an author who typed share decimals
+  // summing below 100%), or a residual precision note on a cliff. Surfacing them is
+  // the #413 fix — they used to be dropped silently once the artifact stored.
+  warnings: Finding[];
 }>;
 
 // Compile a program down to a storable artifact. Three gates stand in the way, in
@@ -175,12 +182,15 @@ export function runPersist(input: PersistInput): PersistResult {
   });
   // pending/dead come from resolution (the verdict with blocker vocabulary). A
   // storable schedule may legitimately carry a non-empty `dead` here — see the
-  // PersistResult note above.
+  // PersistResult note above. The warning-severity findings (under-allocation, a
+  // residual cliff-precision note) ride along too: the error findings already gated
+  // the refuse path above, so what's left is advisory but used to be dropped.
   return {
     ok: true,
     artifact,
     pending: schedule.resolution.pending,
     dead: schedule.resolution.dead,
+    warnings: warningFindings(schedule.findings),
   };
 }
 

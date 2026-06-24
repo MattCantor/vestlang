@@ -37,10 +37,12 @@ type PersistedArtifact = {
   sidecar?: { vestlang: Record<string, { definition: string }> };
 };
 
+type Finding = { kind: string; severity: string };
 type PersistOutput = {
   artifact: PersistedArtifact;
   pending: Blocker[];
   dead: Blocker[];
+  warnings: Finding[];
 };
 
 type FiringToApply = {
@@ -489,6 +491,64 @@ describe("mcp-server / persistence tool pair", () => {
     expect(res.isError).toBeFalsy();
     const out = res.structuredContent as unknown as PersistOutput;
     expect(out.artifact.template.statements.length).toBeGreaterThan(0);
+  });
+
+  // #413 — the persist envelope gains an additive `warnings` channel. A clean
+  // template carries []; an under-allocating one surfaces its warning here rather
+  // than dropping it. The existing { artifact, pending, dead } fields stay intact.
+  it("surfaces warning-severity findings in the additive `warnings` envelope field", async () => {
+    const client = await connectClient();
+
+    // A clean fully-dated template: warnings present and empty.
+    const clean = await persistOk(client, {
+      dsl: "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 1200,
+    });
+    expect(clean).toHaveProperty("warnings");
+    expect(clean.warnings).toEqual([]);
+    // The pre-existing fields are untouched.
+    expect(clean).toHaveProperty("artifact");
+    expect(clean).toHaveProperty("pending");
+    expect(clean).toHaveProperty("dead");
+
+    // An under-allocating template: the warning rides the envelope.
+    const under = await persistOk(client, {
+      dsl: "1/2 VEST FROM DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
+      grant_date: "2025-01-01",
+      grant_quantity: 1000,
+    });
+    expect(under.warnings.some((f) => f.kind === "under-allocation")).toBe(
+      true,
+    );
+  });
+
+  it("three thirds (THEN) persist with no precision warning and conserve the grant (#413/#415)", async () => {
+    const client = await connectClient();
+    const persisted = await persistOk(client, {
+      dsl:
+        "1/3 VEST OVER 1 month EVERY 1 month " +
+        "THEN 1/3 VEST OVER 1 month EVERY 1 month " +
+        "THEN 1/3 VEST OVER 1 month EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 30000,
+    });
+    // The schedule-whole set: the earliest statement carries the +1-ulp bump.
+    expect(
+      persisted.artifact.template.statements.map(
+        (s) => (s as { percentage: string }).percentage,
+      ),
+    ).toEqual(["0.3333333334", "0.3333333333", "0.3333333333"]);
+    // No precision warning — the set allocates exactly.
+    expect(
+      persisted.warnings.some((f) => f.kind === "precision-insufficient"),
+    ).toBe(false);
+
+    const out = await rehydrate(client, {
+      artifact: persisted.artifact,
+      grant_quantity: 30000,
+    });
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(30000);
   });
 
   it("reports a PLUS over-allocation as the over-allocation, not the shape", async () => {

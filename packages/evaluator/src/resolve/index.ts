@@ -162,16 +162,19 @@ const allocationFindings = (
     totalShares,
   );
 
-// Run the precision analyzer over a built template's stored Numeric percentages
-// and emit a warning finding for any that misallocates at the grant size.
+// Run the precision analyzer over a built template's stored Numeric CLIFF
+// percentages and emit a warning finding for any that misallocates at the grant
+// size.
 //
-// Share-count basis (the v1 semantics):
-//   - a statement's percentage is a share of the whole grant → analyze against
-//     `grant`;
-//   - a cliff's percentage is a share *of its own statement*, so analyze against
-//     that statement's share basis, floor(stmtFraction × grant). For a single
-//     100% statement this is just the grant, matching the analyzer's own
-//     (0.3333…, 36000) example.
+// The statement percentages are no longer analyzed here. They're now apportioned
+// across the whole schedule (`apportionStored` in lower.ts), so the stored set sums
+// to the exact total and the single-cumulative allocator conserves the grant by
+// construction — there is nothing per statement to warn about, and a sibling-blind
+// per-statement check would be incoherent anyway (no decimal can hit 1/3 × 30000 =
+// 10000 on its own). A cliff percentage, by contrast, is a share *of its own
+// statement* (not a grant claim, so it never participates in that apportionment),
+// and its truncated decimal can still misallocate within its statement's basis —
+// floor(stmtFraction × grant) — so that pass stays.
 const precisionFindings = (
   template: VestingScheduleTemplate,
   grant: number,
@@ -179,13 +182,11 @@ const precisionFindings = (
   if (grant <= 0) return [];
   const findings: Finding[] = [];
   template.statements.forEach((s, i) => {
-    const stmtFraction = numericToFraction(s.percentage);
-    pushPrecisionFinding(findings, s.percentage, grant, ["statements", i]);
-
     // The cliff now lives inside the optional `schedule` block; a pure milestone
     // has neither, so there is nothing to analyze.
     const cliff = s.schedule?.cliff;
     if (cliff) {
+      const stmtFraction = numericToFraction(s.percentage);
       analyzeCliff(findings, cliff.percentage, stmtFraction, grant, [
         "statements",
         i,

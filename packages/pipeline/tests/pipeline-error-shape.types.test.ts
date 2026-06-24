@@ -17,6 +17,7 @@ import type {
 import type { PersistedArtifact } from "@vestlang/evaluator";
 import type {
   AbsenceAssumption,
+  Finding,
   OCTDate,
   UnresolvedBlocker,
   DeadBlocker,
@@ -27,6 +28,7 @@ type PersistOk = {
   artifact: PersistedArtifact;
   pending: UnresolvedBlocker[];
   dead: DeadBlocker[];
+  warnings: Finding[];
 };
 // The offset success payload carries the resolved date and, only when a commit
 // leaned on an unfired event, the message-enriched absence disclosure (#325). The

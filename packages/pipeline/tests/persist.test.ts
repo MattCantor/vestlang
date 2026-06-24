@@ -117,6 +117,112 @@ describe("runPersist (AC#4)", () => {
   });
 });
 
+// #413/#415 — precision conservation. A schedule of exact thirds means to vest the
+// whole grant, but each third stored independently truncates to 0.3333333333, the
+// set sums below 1, and the allocator floors the last share away. Apportioning the
+// stored set together (`apportionStored`) keeps the sum at exactly 1, so rehydrate
+// projects the full grant. The under-allocation channel is unchanged: an author who
+// types literal decimals that under-sum gets that warning surfaced, not silently
+// repaired.
+describe("precision conservation — schedule-whole storage (#413/#415)", () => {
+  const THIRDS_THEN =
+    "1/3 VEST OVER 1 month EVERY 1 month " +
+    "THEN 1/3 VEST OVER 1 month EVERY 1 month " +
+    "THEN 1/3 VEST OVER 1 month EVERY 1 month";
+  const THIRDS_PLUS =
+    "1/3 VEST FROM DATE 2025-01-01 OVER 1 month EVERY 1 month " +
+    "PLUS 1/3 VEST FROM DATE 2025-02-01 OVER 1 month EVERY 1 month " +
+    "PLUS 1/3 VEST FROM DATE 2025-03-01 OVER 1 month EVERY 1 month";
+
+  it("THEN thirds at grant 30000 store the apportioned set and rehydrate to exactly 30000", () => {
+    const persisted = persistOk({
+      dsl: THIRDS_THEN,
+      grant_date: "2025-01-01",
+      grant_quantity: 30000,
+    });
+    // The schedule-whole set: the earliest statement carries the +1-ulp bump.
+    expect(
+      persisted.artifact.template.statements.map((s) => s.percentage),
+    ).toEqual(["0.3333333334", "0.3333333333", "0.3333333333"]);
+
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 30000,
+    });
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(30000);
+    // No residual precision warning: the set allocates exactly.
+    expect(persisted.warnings).toEqual([]);
+  });
+
+  it("the PLUS variant (chaining dated grids) stores the apportioned set and conserves", () => {
+    // Three dated grids that step month-by-month chain off one cursor into a single
+    // template, so this IS storable — and the apportionment keeps the stored set at 1.
+    const persisted = persistOk({
+      dsl: THIRDS_PLUS,
+      grant_date: "2025-01-01",
+      grant_quantity: 30000,
+    });
+    expect(
+      persisted.artifact.template.statements.map((s) => s.percentage),
+    ).toEqual(["0.3333333334", "0.3333333333", "0.3333333333"]);
+    expect(persisted.warnings).toEqual([]);
+    const out = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 30000,
+    });
+    expect(out.projection.reduce((s, i) => s + i.amount, 0)).toBe(30000);
+  });
+
+  it("a literal-decimal under-summing set persists ok and surfaces the under-allocation in the envelope", () => {
+    // Hand-authored 0.3333333333 ×3 sums to 0.9999999999 < 1. The author wrote a
+    // schedule that legitimately leaves a share unvested; the apportionment stores it
+    // faithfully (it can't invent the missing ulp), and the under-allocation warning
+    // must reach the caller rather than being dropped.
+    const r = runPersist({
+      dsl:
+        "0.3333333333 VEST OVER 1 month EVERY 1 month " +
+        "THEN 0.3333333333 VEST OVER 1 month EVERY 1 month " +
+        "THEN 0.3333333333 VEST OVER 1 month EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 30000,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.artifact.template.statements.map((s) => s.percentage)).toEqual([
+        "0.3333333333",
+        "0.3333333333",
+        "0.3333333333",
+      ]);
+      // The signal surfaces — it is NOT silently dropped.
+      expect(r.warnings.some((f) => f.kind === "under-allocation")).toBe(true);
+    }
+  });
+
+  it("over-allocation stays a hard refusal (regression guard)", () => {
+    const r = runPersist({
+      dsl:
+        "0.6 VEST FROM DATE 2025-01-01 OVER 1 month EVERY 1 month " +
+        "PLUS 0.6 VEST FROM DATE 2025-01-01 OVER 1 month EVERY 1 month",
+      grant_date: "2025-01-01",
+      grant_quantity: 30000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("persist-not-storable");
+      expect(r.error.message).toMatch(/over-allocat/);
+    }
+  });
+
+  it("a storable template carries an empty warnings array", () => {
+    const r = persistOk({
+      dsl: TIME_BASED_DSL,
+      grant_date: "2025-01-01",
+      grant_quantity: 1200,
+    });
+    expect(r.warnings).toEqual([]);
+  });
+});
+
 describe("runRehydrate (AC#5)", () => {
   it("refuses an artifact with no stored grant date", () => {
     const r = runRehydrate({

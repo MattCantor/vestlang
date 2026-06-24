@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  apportionStored,
   fractionToNumeric,
   isNumeric,
   numericToFraction,
@@ -8,7 +9,7 @@ import {
   terminates,
   renderFixed,
 } from "../src/numeric";
-import type { Numeric } from "@vestlang/types";
+import type { Fraction, Numeric } from "@vestlang/types";
 import { analyzePrecision } from "../src/precision";
 
 // The OCF Numeric boundary: parse a stored decimal to its exact rational on the
@@ -167,6 +168,68 @@ describe("renderFixed", () => {
     expect(renderFixed(5n, 0)).toBe("5"); // no point at zero places
     expect(renderFixed(125n, 3)).toBe("0.125");
     expect(renderFixed(25n, 2)).toBe("0.25");
+  });
+});
+
+describe("apportionStored — schedule-whole share lowering (#413)", () => {
+  const f = (numerator: number, denominator: number): Fraction => ({
+    numerator,
+    denominator,
+  });
+
+  // The total parsed back from the stored set, as an exact rational over 10^10.
+  const sumStored = (stored: Numeric[]): Fraction =>
+    stored.reduce<Fraction>(
+      (acc, n) => {
+        const fr = numericToFraction(n);
+        return {
+          numerator:
+            acc.numerator * fr.denominator + fr.numerator * acc.denominator,
+          denominator: acc.denominator * fr.denominator,
+        };
+      },
+      { numerator: 0, denominator: 1 },
+    );
+
+  it("three exact thirds store a set that sums to exactly 1 (the deficit is handed back)", () => {
+    const stored = apportionStored([f(1, 3), f(1, 3), f(1, 3)]);
+    // The earliest statement carries the +1-ulp bump (ascending tie-break).
+    expect(stored).toEqual(["0.3333333334", "0.3333333333", "0.3333333333"]);
+    const total = sumStored(stored);
+    expect(total.numerator).toBe(total.denominator); // exactly 1
+  });
+
+  it("terminating shares are unchanged — no spurious bump", () => {
+    expect(apportionStored([f(1, 2), f(1, 2)])).toEqual(["0.5", "0.5"]);
+    expect(apportionStored([f(1, 4), f(3, 4)])).toEqual(["0.25", "0.75"]);
+  });
+
+  it("a lone 100% statement stores as the exact 1", () => {
+    expect(apportionStored([f(1, 1)])).toEqual(["1"]);
+  });
+
+  it("an empty set apportions to nothing", () => {
+    expect(apportionStored([])).toEqual([]);
+  });
+
+  it("sevenths recover their lost ulps too (the largest remainders win)", () => {
+    const stored = apportionStored([f(1, 7), f(2, 7), f(4, 7)]);
+    const total = sumStored(stored);
+    expect(total.numerator).toBe(total.denominator); // sums to exactly 1
+  });
+
+  it("under-summing literal decimals are stored faithfully — nothing invented", () => {
+    // Three hand-typed 0.3333333333 already sum below 1; the deficit is ≤ 0, so the
+    // apportionment stores exactly what was authored and lets the under-allocation
+    // gate speak.
+    const typed = f(3333333333, 10000000000);
+    const stored = apportionStored([typed, typed, typed]);
+    expect(stored).toEqual(["0.3333333333", "0.3333333333", "0.3333333333"]);
+  });
+
+  it("over-summing shares are stored as-is (the persist gate refuses, not this helper)", () => {
+    // 0.6 + 0.6 over-allocates; apportionStored must not throw — it stores faithfully.
+    expect(apportionStored([f(3, 5), f(3, 5)])).toEqual(["0.6", "0.6"]);
   });
 });
 
