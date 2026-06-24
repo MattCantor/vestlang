@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { templateAllocationFindings } from "@vestlang/core";
+import { templateAllocationFindings } from "../src/findings";
 import { fractionToNumeric } from "@vestlang/utils";
 
 // templateAllocationFindings re-runs the over/under-allocation check against a

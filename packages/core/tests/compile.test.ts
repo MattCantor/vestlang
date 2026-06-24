@@ -1035,3 +1035,115 @@ describe("compile — boundary hardening", () => {
     );
   });
 });
+
+describe("compile — event-conditioned statement (event hold)", () => {
+  // A scheduled statement that also waits on a named event: the whole grid stays
+  // held until the event fires, then folds at max(time-cliff baseline, firing) as
+  // one proportional cliff.
+  const template: VestingScheduleTemplate = {
+    id: "evt",
+    statements: [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 48,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
+        },
+        event_condition: { event_id: "ipo" },
+        percentage: "1",
+      },
+    ],
+  };
+
+  it("emits nothing while the event is unfired", () => {
+    // No matching firing in the runtime, so the grid never releases.
+    expect(compile(template, 100_000, startJan2025)).toEqual([]);
+  });
+
+  it("folds on the firing date when the firing is after the cliff baseline", () => {
+    // baseline = start + 12mo = 2026-01-01; the 2026-07-01 firing is later, so the
+    // proportional lump lands on the firing date.
+    const events = compile(template, 100_000, {
+      startDate: "2025-01-01",
+      eventFirings: [{ event_id: "ipo", date: "2026-07-01" }],
+    });
+    expect(events[0].date).toBe("2026-07-01");
+    expect(sumAmounts(events)).toBe(100_000);
+  });
+
+  it("folds on the cliff baseline when the firing precedes it", () => {
+    // The 2025-04-01 firing is before the 2026-01-01 baseline, so the baseline
+    // floors the fold point: the lump lands on 2026-01-01, not the earlier firing.
+    const events = compile(template, 100_000, {
+      startDate: "2025-01-01",
+      eventFirings: [{ event_id: "ipo", date: "2025-04-01" }],
+    });
+    expect(events[0].date).toBe("2026-01-01");
+    expect(sumAmounts(events)).toBe(100_000);
+  });
+});
+
+describe("compile — pure milestone (no schedule)", () => {
+  // A statement carrying an event_condition and no schedule: it projects nothing
+  // until the event fires, then vests its whole share as one lump on that date.
+  const template: VestingScheduleTemplate = {
+    id: "ms",
+    statements: [
+      { order: 1, event_condition: { event_id: "ipo" }, percentage: "1" },
+    ],
+  };
+
+  it("projects nothing while unfired", () => {
+    expect(compile(template, 100_000, startJan2025)).toEqual([]);
+  });
+
+  it("vests the whole share as one lump on the firing date", () => {
+    const events = compile(template, 100_000, {
+      startDate: "2025-01-01",
+      eventFirings: [{ event_id: "ipo", date: "2027-03-01" }],
+    });
+    expect(events).toEqual([{ date: "2027-03-01", amount: "100000" }]);
+  });
+});
+
+describe("compile — statement ordering and the zero-share boundary", () => {
+  it("sorts statements by order, not array position", () => {
+    // Two chained years written out of order: a 25% first year, a 75% second year.
+    // The compiler must process them by `order` (so the 75% lands in year two),
+    // regardless of how the array is arranged.
+    const monthly = {
+      occurrences: 12,
+      period: 1,
+      period_type: "MONTHS" as const,
+    };
+    const template: VestingScheduleTemplate = {
+      id: "ord",
+      statements: [
+        { order: 2, schedule: monthly, percentage: "0.75" },
+        { order: 1, schedule: monthly, percentage: "0.25" },
+      ],
+    };
+    const events = compile(template, 100_000, startJan2025);
+    expect(events).toHaveLength(24);
+    // Output is date-sorted: the first year is statement 1 (25%), the second
+    // year statement 2 (75%). A broken sort would flip the two halves.
+    expect(sumAmounts(events.slice(0, 12))).toBe(25_000);
+    expect(sumAmounts(events.slice(12))).toBe(75_000);
+  });
+
+  it("allows a zero-share grant (the non-negative boundary includes 0)", () => {
+    const template: VestingScheduleTemplate = {
+      id: "zero",
+      statements: [
+        {
+          order: 1,
+          schedule: { occurrences: 4, period: 1, period_type: "MONTHS" },
+          percentage: "1",
+        },
+      ],
+    };
+    expect(sumAmounts(compile(template, 0, startJan2025))).toBe(0);
+  });
+});

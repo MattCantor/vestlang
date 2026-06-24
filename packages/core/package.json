@@ -20,9 +20,12 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
+    "test:mutation": "stryker run",
     "clean": "rimraf dist"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@vestlang/primitives": "workspace:*",
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*",

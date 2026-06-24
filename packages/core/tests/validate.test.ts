@@ -316,6 +316,7 @@ describe("validateVestingRuntime", () => {
     expect(
       result.errors.some((e) => e.message.includes("duplicate event_id")),
     ).toBe(true);
+    expect(pathsOf(result.errors)).toContain("eventFirings");
   });
 
   it("assertValidVestingRuntime throws on invalid input", () => {
@@ -545,5 +546,79 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
       ],
     });
     expect(result.valid).toBe(true);
+  });
+});
+
+describe("validateVestingRuntime — edge branches", () => {
+  const emptyTemplate: VestingScheduleTemplate = {
+    id: "empty",
+    statements: [],
+  };
+
+  it("an empty template needs no startDate", () => {
+    // hasStatements is false, so the startDate-required check is skipped entirely.
+    const result = validateVestingRuntime({}, emptyTemplate);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("an empty template still format-checks a startDate that is present", () => {
+    const result = validateVestingRuntime(
+      { startDate: "01/01/2024" },
+      emptyTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("startDate");
+  });
+
+  it("rejects a non-array eventFirings", () => {
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: "nope",
+      } as unknown as VestingRuntime,
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings");
+  });
+
+  it("rejects a firing with an empty event_id", () => {
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: [{ event_id: "", date: "2026-01-01" }],
+      },
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].event_id");
+  });
+
+  it("rejects a firing whose event_id is not a string", () => {
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: [{ event_id: 123, date: "2026-01-01" }],
+      } as unknown as VestingRuntime,
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].event_id");
+  });
+
+  it("tolerates a null firing entry without throwing (optional chaining)", () => {
+    // A malformed null entry must surface as field errors, not a crash — the
+    // optional chaining on event_id / date is what keeps it graceful.
+    const result = validateVestingRuntime(
+      {
+        startDate: "2024-01-01",
+        eventFirings: [null],
+      } as unknown as VestingRuntime,
+      validTemplate,
+    );
+    expect(result.valid).toBe(false);
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].event_id");
+    expect(pathsOf(result.errors)).toContain("eventFirings[0].date");
   });
 });
