@@ -112,7 +112,7 @@ export interface Cliff {
 //                    canonical default (VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
 //                    Allocation is always CUMULATIVE_ROUND_DOWN — the interchange
 //                    has no allocation field.
-interface RuntimeBase {
+export interface RuntimeBase {
   // The hoisted vesting start; the DATE cursor's origin. A contingent start (its
   // calendar date unknown until a named event fires) stores the far-future
   // CONTINGENT_START_SENTINEL (`9999-12-31`, in @vestlang/utils) here, with the
@@ -124,6 +124,21 @@ interface RuntimeBase {
   grantDate?: OCTDate;
   vestingDayOfMonth?: VestingDayOfMonth;
 }
+
+// The single source of truth for the `RuntimeBase` field names. The downstream
+// sites that re-list these — the `toStoredTerms` projection, the producer in
+// lower.ts, the MCP wire validator — all derive from this set, so a new field
+// can't be silently dropped on the way to storage (#417/#422).
+//
+// Object-keyed, not an array, on purpose: only `satisfies Record<keyof
+// RuntimeBase, true>` forces the set to name *every* key (a missing one is a
+// compile error). An array `satisfies readonly (keyof RuntimeBase)[]` would catch
+// a stray key but happily accept a subset, so it could never catch a dropped one.
+export const RUNTIME_BASE_KEYS = {
+  startDate: true,
+  grantDate: true,
+  vestingDayOfMonth: true,
+} satisfies Record<keyof RuntimeBase, true>;
 
 // One named-event firing — the runtime witness channel for an event hold. The
 // start path no longer uses it (a contingent start is a DATE base on the sentinel
