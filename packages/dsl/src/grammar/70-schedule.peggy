@@ -1,4 +1,17 @@
-From = "FROM"i _ a:(VestingNode / GateExpr) {
+// A bare, anchorless offset of TWO OR MORE terms (`+ 20 days + 1 month`). The
+// single-term case (`+ 3 months`) is intentionally NOT matched here — it stays a
+// bare Duration via GateExpr below, which the normalizer anchors to the slot's
+// system base. Multi-term offsets, by contrast, can't ride a bare Duration (it's
+// one term), so we aggregate them with the same per-unit `normalizeOffsets` every
+// anchored node uses and hand back the offsets list. From/Cliff wrap it in a NODE
+// over their own system anchor (grantDate / vestingStart), so a written-out
+// `grantDate + 20 days + 1 month` and the bare `+ 20 days + 1 month` agree.
+MultiOffsets
+  = head:Duration tail:(_ Duration)+ {
+      return normalizeOffsets(collect(head, tail));
+    }
+
+From = "FROM"i _ a:(VestingNode / BareFromOffset / GateExpr) {
   if (hasSystemAnchor(a, "VESTING_START")) {
     error('vestingStart is a reserved system event that cannot be used in a `FROM` statement. Pick a different event name.')
   }
@@ -13,12 +26,26 @@ From = "FROM"i _ a:(VestingNode / GateExpr) {
   return a
 }
 
-Cliff = "CLIFF"i _ a:(VestingNode / GateExpr) {
+// `FROM + 20 days + 1 month` ⇒ a grant-date-anchored node carrying the aggregated
+// offsets.
+BareFromOffset
+  = offsets:MultiOffsets {
+      return { type: "NODE", base: mkGrantDate(), offsets };
+    }
+
+Cliff = "CLIFF"i _ a:(VestingNode / BareCliffOffset / GateExpr) {
   if (hasSystemAnchor(a, "GRANT_DATE")) {
     error('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
   }
   return a
 };
+
+// `CLIFF 20 days + 1 month` ⇒ a vesting-start-anchored node carrying the aggregated
+// offsets, mirroring how a single-term `CLIFF 20 days` anchors to vestingStart.
+BareCliffOffset
+  = offsets:MultiOffsets {
+      return { type: "NODE", base: mkVestingStart(), offsets };
+    }
 
 ScheduleBlock
   = f:From? _ p:OverEveryOpt _ c:Cliff? {

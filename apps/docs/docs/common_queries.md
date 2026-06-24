@@ -164,6 +164,7 @@ Resolve a vestlang offset expression to a concrete date. Accepts anything
 valid after `VEST FROM` in the DSL:
 
 - `+3 months`
+- `+20 days +1 month` (multi-term bare offset, aggregated months-first off the grant date)
 - `EVENT ipo + 6 months`
 - `DATE 2025-01-01 - 2 days`
 - `EARLIER OF (EVENT a, EVENT b)`
