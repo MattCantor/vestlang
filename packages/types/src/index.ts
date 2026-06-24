@@ -13,9 +13,11 @@ export type {
   VestingSchedule,
   Fraction,
   Cliff,
+  RuntimeBase,
   StoredTerms,
   VestingRuntime,
 } from "./canonical.js";
+export { RUNTIME_BASE_KEYS } from "./canonical.js";
 export type {
   TwoOrMore,
   SelectorTag,

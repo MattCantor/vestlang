@@ -31,7 +31,10 @@ import type {
   VestingScheduleTemplate,
   VestingStatement,
 } from "@vestlang/types";
-import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
+import {
+  DEFAULT_VESTING_DAY_OF_MONTH,
+  RUNTIME_BASE_KEYS,
+} from "@vestlang/types";
 import { advanceCursor, eq } from "@vestlang/primitives";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../interpret/selectors.js";
@@ -831,17 +834,31 @@ export const buildTemplate = (
     }
   }
 
+  // Field names pinned to `RUNTIME_BASE_KEYS` (the single source of truth in
+  // canonical.ts) via `satisfies keyof typeof`, then used as computed keys below,
+  // so a rename or removal of a `RuntimeBase` field is a compile error right here.
+  // The construction stays deliberately heterogeneous — each field has its own
+  // source and elision guard, and `eventFirings` isn't a RuntimeBase field at all —
+  // so this must NOT collapse into a uniform copy-loop. The one drift this can't
+  // catch is an *addition*: a new optional field isn't type-forced to be populated
+  // here. That's caught instead at the key set's own `satisfies`, which sends the
+  // editor back to wire the new field a source and a guard below.
+  const START_DATE = "startDate" satisfies keyof typeof RUNTIME_BASE_KEYS;
+  const GRANT_DATE = "grantDate" satisfies keyof typeof RUNTIME_BASE_KEYS;
+  const DAY_OF_MONTH =
+    "vestingDayOfMonth" satisfies keyof typeof RUNTIME_BASE_KEYS;
   const runtime: VestingRuntime = {
-    ...(startDate !== undefined ? { startDate } : {}),
+    ...(startDate !== undefined ? { [START_DATE]: startDate } : {}),
     // The resolution-mode condition firings (empty firing-blind, which keeps the
     // interchange runtime firing-free). core.compile reads them to place each
-    // event hold's fold.
+    // event hold's fold. Not a RuntimeBase field — it lives only on VestingRuntime,
+    // so it carries no computed key.
     ...(eventFirings.length > 0 ? { eventFirings } : {}),
     // Grant-date implicit cliff: amounts scheduled before the grant existed fold
     // onto grantDate. Core's compile applies this when runtime.grantDate is set.
-    ...(ctx.grantDate ? { grantDate: ctx.grantDate } : {}),
+    ...(ctx.grantDate ? { [GRANT_DATE]: ctx.grantDate } : {}),
     ...(ctx.vesting_day_of_month !== DEFAULT_VESTING_DAY_OF_MONTH
-      ? { vestingDayOfMonth: ctx.vesting_day_of_month }
+      ? { [DAY_OF_MONTH]: ctx.vesting_day_of_month }
       : {}),
   };
 

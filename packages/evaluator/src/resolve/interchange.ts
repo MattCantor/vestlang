@@ -13,16 +13,21 @@
 // mode), so a settled date arm doesn't collapse the gate. Re-run it after any
 // event fires and you get the same verdict — which is what makes it safe to store.
 // Firing-invariance is enforced by the context type now, not just by the mode
-// check: a firing read on an interchange-typed context is a compile error.
+// check: a firing read on an interchange-typed context is a compile error. The
+// write-side narrow below (`toStoredTerms`) iterates the canonical key set rather
+// than re-listing the field names, so a field added to `RuntimeBase` is carried
+// through here automatically — it can't be silently dropped on the way to storage.
 
 import type {
   ResolutionContextInput,
   InterchangeVerdict,
   NonTemplateReason,
   Program,
+  RuntimeBase,
   StoredTerms,
   VestingRuntime,
 } from "@vestlang/types";
+import { RUNTIME_BASE_KEYS } from "@vestlang/types";
 import { assertValidVestingScheduleTemplate } from "@vestlang/core";
 import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { createEvaluationContext } from "../utils.js";
@@ -113,16 +118,39 @@ const pendingHeadEvent = (
   return undefined;
 };
 
-// Keep only the firing-free structural fields of a runtime. A firing-blind build
-// leaves eventFirings unset, so this is the type-narrow that lets the interchange
-// template carry a `StoredTerms` runtime.
-const toStoredTerms = (runtime: VestingRuntime): StoredTerms => ({
-  ...(runtime.startDate !== undefined ? { startDate: runtime.startDate } : {}),
-  ...(runtime.grantDate !== undefined ? { grantDate: runtime.grantDate } : {}),
-  ...(runtime.vestingDayOfMonth !== undefined
-    ? { vestingDayOfMonth: runtime.vestingDayOfMonth }
-    : {}),
-});
+// `Object.keys` widens to `string[]`; the set's own keys are exactly
+// `keyof RuntimeBase` (forced by its `satisfies` in canonical.ts), so the cast is
+// sound. Hoisted so iterating it costs no per-call allocation.
+const RUNTIME_BASE_KEY_LIST = Object.keys(
+  RUNTIME_BASE_KEYS,
+) as (keyof RuntimeBase)[];
+
+// Copy one present field across. The generic `K` ties the read and the write to
+// the same key so they share a type — without it the union-indexed `into[k] =
+// from[k]` doesn't check (TS can't see `k` picks the same property on both sides).
+const carryField = <K extends keyof RuntimeBase>(
+  from: RuntimeBase,
+  into: RuntimeBase,
+  k: K,
+): void => {
+  const value = from[k];
+  if (value !== undefined) into[k] = value;
+};
+
+// Project a runtime onto the firing-free `StoredTerms` shape: keep every
+// `RuntimeBase` field, drop `eventFirings` (which lives only on VestingRuntime).
+// Iterating the canonical key set rather than re-listing names is what makes that
+// carry complete — a field added to the set flows through with no edit here, so it
+// can't be silently lost on the way to storage (#417). A present field is copied;
+// an absent one is left off entirely (no materialized `key: undefined`).
+//
+// Exported at module level (not the package index) so the eventFirings-drop is
+// unit-testable: it's unreachable through the firing-blind entry `resolveInterchange`.
+export const toStoredTerms = (runtime: VestingRuntime): StoredTerms => {
+  const stored: RuntimeBase = {};
+  for (const k of RUNTIME_BASE_KEY_LIST) carryField(runtime, stored, k);
+  return stored;
+};
 
 /**
  * Translate a template-build outcome into the storable-floor verdict.
@@ -141,8 +169,9 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
       template: build.template,
       // The interchange path is firing-blind, so its build never populates
       // eventFirings; project the runtime onto StoredTerms (where eventFirings is
-      // unrepresentable) by keeping only the structural fields. A type-narrow, not
-      // a drop — the seam where firing-invariance becomes a type guarantee.
+      // unrepresentable) by keeping the `RuntimeBase` fields and dropping the
+      // firing channel. The structural-field carry is driven by the canonical key
+      // set, so it's complete by construction; only `eventFirings` is dropped.
       runtime: toStoredTerms(build.runtime),
       sourceMap: build.sourceMap,
     };

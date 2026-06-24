@@ -17,7 +17,7 @@ import {
   type PersistedArtifact,
 } from "@vestlang/evaluator";
 import { TEMPLATE } from "@vestlang/primitives";
-import { VESTING_DAY_OF_MONTH_VALUES } from "@vestlang/types";
+import { VESTING_DAY_OF_MONTH_VALUES, type RuntimeBase } from "@vestlang/types";
 import { ISO_DATE } from "./iso-date.js";
 
 /* ------------------------
@@ -34,11 +34,17 @@ const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
 // tries to smuggle a baked firing in. Firing-invariance is enforced here on untrusted
 // wire input, not just at the type level. Witnesses are re-derived from the world
 // on every reload (see rehydrate).
+//
+// `satisfies Record<keyof RuntimeBase, z.ZodTypeAny>` ties this validator to the
+// canonical field set: a field added to `RuntimeBase` (the source of truth for
+// these names) forces a matching validator here, or typecheck fails. So a new
+// runtime field can't be silently rejected on the wire — it's the same
+// derive-from-the-canonical-set discipline the day-of-month enum above follows.
 const RUNTIME = z.strictObject({
   startDate: ISO_DATE.optional(),
   grantDate: ISO_DATE.optional(),
   vestingDayOfMonth: VESTING_DAY_OF_MONTH.optional(),
-});
+} satisfies Record<keyof RuntimeBase, z.ZodTypeAny>);
 
 const SOURCE_MAP_ENTRY = z.strictObject({
   definition: z.string(),
