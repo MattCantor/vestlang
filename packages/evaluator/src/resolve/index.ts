@@ -1,8 +1,9 @@
 // extended.resolve — runtime-aware resolver/classifier.
 //
 // Resolves a DSL program's combinators against runtime, then maps the result to
-// one verdict (`status`): `template`, `events`, or `unresolved`. This is the live
-// evaluate path — `evaluateStatement`/`evaluateProgram` run through here.
+// one `ResolveVerdict` (discriminated by `kind` — see `./types.ts` for the arms,
+// so this header can't drift as they change). This is the live evaluate path —
+// `evaluateStatement`/`evaluateProgram` run through here.
 
 import type {
   ResolutionContextInput,
@@ -166,7 +167,8 @@ export const resolveToCore = (
       pendingInstallments,
     };
   } else {
-    // Resolves but doesn't fit one template (events) or can't materialize (unresolved).
+    // Doesn't fit one template: classify into the non-template arms (events /
+    // unresolved, or the all-void rollup to impossible). See `classify`.
     verdict = classify(build);
   }
 
