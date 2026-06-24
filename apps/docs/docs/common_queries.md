@@ -75,7 +75,7 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 | `representable` | boolean | From `interchange` — can it be stored at all. |
 | `pending` | boolean | From `blockers` — witnesses (unfired events) still missing. A `template` can be `pending`; read pending here, never from a `status`. |
 | `valid` | boolean | `false` when the schedule allocates more than the grant (see `findings`). |
-| `findings` | array | Allocation problems, each with `kind`, `severity`, exact `sum`, and a human `message`. |
+| `findings` | array | Schedule advisories — allocation problems, precision warnings, and event-id case near-misses — each with `kind`, `severity`, and a human `message` (allocation kinds also carry an exact `sum`). |
 | `absenceAssumptions` | array | Events the resolves-to reading is assuming stayed absent — each `{ eventId, through, message }`, i.e. "`eventId` did not occur on/before `through`". A later/backdated firing of one of these could change the result. Empty for a date-only or fully-fired schedule. |
 | `installments` | array | The dated projection (RESOLVED), or symbolic tranches when something is pending. |
 | `blockers` | array | What's unfired/contradictory, structurally. |
@@ -93,7 +93,7 @@ below) alongside a `summary` object:
 | Field | Type | Meaning |
 |---|---|---|
 | `valid` | boolean | `false` when the program allocates more than the grant (an error-severity finding). The partition and summary are still returned — annotate, don't certify. |
-| `findings` | array | Allocation problems, each with `kind`, `severity`, exact `sum`, and a human `message` (the same shape `vestlang_evaluate` returns). Empty for a valid program. |
+| `findings` | array | Schedule advisories — allocation problems, precision warnings, and event-id case near-misses — each with `kind`, `severity`, and a human `message` (the same shape `vestlang_evaluate` returns; allocation kinds also carry an exact `sum`). Empty for a valid program with nothing to flag. |
 | `total_vested` | number | Sum of shares across all RESOLVED `vested` installments. |
 | `total_unvested` | number | Sum of shares across `unvested` (RESOLVED + UNRESOLVED) plus the top-level `unresolved` quantity. |
 | `total_impossible` | number | Sum of shares across `impossible`. |

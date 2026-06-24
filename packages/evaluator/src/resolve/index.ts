@@ -27,6 +27,7 @@ import {
   numericToFraction,
 } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
+import { eventCaseFindings } from "./event-case.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
 import { classify } from "./classify.js";
@@ -169,9 +170,17 @@ export const resolveToCore = (
     verdict = classify(build);
   }
 
+  // Read the literal user-supplied firings (`ctxInput.events`), not the rebuilt
+  // null-prototype `ctx.events` — same key set, but the input is the honest source
+  // and dodges any question about the prototype copy. This rides the resolution arm
+  // by construction: the interchange context carries no firings to compare against.
   return {
     ...verdict,
-    findings: [...allocationFindings(resolutions, totalShares), ...precision],
+    findings: [
+      ...allocationFindings(resolutions, totalShares),
+      ...precision,
+      ...eventCaseFindings(program, ctxInput.events),
+    ],
   };
 };
 

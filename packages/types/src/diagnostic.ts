@@ -100,4 +100,20 @@ export type Finding =
       // not-representable finding (which also has no `recommended`).
       conservative?: boolean;
       path?: NodePath;
+    }
+  // Event ids are case-sensitive (a firing only satisfies a gate on an exact key
+  // match), but every DSL keyword is case-insensitive — so a firing whose case
+  // doesn't match the referenced id silently never matches, and the schedule pends
+  // with no signal. This advisory catches the likely typo: a referenced id with no
+  // exact firing but a case-only twin among the firings provided. It never changes
+  // resolution (the grant still pends) and never invalidates the schedule — it's a
+  // warning, the same way an unreferenced firing is harmless rather than rejected.
+  | {
+      kind: "event-firing-case-mismatch";
+      severity: "warning";
+      // The id as written in the DSL (the EVENT node's value).
+      referenced: string;
+      // The firing key that differs from it only by case.
+      fired: string;
+      path?: NodePath;
     };

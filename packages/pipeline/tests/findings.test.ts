@@ -82,4 +82,19 @@ describe("formatFinding", () => {
     // It must NOT read as the not-representable claim even though recommended is absent.
     expect(formatFinding(f)).not.toContain("no ≤10-place decimal");
   });
+
+  it("renders an event-firing case mismatch naming both ids", () => {
+    // #407 — the message has to name the referenced id and the case-twin firing so
+    // the author can see exactly which two strings disagree only by case.
+    const f: Finding = {
+      kind: "event-firing-case-mismatch",
+      severity: "warning",
+      referenced: "IpO",
+      fired: "ipo",
+    };
+    const msg = formatFinding(f);
+    expect(msg).toContain("`IpO`");
+    expect(msg).toContain("`ipo`");
+    expect(msg).toContain("case-sensitive");
+  });
 });
