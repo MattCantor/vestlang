@@ -3,6 +3,7 @@ import {
   OCTDate,
   Program,
   Installment,
+  Finding,
 } from "@vestlang/types";
 import { evaluateProgram } from "./evaluate.js";
 import { createEvaluationContext } from "./utils.js";
@@ -13,6 +14,12 @@ export interface VestedResult {
   unvested: Installment[];
   impossible: Installment[];
   unresolved: number; // quantity not yet schedulable
+  // What the engine noticed about the schedule as written — most importantly
+  // whether it allocates more than the whole grant. Carried raw (unformatted) so
+  // the read surfaces can decide validity and render the message themselves. The
+  // partition by date is honest either way; this is the channel that tells a
+  // caller the schedule it's partitioning isn't legal.
+  findings: Finding[];
 }
 
 /**
@@ -25,6 +32,7 @@ function partitionAsOf(
   installments: Installment[],
   asOf: OCTDate,
   fallbackQuantity: number,
+  findings: Finding[],
 ): VestedResult {
   const vested: Installment[] = [];
   const unvested: Installment[] = [];
@@ -32,7 +40,13 @@ function partitionAsOf(
   let unresolved = 0;
 
   if (installments.length === 0) {
-    return { vested, unvested, impossible, unresolved: fallbackQuantity };
+    return {
+      vested,
+      unvested,
+      impossible,
+      unresolved: fallbackQuantity,
+      findings,
+    };
   }
 
   for (const t of installments) {
@@ -50,7 +64,7 @@ function partitionAsOf(
     }
   }
 
-  return { vested, unvested, impossible, unresolved };
+  return { vested, unvested, impossible, unresolved, findings };
 }
 
 /**
@@ -86,5 +100,9 @@ export function evaluateProgramAsOf(
     schedule.resolution.installments,
     ctx.asOf,
     programQuantity,
+    // The findings ride along: the over-allocation the schedule carries is
+    // about the spec as written, not about where we cut the partition, so it's
+    // the same whatever `asOf` is asked.
+    schedule.findings,
   );
 }

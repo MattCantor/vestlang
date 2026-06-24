@@ -3,9 +3,11 @@ import {
   runEvaluate,
   runAsOf,
   runVestedBetween,
+  runPersist,
   type GrantInput,
   type Summary,
 } from "../src/index";
+import { formatFinding } from "../src/findings";
 
 const grant: GrantInput = {
   grant_date: "2025-01-01",
@@ -298,5 +300,191 @@ describe("runEvaluate — a user event named evt_1 no longer shadows a stand-in"
       },
     ]);
     expect(r.view.deadBlockers).toEqual([]);
+  });
+});
+
+// The as-of read tools used to sum the resolved tranches with no signal, so an
+// over-allocating program quietly reported more than 100% vested with a clean
+// completion date. The validity channel — `valid` + `findings` — now rides along:
+// the partition is still returned (annotate, don't certify), but flagged.
+describe("runAsOf — validity channel on an over-allocating program", () => {
+  // Two 0.6 grids on the same grant total 120% (6/5). They resolve to bare dated
+  // events (two overlapping absolute grids can't be one template), so this is the
+  // events-only arm.
+  const overAllocates =
+    "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month PLUS " +
+    "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month";
+  const grant: GrantInput = {
+    grant_date: "2025-01-01",
+    grant_quantity: 1200,
+  };
+
+  it("flags valid:false with the over-allocation finding (events-only arm)", () => {
+    const r = runAsOf(overAllocates, grant, "2027-01-01");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valid).toBe(false);
+    expect(r.findings).toHaveLength(1);
+    const [f] = r.findings;
+    expect(f.kind).toBe("over-allocation");
+    expect(f.severity).toBe("error");
+    // The rendered sentence is self-consistent (formatted by the same helper the
+    // evaluate surface uses) and pins the exact human string.
+    expect(f.message).toBe(formatFinding(f));
+    expect(f.message).toBe(
+      "over-allocates the grant to 120% (6/5) — not a valid schedule",
+    );
+  });
+
+  // The other arm: a single absolute count exceeding the grant stays one clean
+  // template, so this proves the channel works on the template arm too. (A single
+  // fraction can't over-allocate — the parser caps a portion at ≤ 1.)
+  it("flags valid:false with the over-allocation finding (template arm)", () => {
+    const r = runAsOf(
+      "1500 VEST OVER 12 months EVERY 1 month",
+      grant,
+      "2027-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valid).toBe(false);
+    expect(r.findings).toHaveLength(1);
+    const [f] = r.findings;
+    expect(f.kind).toBe("over-allocation");
+    expect(f.message).toBe(formatFinding(f));
+    expect(f.message).toBe(
+      "over-allocates the grant to 125% (5/4) — not a valid schedule",
+    );
+  });
+
+  // Fully vested past the end: the numbers stay honest — percent reads above 1
+  // (no clamp), totals are the raw sum — and only the completion date is dropped,
+  // since it would otherwise assert a false "the grant finished vesting".
+  it("summary stays honest after full vest, only fully_vested_date suppressed", () => {
+    const r = runAsOf(overAllocates, grant, "2027-01-01");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.percent_vested).toBe(1.2);
+    expect(r.summary.total_vested).toBe(1440);
+    expect(r.summary.fully_vested_date).toBeNull();
+  });
+
+  // The same program viewed mid-vesting, where a clamp-to-1 would have been a
+  // no-op anyway: percent reads below 1, the completion date is still null, and
+  // validity is independent of how far vesting has progressed. (Pins that the
+  // guard isn't a `=== 1.0` assignment.)
+  it("summary stays honest mid-vesting; validity doesn't depend on progress", () => {
+    const r = runAsOf(overAllocates, grant, "2025-06-15");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valid).toBe(false);
+    expect(r.summary.percent_vested).toBe(0.5);
+    expect(r.summary.percent_vested).toBeLessThan(1);
+    expect(r.summary.total_vested).toBe(600);
+    expect(r.summary.fully_vested_date).toBeNull();
+  });
+});
+
+describe("runVestedBetween — validity channel", () => {
+  it("flags valid:false but keeps the window sum unclamped", () => {
+    const r = runVestedBetween(
+      "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month PLUS " +
+        "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1200 },
+      "2025-01-01",
+      "2027-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valid).toBe(false);
+    expect(r.findings.some((f) => f.kind === "over-allocation")).toBe(true);
+    // The whole 1440 shares fall inside the window — the real sum, not clamped to
+    // the grant.
+    expect(r.vested_in_window).toBe(1440);
+  });
+});
+
+// A normal program loses nothing: valid, no findings, and the summary reads
+// exactly as before.
+describe("runAsOf — a valid program is unchanged", () => {
+  it("reports valid:true, empty findings, and a real completion date", () => {
+    const r = runAsOf(
+      "VEST OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1200 },
+      "2027-01-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.valid).toBe(true);
+    expect(r.findings).toEqual([]);
+    expect(r.summary.percent_vested).toBe(1);
+    expect(r.summary.fully_vested_date).toBe("2026-01-01");
+  });
+});
+
+// The three read surfaces and the write path agree about validity. The as-of
+// tools have no template recovery (only evaluate does), so this also pins that
+// recovery and the as-of path still coincide — they do, because recovery declines
+// on an error finding.
+describe("read surfaces agree with evaluate on validity", () => {
+  const overAllocates =
+    "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month PLUS " +
+    "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month";
+  const grant: GrantInput = {
+    grant_date: "2025-01-01",
+    grant_quantity: 1200,
+  };
+
+  it("an over-allocating program is invalid everywhere; persist refuses", () => {
+    const ev = runEvaluate(overAllocates, grant);
+    const asof = runAsOf(overAllocates, grant, "2027-01-01");
+    const between = runVestedBetween(
+      overAllocates,
+      grant,
+      "2025-01-01",
+      "2027-01-01",
+    );
+    expect(ev.ok && asof.ok && between.ok).toBe(true);
+    if (!ev.ok || !asof.ok || !between.ok) return;
+    expect(ev.view.valid).toBe(false);
+    expect(asof.valid).toBe(false);
+    expect(between.valid).toBe(false);
+
+    // The write path keeps refusing where the reads only annotate.
+    const persisted = runPersist({ dsl: overAllocates, ...grant });
+    expect(persisted.ok).toBe(false);
+    if (!persisted.ok) {
+      expect(persisted.error.ruleId).toBe("persist-not-storable");
+    }
+  });
+
+  it("a valid program evaluate rescues to a template reads valid on all surfaces", () => {
+    // Two overlapping absolute grids summing to 100% — events-only, but their
+    // projection collapses back to a single THEN-chain template, so evaluate
+    // rescues it. The as-of path has no recovery, yet still agrees it's valid,
+    // because neither path produces an error finding.
+    const recoverable =
+      "0.5 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS " +
+      "0.5 VEST FROM DATE 2024-03-01 OVER 4 months EVERY 1 month";
+    const recoverGrant: GrantInput = {
+      grant_date: "2024-01-01",
+      grant_quantity: 800,
+    };
+    const ev = runEvaluate(recoverable, recoverGrant);
+    const asof = runAsOf(recoverable, recoverGrant, "2027-01-01");
+    const between = runVestedBetween(
+      recoverable,
+      recoverGrant,
+      "2024-01-01",
+      "2027-01-01",
+    );
+    expect(ev.ok && asof.ok && between.ok).toBe(true);
+    if (!ev.ok || !asof.ok || !between.ok) return;
+    // evaluate did rescue it (the proof the two paths really differ here).
+    expect(ev.recovered).toBeDefined();
+    expect(ev.view.valid).toBe(true);
+    expect(asof.valid).toBe(true);
+    expect(asof.findings).toEqual([]);
+    expect(between.valid).toBe(true);
   });
 });

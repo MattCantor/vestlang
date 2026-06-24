@@ -36,6 +36,16 @@ export function asof(
   // One partition for the whole grant — the program is collapsed before it's
   // split into vested / unvested / impossible.
   console.log(`AS OF ${result.asOf}`);
+
+  // Lead with the validity verdict so an over-allocating schedule isn't shown as a
+  // clean roll-up with no signal. The partition below is still real shares, but the
+  // schedule it came from isn't legal — say so up front.
+  if (!result.valid) {
+    console.log("INVALID — this schedule is not a valid allocation");
+    for (const f of result.findings) {
+      if (f.severity === "error") console.log(`  ${f.message}`);
+    }
+  }
   if (result.vested.length > 0) {
     console.log("VESTED");
     console.table(result.vested);

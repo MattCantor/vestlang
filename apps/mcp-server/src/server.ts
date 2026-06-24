@@ -369,7 +369,7 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting as of a date",
       description:
-        "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. For the verdicts and storability flags, use vestlang_evaluate.",
+        "Partition the grant's installments into {vested, unvested, impossible} with an unresolved count (shares not yet schedulable), as of a given date (defaults to today), plus a `summary` roll-up (total vested/unvested, percent vested, next vest, fully-vested date). The program is collapsed into one schedule first, so this is the grant-wide answer to 'how much is vested right now?'. Also carries the validity channel: `valid` (false when the program allocates more than the grant — e.g. `0.6 …` PLUS `0.6 …` of the same grant reaches 120%) and a `findings` array (each with `kind`, `severity`, exact `sum`, and a human `message`). When `valid` is false the partition and summary are still returned but annotate, not certify: `percent_vested` and the totals stay honest (so percent can exceed 1), only `fully_vested_date` is nulled (it would otherwise assert a false completion). For the verdicts and storability flags, use vestlang_evaluate.",
       inputSchema: z.strictObject({
         dsl: DSL_INPUT,
         ...EVAL_CONTEXT_FIELDS,
@@ -394,6 +394,8 @@ export function createServer(): McpServer {
         impossible: result.impossible,
         unresolved: result.unresolved,
         summary: result.summary,
+        valid: result.valid,
+        findings: result.findings,
       });
     },
   );
@@ -404,7 +406,7 @@ export function createServer(): McpServer {
     {
       title: "Vested shares in a date window",
       description:
-        "Return the grant's RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. The program is collapsed into one schedule first; UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested.",
+        "Return the grant's RESOLVED installments whose vest date falls within [from, to] (inclusive), along with the sum. Use this for questions like 'how much vested in H2 2025?' or 'how many tranches released between 2025-01-01 and 2025-12-31?'. The program is collapsed into one schedule first; UNRESOLVED and IMPOSSIBLE installments are excluded — they haven't vested. Carries the validity channel too: `valid` (false when the program allocates more than the grant) and a `findings` array (each `kind`, `severity`, exact `sum`, human `message`); the window sum is the real total even when the schedule over-allocates.",
       inputSchema: z.strictObject({
         dsl: DSL_INPUT,
         ...EVAL_CONTEXT_FIELDS,
@@ -432,6 +434,8 @@ export function createServer(): McpServer {
         vested_in_window: result.vested_in_window,
         tranches_in_window: result.tranches_in_window,
         installments: result.installments,
+        valid: result.valid,
+        findings: result.findings,
       });
     },
   );
