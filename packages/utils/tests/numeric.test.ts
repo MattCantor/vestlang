@@ -3,8 +3,12 @@ import {
   fractionToNumeric,
   isNumeric,
   numericToFraction,
+  tryNumericToFraction,
   validateNumeric,
+  terminates,
+  renderFixed,
 } from "../src/numeric";
+import type { Numeric } from "@vestlang/types";
 import { analyzePrecision } from "../src/precision";
 
 // The OCF Numeric boundary: parse a stored decimal to its exact rational on the
@@ -100,6 +104,69 @@ describe("isNumeric / validateNumeric — the boundary guard", () => {
   it("validateNumeric returns the string when valid, throws when not", () => {
     expect(validateNumeric("0.5")).toBe("0.5");
     expect(() => validateNumeric("1e-5")).toThrow();
+  });
+});
+
+describe("the MAX_SAFE_INTEGER ceiling", () => {
+  // Grammar-valid but too big to hold exactly as a number-based Fraction.
+  const oversized = "99999999999999999999" as Numeric;
+
+  it("numericToFraction throws rather than rounding past MAX_SAFE", () => {
+    expect(() => numericToFraction(oversized)).toThrow(/MAX_SAFE/);
+  });
+
+  it("tryNumericToFraction returns null where numericToFraction throws", () => {
+    expect(tryNumericToFraction(oversized)).toBeNull();
+  });
+
+  it("allows a value reducing to exactly MAX_SAFE — the ceiling is inclusive", () => {
+    const atCeiling: Numeric = String(Number.MAX_SAFE_INTEGER); // 2^53 − 1
+    const exact = { numerator: Number.MAX_SAFE_INTEGER, denominator: 1 };
+    expect(numericToFraction(atCeiling)).toEqual(exact);
+    expect(tryNumericToFraction(atCeiling)).toEqual(exact);
+  });
+});
+
+describe("tryNumericToFraction — graceful refusal", () => {
+  it("returns the exact fraction for a well-formed value", () => {
+    expect(tryNumericToFraction("0.25")).toEqual({
+      numerator: 1,
+      denominator: 4,
+    });
+  });
+
+  it("returns null for a string outside the grammar instead of throwing", () => {
+    expect(tryNumericToFraction("1e-5")).toBeNull();
+  });
+});
+
+describe("fractionToNumeric — domain guards", () => {
+  it('writes a zero numerator as "0" (zero is in domain, not rejected)', () => {
+    expect(fractionToNumeric({ numerator: 0, denominator: 1 })).toBe("0");
+  });
+
+  it("throws on a non-positive denominator", () => {
+    expect(() =>
+      fractionToNumeric({ numerator: 1, denominator: -2 }),
+    ).toThrow();
+  });
+});
+
+describe("terminates", () => {
+  it("is true iff the denominator's only prime factors are 2 and 5", () => {
+    expect(terminates(5n)).toBe(true); // 1/5 = 0.2
+    expect(terminates(8n)).toBe(true); // 1/8 = 0.125
+    expect(terminates(40n)).toBe(true); // 2^3 · 5
+    expect(terminates(3n)).toBe(false); // 1/3 repeats
+    expect(terminates(6n)).toBe(false); // factor 3 remains
+  });
+});
+
+describe("renderFixed", () => {
+  it("renders an integer numerator over 10^places, padding sub-1 values", () => {
+    expect(renderFixed(5n, 0)).toBe("5"); // no point at zero places
+    expect(renderFixed(125n, 3)).toBe("0.125");
+    expect(renderFixed(25n, 2)).toBe("0.25");
   });
 });
 
