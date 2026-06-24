@@ -18,7 +18,12 @@ import type {
 } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
 import { buildContext, buildAsOfContext } from "./context.js";
-import { computeSummary, filterByWindow, type Summary } from "./summary.js";
+import {
+  computeSummary,
+  filterByWindow,
+  sumAmounts,
+  type Summary,
+} from "./summary.js";
 import { errorFindings, formatFinding } from "./findings.js";
 
 // The grant a schedule is evaluated against. `events.grantDate` is injected by
@@ -119,6 +124,34 @@ function clauseBreakdown(
   }
 }
 
+// Fixed sentence carried in-band so a consumer reading only the JSON learns the
+// breakdown is attribution-only and which figure is authoritative — it doesn't
+// have to consult the tool description. Worded so it's NOT a validity claim: it
+// says the collapsed schedule is the figure to reconcile *against*, not that the
+// grant total is correct (the schedule may itself over-allocate; `valid`/
+// `findings` carry that verdict).
+const BREAKDOWN_NOTE =
+  "Per-clause amounts are attribution-only and floored independently; they can " +
+  "sum to less than the headline by the rounding residual. Reconcile per-clause " +
+  "amounts against the collapsed schedule, not the other way around.";
+
+// The rounding residual: the headline the user sees (post-recovery) minus the sum
+// of every breakdown entry's installments. Each clause floors against its own
+// fresh cumulative, so on non-divisible fractions the per-clause floors can sum to
+// a share less than the collapsed headline; this surfaces that gap as a number
+// (typically 1, 0 when they tie). It stays well-defined when the headline is a
+// rescued single line — we subtract from `view.installments`, the figure the user
+// reads — and is computed verbatim even on an over-allocating (`valid: false`)
+// schedule, since it's still Σheadline − Σbreakdown there. Returned non-negative
+// by construction: the collapse recovers the odd share the per-clause floors drop,
+// so it never under-counts the breakdown.
+const breakdownResidual = (
+  installments: Installment[],
+  breakdown: ClauseBreakdown[],
+): number =>
+  sumAmounts(installments) -
+  breakdown.reduce((a, b) => a + sumAmounts(b.installments), 0);
+
 // Evaluate a grant. The program collapses into ONE schedule with one verdict and
 // one allocation finding (`view`); on top of that the breakdown shows what each
 // clause contributed, for callers that want per-clause attribution.
@@ -126,6 +159,12 @@ function clauseBreakdown(
 // The collapse runs template recovery: an events-only program whose realized
 // projection happens to have a single-template form is rescued back to a
 // template, transparently.
+//
+// `breakdownResidual`/`breakdownNote` ride along only when there's a breakdown to
+// reconcile — a degraded (empty) breakdown omits both, since there's nothing to
+// compare against and a residual equal to the whole grant would mislead. The real
+// reconcile (making the per-clause floors themselves sum to the headline) is
+// deferred to #442; this only makes the existing gap visible.
 export function runEvaluate(
   dsl: string,
   g: GrantInput,
@@ -133,6 +172,8 @@ export function runEvaluate(
   view: ScheduleView;
   recovered?: RecoveredView;
   breakdown: ClauseBreakdown[];
+  breakdownResidual?: number;
+  breakdownNote?: string;
 }> {
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) return parsed;
@@ -156,6 +197,15 @@ export function runEvaluate(
       view,
       breakdown,
       ...(recovered ? { recovered } : {}),
+      // Omit both when the breakdown degraded to empty — there's nothing to
+      // reconcile, and a residual equal to the whole grant would read as a gap
+      // that isn't one.
+      ...(breakdown.length > 0
+        ? {
+            breakdownResidual: breakdownResidual(view.installments, breakdown),
+            breakdownNote: BREAKDOWN_NOTE,
+          }
+        : {}),
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };

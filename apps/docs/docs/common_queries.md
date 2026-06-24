@@ -80,6 +80,8 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 | `installments` | array | The dated projection (RESOLVED), or symbolic tranches when something is pending. |
 | `blockers` | array | What's unfired/contradictory, structurally. |
 | `breakdown` | array | Per-clause attribution — one entry per statement (a THEN chain is one entry, since its segments can't be placed apart), each with its own `installments` and `blockers` (no verdict; a clause has no storable schedule of its own). |
+| `breakdownResidual` | number | The rounding gap between the headline and the per-clause `breakdown`: `Σ headline installment amounts − Σ breakdown installment amounts`. A **non-negative integer** — `0` iff the breakdown ties the headline, otherwise the small unallocated rounding share (typically `1`), since each clause floors against its own cumulative. Computed against the user-visible headline (post-recovery) and **verbatim even when `valid` is false** (still Σheadline − Σbreakdown). **Omitted** when the breakdown degrades to empty — there's nothing to reconcile. The real reconcile is deferred (#442); this only surfaces the gap. |
+| `breakdownNote` | string | Fixed sentence stating the breakdown is attribution-only and the collapsed schedule is the figure to reconcile against. In-band so a consumer reading only the JSON learns there's a residual and which figure is authoritative. Present whenever `breakdownResidual` is. |
 
 ## Summary fields on `vestlang_evaluate_as_of`
 

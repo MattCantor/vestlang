@@ -1,4 +1,24 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+
+// The degraded-breakdown AC needs `clauseBreakdown` to fall into its `[]` catch
+// path. We mock just `evaluateClauseGroups` (the only call inside that try),
+// gated on a flag so every other test runs against the real evaluator — the
+// whole-program path goes through `@vestlang/recover`, which depends on the rest
+// of this module, so a blanket mock would break it.
+let failClauseBreakdown = false;
+vi.mock("@vestlang/evaluator", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vestlang/evaluator")>();
+  return {
+    ...actual,
+    evaluateClauseGroups: (
+      ...args: Parameters<typeof actual.evaluateClauseGroups>
+    ) => {
+      if (failClauseBreakdown) throw new Error("breakdown failed");
+      return actual.evaluateClauseGroups(...args);
+    },
+  };
+});
+
 import {
   runEvaluate,
   runAsOf,
@@ -118,6 +138,146 @@ describe("runEvaluate", () => {
     const r = runEvaluate("not vestlang", grant);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.ruleId).toBe("syntax-error");
+  });
+});
+
+// #401 (explicit-gap): the per-clause breakdown floors each clause against its own
+// cumulative, so on non-divisible fractions the per-clause amounts can sum to a
+// share less than the collapsed headline. This surfaces that gap in-band as
+// `breakdownResidual` (= Σheadline − Σbreakdown) plus a fixed `breakdownNote`,
+// WITHOUT changing any amount. The real reconcile is deferred to #442.
+describe("runEvaluate — breakdown residual (#401)", () => {
+  const sumBreakdown = (b: { installments: { amount: number }[] }[]) =>
+    b.reduce((a, c) => a + sumInstallments(c.installments), 0);
+
+  // AC1: symbolic + resolved mix. The ipo clause is pending (33), the 2/3 clause
+  // resolves (66); breakdown sums to 99 against a headline of 100.
+  it("AC1: blocker case (symbolic + resolved) surfaces residual 1", () => {
+    const r = runEvaluate(
+      "1/3 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
+        "2/3 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(sumInstallments(r.view.installments)).toBe(100);
+    expect(sumBreakdown(r.breakdown)).toBe(99);
+    expect(r.breakdownResidual).toBe(1);
+    expect(typeof r.breakdownNote).toBe("string");
+  });
+
+  // AC2/AC4: plain divide that rescues to a single headline line, while the
+  // breakdown keeps three per-clause floors (33 each). The residual is computed
+  // against the user-visible (rescued) headline and still reads 1.
+  it("AC2/AC4: rescue to one line keeps residual against the visible headline", () => {
+    const r = runEvaluate(
+      "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
+        "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
+        "1/3 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // The headline rescues to one 100 line; the breakdown keeps three floors.
+    expect(sumInstallments(r.view.installments)).toBe(100);
+    expect(r.breakdown).toHaveLength(3);
+    expect(sumBreakdown(r.breakdown)).toBe(99);
+    expect(r.breakdownResidual).toBe(1);
+  });
+
+  // AC3: an even split ties, so the residual is 0 (still surfaced as a number,
+  // and the note still rides along).
+  it("AC3: even split ties at residual 0", () => {
+    const r = runEvaluate(
+      "0.5 VEST OVER 1 month EVERY 1 month PLUS " +
+        "0.5 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(sumInstallments(r.view.installments)).toBe(100);
+    expect(sumBreakdown(r.breakdown)).toBe(100);
+    expect(r.breakdownResidual).toBe(0);
+    expect(typeof r.breakdownNote).toBe("string");
+  });
+
+  // AC7: over-allocation. Two 2/3 grids on a 100-share grant reach 4/3 — valid is
+  // false. The residual is computed verbatim (66+67 headline − 66+66 breakdown =
+  // 1), and the note is NOT a validity claim.
+  it("AC7: residual is computed verbatim on a valid:false over-allocation", () => {
+    const r = runEvaluate(
+      "2/3 VEST OVER 1 month EVERY 1 month PLUS " +
+        "2/3 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.valid).toBe(false);
+    expect(sumInstallments(r.view.installments)).toBe(133);
+    expect(sumBreakdown(r.breakdown)).toBe(132);
+    expect(r.breakdownResidual).toBe(1);
+    // The note must not assert a correct grant total for an over-allocator.
+    expect(r.breakdownNote).not.toMatch(/authoritative total/i);
+    expect(r.breakdownNote).not.toMatch(/valid/i);
+  });
+
+  // AC4 as a property: across a spread of programs the residual is always a
+  // non-negative integer, and is 0 exactly when the breakdown ties the headline.
+  it("AC4: residual is a non-negative integer, 0 iff the breakdown ties", () => {
+    const cases: { dsl: string; q: number }[] = [
+      {
+        dsl: "1/3 VEST OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 1 month EVERY 1 month",
+        q: 100,
+      },
+      {
+        dsl: "0.5 VEST OVER 1 month EVERY 1 month PLUS 0.5 VEST OVER 1 month EVERY 1 month",
+        q: 100,
+      },
+      {
+        dsl: "1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month",
+        q: 100,
+      },
+      { dsl: "VEST OVER 12 months EVERY 1 month", q: 1200 },
+      {
+        dsl: "2/3 VEST OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 1 month EVERY 1 month",
+        q: 100,
+      },
+    ];
+    for (const { dsl, q } of cases) {
+      const r = runEvaluate(dsl, {
+        grant_date: "2025-01-01",
+        grant_quantity: q,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      const residual = r.breakdownResidual;
+      expect(residual).toBeDefined();
+      if (residual === undefined) continue;
+      expect(Number.isInteger(residual)).toBe(true);
+      expect(residual).toBeGreaterThanOrEqual(0);
+      const ties =
+        sumInstallments(r.view.installments) === sumBreakdown(r.breakdown);
+      expect(residual === 0).toBe(ties);
+    }
+  });
+
+  // AC8: when the breakdown degrades to empty, both fields are omitted — there's
+  // nothing to reconcile, and a residual equal to the whole grant would mislead.
+  it("AC8: a degraded (empty) breakdown omits both fields", () => {
+    failClauseBreakdown = true;
+    try {
+      const r = runEvaluate("VEST OVER 12 months EVERY 1 month", {
+        grant_date: "2025-01-01",
+        grant_quantity: 100,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.breakdown).toEqual([]);
+      expect(r.breakdownResidual).toBeUndefined();
+      expect(r.breakdownNote).toBeUndefined();
+    } finally {
+      failClauseBreakdown = false;
+    }
   });
 });
 
