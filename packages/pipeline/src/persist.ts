@@ -23,6 +23,7 @@ import {
   fromSidecar,
   isRehydrateDefinitionError,
   isRehydrateMissingStartMarkerError,
+  isRehydrateUnexpectedStartError,
   isSyntheticNamespaceError,
   type PersistedArtifact,
 } from "@vestlang/evaluator";
@@ -355,6 +356,18 @@ export function runRehydrate(input: RehydrateInput): RehydrateResult {
           ruleId: "rehydrate-missing-start-marker",
           message:
             "Cannot rehydrate: the artifact's startDate is the contingent-start sentinel but it carries no start recipe to re-derive the real start. The artifact appears to be damaged; supply one built by vestlang_persist.",
+        },
+      };
+    }
+    // The mirror case: an `evt:start` recipe paired with a non-sentinel startDate.
+    // Applying the recipe would silently overwrite a genuine stored start, so refuse.
+    if (isRehydrateUnexpectedStartError(err)) {
+      return {
+        ok: false,
+        error: {
+          ruleId: "rehydrate-unexpected-start",
+          message:
+            "Cannot rehydrate: the artifact carries a start recipe but its startDate is not the contingent-start sentinel, so applying the recipe would overwrite a genuine stored start. The artifact appears to be damaged; supply one built by vestlang_persist.",
         },
       };
     }

@@ -617,6 +617,29 @@ describe("runRehydrate guards the reserved namespace + the contingency marker", 
     }
   });
 
+  it("refuses a damaged artifact: real startDate paired with an evt:start recipe (#410)", () => {
+    // The mirror half of the biconditional: a genuine 2025-01-15 start beside an
+    // `evt:start` recipe. Left uncaught the error would escape to the wire; the new
+    // catch arm turns it into a clean structured refusal.
+    const r = runRehydrate({
+      artifact: {
+        ...contingentArtifact({
+          vestlang: { "evt:start": { definition: "EVENT ipo" } },
+        }),
+        runtime: { grantDate: "2025-01-01", startDate: "2025-01-15" },
+      },
+      grant_quantity: 1000,
+      events: { ipo: "2027-03-01" },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.ruleId).toBe("rehydrate-unexpected-start");
+      expect(r.error.message).toBe(
+        "Cannot rehydrate: the artifact carries a start recipe but its startDate is not the contingent-start sentinel, so applying the recipe would overwrite a genuine stored start. The artifact appears to be damaged; supply one built by vestlang_persist.",
+      );
+    }
+  });
+
   it("leaves a contingent start pending when its event is unfired, not refused", () => {
     const out = rehydrateOk({
       artifact: contingentArtifact({

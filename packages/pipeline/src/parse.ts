@@ -37,15 +37,17 @@ type PersistError = { ruleId: "persist-not-storable"; message: string };
 // rehydrate's damage modes a consumer might remediate differently: a hand-built
 // artifact missing its grant date, one whose template over-allocates the grant,
 // one whose stored start recipe no longer parses, one carrying the contingent-start
-// sentinel with no `evt:start` recipe to re-derive it, or one whose sidecar key
-// falls outside the reserved synthetic namespace (a tampered key aliasing a real
-// user event).
+// sentinel with no `evt:start` recipe to re-derive it, the mirror case (an
+// `evt:start` recipe paired with a non-sentinel startDate, which would otherwise
+// silently overwrite a genuine stored start), or one whose sidecar key falls outside
+// the reserved synthetic namespace (a tampered key aliasing a real user event).
 type RehydrateError =
   | { ruleId: "rehydrate-missing-grant-date"; message: string }
   | { ruleId: "rehydrate-over-allocation"; message: string }
   | { ruleId: "rehydrate-malformed-percentage"; message: string }
   | { ruleId: "rehydrate-corrupt-definition"; message: string }
   | { ruleId: "rehydrate-missing-start-marker"; message: string }
+  | { ruleId: "rehydrate-unexpected-start"; message: string }
   | { ruleId: "rehydrate-namespace-violation"; message: string };
 
 // offset's input-shape refusals (not a single offset expression) and its

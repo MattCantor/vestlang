@@ -71,6 +71,40 @@ export const isSyntheticNamespaceError = (
 const firstNonReservedKey = (sourceMap: SourceMap): string | undefined =>
   Object.keys(sourceMap).find((key) => !isSyntheticEventId(key));
 
+// The three states of the contingent-start marker biconditional. A persisted
+// artifact must satisfy it (`hasSentinelStart === hasStartRecipe`); the two
+// failure modes are the half-present cases.
+export type StartPartition =
+  // Both present (a contingent start) or both absent (a plain dated start).
+  | "consistent"
+  // Sentinel startDate, no `evt:start` recipe: the contingency marker was dropped,
+  // so there is nothing to re-derive the real date from.
+  | "sentinel-without-recipe"
+  // An `evt:start` recipe but the startDate is not the sentinel (a real date, or
+  // undefined): the recipe could never be applied — a real start would be silently
+  // overwritten on reload.
+  | "recipe-without-sentinel";
+
+// Classify the start marker from the two booleans the save guard and the reload
+// guard both need: whether the startDate is the contingent-start sentinel, and
+// whether the source map carries the one reserved `evt:start` recipe. Keyed on the
+// `evt:start` key SPECIFICALLY (not "any synthetic key") — a numbered `evt:<n>`
+// recipe beside a real startDate is legitimate and stays out of this. Shared so the
+// save and reload paths can't drift on what the biconditional means; each caller
+// maps the result to its own error type (a plain Error on save, a tagged refusal on
+// reload).
+export const classifyStartPartition = (
+  startDate: StoredTerms["startDate"],
+  sourceMap: SourceMap,
+): StartPartition => {
+  const hasSentinelStart = startDate === CONTINGENT_START_SENTINEL;
+  const hasStartRecipe = Object.hasOwn(sourceMap, SYNTHETIC_START_EVENT_ID);
+  if (hasSentinelStart === hasStartRecipe) return "consistent";
+  return hasSentinelStart
+    ? "sentinel-without-recipe"
+    : "recipe-without-sentinel";
+};
+
 // Save-path tripwire: assert the partition + the contingent-start marker invariant
 // hold before persisting.
 //
@@ -108,13 +142,15 @@ export const assertSavePartition = (
     );
   }
 
-  const hasSentinelStart = runtime.startDate === CONTINGENT_START_SENTINEL;
-  const hasStartRecipe = Object.hasOwn(sourceMap, SYNTHETIC_START_EVENT_ID);
-  if (hasSentinelStart !== hasStartRecipe) {
+  const partition = classifyStartPartition(runtime.startDate, sourceMap);
+  if (partition === "sentinel-without-recipe") {
     throw new Error(
-      hasSentinelStart
-        ? `Persist invariant violated: the contingent-start sentinel is present but the "${SYNTHETIC_START_EVENT_ID}" recipe is missing.`
-        : `Persist invariant violated: an "${SYNTHETIC_START_EVENT_ID}" recipe is present but the startDate is not the contingent-start sentinel.`,
+      `Persist invariant violated: the contingent-start sentinel is present but the "${SYNTHETIC_START_EVENT_ID}" recipe is missing.`,
+    );
+  }
+  if (partition === "recipe-without-sentinel") {
+    throw new Error(
+      `Persist invariant violated: an "${SYNTHETIC_START_EVENT_ID}" recipe is present but the startDate is not the contingent-start sentinel.`,
     );
   }
 

@@ -36,7 +36,6 @@ import type {
   VestingRuntime,
   VestingScheduleTemplate,
 } from "@vestlang/types";
-import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { createEvaluationContext } from "../utils.js";
@@ -45,6 +44,7 @@ import { partitionResolutionBlockers } from "../interpret/blockerTree.js";
 import { isPickedResolved, type PickReturn } from "../interpret/utils.js";
 import {
   assertReloadKeysReserved,
+  classifyStartPartition,
   isSyntheticEventId,
   SYNTHETIC_START_EVENT_ID,
 } from "./synthetic.js";
@@ -125,6 +125,27 @@ export const isRehydrateMissingStartMarkerError = (
   e: unknown,
 ): e is RehydrateMissingStartMarkerError =>
   e instanceof Error && e.name === "RehydrateMissingStartMarkerError";
+
+// Thrown for the other half of the start biconditional: a stored artifact carries
+// an `evt:start` recipe but its `startDate` is NOT the contingent-start sentinel
+// (a real date, or undefined). The recipe could never be applied — left unguarded,
+// the override below would re-derive the event date and silently overwrite a genuine
+// stored start. A vestlang-produced artifact can't reach this state (the save guard
+// enforces the same biconditional), so it signals a corrupt or hand-edited artifact.
+// Mirrors the save side's second branch; tagged like the other reload refusals.
+export class RehydrateUnexpectedStartError extends Error {
+  readonly name = "RehydrateUnexpectedStartError";
+  constructor() {
+    super(
+      `The artifact carries an "${SYNTHETIC_START_EVENT_ID}" recipe but the startDate is not the contingent-start sentinel.`,
+    );
+  }
+}
+
+export const isRehydrateUnexpectedStartError = (
+  e: unknown,
+): e is RehydrateUnexpectedStartError =>
+  e instanceof Error && e.name === "RehydrateUnexpectedStartError";
 
 /**
  * Re-parse a stored source-map recipe back into a `VestingNodeExpr`, through the
@@ -225,16 +246,25 @@ export const rehydrate = (
   // empty map, so this never fires on the legitimate opaque path.
   assertReloadKeysReserved(sourceMap);
 
-  // Damaged-artifact guard (pure corruption check reading the sentinel VALUE — see
-  // CONTINGENT_START_SENTINEL — NOT the override decision below, which keys on the
-  // recipe's presence). A sentinel startDate with no `evt:start` recipe means the
-  // contingency marker was dropped: there's nothing to re-derive the real date
-  // from, so the artifact would project an obviously-wrong far-future schedule.
-  const hasSentinelStart = runtime.startDate === CONTINGENT_START_SENTINEL;
-  const hasStartRecipe = Object.hasOwn(sourceMap, SYNTHETIC_START_EVENT_ID);
-  if (hasSentinelStart && !hasStartRecipe) {
+  // Damaged-artifact guard: enforce BOTH halves of the start biconditional the save
+  // guard enforces, off the shared classifier so the two paths can't drift. This is
+  // a pure corruption check reading the sentinel VALUE (see CONTINGENT_START_SENTINEL)
+  // and the recipe's presence — NOT the override decision below, which keys on the
+  // recipe alone.
+  //   - Sentinel startDate, no `evt:start` recipe: the contingency marker was dropped,
+  //     so there's nothing to re-derive the real date from — the artifact would
+  //     project an obviously-wrong far-future schedule.
+  //   - An `evt:start` recipe but a non-sentinel startDate (a real date OR undefined):
+  //     left unguarded, the override below would re-derive the event date and silently
+  //     overwrite a genuine stored start (#410).
+  const partition = classifyStartPartition(runtime.startDate, sourceMap);
+  if (partition === "sentinel-without-recipe") {
     throw new RehydrateMissingStartMarkerError();
   }
+  if (partition === "recipe-without-sentinel") {
+    throw new RehydrateUnexpectedStartError();
+  }
+  const hasStartRecipe = Object.hasOwn(sourceMap, SYNTHETIC_START_EVENT_ID);
 
   // The grant's frozen conventions come from the stored runtime, not the caller.
   // Grant date and day-of-month were fixed at issuance, so the start we re-resolve
