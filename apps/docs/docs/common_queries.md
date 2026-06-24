@@ -30,8 +30,10 @@ across every refusal-capable tool:
   isn't storable as a single template (lint-error, over-allocation, or a
   non-template shape; the `message` names which).
 - **`vestlang_rehydrate`** — `ruleId: "rehydrate-missing-grant-date"`,
-  `"rehydrate-over-allocation"`, `"rehydrate-corrupt-definition"`, or
-  `"rehydrate-namespace-violation"` for a damaged or hand-built artifact.
+  `"rehydrate-over-allocation"`, `"rehydrate-malformed-percentage"`,
+  `"rehydrate-corrupt-definition"`, `"rehydrate-missing-start-marker"`,
+  `"rehydrate-unexpected-start"`, or `"rehydrate-namespace-violation"` for a
+  damaged or hand-built artifact.
 - **`vestlang_resolve_offset`** — `ruleId: "offset-unresolved"` (carries
   `unresolved`, the blocking reason) when a referenced event hasn't fired, or
   `"offset-not-single-expression"` when the input isn't one offset expression.
@@ -147,7 +149,14 @@ handling, and month-end semantics are identical.
 
 `date + (length × unit)`. Units: `days`, `weeks`, `months`, `years`. Negative
 `length` subtracts. For months/years the `vesting_day_of_month` rule controls
-day-of-month clamping.
+the resulting day-of-month.
+
+Month arithmetic clamps at month-ends, so it is neither invertible nor
+associative: `2025-01-31 + 3 months → 2025-04-30` (April has no 31st), but
+`2025-04-30 − 3 months → 2025-01-30`, not back to the 31st — the lost day-of-31
+can't be recovered. And `(2025-01-31 + 1 month) + 1 month → 2025-03-28` while
+`2025-01-31 + 2 months → 2025-03-31`. Don't compose period additions step by
+step when you mean a single span.
 
 Example: `date=2025-01-31, length=1, unit=months, rule=31_OR_LAST_DAY_OF_MONTH`
 → `2025-02-28`.
