@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   validateVestingScheduleTemplate,
   validateVestingRuntime,
+  validateTemplateAllocatable,
   assertValidVestingScheduleTemplate,
   assertValidVestingRuntime,
 } from "../src/validate";
@@ -620,5 +621,105 @@ describe("validateVestingRuntime — edge branches", () => {
     expect(result.valid).toBe(false);
     expect(pathsOf(result.errors)).toContain("eventFirings[0].event_id");
     expect(pathsOf(result.errors)).toContain("eventFirings[0].date");
+  });
+});
+
+// #418 — validateTemplateAllocatable: structure + allocatability in one verdict.
+// The seam is that validateVestingScheduleTemplate is structural-only and never
+// bounds the share-of-grant, so a 150% template reads structurally valid; this
+// combined function is the one whose `valid` means "safe to allocate."
+describe("validateTemplateAllocatable (#418)", () => {
+  // A scheduled statement carrying a given share-of-grant percentage, with a
+  // distinct order so the template stays structurally valid (no duplicate order).
+  const statement = (order: number, percentage: string) => ({
+    order,
+    schedule: {
+      occurrences: 1,
+      period: 12,
+      period_type: "MONTHS" as const,
+    },
+    percentage,
+  });
+
+  const template = (...percentages: string[]): VestingScheduleTemplate => ({
+    id: "alloc",
+    statements: percentages.map((p, i) => statement(i + 1, p)),
+  });
+
+  it("flags an over-allocating template as invalid (the seam: structural validator still passes it)", () => {
+    // Two statements each at 0.75 sum to 150% over the grant.
+    const t = template("0.75", "0.75");
+
+    const result = validateTemplateAllocatable(t, 4800);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([]);
+    expect(result.findings).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 3, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
+
+    // The seam, on the SAME object: the structural validator says valid.
+    expect(validateVestingScheduleTemplate(t).valid).toBe(true);
+  });
+
+  it("warns but stays valid on an under-allocating template (a warning does not flip valid)", () => {
+    // 1/2 + 1/4 = 3/4 < 100% — legal to leave shares unvested.
+    const result = validateTemplateAllocatable(template("0.5", "0.25"), 4800);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.findings).toEqual([
+      {
+        kind: "under-allocation",
+        severity: "warning",
+        sum: { numerator: 3, denominator: 4 },
+        path: ["Program"],
+      },
+    ]);
+  });
+
+  it("is valid with no allocation findings at exactly 100%", () => {
+    const result = validateTemplateAllocatable(template("0.75", "0.25"), 4800);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("is invalid with structural errors on a structurally-invalid template", () => {
+    // Empty id and empty statements array — both structural failures.
+    const result = validateTemplateAllocatable(
+      { id: "", statements: [] },
+      4800,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("does not propagate the throwing parse on an oversized Numeric percentage", () => {
+    // "99999999999999999999" matches the OCF Numeric grammar but reduces past
+    // MAX_SAFE, so SHARE_OF_GRANT rejects it (structurally invalid) and that is
+    // exactly the input on which templateAllocationFindings' throwing
+    // numericToFraction would throw. The short-circuit must absorb it.
+    const t = template("99999999999999999999");
+
+    let result!: ReturnType<typeof validateTemplateAllocatable>;
+    expect(() => {
+      result = validateTemplateAllocatable(t, 4800);
+    }).not.toThrow();
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.findings).toEqual([]);
+  });
+
+  it("raises no allocation finding for a zero-share grant (structural-only)", () => {
+    // totalShares 0 means nothing to allocate against, so even a 150% template is
+    // valid here — mirroring allocationFindingsFromFractions' zero guard.
+    const result = validateTemplateAllocatable(template("0.75", "0.75"), 0);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.findings).toEqual([]);
   });
 });
