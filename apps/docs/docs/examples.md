@@ -81,10 +81,11 @@ VEST FROM EVENT board AFTER DATE 2025-01-01 AND BEFORE DATE 2025-12-31 OVER 48 m
 ## Cliffs and parallel schedules
 
 Accrue monthly but release nothing until a liquidity event — a single-trigger hold. A
-cliff gated on an event has no fixed date, so it resolves to **events-only** rather than a
-single template — and since the canonical cliff is a fixed duration, there's nowhere to
-store an event-anchored one, so the storable verdict is **unrepresentable**. The same
-construct, seen through the two lenses (see [the two verdicts](./evaluation.md#the-two-verdicts)):
+cliff gated on an event stores as one **`template`** — a time `cliff` (here a zero-length
+hold) plus the `ipo` gate carried in `event_condition` — and resolves to **`template`** too,
+just held pending until `ipo` fires (`representable: true`, `pending: true`). Both verdicts
+agree; the projection stays empty until the event lands (see [the two
+verdicts](./evaluation.md#the-two-verdicts)):
 
 ```vest
 VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo

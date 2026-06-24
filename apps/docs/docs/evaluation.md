@@ -39,14 +39,14 @@ The values they share mean the same thing in both lenses:
 They differ only on the pending case, because they're asking different things:
 
 - **`unresolved`** is **resolution-only** — the closed-world "can't be materialized yet" (typically a cliff that needs a firing date to place its lump). The interchange lens never consults firings, so it has no pending state of its own.
-- **`unrepresentable`** is **interchange-only** — there's no storable shape at all, not even as bare events. Today the sole cause is an **event-anchored cliff**: the canonical cliff is a fixed duration, so it has nowhere to put a lump whose size _and_ date both move with the firing.
+- **`unrepresentable`** is **interchange-only** — there's no storable shape at all, not even as bare events. Two causes remain today: a **cross-unit deferred cliff** (a cliff whose duration is in a different unit than the grid, so it can't be placed until a firing is known) and a **`THEN` tail behind an unfired start** (a chained segment that just can't be dated yet). An event-anchored cliff is **not** one of them anymore — it stores as a `template`, a time `cliff` plus an `event_condition` (see the [divergence example](#when-the-two-diverge) below). The interchange lens never consults firings, so it has no pending state of its own.
 
 ### When the two diverge
 
 Keeping both is the whole point — the same schedule can land differently in each lens:
 
 - A **gated start** `VEST FROM DATE 2025-01-01 BEFORE EVENT ipo` is a storable **`template`** (the gate's definition rides across as a synthetic event). But if `ipo` is already on record at `2024-06-01` — before the 2025 start it was meant to precede — the resolves-to verdict is **`impossible`**. Storable floor: `template`; this-world reading: `impossible`.
-- An **event-anchored cliff** `VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo` is **`unrepresentable`** to store, yet with `ipo` unfired it still resolves to **`events-only`** (the grid, minus the not-yet-placed lump). Same construct, two lenses.
+- An **event-anchored cliff** `VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo` stores as a **`template`** — a time `cliff` (a zero-length hold) plus an `event_condition` carrying the `ipo` gate — and with `ipo` unfired it _resolves to_ **`template`** as well. The two verdicts agree here; what moves is the projection: it's a pending template (`representable: true`, `pending: true`), its grid emitted symbolically with each installment held under the `ipo` gate, and the dated stream stays empty until `ipo` is recorded.
 
 ### Read-flags
 
@@ -148,14 +148,14 @@ Two absolute-date grids that interleave into a stream with no single-template fo
 
 Both verdicts `events-only` — _reason: "Two independent absolute-date vesting grids on one grant."_ (Two independent `DATE` grids are purely date-anchored, so they're `events-only` in both lenses.)
 
-### `unresolved` / `unrepresentable`
+### `template` (pending)
 
-A cliff gated on an event can't be placed until the event fires, and has no fixed-duration template form. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF (+12 months, EVENT milestone)`, grant 2025-01-01 over 100 shares, `milestone` unfired:
+A cliff gated on an event still stores as one template — a time `cliff` plus the event gate as an `event_condition`. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF (+12 months, EVENT milestone)`, grant 2025-01-01 over 100 shares, `milestone` unfired:
 
-- **resolution: `unresolved`** — the cliff can't be materialized yet.
-- **interchange: `unrepresentable`** — _reason: "The cliff can only be placed once an event fires, so the schedule can't be stored ahead of time."_
+- **interchange: `template`** — the schedule is storable as written; the event hold lives in `event_condition`.
+- **resolution: `template`** — but `pending: true`, because `milestone` hasn't fired (blocker `EVENT_NOT_YET_OCCURRED`).
 
-The installments are still emitted symbolically, every one pinned no earlier than the 12-month floor (see [Partial knowledge](#partial-knowledge-for-later-of)), and the schedule discloses an absence assumption on `milestone` through `2026-01-01`.
+The installments are emitted symbolically until `milestone` fires (see [Partial knowledge](#partial-knowledge-for-later-of)). The `LATER OF` floor — nothing can vest before the 12-month mark — holds when the schedule is realized, but the unfired symbolic dates currently display at their raw grid positions, not lifted to that floor (so the first row reads `2025-04-01`, below the `2026-01-01` floor). What those pending dates _should_ surface is the open question tracked in [#447](https://github.com/MattCantor/vestlang/issues/447).
 
 ### `impossible`
 
@@ -263,13 +263,15 @@ When a `LATER OF` selector has some but not all items resolved, the resolved ite
   CLIFF LATER OF (+12 months, EVENT milestone)
 ```
 
-With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so we already know nothing vests before that floor. The schedule is `unresolved` (and `unrepresentable` to store), yet every installment carries the 12-month cliff:
+With `milestone` unfired the cliff date is unknown — but a `LATER OF` can only push the cliff _later_ than the 12-month floor, so the resolved floor still constrains the outcome: when the schedule is realized, nothing vests before that 12-month mark. The schedule stores and resolves as a `template`, with `milestone` outstanding (`pending: true`). Every installment is emitted symbolically, blocked on `EVENT milestone`:
 
 | Amount | Symbolic date                              | State      | Unresolved     |
 | ------ | ------------------------------------------ | ---------- | -------------- |
-| 25     | `{ type: UNRESOLVED_CLIFF, date: 2026-01-01 }` | UNRESOLVED | EVENT milestone |
-| 6      | `{ type: UNRESOLVED_CLIFF, date: 2026-04-01 }` | UNRESOLVED | EVENT milestone |
+| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-04-01 }` | UNRESOLVED | EVENT milestone |
+| 6      | `{ type: UNRESOLVED_CLIFF, date: 2025-07-01 }` | UNRESOLVED | EVENT milestone |
 | …      | … _(through 2029-01-01)_                   | …          | …              |
+
+A wrinkle worth flagging: those `UNRESOLVED_CLIFF` dates currently display at their _raw grid positions_ (the first reads `2025-04-01`), not lifted to the `2026-01-01` floor the `LATER OF` guarantees — and no absence assumption is surfaced for the floor. The floor still binds at realization; it just isn't reflected in the pending symbolic dates today. Whether those dates should be raised to the floor (or otherwise signal it) is the open question tracked in [#447](https://github.com/MattCantor/vestlang/issues/447).
 
 ### Vesting start before grant date
 
