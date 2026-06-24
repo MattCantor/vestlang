@@ -19,16 +19,19 @@ export interface Summary {
   fully_vested_date: OCTDate | null;
 }
 
-const sum = (xs: Installment[]) => xs.reduce((a, x) => a + x.amount, 0);
+// Total the shares across a list of installments. Shared with the pipeline's
+// other roll-ups (the breakdown residual), so it's exported rather than redefined.
+export const sumAmounts = (xs: Installment[]) =>
+  xs.reduce((a, x) => a + x.amount, 0);
 
 export function computeSummary(
   result: VestedResult,
   grantQuantity: number,
   valid: boolean,
 ): Summary {
-  const total_vested = sum(result.vested);
-  const total_unvested = sum(result.unvested) + result.unresolved;
-  const total_impossible = sum(result.impossible);
+  const total_vested = sumAmounts(result.vested);
+  const total_unvested = sumAmounts(result.unvested) + result.unresolved;
+  const total_impossible = sumAmounts(result.impossible);
 
   // Kept honest even when the schedule over-allocates: percent_vested is the raw
   // total_vested / grant, so on an over-allocating program it reads above 1 (e.g.
@@ -90,5 +93,5 @@ export function filterByWindow(
   const inWindow = vested.filter(
     (i) => i.state === "RESOLVED" && i.date >= from && i.date <= to,
   );
-  return { installments: inWindow, total: sum(inWindow) };
+  return { installments: inWindow, total: sumAmounts(inWindow) };
 }
