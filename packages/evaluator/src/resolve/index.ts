@@ -37,22 +37,15 @@ import {
 } from "./unresolved.js";
 import type { ResolveResult, ResolveVerdict } from "./types.js";
 
-// The template arm's stored statement fractions, index-aligned to the resolutions
-// (order = i+1). A cliff's basis on this arm must be the *stored* statement decimal
-// the realizer multiplies by (`compile.ts`), not the exact internal fraction —
-// #443's apportionment can bump a non-terminating share by an ulp, so the two
-// diverge for multi-statement non-terminating schedules. A statement with no cliff
-// (or a pure milestone) yields `undefined`; only cliff statements read it.
-const storedStmtFractions = (
-  template: VestingScheduleTemplate,
-  count: number,
-): (Fraction | undefined)[] => {
-  const byOrder = new Map<number, Fraction>();
-  for (const s of template.statements) {
-    byOrder.set(s.order, numericToFraction(s.percentage));
-  }
-  return Array.from({ length: count }, (_, i) => byOrder.get(i + 1));
-};
+// The template arm's stored statement fractions, index-aligned to the resolutions.
+// A cliff's basis on this arm must be the *stored* statement decimal the realizer
+// multiplies by (`compile.ts`), not the exact internal fraction — #443's apportionment
+// can bump a non-terminating share by an ulp, so the two diverge for multi-statement
+// non-terminating schedules. `buildTemplate` pushes exactly one statement per
+// resolution in loop order (`order = i+1`), so a plain map lines up with the
+// resolutions without any realignment.
+const storedStmtFractions = (template: VestingScheduleTemplate): Fraction[] =>
+  template.statements.map((s) => numericToFraction(s.percentage));
 
 /** Bound the installments a program will materialize, before any resolution or
  *  per-occurrence build. The count is structural (`programInstallmentTotal` from
@@ -112,7 +105,7 @@ export const resolveToCore = (
   const precision = cliffPrecisionFindings(resolutions, totalShares, {
     materializeGate: !build.ok,
     storedStmtFractions: build.ok
-      ? storedStmtFractions(build.template, resolutions.length)
+      ? storedStmtFractions(build.template)
       : undefined,
   });
 
@@ -227,7 +220,7 @@ const cliffPrecisionFindings = (
     // decimal (`compile.ts`), so on that arm the basis is this stored value, not the
     // exact internal fraction. Absent on the events / unresolved arm, whose realizer
     // (`classify.ts`) multiplies by the exact `r.percentage`.
-    storedStmtFractions?: (Fraction | undefined)[];
+    storedStmtFractions?: Fraction[];
   },
 ): Finding[] => {
   if (grant <= 0) return [];
@@ -328,10 +321,7 @@ const pushCliffFinding = (
   if (shareCount <= 0) return;
 
   const percentage = cliff.percentage;
-  const verdict = analyzePrecision(percentage, grant, {
-    num: stmtFraction.numerator,
-    den: stmtFraction.denominator,
-  });
+  const verdict = analyzePrecision(percentage, grant, stmtFraction);
 
   if (leading) {
     // Trust the grant-scale verdict directly: only the two warning kinds fire, and

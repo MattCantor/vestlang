@@ -26,19 +26,13 @@
 // home for what a Numeric is); this file imports them and adds only the
 // analyzer-specific search.
 
+import type { Fraction } from "@vestlang/types";
 import { parseDecimal, renderFixed, terminates } from "./numeric.js";
 
 /** A reduced fraction carried in BigInt so large denominators stay exact. */
 export interface InferredFraction {
   numerator: bigint;
   denominator: bigint;
-}
-
-/** An exact rational the analyzer can scale its share basis by, before its own
- *  floor. `num`/`den` are positive integers (a share fraction's m/N). */
-export interface BasisScale {
-  num: number;
-  den: number;
 }
 
 /**
@@ -160,7 +154,7 @@ const simplestInHalfOpen = (
 
 const RANGE_ERROR = "analyzePrecision: shareCount must be a positive integer";
 const BASIS_ERROR =
-  "analyzePrecision: basisScale.num and .den must be positive integers";
+  "analyzePrecision: basisScale numerator and denominator must be positive integers";
 
 // shareCount mirrors allocate.ts's floorSharesAt guard: a `number` must be a
 // safe integer (Number.isInteger would admit 2^53 + 2, which the BigInt cast
@@ -183,19 +177,19 @@ const toShareCount = (shareCount: number | bigint): bigint => {
 // must be positive integers — a zero numerator means the basis covers no shares
 // and must be skipped at the caller, never reach the analyzer.
 const toBasisScale = (
-  basisScale: BasisScale | undefined,
+  basisScale: Fraction | undefined,
 ): { bnum: bigint; bden: bigint } => {
   if (basisScale === undefined) return { bnum: 1n, bden: 1n };
-  const { num, den } = basisScale;
+  const { numerator, denominator } = basisScale;
   if (
-    !Number.isSafeInteger(num) ||
-    !Number.isSafeInteger(den) ||
-    num <= 0 ||
-    den <= 0
+    !Number.isSafeInteger(numerator) ||
+    !Number.isSafeInteger(denominator) ||
+    numerator <= 0 ||
+    denominator <= 0
   ) {
-    throw new Error(`${BASIS_ERROR} (got ${num}/${den})`);
+    throw new Error(`${BASIS_ERROR} (got ${numerator}/${denominator})`);
   }
-  return { bnum: BigInt(num), bden: BigInt(den) };
+  return { bnum: BigInt(numerator), bden: BigInt(denominator) };
 };
 
 /**
@@ -205,7 +199,7 @@ const toBasisScale = (
  *
  * @param decimal     A non-negative OCF `Numeric` string (≤10 decimal places).
  * @param shareCount  A positive integer (number must be a safe integer).
- * @param basisScale  Optional exact rational the share basis is scaled by before
+ * @param basisScale  Optional exact `Fraction` the share basis is scaled by before
  *                    the analyzer's own floor — `floor(x · basisScale · N)` rather
  *                    than `floor(x · N)`. Defaults to 1/1 (no scaling). A cliff
  *                    guard passes `N = grant` and `basisScale = stmtFraction` so the
@@ -220,7 +214,7 @@ const toBasisScale = (
 export const analyzePrecision = (
   decimal: string,
   shareCount: number | bigint,
-  basisScale?: BasisScale,
+  basisScale?: Fraction,
 ): PrecisionVerdict => {
   const n = toShareCount(shareCount);
   const { bnum, bden } = toBasisScale(basisScale);

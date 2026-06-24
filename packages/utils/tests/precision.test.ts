@@ -213,12 +213,17 @@ describe("analyzePrecision", () => {
   // becomes floor(decimal × stmtNum × grant / stmtDen) — the realizer's grant-scale
   // leading lump — instead of pre-flooring the statement share count.
   describe("basisScale (the rational share basis)", () => {
+    // A number-based Fraction (the public `@vestlang/types` shape the analyzer's
+    // basisScale param takes), distinct from the BigInt `frac` used for `inferred`.
+    const bf = (numerator: number, denominator: number) => ({
+      numerator,
+      denominator,
+    });
+
     // The default and an explicit 1/1 are byte-identical to the no-basis path.
     it("defaults to 1/1 and an explicit 1/1 matches the unscaled call", () => {
       const bare = analyzePrecision("0.3333", 36000);
-      expect(analyzePrecision("0.3333", 36000, { num: 1, den: 1 })).toEqual(
-        bare,
-      );
+      expect(analyzePrecision("0.3333", 36000, bf(1, 1))).toEqual(bare);
     });
 
     // The AC7a false positive: at basisScale 1/2 and N = 72001 the single floor is
@@ -227,7 +232,7 @@ describe("analyzePrecision", () => {
     // The old pre-floored basis (floor(1/2 × 72001) = 36000) double-floored to
     // 11999 and would have misallocated.
     it("kills the AC7a false positive at a lossy basis (1/3 cliff, 1/2 stmt, N 72001)", () => {
-      const v = analyzePrecision("0.3333333333", 72001, { num: 1, den: 2 });
+      const v = analyzePrecision("0.3333333333", 72001, bf(1, 2));
       expect(v.kind).toBe("precise-enough");
       if (v.kind === "precise-enough") {
         expect(v.inferred).toEqual(frac(1n, 3n));
@@ -239,7 +244,7 @@ describe("analyzePrecision", () => {
     // verdict misallocates where the pre-floored basis (floor(1/2 × 1005) = 502,
     // floor(2/3 × 502) = 334 = the realized lump) stayed silent.
     it("catches the AC7b false negative at a lossy basis (2/3 cliff, 1/2 stmt, N 1005)", () => {
-      const v = analyzePrecision("0.6666666666", 1005, { num: 1, den: 2 });
+      const v = analyzePrecision("0.6666666666", 1005, bf(1, 2));
       expect(v.kind).toBe("misallocates");
       if (v.kind === "misallocates") {
         expect(v.suppliedShares).toBe(334n);
@@ -252,7 +257,7 @@ describe("analyzePrecision", () => {
     // move it; and the recommended window search runs against the same rational
     // basis. The AC1 case (1/3 cliff, 1/2 stmt, N 72000) still recommends 0.33334.
     it("recommends against the scaled basis (AC1: 0.33334 at 1/2 of 72000)", () => {
-      const v = analyzePrecision("0.3333333333", 72000, { num: 1, den: 2 });
+      const v = analyzePrecision("0.3333333333", 72000, bf(1, 2));
       expect(v.kind).toBe("misallocates");
       if (v.kind === "misallocates") {
         expect(v.intendedShares).toBe(12000n);
@@ -264,16 +269,16 @@ describe("analyzePrecision", () => {
     // throws, mirroring the shareCount guard. A zero numerator means the basis
     // covers no shares — the caller skips it, it never reaches the analyzer.
     it("throws on a non-positive or non-integer basis part", () => {
-      expect(() => analyzePrecision("0.5", 100, { num: 0, den: 2 })).toThrow(
+      expect(() => analyzePrecision("0.5", 100, bf(0, 2))).toThrow(
         /basisScale/,
       );
-      expect(() => analyzePrecision("0.5", 100, { num: -1, den: 2 })).toThrow(
+      expect(() => analyzePrecision("0.5", 100, bf(-1, 2))).toThrow(
         /basisScale/,
       );
-      expect(() => analyzePrecision("0.5", 100, { num: 1, den: 0 })).toThrow(
+      expect(() => analyzePrecision("0.5", 100, bf(1, 0))).toThrow(
         /basisScale/,
       );
-      expect(() => analyzePrecision("0.5", 100, { num: 1.5, den: 2 })).toThrow(
+      expect(() => analyzePrecision("0.5", 100, bf(1.5, 2))).toThrow(
         /basisScale/,
       );
     });
