@@ -49,7 +49,12 @@ describe("#251 AC1 — headline repro: commits to the date floor, discloses ipo"
 
     const schedule = evaluateProgram(prog(HEADLINE), ctx());
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "ipo", through: "2024-06-01" },
+      {
+        eventId: "ipo",
+        through: "2024-06-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
     // The same disclosure appears in resolution.pending.
     expect(findUnfired(schedule.resolution.pending, "ipo")).toEqual({
@@ -235,7 +240,12 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       throw new Error(`expected template, got ${schedule.resolution.status}`);
     expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "e", through: "2024-09-01" },
+      {
+        eventId: "e",
+        through: "2024-09-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
     expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
       through: "2024-09-01",
@@ -255,7 +265,12 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       throw new Error(`expected template, got ${schedule.resolution.status}`);
     expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "e", through: "2024-09-01" },
+      {
+        eventId: "e",
+        through: "2024-09-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
   });
 
@@ -272,6 +287,8 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     expect(schedule.absenceAssumptions).toContainEqual({
       eventId: "e",
       through: "2024-06-01",
+      direction: "before",
+      inclusive: false,
     });
     expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
       through: "2024-06-01",
@@ -290,7 +307,12 @@ describe("#363 AC-6 — no regression on single-level / flattened cases", () => 
       "VEST FROM EARLIER OF (DATE 2024-06-01, EVENT e) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "e", through: "2024-06-01" },
+      {
+        eventId: "e",
+        through: "2024-06-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
   });
 
@@ -301,7 +323,12 @@ describe("#363 AC-6 — no regression on single-level / flattened cases", () => 
       "VEST FROM EARLIER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "e", through: "2024-06-01" },
+      {
+        eventId: "e",
+        through: "2024-06-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
   });
 });
@@ -365,6 +392,8 @@ describe("#251 — a committed disclosure survives the unresolved routing arm", 
     expect(schedule.absenceAssumptions).toContainEqual({
       eventId: "e",
       through: "2024-06-01",
+      direction: "before",
+      inclusive: false,
     });
     // Sanity: portion 2's own pending cliff event is disclosed too — `e` rides
     // alongside it, it doesn't displace it.
@@ -381,7 +410,12 @@ describe("#251 AC17 — schedule-level EARLIER START OF behaves as the node-leve
       throw new Error(`expected template, got ${schedule.resolution.status}`);
     expect(schedule.resolution.runtime.startDate).toBe("2024-06-01");
     expect(schedule.absenceAssumptions).toEqual([
-      { eventId: "ipo", through: "2024-06-01" },
+      {
+        eventId: "ipo",
+        through: "2024-06-01",
+        direction: "before",
+        inclusive: false,
+      },
     ]);
   });
 });

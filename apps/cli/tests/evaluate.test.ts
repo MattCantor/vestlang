@@ -28,6 +28,22 @@ describe("evaluate action", () => {
     expect(out).toContain("RESOLVED");
   });
 
+  it("renders the direction-honest absence message for an AFTER gate", () => {
+    // `AFTER EVENT ipo` (ipo unfired) leans on ipo NOT having occurred after the
+    // start date — the watch-list block must name the *after* side, not on/before.
+    spies = spyConsoleAndExit();
+    evaluate(
+      [
+        "VEST FROM DATE 2025-01-01 AFTER EVENT ipo OVER 12 months EVERY 1 month",
+      ],
+      baseOpts,
+    );
+    const out = spies.stdout();
+    expect(out).toContain("Assumes these events have not yet occurred:");
+    expect(out).toContain("ipo did not occur after 2025-01-01");
+    expect(out).not.toContain("ipo did not occur on/before");
+  });
+
   it("routes an invalid quantity through fail() — error: line, exit 1", () => {
     spies = spyConsoleAndExit();
     expect(() =>

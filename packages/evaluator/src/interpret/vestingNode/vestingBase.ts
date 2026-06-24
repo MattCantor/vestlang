@@ -8,8 +8,7 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
-import { addDays } from "@vestlang/primitives";
-import { addMonthsRule, addMonthsExact } from "../time.js";
+import { addMonthsRule, addMonthsExact, stepByOffsets } from "../time.js";
 
 // Human label for the vesting-start anchor in a blocker. The anchor's identity is
 // a type tag, not a string; this is purely the word a diagnostic prints. Module-
@@ -126,26 +125,20 @@ export function evaluateVestingBase(
 }
 
 // Walk the node's offsets onto its base date. A DAYS offset is the same exact
-// calendar step everywhere. A MONTHS offset diverges: `snap` true makes it
+// calendar step everywhere. A MONTHS offset diverges on `snap`: true makes it
 // cadence (consult the day-of-month policy on the context, so a fixed "15" pulls
-// it to the 15th), `snap` false makes it an exact duration (keep the day, clamp
-// to month-end on a shorter month, never read the policy). Only a cliff's own
-// `vestingStart` anchor passes `snap` true — see `evaluateVestingBase`.
+// it to the 15th), false makes it an exact duration (keep the day, clamp to
+// month-end on a shorter month, never read the policy). Only a cliff's own
+// `vestingStart` anchor passes `snap` true — see `evaluateVestingBase`. The walk
+// itself lives in `stepByOffsets`; here we just pick which month-stepper it uses.
 function applyOffsets(
   base: OCTDate,
   offsets: Offsets,
   ctx: ResolutionContext,
   snap: boolean,
 ): OCTDate {
-  let d = base;
-  for (const o of offsets) {
-    const signed = o.sign === "PLUS" ? o.value : -o.value;
-    d =
-      o.unit === "MONTHS"
-        ? snap
-          ? addMonthsRule(d, signed, ctx)
-          : addMonthsExact(d, signed)
-        : addDays(d, signed);
-  }
-  return d;
+  const monthStep = snap
+    ? (d: OCTDate, n: number) => addMonthsRule(d, n, ctx)
+    : addMonthsExact;
+  return stepByOffsets(base, offsets, monthStep);
 }

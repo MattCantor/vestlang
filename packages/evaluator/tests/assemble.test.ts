@@ -373,6 +373,8 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     expect(schedule.absenceAssumptions).toContainEqual({
       eventId: "ipo",
       through: "2030-01-01",
+      direction: "before",
+      inclusive: false,
     });
 
     // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still

@@ -1,6 +1,8 @@
 import type {
+  AbsenceDescriptor,
   AtomCondition,
   Blocker,
+  Constraint,
   ImpossibleBlocker,
   ImpossibleNode,
   NodeMeta,
@@ -10,6 +12,7 @@ import type {
   VestingNode,
 } from "@vestlang/types";
 import { satisfiesRelation } from "@vestlang/primitives";
+import { addMonthsExact, stepByOffsets } from "../time.js";
 import { withBoundary } from "../boundary.js";
 
 /* ------------------------
@@ -34,19 +37,75 @@ export const createGateImpossibleBlocker = (
   node,
 });
 
+// The boundary an unfired side is measured against, ready to stamp: the date plus
+// the relation it guards against. Absent when there's nothing to compare the unfired
+// event to (both sides unfired), so the blockers stay bare.
+interface Boundary {
+  through: OCTDate;
+  descriptor: AbsenceDescriptor;
+}
+
 const mergedUnresolved = (
   nodes: (UnresolvedNode | ImpossibleNode)[],
   node: VestingNode,
-  // The date the still-pending side is being measured against, if we know one.
-  // It gets stamped onto the pending-event blockers (not the condition blocker)
-  // so the schedule can later disclose what it's assuming stayed absent.
-  through?: OCTDate,
+  boundary?: Boundary,
 ): Blocker[] => {
   const operandBlockers = nodes.map((n) => n.blockers).flat();
   return [
-    ...(through ? withBoundary(operandBlockers, through) : operandBlockers),
+    ...(boundary
+      ? withBoundary(operandBlockers, boundary.through, boundary.descriptor)
+      : operandBlockers),
     { type: "UNRESOLVED_CONDITION", node },
   ];
+};
+
+// The boundary + relation an unfired gate side is held against, given which side we
+// know the date of. Two shapes:
+//   - subject resolved, gated event pending (the constraint base is the unfired
+//     side): the dangerous firing is on the `constraint.type` side of the subject
+//     date, and the gated event's own offsets fold back into that boundary
+//     (negated, into the raw-event frame).
+//   - gated event resolved, subject pending (the subject is the unfired side): the
+//     base's date already has its offset baked in (resolved upstream), so no folding
+//     — and the dangerous direction is the *complement* of `constraint.type` (the
+//     subject must land on the far side of the base for the gate to fail).
+// Inclusivity is the complement of the gate's own `strict` either way: a non-strict
+// gate admits the boundary day (benign), a strict one excludes it (dangerous).
+const gateBoundary = (
+  subjectDate: OCTDate | undefined,
+  baseDate: OCTDate | undefined,
+  constraint: Constraint,
+): Boundary | undefined => {
+  const inclusive = constraint.strict;
+  // The relation's own side, and its complement. Which one the disclosure takes
+  // depends on whether the gated event is the constraint base or the gate's subject.
+  const [direct, opposite] =
+    constraint.type === "BEFORE"
+      ? (["before", "after"] as const)
+      : (["after", "before"] as const);
+  if (subjectDate !== undefined) {
+    // Fold the gated event's own offset back into the boundary a *raw* firing of it
+    // flips at: `... BEFORE EVENT ipo - 6 months` holds iff `ipo - 6mo >= d`, i.e. a
+    // raw `ipo >= d + 6mo`, so the disclosed boundary is the subject date shifted by
+    // the negation of the event's offsets (exact step, never policy-snapped). Month-
+    // end clamping can make the inverse off by a day — fine for a watch-list.
+    return {
+      through: stepByOffsets(
+        subjectDate,
+        constraint.base.offsets,
+        addMonthsExact,
+        true,
+      ),
+      descriptor: { direction: direct, inclusive },
+    };
+  }
+  if (baseDate !== undefined) {
+    return {
+      through: baseDate,
+      descriptor: { direction: opposite, inclusive },
+    };
+  }
+  return undefined;
 };
 
 /* ------------------------
@@ -98,19 +157,18 @@ export function evaluateConstraint(
   // An unfired event on either side keeps the comparison pending — we only ever
   // hand back the operand(s) we're actually waiting on. Whichever side we do know
   // the date of is the yardstick the unfired event is being held against, so that
-  // date is what we're assuming it stays absent through; with neither side known
-  // there's nothing to record.
+  // date (and the relation it guards against) is what we disclose; with neither side
+  // known there's nothing to record.
   if (a.type === "UNRESOLVED" || b.type === "UNRESOLVED") {
     const pending = [a, b].filter(
       (n): n is UnresolvedNode => n.type === "UNRESOLVED",
     );
-    const knownDate =
-      a.type === "RESOLVED"
-        ? a.date
-        : b.type === "RESOLVED"
-          ? b.date
-          : undefined;
-    return mergedUnresolved(pending, vestingNode, knownDate);
+    const boundary = gateBoundary(
+      a.type === "RESOLVED" ? a.date : undefined,
+      b.type === "RESOLVED" ? b.date : undefined,
+      constraint,
+    );
+    return mergedUnresolved(pending, vestingNode, boundary);
   }
 
   // Both dates known: run the comparison. A proviso that the two known dates

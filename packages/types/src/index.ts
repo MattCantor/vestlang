@@ -115,4 +115,5 @@ export {
   NonTemplateReason,
   InterchangeVerdict,
   AbsenceAssumption,
+  AbsenceDescriptor,
 } from "./evaluation.js";
