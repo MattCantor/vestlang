@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.1">
 <title data-rh="true">Common Queries | vestlang</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://MattCantor.github.io/vestlang/common_queries"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Common Queries | vestlang"><meta data-rh="true" name="description" content="Reference for LLM consumers of the vestlang MCP server. Lists the summary fields"><meta data-rh="true" property="og:description" content="Reference for LLM consumers of the vestlang MCP server. Lists the summary fields"><link data-rh="true" rel="icon" href="/vestlang/img/vestlang-icon.png"><link data-rh="true" rel="canonical" href="https://MattCantor.github.io/vestlang/common_queries"><link data-rh="true" rel="alternate" href="https://MattCantor.github.io/vestlang/common_queries" hreflang="en"><link data-rh="true" rel="alternate" href="https://MattCantor.github.io/vestlang/common_queries" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Common Queries","item":"https://MattCantor.github.io/vestlang/common_queries"}]}</script><link rel="stylesheet" href="/vestlang/assets/css/styles.b9c62cb6.css">
-<script src="/vestlang/assets/js/runtime~main.c5d282de.js" defer="defer"></script>
+<script src="/vestlang/assets/js/runtime~main.60294ea1.js" defer="defer"></script>
 <script src="/vestlang/assets/js/main.fd545d11.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -36,8 +36,10 @@ but evaluation couldn&#x27;t proceed (e.g. a schedule too large to materialize, 
 isn&#x27;t storable as a single template (lint-error, over-allocation, or a
 non-template shape; the <code>message</code> names which).</li>
 <li><strong><code>vestlang_rehydrate</code></strong> — <code>ruleId: &quot;rehydrate-missing-grant-date&quot;</code>,
-<code>&quot;rehydrate-over-allocation&quot;</code>, <code>&quot;rehydrate-corrupt-definition&quot;</code>, or
-<code>&quot;rehydrate-namespace-violation&quot;</code> for a damaged or hand-built artifact.</li>
+<code>&quot;rehydrate-over-allocation&quot;</code>, <code>&quot;rehydrate-malformed-percentage&quot;</code>,
+<code>&quot;rehydrate-corrupt-definition&quot;</code>, <code>&quot;rehydrate-missing-start-marker&quot;</code>,
+<code>&quot;rehydrate-unexpected-start&quot;</code>, or <code>&quot;rehydrate-namespace-violation&quot;</code> for a
+damaged or hand-built artifact.</li>
 <li><strong><code>vestlang_resolve_offset</code></strong> — <code>ruleId: &quot;offset-unresolved&quot;</code> (carries
 <code>unresolved</code>, the blocking reason) when a referenced event hasn&#x27;t fired, or
 <code>&quot;offset-not-single-expression&quot;</code> when the input isn&#x27;t one offset expression.</li>
@@ -91,7 +93,13 @@ handling, and month-end semantics are identical.</p>
 <h3 class="anchor anchorWithStickyNavbar_hMtt" id="vestlang_add_period"><code>vestlang_add_period</code><a href="#vestlang_add_period" class="hash-link" aria-label="Direct link to vestlang_add_period" title="Direct link to vestlang_add_period" translate="no">​</a></h3>
 <p><code>date + (length × unit)</code>. Units: <code>days</code>, <code>weeks</code>, <code>months</code>, <code>years</code>. Negative
 <code>length</code> subtracts. For months/years the <code>vesting_day_of_month</code> rule controls
-day-of-month clamping.</p>
+the resulting day-of-month.</p>
+<p>Month arithmetic clamps at month-ends, so it is neither invertible nor
+associative: <code>2025-01-31 + 3 months → 2025-04-30</code> (April has no 31st), but
+<code>2025-04-30 − 3 months → 2025-01-30</code>, not back to the 31st — the lost day-of-31
+can&#x27;t be recovered. And <code>(2025-01-31 + 1 month) + 1 month → 2025-03-28</code> while
+<code>2025-01-31 + 2 months → 2025-03-31</code>. Don&#x27;t compose period additions step by
+step when you mean a single span.</p>
 <p>Example: <code>date=2025-01-31, length=1, unit=months, rule=31_OR_LAST_DAY_OF_MONTH</code>
 → <code>2025-02-28</code>.</p>
 <h3 class="anchor anchorWithStickyNavbar_hMtt" id="vestlang_date_diff"><code>vestlang_date_diff</code><a href="#vestlang_date_diff" class="hash-link" aria-label="Direct link to vestlang_date_diff" title="Direct link to vestlang_date_diff" translate="no">​</a></h3>
