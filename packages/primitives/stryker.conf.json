@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "testRunner": "vitest",
+  "mutate": [
+    "src/allocate.ts",
+    "src/dates.ts",
+    "src/kernel.ts",
+    "src/fold.ts",
+    "src/window.ts",
+    "src/limits.ts"
+  ],
+  "coverageAnalysis": "perTest",
+  "concurrency": 4,
+  "reporters": ["html", "clear-text", "progress"],
+  "clearTextReporter": {
+    "allowColor": false,
+    "reportTests": false
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 75,
+    "break": null
+  }
+}

@@ -435,4 +435,61 @@ describe("allocateEvents", () => {
     const out = allocateEvents(grid(37, { kind: "none" }), total);
     expect(out.reduce((a, e) => a + e.amount, 0)).toBe(total);
   });
+
+  // The cases above feed events that grid() already emits in (date, order,
+  // occurrence) order, so a broken sort comparator goes unnoticed. These feed
+  // scrambled input and pin that the comparator restores the canonical order
+  // before the single cumulative walk — the ordering is load-bearing, since the
+  // walk telescopes in sequence and a cliff lump must lead its day.
+  it("sorts scrambled events by date, then statement order, before allocating", () => {
+    const events: RawEvent[] = [
+      {
+        date: "2025-03-01",
+        fractionOfGrant: frac(1, 6),
+        statementOrder: 1,
+        occurrence: 1,
+      },
+      {
+        date: "2025-02-01", // same day as the next, higher statement order
+        fractionOfGrant: frac(1, 3),
+        statementOrder: 2,
+        occurrence: 1,
+      },
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 2),
+        statementOrder: 1,
+        occurrence: 1,
+      },
+    ];
+    // Canonical order: Feb(½, stmt 1), Feb(⅓, stmt 2), Mar(⅙). Cumulative
+    // round-down over 600: 300, then 500−300=200, then 600−500=100.
+    expect(allocateEvents(events, 600)).toEqual([
+      { date: "2025-02-01", amount: 300 },
+      { date: "2025-02-01", amount: 200 },
+      { date: "2025-03-01", amount: 100 },
+    ]);
+  });
+
+  it("breaks a same-date, same-statement tie by occurrence (a cliff lump leads)", () => {
+    const events: RawEvent[] = [
+      {
+        date: "2025-02-01",
+        fractionOfGrant: frac(1, 3),
+        statementOrder: 1,
+        occurrence: 5,
+      },
+      {
+        date: "2025-02-01", // a cliff lump (occurrence 0) must lead its day
+        fractionOfGrant: frac(2, 3),
+        statementOrder: 1,
+        occurrence: 0,
+      },
+    ];
+    // Canonical order: occ 0 (⅔)=200 leads, occ 5 (⅓)=100 follows.
+    expect(allocateEvents(events, 300)).toEqual([
+      { date: "2025-02-01", amount: 200 },
+      { date: "2025-02-01", amount: 100 },
+    ]);
+  });
 });
