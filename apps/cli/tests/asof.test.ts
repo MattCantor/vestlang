@@ -32,6 +32,25 @@ describe("asof action", () => {
     expect(out).toContain("UNVESTED");
   });
 
+  it("leads with an INVALID banner and the over-allocation finding for an over-allocating schedule", () => {
+    spies = spyConsoleAndExit();
+    // Two 0.6 grids on one grant reach 120% — not a legal allocation. The CLI
+    // still prints the partition, but must say up front it isn't valid.
+    const overAllocates =
+      "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month PLUS " +
+      "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month";
+    asof([overAllocates], baseOpts);
+    const out = spies.stdout();
+    expect(out).toContain("INVALID");
+    expect(out).toContain("over-allocates the grant to 120% (6/5)");
+  });
+
+  it("shows no INVALID banner for a valid schedule", () => {
+    spies = spyConsoleAndExit();
+    asof([HAPPY_DSL], baseOpts);
+    expect(spies.stdout()).not.toContain("INVALID");
+  });
+
   it("routes an invalid quantity through fail() — error: line, exit 1", () => {
     spies = spyConsoleAndExit();
     // "" and "  " coerce to a valid 0; "abc" is a genuine parse failure.

@@ -24,7 +24,7 @@ const run = (dsl: string, context = ctx()) =>
 describe("computeSummary", () => {
   it("sums vested and reports percent for mid-schedule as_of", () => {
     const result = run("VEST OVER 4 years EVERY 1 month CLIFF 1 year");
-    const s = computeSummary(result, 100000);
+    const s = computeSummary(result, 100000, true);
 
     // Cliff (25000) + 3 monthly tranches of ~2083 each = 31250
     expect(s.total_vested).toBe(31250);
@@ -40,7 +40,7 @@ describe("computeSummary", () => {
       "VEST FROM EVENT ipo OVER 2 years EVERY 1 month",
       ctx({ grantDate: "2025-01-01", events: {} }),
     );
-    const s = computeSummary(result, 100000);
+    const s = computeSummary(result, 100000, true);
     expect(s.fully_vested_date).toBeNull();
     expect(s.total_vested).toBe(0);
   });
@@ -50,7 +50,7 @@ describe("computeSummary", () => {
       "VEST OVER 12 months EVERY 1 month",
       ctx({ grantQuantity: 0 }),
     );
-    const s = computeSummary(result, 0);
+    const s = computeSummary(result, 0, true);
     expect(s.percent_vested).toBe(0);
   });
 
@@ -63,7 +63,7 @@ describe("computeSummary", () => {
         asOf: "2025-02-01",
       }),
     );
-    const s = computeSummary(result, 100);
+    const s = computeSummary(result, 100, true);
     expect(s.total_vested).toBe(33);
     expect(s.percent_vested).toBe(0.33);
   });
@@ -152,7 +152,7 @@ describe("summary — pending THEN tail share claim (R2-B2)", () => {
       ctx({ grantQuantity: 2400, asOf: "2026-01-01" }),
     );
     expect(result.unresolved).toBe(2400);
-    const s = computeSummary(result, 2400);
+    const s = computeSummary(result, 2400, true);
     expect(s.total_vested).toBe(0);
     expect(s.total_unvested).toBe(2400);
     expect(s.percent_vested).toBe(0);

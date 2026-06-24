@@ -64,6 +64,20 @@ describe("mcp-server / vestlang_evaluate_as_of description (#379)", () => {
   });
 });
 
+describe("mcp-server / vestlang_evaluate_as_of validity channel in description", () => {
+  it("documents the `valid` / `findings` validity channel", async () => {
+    // The as-of read used to "carry no verdict"; it now reports the same
+    // over-allocation verdict evaluate does, so the description must say so.
+    const description = await descriptionOf("vestlang_evaluate_as_of");
+    expect(description).toContain("`valid`");
+    expect(description).toContain("`findings`");
+    expect(description).toMatch(/allocates more than the grant/i);
+    // The over-allocation example uses the 0.6 + 0.6 shape, not a cliff one — the
+    // word "cliff" must still be absent (guarded above and re-asserted here).
+    expect(description).not.toContain("cliff");
+  });
+});
+
 describe("mcp-server / server INSTRUCTIONS error-shape paragraph (#296, AC#8)", () => {
   it("no longer enumerates only the two syntax/evaluation ruleIds", async () => {
     const client = await connectedClient();

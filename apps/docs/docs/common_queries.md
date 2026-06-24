@@ -61,8 +61,11 @@ inside an `{ ok: true, … }` result.
 
 `vestlang_evaluate` evaluates the whole program as one schedule and returns two
 verdicts plus a few derived reads (and a per-clause `breakdown`).
-`vestlang_evaluate_as_of` carries no verdict — it partitions the same schedule by
-date; see [its summary fields](#summary-fields-on-vestlang_evaluate_as_of) below.
+`vestlang_evaluate_as_of` partitions the same schedule by date and carries the
+validity channel — `valid` and `findings`, the same `false`-when-over-allocating
+verdict `vestlang_evaluate` reports — so the read tools agree with `evaluate`. (It
+still doesn't expose the storability verdicts; for those use `vestlang_evaluate`.)
+See [its summary fields](#summary-fields-on-vestlang_evaluate_as_of) below.
 See [Evaluation](./evaluation.md) for the full model; the short version:
 
 | Field | Type | Meaning |
@@ -82,17 +85,20 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 
 `vestlang_evaluate_as_of` partitions the evaluated installments by the as-of date — into `vested` (RESOLVED on/before `as_of`) and `unvested` (RESOLVED after `as_of`, plus UNRESOLVED), alongside the `unresolved` quantity and `impossible` installments. The summary fields derive from those buckets. (The library's `EvaluatedSchedule` carries the two verdicts, `absenceAssumptions`, the flat `installments`, and `blockers`; the as-of partitioning and `summary` are what the MCP layer adds on top.)
 
-The response includes a `summary` object:
+The response includes `valid` and `findings` (the validity channel — see the rows
+below) alongside a `summary` object:
 
 | Field | Type | Meaning |
 |---|---|---|
+| `valid` | boolean | `false` when the program allocates more than the grant (an error-severity finding). The partition and summary are still returned — annotate, don't certify. |
+| `findings` | array | Allocation problems, each with `kind`, `severity`, exact `sum`, and a human `message` (the same shape `vestlang_evaluate` returns). Empty for a valid program. |
 | `total_vested` | number | Sum of shares across all RESOLVED `vested` installments. |
 | `total_unvested` | number | Sum of shares across `unvested` (RESOLVED + UNRESOLVED) plus the top-level `unresolved` quantity. |
 | `total_impossible` | number | Sum of shares across `impossible`. |
-| `percent_vested` | number | `total_vested / grant_quantity`, 0–1, rounded to 4 decimals. |
+| `percent_vested` | number | `total_vested / grant_quantity`, rounded to 4 decimals. Usually 0–1, but **not clamped**: an over-allocating schedule (`valid: false`) reads above 1 — e.g. `1.2` when 120% has vested. It is deliberately decoupled from being ≤ 1 in the invalid case; the verdict is carried by `valid`/`findings`. |
 | `next_vest_date` | ISO date \| null | Earliest upcoming RESOLVED installment date in `unvested`. Null if no upcoming RESOLVED tranche. |
 | `next_vest_amount` | number \| null | Amount of that upcoming tranche. |
-| `fully_vested_date` | ISO date \| null | Latest installment date, but only if the schedule is fully determinate (`unresolved === 0`, no impossible, all unvested RESOLVED). Null when the endpoint is unknowable (e.g. gated on an event with no occurrence date). |
+| `fully_vested_date` | ISO date \| null | Latest installment date, but only if the schedule is fully determinate (`unresolved === 0`, no impossible, all unvested RESOLVED). Null when the endpoint is unknowable (e.g. gated on an event with no occurrence date), and null when `valid` is false — it would otherwise assert a false "fully vested" completion for an over-allocating grant. |
 
 ### Example
 
@@ -105,6 +111,8 @@ Returns (abbreviated):
 
 ```json
 {
+  "valid": true,
+  "findings": [],
   "summary": {
     "total_vested": 31250,
     "total_unvested": 68750,

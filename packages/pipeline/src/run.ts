@@ -10,10 +10,16 @@
 import { evaluateProgramAsOf, evaluateClauseGroups } from "@vestlang/evaluator";
 import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
-import type { Installment, OCTDate, VestingDayOfMonth } from "@vestlang/types";
+import type {
+  Finding,
+  Installment,
+  OCTDate,
+  VestingDayOfMonth,
+} from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
 import { buildContext, buildAsOfContext } from "./context.js";
 import { computeSummary, filterByWindow, type Summary } from "./summary.js";
+import { errorFindings, formatFinding } from "./findings.js";
 
 // The grant a schedule is evaluated against. `events.grantDate` is injected by
 // the context builder, so callers pass only their own named events.
@@ -35,20 +41,44 @@ export type RecoveredView = {
   residualError: number;
 };
 
-// The whole grant's point-in-time partition, plus the roll-up.
+// A finding paired with its rendered sentence — the same shape `toScheduleView`
+// hands the `evaluate` surface, so the validity channel reads identically across
+// the three read tools.
+type FindingView = Finding & { message: string };
+
+// True when nothing error-severity is flagged (an over-allocation flips it; a
+// warning like under-allocation does not). Each as-of surface derives validity
+// off the same `result.findings`, so they agree with one another and with
+// `evaluate`.
+const asOfFindings = (
+  findings: Finding[],
+): { valid: boolean; findings: FindingView[] } => ({
+  valid: errorFindings(findings).length === 0,
+  findings: findings.map((f) => ({ ...f, message: formatFinding(f) })),
+});
+
+// The whole grant's point-in-time partition, plus the roll-up. `valid`/`findings`
+// carry the validity verdict — the partition is still returned for an
+// over-allocating schedule (annotate, don't certify), but flagged as not legal.
 export type AsOfView = {
   vested: Installment[];
   unvested: Installment[];
   impossible: Installment[];
   unresolved: number;
   summary: Summary;
+  valid: boolean;
+  findings: FindingView[];
 };
 
-// The grant's resolved tranches inside a [from, to] window.
+// The grant's resolved tranches inside a [from, to] window, with the same
+// validity verdict — the window sum is the real (unclamped) total even when the
+// schedule over-allocates.
 export type WindowView = {
   vested_in_window: number;
   tranches_in_window: number;
   installments: Installment[];
+  valid: boolean;
+  findings: FindingView[];
 };
 
 // One clause-group's contribution to the program: its own tranches and the
@@ -144,6 +174,7 @@ export function runAsOf(
   const ctx = buildAsOfContext({ ...g, as_of: asOf });
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
+    const { valid, findings } = asOfFindings(result.findings);
     return {
       ok: true,
       asOf: ctx.asOf,
@@ -151,7 +182,11 @@ export function runAsOf(
       unvested: result.unvested,
       impossible: result.impossible,
       unresolved: result.unresolved,
-      summary: computeSummary(result, ctx.grantQuantity),
+      // When invalid, the summary keeps its numbers honest and only drops the
+      // completion date — see computeSummary.
+      summary: computeSummary(result, ctx.grantQuantity, valid),
+      valid,
+      findings,
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };
@@ -182,6 +217,8 @@ export function runVestedBetween(
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
     const { installments, total } = filterByWindow(result.vested, from, to);
+    // No summary path here, so validity reads straight off the same findings.
+    const { valid, findings } = asOfFindings(result.findings);
     return {
       ok: true,
       from,
@@ -189,6 +226,8 @@ export function runVestedBetween(
       vested_in_window: total,
       tranches_in_window: installments.length,
       installments,
+      valid,
+      findings,
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };
