@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { fracSum, fracCmp, fracMul, fracAdd, ONE } from "../src/fractions";
+import {
+  fracSum,
+  fracCmp,
+  fracMul,
+  fracAdd,
+  fracSub,
+  fracReduce,
+  classifyAllocation,
+  formatPct,
+  ONE,
+} from "../src/fractions";
 import type { Fraction } from "@vestlang/types";
 
 const f = (numerator: number, denominator: number): Fraction => ({
@@ -73,6 +83,15 @@ describe("overflow", () => {
     expect(fracMul(a, b)).toEqual({ numerator: 1, denominator: 1 });
   });
 
+  it("allows a component exactly at MAX_SAFE_INTEGER — the ceiling is inclusive", () => {
+    // 2^53 − 1 is the largest value Number holds exactly; it must be accepted,
+    // not refused as if it overflowed.
+    expect(fracReduce(f(Number.MAX_SAFE_INTEGER, 1))).toEqual({
+      numerator: Number.MAX_SAFE_INTEGER,
+      denominator: 1,
+    });
+  });
+
   it("keeps a long running sum of equal slices exact past 2^53", () => {
     // 37 slices of 1/37 of a ~1.2e14 grant: scaled to per-share fractions the
     // denominators reach grant × 37 ≈ 4.5e15 > 2^53. The running total must
@@ -83,5 +102,43 @@ describe("overflow", () => {
     for (let i = 0; i < total && i < 37; i++) sum = fracAdd(sum, slice);
     // 37 shares of the grant, reduced:
     expect(sum).toEqual({ numerator: 37, denominator: total });
+  });
+});
+
+describe("fracSub", () => {
+  it("subtracts to a reduced positive result", () => {
+    expect(fracSub(f(3, 4), f(1, 4))).toEqual({ numerator: 1, denominator: 2 });
+  });
+
+  it("goes negative when the subtrahend is larger, carrying the sign on the numerator", () => {
+    // 1/4 − 1/2 = −1/4. The reduction runs the GCD over a negative numerator, so
+    // the sign rides the numerator and the denominator stays positive.
+    expect(fracSub(f(1, 4), f(1, 2))).toEqual({
+      numerator: -1,
+      denominator: 4,
+    });
+  });
+});
+
+describe("fracReduce", () => {
+  it("reduces to lowest terms, keeping the sign on the numerator", () => {
+    expect(fracReduce(f(6, 4))).toEqual({ numerator: 3, denominator: 2 });
+    expect(fracReduce(f(-6, 4))).toEqual({ numerator: -3, denominator: 2 });
+  });
+});
+
+describe("classifyAllocation", () => {
+  it("names over / under / exact against the whole grant", () => {
+    expect(classifyAllocation(f(3, 2))).toBe("over");
+    expect(classifyAllocation(f(1, 2))).toBe("under");
+    expect(classifyAllocation(f(1, 1))).toBe("exact");
+  });
+});
+
+describe("formatPct", () => {
+  it("renders a fraction as a rounded whole percent", () => {
+    expect(formatPct(f(3, 2))).toBe("150%");
+    expect(formatPct(f(1, 1))).toBe("100%");
+    expect(formatPct(f(1, 3))).toBe("33%"); // rounded from 33.33…
   });
 });

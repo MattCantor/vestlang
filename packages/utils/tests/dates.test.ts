@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { isValidCalendarDate, todayISO } from "../src/dates";
 
 describe("isValidCalendarDate", () => {
@@ -34,6 +34,11 @@ describe("isValidCalendarDate", () => {
     }
   });
 
+  it("rejects a valid date carrying leading junk (the match is anchored)", () => {
+    // An un-anchored regex would find the date as a suffix and accept it.
+    expect(isValidCalendarDate("x2025-01-01")).toBe(false);
+  });
+
   it("applies the centennial leap rule", () => {
     expect(isValidCalendarDate("2000-02-29")).toBe(true); // div by 400
     expect(isValidCalendarDate("1900-02-29")).toBe(false); // div by 100, not 400
@@ -41,13 +46,21 @@ describe("isValidCalendarDate", () => {
 });
 
 describe("todayISO", () => {
-  // Can't pin an exact value without freezing the clock; assert the shape and
-  // that it's a date the rest of the system would accept.
+  afterEach(() => vi.useRealTimers());
+
   it("returns a strict YYYY-MM-DD string", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("returns a real calendar date", () => {
     expect(isValidCalendarDate(todayISO())).toBe(true);
+  });
+
+  it("zero-pads a single-digit month and day against a frozen clock", () => {
+    // 7 March 2025, constructed in local time so the read (also local) is
+    // timezone-stable. Pins the +1 month shift and the two-place padding.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2025, 2, 7));
+    expect(todayISO()).toBe("2025-03-07");
   });
 });
