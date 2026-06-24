@@ -3,8 +3,8 @@
 // and the evaluate view agree on one total, and that total is the
 // hand-computed claim.
 //
-// `total_impossible` is a subset disclosure (those amounts already sit inside
-// `total_unvested` via `unresolved`), never an addend.
+// `total_impossible` is its own bucket — impossible shares don't sit inside
+// `total_unvested`, so the conserved total adds vested, unvested, and impossible.
 
 import { describe, it, expect } from "vitest";
 import { runAsOf, runEvaluate } from "../src/index";
@@ -88,7 +88,7 @@ const ROWS: Row[] = [
     grantQuantity: 100,
     events: { a: "2025-06-01" },
     vested: 0,
-    unresolved: 100,
+    unresolved: 66,
     impossible: 34,
   },
   {
@@ -136,17 +136,16 @@ describe("conservation — pipeline cross-surface agreement (R2-T1)", () => {
         sumInstallments(r.unvested) + r.unresolved,
       );
       expect(r.summary.total_impossible).toBe(sumInstallments(r.impossible));
-      // impossible is a subset of unvested (folded into unresolved), never an addend.
-      expect(r.summary.total_impossible).toBeLessThanOrEqual(
-        r.summary.total_unvested,
-      );
 
-      // The evaluate view (recovery included) carries the same total.
+      // The evaluate view (recovery included) carries the same total — every
+      // installment lands in one of the three roll-up buckets.
       const e = runEvaluate(row.dsl, grant);
       expect(e.ok).toBe(true);
       if (!e.ok) return;
       expect(sumInstallments(e.view.installments)).toBe(
-        r.summary.total_vested + r.summary.total_unvested,
+        r.summary.total_vested +
+          r.summary.total_unvested +
+          r.summary.total_impossible,
       );
     });
   }

@@ -219,9 +219,11 @@ describe("claim conservation (R2-B20)", () => {
       expect.objectContaining({ state: "UNRESOLVED", amount: 66 }),
     ]);
 
-    // partitionAsOf folds impossible amounts into unresolved (preexisting semantics)
+    // The as-of partition keeps the two apart: the dead 34 is impossible, only
+    // the live 66 is unresolved. Together with vested/unvested they still cover
+    // the whole 100.
     const asof = evaluateProgramAsOf(program, ctx);
     expect(asof.impossible.reduce((n, i) => n + i.amount, 0)).toBe(34);
-    expect(asof.unresolved).toBe(100);
+    expect(asof.unresolved).toBe(66);
   });
 });

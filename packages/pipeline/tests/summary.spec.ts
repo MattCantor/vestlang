@@ -242,3 +242,80 @@ describe("summary — QUANTITY claims cap at the grant (R2-B7)", () => {
     expect(r.summary.percent_vested).toBe(0);
   });
 });
+
+// An impossible installment belongs to one bucket — `total_impossible` — not
+// also to `unresolved` (which the summary folds into total_unvested). A
+// contradictory window (start after a BEFORE deadline) makes the whole clause
+// impossible, so these pin that it's counted exactly once.
+describe("summary — impossible shares aren't also tallied as unvested", () => {
+  // Start 2025-06-01 but required BEFORE 2025-01-01 — unsatisfiable, so the
+  // whole grant is impossible.
+  const contradiction = {
+    dsl: "VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01 OVER 12 months EVERY 1 month",
+    grant: { grant_date: "2025-01-01", grant_quantity: 1200, events: {} },
+    asOf: "2025-06-01" as const,
+  };
+
+  // 500 on a clean dated grid that's fully vested by the as-of date; 700 on a
+  // contradictory window. The impossible 700 must not bleed into unvested.
+  const mixedGrant = {
+    dsl:
+      "500 VEST FROM DATE 2024-02-01 OVER 4 months EVERY 1 month PLUS " +
+      "700 VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01 OVER 7 months EVERY 1 month",
+    grant: { grant_date: "2024-01-01", grant_quantity: 1200, events: {} },
+    asOf: "2024-12-31" as const,
+  };
+
+  it("a pure contradiction puts the whole grant in total_impossible", () => {
+    const r = runAsOf(
+      contradiction.dsl,
+      contradiction.grant,
+      contradiction.asOf,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.total_impossible).toBe(1200);
+    expect(r.summary.total_vested).toBe(0);
+    expect(r.summary.total_unvested).toBe(0);
+    expect(r.unresolved).toBe(0);
+    // The buckets partition the grant — impossible reflected once, not folded in.
+    expect(
+      r.summary.total_vested +
+        r.summary.total_unvested +
+        r.summary.total_impossible,
+    ).toBe(1200);
+  });
+
+  it("a mixed grant keeps the vested and impossible halves apart", () => {
+    const r = runAsOf(mixedGrant.dsl, mixedGrant.grant, mixedGrant.asOf);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.summary.total_vested).toBe(500);
+    expect(r.summary.total_unvested).toBe(0);
+    expect(r.summary.total_impossible).toBe(700);
+    expect(r.unresolved).toBe(0);
+    // Same partition check on the mixed grant: 500 + 0 + 700 covers it.
+    expect(
+      r.summary.total_vested +
+        r.summary.total_unvested +
+        r.summary.total_impossible,
+    ).toBe(1200);
+  });
+
+  it("genuine not-yet-schedulable shares still tally as unresolved", () => {
+    // No contradiction here — an unfired event start leaves the whole grant
+    // waiting. Those shares are unresolved (and fold into total_unvested),
+    // unchanged by the impossible-bucket fix.
+    const r = runAsOf(
+      "VEST FROM EVENT ipo OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1200, events: {} },
+      "2026-06-01",
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.unresolved).toBe(1200);
+    expect(r.summary.total_unvested).toBe(1200);
+    expect(r.summary.total_impossible).toBe(0);
+    expect(r.summary.total_vested).toBe(0);
+  });
+});
