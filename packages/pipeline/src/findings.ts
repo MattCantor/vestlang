@@ -50,5 +50,7 @@ export const formatFinding = (f: Finding): string => {
           : ` and no ≤10-place decimal allocates it correctly`;
       return `stored percentage \`${f.percentage}\` is too imprecise for ${f.shareCount} shares — it reads as ${meant}${fix}`;
     }
+    case "event-firing-case-mismatch":
+      return `event \`${f.referenced}\` is never fired, but a firing \`${f.fired}\` was provided that differs only in case — event ids are case-sensitive, so it does not match`;
   }
 };
