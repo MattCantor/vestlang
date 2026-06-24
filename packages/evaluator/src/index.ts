@@ -18,6 +18,8 @@ export {
   RehydrateDefinitionError,
   isRehydrateMissingStartMarkerError,
   RehydrateMissingStartMarkerError,
+  isRehydrateUnexpectedStartError,
+  RehydrateUnexpectedStartError,
   isSyntheticNamespaceError,
   SyntheticNamespaceError,
   type RehydrateResult,

@@ -309,6 +309,8 @@ export {
   isRehydrateDefinitionError,
   RehydrateMissingStartMarkerError,
   isRehydrateMissingStartMarkerError,
+  RehydrateUnexpectedStartError,
+  isRehydrateUnexpectedStartError,
 } from "./rehydrate.js";
 export type { RehydrateResult } from "./rehydrate.js";
 export {

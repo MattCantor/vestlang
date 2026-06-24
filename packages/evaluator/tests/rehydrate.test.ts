@@ -25,6 +25,7 @@ import {
   reparseDefinition,
   isRehydrateDefinitionError,
   isRehydrateMissingStartMarkerError,
+  isRehydrateUnexpectedStartError,
   isSyntheticNamespaceError,
 } from "../src/resolve/index";
 import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
@@ -315,6 +316,68 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
     expect(result.startToApply).toBeNull();
     expect(result.runtime.startDate).toBe("2025-01-01");
     expect(result.pending).toEqual([]);
+  });
+});
+
+// ---- The mirror half of the biconditional (#410): an `evt:start` recipe paired
+// with a startDate that is NOT the sentinel. Left unguarded, the override would
+// re-derive the event date and silently overwrite a genuine stored start. The save
+// guard already rejects this; the reload guard now matches it.
+
+describe("rehydrate — damaged artifact: evt:start recipe, non-sentinel start", () => {
+  const datedTemplate = (): VestingScheduleTemplate => ({
+    id: "t1",
+    statements: [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+        },
+        percentage: "1",
+      },
+    ],
+  });
+
+  it("refuses a REAL startDate + evt:start recipe with RehydrateUnexpectedStartError (bug repro)", () => {
+    // The bug: a real 2025-01-15 start beside an `evt:start` recipe. Before the fix
+    // the override silently overwrote startDate with the event-derived date.
+    let thrown: unknown;
+    try {
+      rehydrate(
+        datedTemplate(),
+        { "evt:start": { definition: "EVENT ipo" } },
+        { grantDate: "2025-01-01", startDate: "2025-01-15" },
+        ctxInput({ events: { ipo: "2027-03-01" }, grantQuantity: 400 }),
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(isRehydrateUnexpectedStartError(thrown)).toBe(true);
+  });
+
+  it("refuses an OMITTED startDate + evt:start recipe too — full symmetry", () => {
+    // The wider half of the biconditional: an undefined startDate is also not the
+    // sentinel, so a recipe beside it is still a corrupt artifact.
+    let thrown: unknown;
+    try {
+      rehydrate(
+        datedTemplate(),
+        { "evt:start": { definition: "EVENT ipo" } },
+        { grantDate: "2025-01-01" },
+        ctxInput({ events: { ipo: "2027-03-01" }, grantQuantity: 400 }),
+      );
+    } catch (e) {
+      thrown = e;
+    }
+    expect(isRehydrateUnexpectedStartError(thrown)).toBe(true);
+  });
+
+  it("the unexpected-start guard rejects unrelated errors and non-errors", () => {
+    expect(isRehydrateUnexpectedStartError(new Error("nope"))).toBe(false);
+    expect(isRehydrateUnexpectedStartError("not an error")).toBe(false);
+    expect(isRehydrateUnexpectedStartError(undefined)).toBe(false);
   });
 });
 
