@@ -32,7 +32,12 @@ import type {
 import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
 import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/primitives";
 import { fractionToNumeric } from "@vestlang/utils";
-import { eventBaseId, referencesEvent, isGatedNode } from "@vestlang/walk";
+import {
+  eventBaseId,
+  referencesEvent,
+  isGatedNode,
+  systemAnchorOffset,
+} from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../interpret/selectors.js";
 import { pickedDate } from "../interpret/utils.js";
 import type { PickReturn } from "../interpret/utils.js";
@@ -549,33 +554,17 @@ const relativeDurationCliff = (
   period: number,
   occurrences: number,
 ): Cliff | null | undefined => {
-  const off = systemAnchorOffsetLocal(expr);
+  const off = systemAnchorOffset(expr, "VESTING_START");
   if (!off || off.unit !== periodType) return undefined;
   if (off.value <= 0) return null;
   const m = Math.min(Math.floor(off.value / period), occurrences);
   if (m === 0) return null;
   return {
     length: off.value,
+    // `off.unit` is a PeriodTag (DAYS/MONTHS); period_type is a PeriodType
+    // (DAYS/MONTHS/YEARS). The assignment widens without a cast because YEARS
+    // can't occur here — vestlang source never emits a YEARS duration.
     period_type: off.unit,
     percentage: fractionToNumeric({ numerator: m, denominator: occurrences }),
   };
-};
-
-// The lone positive `vestingStart + duration` offset, or undefined for any richer
-// shape. Inlined rather than reaching for `systemAnchorOffset` so the cliff
-// lowering keeps one shape-match it owns.
-const systemAnchorOffsetLocal = (
-  expr: VestingNodeExpr<"VESTING_START">,
-): { value: number; unit: PeriodType } | undefined => {
-  if (
-    expr.type !== "NODE" ||
-    expr.base.type !== "VESTING_START" ||
-    expr.condition !== undefined ||
-    expr.offsets.length !== 1
-  )
-    return undefined;
-  const off = expr.offsets[0];
-  // `off.unit` is a PeriodTag (DAYS/MONTHS), a subset of PeriodType — the cliff's
-  // period_type widens to it safely.
-  return off.sign === "PLUS" ? { value: off.value, unit: off.unit } : undefined;
 };

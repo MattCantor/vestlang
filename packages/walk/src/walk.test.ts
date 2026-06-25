@@ -1,10 +1,12 @@
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { describe, expect, it } from "vitest";
+import type { Duration, VestingNodeExpr } from "@vestlang/types";
 import {
   forEachChild,
   programInstallmentTotal,
   some,
+  systemAnchorOffset,
   walk,
   type AstNode,
   type Path,
@@ -195,5 +197,116 @@ describe("programInstallmentTotal", () => {
         ),
       ),
     ).toBe(48);
+  });
+});
+
+// The single shape-match the three consumer sites (evaluator cliff lowering,
+// render's `FROM`/`CLIFF` sugar, the cliff-exceeds-span linter rule) share. The
+// negative shapes are hand-rolled rather than DSL-parsed: a zero-offset or
+// GRANT_DATE-in-a-cliff-slot node is grammar-blocked, and the normalizer collapses
+// multi-offset / MINUS forms, so none of them survives `parse → normalize`.
+describe("systemAnchorOffset shape contract", () => {
+  const dur = (value: number, sign: Duration["sign"] = "PLUS"): Duration => ({
+    type: "DURATION",
+    value,
+    unit: "MONTHS",
+    sign,
+  });
+
+  it("returns the lone Duration for a plain VESTING_START + one PLUS duration", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [dur(12)],
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toEqual(dur(12));
+  });
+
+  it("returns undefined for a non-NODE (a combinator)", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_LATER_OF",
+      items: [
+        { type: "NODE", base: { type: "VESTING_START" }, offsets: [dur(12)] },
+        { type: "NODE", base: { type: "EVENT", value: "ipo" }, offsets: [] },
+      ],
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toBeUndefined();
+  });
+
+  it("returns undefined for the other system anchor", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [dur(12)],
+    };
+    // Asking for GRANT_DATE against a VESTING_START node misses.
+    expect(systemAnchorOffset(expr, "GRANT_DATE")).toBeUndefined();
+  });
+
+  it("returns undefined for a non-system anchor (DATE / EVENT)", () => {
+    const onDate: VestingNodeExpr = {
+      type: "NODE",
+      base: { type: "DATE", value: "2025-01-01" },
+      offsets: [dur(12)],
+    };
+    const onEvent: VestingNodeExpr = {
+      type: "NODE",
+      base: { type: "EVENT", value: "ipo" },
+      offsets: [dur(12)],
+    };
+    expect(systemAnchorOffset(onDate, "VESTING_START")).toBeUndefined();
+    expect(systemAnchorOffset(onEvent, "VESTING_START")).toBeUndefined();
+  });
+
+  it("returns undefined when the node carries a condition (a gate)", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [dur(12)],
+      condition: {
+        type: "ATOM",
+        constraint: {
+          type: "AFTER",
+          base: {
+            type: "NODE",
+            base: { type: "GRANT_DATE" },
+            offsets: [dur(6)],
+          },
+          strict: false,
+        },
+      },
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toBeUndefined();
+  });
+
+  it("returns undefined for zero offsets", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [],
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toBeUndefined();
+  });
+
+  it("returns undefined for multiple offsets", () => {
+    // The two-offset form is the tuple `[DurationMonth, DurationDay]`.
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [
+        { type: "DURATION", value: 12, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 15, unit: "DAYS", sign: "PLUS" },
+      ],
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toBeUndefined();
+  });
+
+  it("returns undefined for a MINUS offset", () => {
+    const expr: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [dur(12, "MINUS")],
+    };
+    expect(systemAnchorOffset(expr, "VESTING_START")).toBeUndefined();
   });
 });
