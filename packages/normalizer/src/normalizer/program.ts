@@ -21,6 +21,20 @@ import {
  * ------------------------ */
 
 /**
+ * Shared default-branch throw for the three normalize switches. Each call keeps its
+ * own distinguishing label — the function name and which kind of node it was
+ * switching on (ScheduleExpr / node / VestingNode) — so a thrown message still points
+ * at its site; this just stops re-spelling the `unexpected … type ${node.type}` shape.
+ * Typed `never`, so it doubles as an exhaustiveness guard: a future union member a
+ * switch forgets to handle is a compile error at the call site, not a silent throw.
+ */
+function unexpectedNodeType(fnName: string, kind: string, node: never): Error {
+  return new Error(
+    `${fnName}: unexpected ${kind} type ${(node as { type?: string })?.type}`,
+  );
+}
+
+/**
  * Normalize a single statement
  * `amount` comes already canonical from the grammar
  */
@@ -84,9 +98,7 @@ function normalizeScheduleExpr(
         report,
       );
     default:
-      throw new Error(
-        `normalizeScheduleExpr: unexpected ScheduleExpr type ${(e as { type?: string })?.type}`,
-      );
+      throw unexpectedNodeType("normalizeScheduleExpr", "ScheduleExpr", e);
   }
 }
 
@@ -125,10 +137,11 @@ function normalizeNode(
         base: { type: anchor },
         offsets: [c],
       };
-    // A bare multi-term offset selector arm. The grammar can't anchor it (an arm
-    // has no fixed system base at parse time), so the raw carrier reaches here and
-    // we anchor it to the slot base, spreading the already-aggregated offsets — the
-    // same NODE the written-out `grantDate + 20 days + 1 month` arm produces.
+    // A bare multi-term offset with no fixed system base at parse time — reached
+    // both directly under a top-level FROM/CLIFF and as a selector arm. The grammar
+    // can't anchor it, so the raw carrier reaches here and we anchor it to the slot
+    // base, spreading the already-aggregated offsets — the same NODE the written-out
+    // `grantDate + 20 days + 1 month` form produces.
     case "DURATION_OFFSETS":
       return {
         type: "NODE",
@@ -149,11 +162,7 @@ function normalizeNode(
     case "NODE":
       return normalizeVestingNodeExpr(c, report);
     default:
-      // Label matches this function; the broad single-sourcing of these throw
-      // strings is deferred to #475.
-      throw new Error(
-        `normalizeNode: unexpected node type ${(c as { type?: string })?.type}`,
-      );
+      throw unexpectedNodeType("normalizeNode", "node", c);
   }
 }
 
@@ -200,8 +209,6 @@ function normalizeVestingNodeExpr(
         report,
       );
     default:
-      throw new Error(
-        `normalizeVestingNodeExpr: unexpected VestingNode type ${(e as { type?: string })?.type}`,
-      );
+      throw unexpectedNodeType("normalizeVestingNodeExpr", "VestingNode", e);
   }
 }

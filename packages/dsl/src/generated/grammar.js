@@ -453,19 +453,13 @@ function peg$parse(input, options) {
     }
     return a
   }
-  function peg$f44(offsets) {
-    return { type: "NODE", base: mkGrantDate(), offsets };
-  }
-  function peg$f45(a) {
+  function peg$f44(a) {
     if (hasSystemAnchor(a, "GRANT_DATE")) {
       error('grantDate is a reserved system event that cannot be used in a `CLIFF` statement. The `CLIFF` will refer to the computed `vestingStart` date, unless an alternative event is provided.')
     }
     return a
   }
-  function peg$f46(offsets) {
-    return { type: "NODE", base: mkVestingStart(), offsets };
-  }
-  function peg$f47(f, p, c) {
+  function peg$f45(f, p, c) {
     const base = {
       type: "SCHEDULE",
       vesting_start: f,
@@ -474,24 +468,24 @@ function peg$parse(input, options) {
     if (c) base.periodicity.cliff = c;
     return base
   }
-  function peg$f48() {
+  function peg$f46() {
     error("THEN chains single schedules in sequence; it can't chain onto a parallel group. To run schedules in parallel after a chain, give each its own FROM under PLUS.")
   }
-  function peg$f49(a) {
+  function peg$f47(a) {
     error("FROM can't follow THEN: a THEN segment continues from the previous segment's end and has no start of its own. To start an independent schedule, use PLUS with its own FROM.")
   }
-  function peg$f50(a, p, c) {
+  function peg$f48(a, p, c) {
     const expr = { type: "SCHEDULE", vesting_start: null, periodicity: p };
     if (c) expr.periodicity.cliff = c;
     return { type: "STATEMENT", chained: true, amount: a ?? mkPortion(1, 1), expr };
   }
-  function peg$f51(op, head, tail) {
+  function peg$f49(op, head, tail) {
     return {
       type: op.toUpperCase() === "EARLIER" ? "SCHEDULE_EARLIER_OF" : "SCHEDULE_LATER_OF",
       items: collectTwoOrMore(head, tail)
     };
   }
-  function peg$f52() {
+  function peg$f50() {
     error("`EARLIER OF` / `LATER OF` selects between anchors and is used inside `FROM` / `CLIFF`. To pick a whole schedule by its vesting start, write `EARLIER START OF (...)` / `LATER START OF (...)`.")
   }
   let peg$currPos = options.peg$currPos | 0;
@@ -2417,10 +2411,7 @@ function peg$parse(input, options) {
       s2 = peg$parse_();
       s3 = peg$parseVestingNode();
       if (s3 === peg$FAILED) {
-        s3 = peg$parseBareFromOffset();
-        if (s3 === peg$FAILED) {
-          s3 = peg$parseGateExpr();
-        }
+        s3 = peg$parseGateExpr();
       }
       if (s3 !== peg$FAILED) {
         peg$savedPos = s0;
@@ -2433,20 +2424,6 @@ function peg$parse(input, options) {
       peg$currPos = s0;
       s0 = peg$FAILED;
     }
-
-    return s0;
-  }
-
-  function peg$parseBareFromOffset() {
-    let s0, s1;
-
-    s0 = peg$currPos;
-    s1 = peg$parseMultiOffsets();
-    if (s1 !== peg$FAILED) {
-      peg$savedPos = s0;
-      s1 = peg$f44(s1);
-    }
-    s0 = s1;
 
     return s0;
   }
@@ -2466,14 +2443,11 @@ function peg$parse(input, options) {
       s2 = peg$parse_();
       s3 = peg$parseVestingNode();
       if (s3 === peg$FAILED) {
-        s3 = peg$parseBareCliffOffset();
-        if (s3 === peg$FAILED) {
-          s3 = peg$parseGateExpr();
-        }
+        s3 = peg$parseGateExpr();
       }
       if (s3 !== peg$FAILED) {
         peg$savedPos = s0;
-        s0 = peg$f45(s3);
+        s0 = peg$f44(s3);
       } else {
         peg$currPos = s0;
         s0 = peg$FAILED;
@@ -2482,20 +2456,6 @@ function peg$parse(input, options) {
       peg$currPos = s0;
       s0 = peg$FAILED;
     }
-
-    return s0;
-  }
-
-  function peg$parseBareCliffOffset() {
-    let s0, s1;
-
-    s0 = peg$currPos;
-    s1 = peg$parseMultiOffsets();
-    if (s1 !== peg$FAILED) {
-      peg$savedPos = s0;
-      s1 = peg$f46(s1);
-    }
-    s0 = s1;
 
     return s0;
   }
@@ -2517,7 +2477,7 @@ function peg$parse(input, options) {
         s5 = null;
       }
       peg$savedPos = s0;
-      s0 = peg$f47(s1, s3, s5);
+      s0 = peg$f45(s1, s3, s5);
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
@@ -2549,7 +2509,7 @@ function peg$parse(input, options) {
     }
     if (s2 !== peg$FAILED) {
       peg$savedPos = s0;
-      s0 = peg$f48();
+      s0 = peg$f46();
     } else {
       peg$currPos = s0;
       s0 = peg$FAILED;
@@ -2579,7 +2539,7 @@ function peg$parse(input, options) {
         }
         if (s5 !== peg$FAILED) {
           peg$savedPos = s0;
-          s0 = peg$f49(s1);
+          s0 = peg$f47(s1);
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
@@ -2612,7 +2572,7 @@ function peg$parse(input, options) {
               s7 = null;
             }
             peg$savedPos = s0;
-            s0 = peg$f50(s1, s5, s7);
+            s0 = peg$f48(s1, s5, s7);
           } else {
             peg$currPos = s0;
             s0 = peg$FAILED;
@@ -2736,7 +2696,7 @@ function peg$parse(input, options) {
               }
               if (s12 !== peg$FAILED) {
                 peg$savedPos = s0;
-                s0 = peg$f51(s1, s9, s10);
+                s0 = peg$f49(s1, s9, s10);
               } else {
                 peg$currPos = s0;
                 s0 = peg$FAILED;
@@ -2805,7 +2765,7 @@ function peg$parse(input, options) {
         }
         if (s5 !== peg$FAILED) {
           peg$savedPos = s0;
-          s0 = peg$f52();
+          s0 = peg$f50();
         } else {
           peg$currPos = s0;
           s0 = peg$FAILED;
