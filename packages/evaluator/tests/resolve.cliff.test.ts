@@ -220,6 +220,60 @@ describe("lowerCliff", () => {
     const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, ctx);
     expect(result.state).not.toBe("EVENT_HELD");
   });
+
+  // #464: with the EVENT arm unfired, the top-level EARLIER OF commits to its +12mo
+  // floor as a plain RESOLVED time cliff AND carries the unfired sibling's pending
+  // blocker, stamped through the floor — so a committed floor no longer reads as
+  // certain. This pins the field this change adds (the harvest in buildTemplate
+  // turns it into the schedule-level absence assumption).
+  it("EARLIER OF(+12 months, EVENT fda) with fda unfired → RESOLVED carrying the stamped fda blocker (#464)", () => {
+    const noFda = baseCtx({ grantDate: "2025-01-01", events: {} });
+    const cliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_EARLIER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+        makeSingletonNode(makeVestingBaseEvent("fda")),
+      ],
+    };
+    const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, noFda);
+    expect(result.state).toBe("RESOLVED");
+    if (result.state === "RESOLVED") {
+      // `through` is the committed +12mo floor under baseCtx's default
+      // day-of-month policy (2025-01-01 + 12 months → 2026-01-31, last-day snap).
+      expect(result.blockers).toEqual([
+        {
+          type: "EVENT_NOT_YET_OCCURRED",
+          event: "fda",
+          through: "2026-01-31",
+          direction: "before",
+          inclusive: false,
+          consequence: "grid-shift",
+        },
+      ]);
+    }
+  });
+
+  // #464: a no-lump EARLIER OF cliff (+0 months) lowers to NONE and carries no
+  // disclosure. Unlike the start, a no-lump cliff is grid-invariant under an earlier
+  // firing (an earlier floor still produces no lump), so there is nothing to assume
+  // absent — the carry lives only on the RESOLVED arm, never NONE.
+  it("EARLIER OF(+0 months, EVENT fda) → NONE, no disclosure (#464)", () => {
+    const noFda = baseCtx({ grantDate: "2025-01-01", events: {} });
+    const cliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_EARLIER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(0, "MONTHS", "PLUS"),
+        ]),
+        makeSingletonNode(makeVestingBaseEvent("fda")),
+      ],
+    };
+    expect(lowerCliff(cliff, anchor, "MONTHS", 1, 48, noFda)).toEqual({
+      state: "NONE",
+    });
+  });
 });
 
 describe("lowerCliff — gated event cliff (#113)", () => {

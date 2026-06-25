@@ -39,7 +39,7 @@ import {
   systemAnchorOffset,
 } from "@vestlang/walk";
 import { evaluateVestingNodeExpr } from "../interpret/selectors.js";
-import { pickedDate } from "../interpret/utils.js";
+import { pickedDate, isPickedCommitted } from "../interpret/utils.js";
 import type { PickReturn } from "../interpret/utils.js";
 import {
   isVestingStartPlaceholder,
@@ -65,7 +65,18 @@ export type LoweredCliff =
   // an internal eval-time field only; the stored canonical `Cliff` stays
   // { length, period_type, percentage } and never sees it. Absent on the
   // deferred (anchor-free) path, which has no concrete date.
-  | { state: "RESOLVED"; cliff: Cliff; cliffDate?: OCTDate }
+  //
+  // `blockers` carries a committed top-level EARLIER_OF cliff's still-pending
+  // sibling disclosures (e.g. an unfired EVENT arm), stamped `through` the
+  // committed floor — the cliff projects identically to a plain resolved one, so
+  // there's no distinct COMMITTED state, only this added disclosure. buildTemplate
+  // harvests them so a committed floor doesn't read as certain (mirrors the start).
+  | {
+      state: "RESOLVED";
+      cliff: Cliff;
+      cliffDate?: OCTDate;
+      blockers?: Blocker[];
+    }
   // An event-held cliff. The grid is held until the event fires; the storable
   // form is the optional time `cliff` (the Carta baseline) plus the `event`
   // hold. In resolution mode the resolved firing rides on `firing` (and the time
@@ -366,9 +377,22 @@ export const lowerCliff = (
     occurrences,
     dom,
   );
+  // A committed top-level EARLIER_OF cliff carries its unfired siblings' pending
+  // disclosures (`res.meta.disclosures`, stamped through the floor) — carry them
+  // verbatim so the committed floor doesn't read as certain. A plain resolved pick
+  // has none; the field is then omitted. No lump (NONE) means no floor to disclose.
+  const disclosures = isPickedCommitted(res) ? res.meta.disclosures : [];
+
   // Carry the absolute cliff date the precision guard's leading test reads (so it
   // never re-derives it). Internal only — it never reaches the stored Cliff.
-  return cliff ? { state: "RESOLVED", cliff, cliffDate } : { state: "NONE" };
+  return cliff
+    ? {
+        state: "RESOLVED",
+        cliff,
+        cliffDate,
+        ...(disclosures.length > 0 ? { blockers: disclosures } : {}),
+      }
+    : { state: "NONE" };
 };
 
 // Lower an event-referencing cliff to a time baseline + an `event_condition`. The

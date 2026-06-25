@@ -853,6 +853,15 @@ export const buildTemplate = (
           ? r.cliff.cliff
           : undefined;
 
+    // A committed top-level EARLIER_OF cliff's pending-sibling disclosures (an
+    // unfired EVENT arm, stamped through the floor), mirroring the start push
+    // above — they reach `resolution.pending` and the absence assumption so the
+    // committed floor doesn't read as certain. Only the RESOLVED arm carries them;
+    // the field is absent on a plain resolved cliff.
+    if (r.cliff.state === "RESOLVED") {
+      blockers.push(...(r.cliff.blockers ?? []));
+    }
+
     // The event hold. A bare event side uses its real id; a richer one mints a
     // synthetic recipe. In resolution mode the resolved firing rides into
     // runtime.eventFirings so core.compile can fold at max(cliff date, firing).

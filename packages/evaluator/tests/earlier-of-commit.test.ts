@@ -162,7 +162,7 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
   const dsl =
     "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
 
-  it("resolution is a template with a placeable cliff and a correct projection (silent)", () => {
+  it("resolution is a template with a placeable cliff and a correct projection, and discloses fda (#464)", () => {
     const schedule = evaluateProgram(
       prog(dsl),
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2026-06-01" }),
@@ -171,13 +171,68 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
       throw new Error(
         `expected resolution template, got ${schedule.resolution.status}`,
       );
-    // The grid is no longer frozen — it projects the full grant.
-    const total = schedule.resolution.installments
-      .filter((i) => i.state === "RESOLVED")
-      .reduce((n, i) => n + (i.state === "RESOLVED" ? i.amount : 0), 0);
-    expect(total).toBe(4800);
-    // Silent per #325: a resolved cliff has no absence-note slot.
+    // The grid is no longer frozen — it projects the full grant. Narrow to
+    // {date, amount} up front so the shape checks below don't re-prove RESOLVED.
+    const resolved = schedule.resolution.installments.flatMap((i) =>
+      i.state === "RESOLVED" ? [{ date: i.date, amount: i.amount }] : [],
+    );
+    expect(resolved.reduce((n, i) => n + i.amount, 0)).toBe(4800);
+    // The cliff lump (12/48 of 4800) folds on the +12mo floor 2026-01-01.
+    const lump = resolved.find((i) => i.date === "2026-01-01");
+    expect(lump?.amount).toBe(1200);
+    // The 36 post-cliff months are 100 each — a mis-distribution that preserved
+    // lump+total alone would slip past, so pin the shape too.
+    const after = resolved.filter((i) => i.date > "2026-01-01");
+    expect(after).toHaveLength(36);
+    for (const i of after) expect(i.amount).toBe(100);
+
+    // #464: the committed floor leans on fda staying absent through it — an earlier
+    // firing would re-grid — so the cliff now discloses, mirroring the start case.
+    expect(schedule.absenceAssumptions).toEqual([
+      {
+        eventId: "fda",
+        through: "2026-01-01",
+        direction: "before",
+        inclusive: false,
+        consequence: "grid-shift",
+      },
+    ]);
+    // The same disclosure rides in resolution.pending (#464 / correction #2).
+    expect(findUnfired(schedule.resolution.pending, "fda")).toEqual({
+      through: "2026-01-01",
+    });
+  });
+
+  it("discharges when fda fires before the floor → no absence note, none in pending (#464)", () => {
+    // fda @ 2025-07-01 is earlier than the +12mo floor, so EARLIER OF picks it and
+    // the fold is all-settled (RESOLVED, not COMMITTED) — nothing to assume absent.
+    const schedule = evaluateProgram(
+      prog(dsl),
+      ctx({
+        grantDate: "2025-01-01",
+        grantQuantity: 4800,
+        asOf: "2026-06-01",
+        events: { fda: "2025-07-01" },
+      }),
+    );
+    expect(schedule.resolution.status).toBe("template");
     expect(schedule.absenceAssumptions).toEqual([]);
+    expect(findUnfired(schedule.resolution.pending, "fda")).toBeUndefined();
+  });
+
+  it("a no-lump EARLIER OF cliff (+0 months) lowers to NONE and stays silent (#464)", () => {
+    // +0 months yields no pre-cliff lump, so the cliff lowers to NONE. Unlike the
+    // start, a no-lump cliff is grid-invariant under an earlier firing (an earlier
+    // floor still produces no lump, no re-grid), so there is genuinely nothing to
+    // disclose — the carry deliberately lives only on the RESOLVED arm, not NONE.
+    const noLump =
+      "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+0 months, EVENT fda)";
+    const schedule = evaluateProgram(
+      prog(noLump),
+      ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2026-06-01" }),
+    );
+    expect(schedule.absenceAssumptions).toEqual([]);
+    expect(findUnfired(schedule.resolution.pending, "fda")).toBeUndefined();
   });
 });
 
@@ -339,14 +394,14 @@ describe("#363 AC-6 — no regression on single-level / flattened cases", () => 
   });
 });
 
-// #363 AC-7 — the cliff carve-out is unaffected. A nested combinator IS expressible
-// in cliff position at the DSL surface (CLIFF LATER OF (EARLIER OF (...), DATE)
-// parses and evaluates), so the all-settled branch now yields a COMMITTED cliff
-// node too. But cliff.ts reads the date via pickedDate and deliberately discards
-// cliff disclosures (the #251/AC6 carve-out: an EARLIER_OF cliff carries no absence
-// note). So the SAME nested combinator that surfaces `e` in start position (AC-1)
-// must surface nothing in cliff position. This locks that the start-position change
-// does not leak disclosures into cliffs.
+// #363 AC-7 — the NESTED combinator in cliff position is the #474 carve-out, not the
+// path #464 touches. A `CLIFF LATER OF (EARLIER OF (...), DATE)` has an outer LATER OF
+// that references an event, so `decomposesToEventCondition` is true and it routes
+// through `lowerEventCliff`: the inner EARLIER OF is buried in a synthetic recipe
+// (`evt:1`, interchange `template`) and never reaches the non-event RESOLVED mint
+// site that #464 carries disclosures off. So the SAME nested combinator that
+// surfaces `e` in start position (AC-1) must surface nothing here — this is the
+// negative guard that #464's top-level-only carry doesn't leak into the nested case.
 describe("#363 AC-7 — nested combinator in cliff position discloses nothing", () => {
   it("CLIFF LATER OF (EARLIER OF (DATE, EVENT e), DATE) places its cliff but discloses no `e`", () => {
     const dsl =

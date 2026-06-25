@@ -21,6 +21,8 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { evaluateProgram } from "@vestlang/evaluator";
+import { parse } from "@vestlang/dsl";
+import { normalizeProgram } from "@vestlang/normalizer";
 import { presentSchedule } from "../src/present";
 import {
   makeSingletonSchedule,
@@ -336,5 +338,37 @@ describe("presentSchedule — end-to-end hybrid", () => {
     const p = presentSchedule(out);
     expect(p.valid).toBe(false);
     expect(p.projected).toBe(true); // the (over-allocating) projection is still shown
+  });
+});
+
+// #464 — a top-level EARLIER OF cliff that commits to its time floor discloses the
+// assumed-absent event. That disclosure is an EVENT_NOT_YET_OCCURRED blocker, so it
+// lands in resolution.pending too — `present.pending` flips false→true while the
+// event is unfired, exactly as the start case does (#363 AC-1/AC-5). Firing the
+// event before the floor settles the fold (RESOLVED, not COMMITTED), so the
+// disclosure and the pending flip both fall away.
+describe("presentSchedule — #464 committed EARLIER OF cliff flips pending", () => {
+  const prog = (dsl: string) => normalizeProgram(parse(dsl));
+  const dsl =
+    "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
+
+  it("fda unfired → present.pending true", () => {
+    const out = evaluateProgram(prog(dsl), {
+      grantDate: "2025-01-01",
+      events: {},
+      grantQuantity: 4800,
+    });
+    expect(out.resolution.status).toBe("template");
+    expect(presentSchedule(out).pending).toBe(true);
+  });
+
+  it("fda fired before the floor → present.pending false", () => {
+    const out = evaluateProgram(prog(dsl), {
+      grantDate: "2025-01-01",
+      events: { fda: "2025-07-01" },
+      grantQuantity: 4800,
+    });
+    expect(out.resolution.status).toBe("template");
+    expect(presentSchedule(out).pending).toBe(false);
   });
 });
