@@ -3,7 +3,10 @@ export {
   evaluateStatement,
   evaluateClauseGroups,
   evaluateProgram,
+  evaluateProgramWithContributions,
+  chainGroupIndices,
 } from "./evaluate.js";
+export type { StatementContribution } from "./resolve/types.js";
 export {
   resolveVestingStart,
   type ResolvedAnchor,

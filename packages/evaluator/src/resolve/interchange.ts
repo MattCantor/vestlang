@@ -216,7 +216,9 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
     };
   }
 
-  const v = classify(build);
+  // The interchange path is firing-blind and never builds a breakdown, so it reads
+  // only the verdict off the classify result and discards the partition.
+  const v = classify(build).verdict;
   switch (v.kind) {
     case "events":
       // Independent date grids and multiple start origins stay events-only here

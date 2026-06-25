@@ -17,9 +17,23 @@ import type {
   ImpossibleInstallment,
   Installment,
   NonTemplateReason,
+  ResolvedInstallment,
   SourceMap,
   UnresolvedInstallment,
 } from "@vestlang/types";
+
+// One statement's slice of the single headline allocation: the integer shares it
+// contributed, grant-date-coalesced into the per-clause DISPLAY shape. Seeded over
+// the whole program — exactly one per program-order statement, even when a
+// statement contributes nothing (`installments: []`), so the chain-group rollup
+// emits one breakdown entry per clause. A statement is either dated (its
+// ResolvedInstallments) or symbolic (its pending / void tranches), never both, and
+// the slices together sum to the headline by construction. Carries NO blockers —
+// those ride the separate per-clause channel in the pipeline.
+export interface StatementContribution {
+  statementOrder: number; // 1-based program order
+  installments: Installment[];
+}
 
 export type ResolveVerdict =
   | {
@@ -30,6 +44,10 @@ export type ResolveVerdict =
       // Externalized combinator gates: `event_id → { definition }`. Empty unless
       // a synthetic event was minted.
       sourceMap: SourceMap;
+      // The dated tranches, allocated once off the shared expansion (so they're
+      // byte-identical to core.compile). assemble spreads these ahead of the
+      // pending ones instead of re-running compileToInstallments.
+      installments: ResolvedInstallment[];
       // Pending witnesses (unfired atomic EVENT starts; unresolved synthetic-event
       // combinators). Advisory under a `template` verdict; the program is a valid
       // template regardless.
@@ -70,8 +88,12 @@ export type ClassifiedVerdict = Exclude<ResolveVerdict, { kind: "template" }>;
 
 // The verdict plus what the resolver learned about the schedule as a whole,
 // independent of which arm it landed in: the allocation `findings`
-// (over-/under-allocation). They sit on the wrapper, not in each arm, because they
-// describe the schedule as written, and ride onward onto EvaluatedSchedule.
+// (over-/under-allocation) and the per-statement `contributions` (the partition of
+// the headline allocation the breakdown is built from). Both sit on the wrapper,
+// not in each arm, because they describe the schedule as written. `findings` ride
+// onward onto EvaluatedSchedule; `contributions` ride out to the recovery outcome
+// and the pipeline, never onto a stored/wire shape.
 export type ResolveResult = ResolveVerdict & {
   findings: Finding[];
+  contributions: StatementContribution[];
 };

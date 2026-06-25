@@ -6,6 +6,16 @@
 import type { OCTDate } from "@vestlang/types";
 import { eq, lt } from "./dates.js";
 
+// The boundary both the fold and the provenance allocator key on: a date before
+// the anchor relocates onto it, a date at or after it stays put. The fold
+// aggregates the relocated amounts; `allocateWithProvenance` relocates each
+// provenance row's date by this same rule, so the two never drift on which side
+// of the anchor a date falls.
+export const relocateToCliffDate = (
+  date: OCTDate,
+  cliffDate: OCTDate,
+): OCTDate => (lt(date, cliffDate) ? cliffDate : date);
+
 /**
  * Fold a parallel (dates, amounts) series against an anchor `cliffDate`:
  *   - amounts strictly before cliffDate aggregate; the aggregate is emitted on
@@ -81,4 +91,69 @@ export function foldToGrantDate(
     dates: folded.map((v) => v.date),
     amounts: folded.map((v) => v.amount),
   };
+}
+
+// A row in the display-coalescing pass: a date and the integer it carries, plus
+// the provenance keys the merged order sorts on. The keys are optional so the
+// rollup can hand in already-coalesced installments (which no longer carry them)
+// and fall back to a stable date sort.
+export interface CoalesceRow {
+  date: OCTDate;
+  amount: number;
+  statementOrder?: number;
+  occurrence?: number;
+}
+
+// The one allocation/merge order: by date, then statement order, then occurrence
+// (so a cliff lump, occurrence 0, leads its day). The single source for both the
+// kernel's allocate sort and the display coalesce, so they can't drift. The keys
+// default to 0 for callers (the rollup) that no longer carry them; a `RawEvent`
+// always carries both, so the defaults never bite there.
+export const byDateOrderOccurrence = (
+  a: { date: OCTDate; statementOrder?: number; occurrence?: number },
+  b: { date: OCTDate; statementOrder?: number; occurrence?: number },
+): number => {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  const order = (a.statementOrder ?? 0) - (b.statementOrder ?? 0);
+  if (order !== 0) return order;
+  return (a.occurrence ?? 0) - (b.occurrence ?? 0);
+};
+
+/**
+ * Collapse a clause's already-relocated rows into the per-clause DISPLAY shape:
+ * the rows landing on `grantDate` sum into one leading grant-date tranche, every
+ * other row passes through on its own date. This is NOT `foldToGrantDate` — the
+ * carrier rows are already AT `grantDate` (relocated row-by-row for #441
+ * headroom), and `foldToGrantDate` only aggregates rows strictly before the
+ * anchor, so over relocated rows it would be an identity and leave several
+ * grant-date tranches. Here the merge is explicit.
+ *
+ * Rows sort by `(date, statementOrder, occurrence)` — the same tiebreak the
+ * allocator uses — so a THEN chain's segments merge in the order they'd allocate.
+ * A missing `grantDate` (no grant-date fold in play) just returns the rows
+ * date-ordered.
+ */
+export function coalesceAtGrantDate(
+  rows: CoalesceRow[],
+  grantDate: OCTDate | undefined,
+): { date: OCTDate; amount: number }[] {
+  const sorted = [...rows].sort(byDateOrderOccurrence);
+  if (grantDate === undefined)
+    return sorted.map((r) => ({ date: r.date, amount: r.amount }));
+
+  // The rows are relocated, so none sit before `grantDate`: the grant-date rows
+  // are the contiguous front of the sorted run, summed into one tranche.
+  let grantSum = 0;
+  let sawGrant = false;
+  const out: { date: OCTDate; amount: number }[] = [];
+  for (const r of sorted) {
+    if (eq(r.date, grantDate)) {
+      grantSum += r.amount;
+      sawGrant = true;
+    } else {
+      out.push({ date: r.date, amount: r.amount });
+    }
+  }
+  if (sawGrant) out.unshift({ date: grantDate, amount: grantSum });
+  return out;
 }

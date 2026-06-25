@@ -19,10 +19,8 @@ export interface Summary {
   fully_vested_date: OCTDate | null;
 }
 
-// Total the shares across a list of installments. Shared with the pipeline's
-// other roll-ups (the breakdown residual), so it's exported rather than redefined.
-export const sumAmounts = (xs: Installment[]) =>
-  xs.reduce((a, x) => a + x.amount, 0);
+// Total the shares across a list of installments.
+const sumAmounts = (xs: Installment[]) => xs.reduce((a, x) => a + x.amount, 0);
 
 export function computeSummary(
   result: VestedResult,

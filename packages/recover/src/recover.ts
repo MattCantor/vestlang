@@ -1,4 +1,7 @@
-import { evaluateProgram } from "@vestlang/evaluator";
+import {
+  evaluateProgram,
+  evaluateProgramWithContributions,
+} from "@vestlang/evaluator";
 import {
   inferSchedule,
   projectionResidual,
@@ -28,9 +31,15 @@ export function evaluateProgramWithRecovery(
   // closed-world resolution and the storable-floor interchange verdict. It's both
   // the value we return when there's no rescue, and the only place the original
   // events-only reason survives: once we publish a recovered template, that
-  // schedule carries no reason of its own.
-  const schedule = evaluateProgram(stmts, ctx);
-  const noRescue: RecoveryOutcome = { rescued: false, schedule };
+  // schedule carries no reason of its own. We evaluate WITH contributions on the
+  // ORIGINAL author program, so the breakdown partition attributes to the author's
+  // clauses whether or not we go on to rescue (the rescued headline still ties to
+  // it — recovery only fires on an exact reproduction, residualError === 0).
+  const { schedule, contributions } = evaluateProgramWithContributions(
+    stmts,
+    ctx,
+  );
+  const noRescue: RecoveryOutcome = { rescued: false, schedule, contributions };
 
   // Everything below the primary collapse is the recovery detour. The primary
   // stays outside the try so a genuine collapse failure — notably the #276
@@ -120,6 +129,9 @@ export function evaluateProgramWithRecovery(
         vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
         residualError,
       },
+      // The original program's partition (pre-rescue), so the breakdown still
+      // attributes to the author's clauses, not the synthesized template's segments.
+      contributions,
     };
   } catch {
     return noRescue;

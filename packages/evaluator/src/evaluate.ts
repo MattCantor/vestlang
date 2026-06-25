@@ -9,6 +9,7 @@ import {
   resolveInterchange,
   assertProgramInstallmentCap,
 } from "./resolve/index.js";
+import type { StatementContribution } from "./resolve/types.js";
 import { assertEvaluableProgram } from "./guard.js";
 import { assemble } from "./assemble.js";
 
@@ -56,6 +57,17 @@ function chainGroups(program: Program): Statement[][] {
 }
 
 /**
+ * The THEN-chain grouping as a `statementOrder → groupIndex` map: the group index
+ * for each statement in program order. Derived from `chainGroups` so the two can't
+ * drift — exposed so the pipeline can group the per-statement partition into the
+ * per-clause breakdown by the SAME chain logic the blocker pass uses, rather than
+ * re-deriving it.
+ */
+export function chainGroupIndices(program: Program): number[] {
+  return chainGroups(program).flatMap((group, i) => group.map(() => i));
+}
+
+/**
  * Evaluate a program one clause-group at a time: one EvaluatedSchedule per THEN
  * chain (a lone statement being a one-element chain), classified independently.
  * This is the entry per-clause consumers use — NOT a hand-rolled
@@ -95,4 +107,24 @@ export function evaluateProgram(
     resolveToCore(stmts, ctx_input),
     resolveInterchange(stmts, ctx_input),
   );
+}
+
+/**
+ * Evaluate a whole program AND return its per-statement partition of the headline
+ * allocation — the breakdown amounts the pipeline attributes per clause. The
+ * `schedule` is byte-for-byte `evaluateProgram`'s (so every existing consumer is
+ * untouched); `contributions` rides alongside, off the resolver's result. The
+ * recovery pass calls this on the ORIGINAL author program, so the partition always
+ * attributes to the author's clauses even after a rescue.
+ */
+export function evaluateProgramWithContributions(
+  stmts: Program,
+  ctx_input: ResolutionContextInput,
+): { schedule: EvaluatedSchedule; contributions: StatementContribution[] } {
+  assertEvaluableProgram(stmts);
+  const resolution = resolveToCore(stmts, ctx_input);
+  return {
+    schedule: assemble(resolution, resolveInterchange(stmts, ctx_input)),
+    contributions: resolution.contributions,
+  };
 }

@@ -12,7 +12,7 @@ export { parse } from "@vestlang/dsl";
 export { normalizeProgram } from "@vestlang/normalizer";
 
 // Evaluator (the spec-to-canonical compiler)
-export type { VestedResult } from "@vestlang/evaluator";
+export type { VestedResult, StatementContribution } from "@vestlang/evaluator";
 
 // Pipeline — the consumer front door; owns schedule presentation.
 export { presentSchedule } from "@vestlang/pipeline";

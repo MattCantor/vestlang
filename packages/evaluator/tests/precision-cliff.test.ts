@@ -243,42 +243,33 @@ describe("over-precise event-held cliff baseline is excluded (#386)", () => {
   });
 });
 
-// #386 — the template-arm basis must be the STORED, apportioned statement percentage
-// (what the realizer multiplies by, `compile.ts`), NOT the exact internal fraction.
-// #443's schedule-whole apportionment can bump a non-terminating share by an ulp, so
-// the two diverge for a multi-statement non-terminating schedule. A THEN chain of
-// three 1/3 statements at grant 72000 stores the cliff statement at "0.3333333334"
-// (bumped). The realizer's leading cliff lump is floor(0.3333333334 × 0.3333333333 ×
-// 72000) = 8000 = the exact ideal (no share lost; BigInt-verified). With the exact 1/3
-// basis the guard would wrongly see floor(1/3 × 0.3333333333 × 72000) = 7999 ≠ 8000 and
-// emit a false positive recommending "0.33334" (which would itself misallocate). Using
-// the stored basis, supplied = intended = 8000 → silent.
-//
-// (We don't compile() this template here: the stored "0.3333333334" × cliff
-// "0.3333333333" product overflows the exact-integer allocator's MAX_SAFE_INTEGER
-// guard — a separate engine limit. The guard's silence is the load-bearing assertion,
-// and `resolveToCore` runs the guard without compiling.)
-describe("template-arm basis matches the realizer's stored percentage (#386)", () => {
+// #386 / #442 — the stored "0.3333333334" × cliff "0.3333333333" product of a
+// multi-statement apportioned cliff overflows the exact-integer allocator's
+// MAX_SAFE_INTEGER guard, so this template is intrinsically uncompilable. Since #442
+// moved the allocation into `resolveToCore` (SD1 — it now allocates eagerly to carry
+// the breakdown's provenance, where before it deferred compilation to `assemble`),
+// `resolveToCore` now surfaces that overflow directly, the same error the public
+// `compile`/`evaluateProgram` path always produced for this template. (The template
+// itself still BUILDS with the apportionment-bumped 0.3333333334; the throw is in the
+// allocation, not the build.) The stored-basis precision guard whose silence this
+// template once exercised is unchanged and positively covered by the lossy-basis warn
+// test above (`DSL_LOSSY`).
+describe("template-arm allocation surfaces the MAX_SAFE overflow (#386 / #442)", () => {
   const THEN_THIRDS =
     "1/3 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month";
+  const ctx2 = {
+    grantDate: "2019-01-01",
+    events: {},
+    grantQuantity: 72000,
+  };
 
-  it("draws no spurious leading warning when the realized lump equals the ideal", () => {
-    const ctx2 = {
-      grantDate: "2019-01-01",
-      events: {},
-      grantQuantity: 72000,
-    };
-    const result = resolveToCore(normalizeProgram(parse(THEN_THIRDS)), ctx2);
-    expect(result.kind).toBe("template");
-    // The cliff statement's stored percentage is the apportionment-bumped 0.3333333334
-    // — distinct from the exact 1/3, which is the whole point.
-    if (result.kind === "template") {
-      expect(result.template.statements[0].percentage).toBe("0.3333333334");
-    }
-    // No share is lost (realized lump 8000 = ideal), so the guard must stay silent —
-    // sizing against the stored 0.3333333334 basis, not the exact 1/3.
-    expect(
-      result.findings.some((f) => f.kind === "precision-insufficient"),
-    ).toBe(false);
+  it("resolveToCore throws the allocator overflow now that it allocates eagerly", () => {
+    expect(() =>
+      resolveToCore(normalizeProgram(parse(THEN_THIRDS)), ctx2),
+    ).toThrow(/MAX_SAFE_INTEGER/);
+    // The public compile path produces the same overflow — unchanged.
+    expect(() =>
+      evaluateProgram(normalizeProgram(parse(THEN_THIRDS)), ctx2),
+    ).toThrow(/MAX_SAFE_INTEGER/);
   });
 });

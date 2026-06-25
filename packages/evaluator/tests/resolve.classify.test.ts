@@ -1156,7 +1156,7 @@ describe("classify — the events arm surfaces a committed floor's disclosures (
   };
 
   it("the committed start's disclosure reaches the events verdict's blockers", () => {
-    const verdict = classify({
+    const { verdict } = classify({
       ok: false,
       why: "events",
       reason: { kind: "OVERLAPPING_ABSOLUTE_STARTS" },
