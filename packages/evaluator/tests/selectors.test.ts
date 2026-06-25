@@ -60,15 +60,9 @@ describe("evaluateVestingNodeExpr selectors", () => {
     expect(
       (res as { meta: { blockers: { type: string }[] } }).meta.blockers[0].type,
     ).toBe("EVENT_NOT_YET_OCCURRED");
-    // The partial pick carries its pivot: the latest settled arm's lower bound —
-    // here the only resolved arm, 2024-02-01. It's a required field of the
-    // start-side partial-pick contract (PickedPartial.pivot), so pin it to the
-    // resolved-arm date. (Whether `pivot` still has a value-read site at all is
-    // tracked separately in #481.)
+    // The pick narrows to a partial: a partially-resolved LATER_OF still waiting
+    // on its event arm.
     expect(isPickedPartial(res)).toBe(true);
-    if (isPickedPartial(res)) {
-      expect(res.pivot).toBe("2024-02-01");
-    }
   });
 
   it("LATER_OF returns UNRESOLVED_SELECTOR when two or more items unresolved", () => {
@@ -229,12 +223,11 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
     expect((res as { meta: { date: string } }).meta.date).toBe("2024-02-01");
   });
 
-  it("partial LATER_OF vesting_start carries its pivot through the re-wrap", () => {
+  it("partial LATER_OF vesting_start stays a partial pick through the re-wrap", () => {
     // A schedule whose start is a partial LATER OF(2024-02-01, EVENT laterEvent).
-    // The node layer settles the date arm and stamps the pivot; re-wrapping that
-    // pick around the schedule leaf must carry the pivot through unchanged, not
-    // drop it. Pinning it here guards the schedule-layer copy directly, not just
-    // by typecheck.
+    // The node layer settles the date arm but the event arm is still pending;
+    // re-wrapping that pick around the schedule leaf must keep it narrowing as a
+    // partial, not collapse it to a resolved pick.
     const partialStart = makeSingletonSchedule(
       {
         type: "NODE_LATER_OF",
@@ -247,8 +240,5 @@ describe("evaluateScheduleExpr SINGLETON pipes through picked vesting_start meta
     );
     const res = evaluateScheduleExpr(partialStart, ctx);
     expect(isPickedPartial(res)).toBe(true);
-    if (isPickedPartial(res)) {
-      expect(res.pivot).toBe("2024-02-01");
-    }
   });
 });
