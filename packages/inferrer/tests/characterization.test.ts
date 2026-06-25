@@ -29,6 +29,11 @@ const renderReason = (r: NonTemplateReason): string => {
         r.detail ??
         `A THEN segment chained behind a start waiting on event "${r.eventId}" can't be dated until that event fires.`
       );
+    case "IMPOSSIBLE_COMPONENT":
+      return (
+        r.detail ??
+        "A statically-impossible component on this grant can never be stored."
+      );
     case "DEFERRED_CLIFF":
       return (
         r.detail ??

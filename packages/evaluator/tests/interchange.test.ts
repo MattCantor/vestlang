@@ -491,39 +491,144 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     );
   });
 
-  // EVENT_CHAINED_TAIL is reachable, not vestigial. A lone contingent THEN chain
-  // would promote to a contingent-start template — but pair it with a statically
-  // impossible sibling and the impossible start poisons the build to `unresolved`
-  // before promotion runs, while the chain's pending head survives. The tail then
-  // walks back to its still-pending head and the reason is EVENT_CHAINED_TAIL.
-  it("a contingent chain beside an impossible sibling reports EVENT_CHAINED_TAIL", () => {
-    const monthly2: VestingPeriod = {
-      type: "MONTHS",
-      length: 1,
-      occurrences: 2,
-    };
-    // A start dated strictly before its own date — a contradiction independent of
-    // any firing, so it's impossible firing-blind (mirrors the voidStart literal
-    // below in this file, but date/date rather than event-gated).
-    const impossibleStart: VestingNode<"GRANT_DATE"> = {
-      type: "NODE",
-      base: makeVestingBaseDate("2025-06-01"),
-      offsets: [],
-      condition: {
-        type: "ATOM",
-        constraint: {
-          type: "BEFORE",
-          base: makeSingletonNode(makeVestingBaseDate("2025-06-01")),
-          strict: true,
-        },
+  // #381: a statically-impossible component coexisting with a live pending chain
+  // surfaces the contradiction as the headline reason, not the soft chained-tail
+  // one. A lone contingent THEN chain would promote to a contingent-start template;
+  // pairing it with an impossible sibling poisons the build to `unresolved` before
+  // promotion runs, while the chain's pending head survives. The impossible
+  // component on its own would roll the interchange up to `impossible`; the live
+  // pending head keeps it off that all-void rollup, so the impossibility surfaces
+  // here as the reason — IMPOSSIBLE_COMPONENT, carrying the coexisting head's event.
+  const monthly2: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 2,
+  };
+  // A start dated strictly before its own date — a contradiction independent of
+  // any firing, so it's impossible firing-blind (mirrors the voidStart literal
+  // below in this file, but date/date rather than event-gated).
+  const impossibleStart: VestingNode<"GRANT_DATE"> = {
+    type: "NODE",
+    base: makeVestingBaseDate("2025-06-01"),
+    offsets: [],
+    condition: {
+      type: "ATOM",
+      constraint: {
+        type: "BEFORE",
+        base: makeSingletonNode(makeVestingBaseDate("2025-06-01")),
+        strict: true,
       },
+    },
+  };
+  const monthly12: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 12,
+  };
+  // Component A (contingent THEN chain headed on unfired `ipo`) + Component B (the
+  // statically-impossible sibling that poisons the build). The sibling's grid is a
+  // parameter so a deferred-cliff variant can give it an off-grid cliff.
+  const impossibleBesideChain = (
+    impossibleGrid: VestingPeriod = monthly12,
+  ): Program => [
+    stmt(
+      portion(1, 4),
+      makeSingletonNode(makeVestingBaseEvent("ipo")),
+      monthly2,
+    ),
+    {
+      type: "STATEMENT",
+      chained: true,
+      amount: portion(1, 4),
+      expr: { type: "SCHEDULE", vesting_start: null, periodicity: monthly2 },
+    },
+    stmt(portion(1, 2), impossibleStart, impossibleGrid),
+  ];
+
+  it("a contingent chain beside an impossible sibling reports IMPOSSIBLE_COMPONENT", () => {
+    const out = evaluateProgram(impossibleBesideChain(), ctxInput());
+
+    // The impossibility leads (AC1), the verdict stays `unrepresentable` not
+    // `impossible` because the live chain may still vest (AC2), and the pending
+    // head's event is carried so the live part isn't lost from the reason (AC3).
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "IMPOSSIBLE_COMPONENT",
+      eventId: "ipo",
+    });
+  });
+
+  // AC6: the flip is interchange-only — the resolution verdict is exactly what it
+  // was before #381. The impossible sibling still surfaces as a dead blocker and a
+  // leaf IMPOSSIBLE installment; the live chain still pends on `ipo`.
+  it("the resolution verdict is unchanged by the interchange flip", () => {
+    const out = evaluateProgram(impossibleBesideChain(), ctxInput());
+
+    expect(out.resolution.status).toBe("unresolved");
+    // The impossible sibling is dead.
+    expect(
+      out.resolution.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
+    ).toBe(true);
+    // The live chain still pends on its unfired head event.
+    expect(
+      out.resolution.pending.some(
+        (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
+      ),
+    ).toBe(true);
+    // A leaf IMPOSSIBLE installment for the dead portion still rides the stream.
+    expect(
+      out.resolution.installments.some((i) => i.state === "IMPOSSIBLE"),
+    ).toBe(true);
+  });
+
+  // The impossibility is the hardest constraint — it leads even past a deferred
+  // cliff on the same impossible component (which alone would be DEFERRED_CLIFF).
+  it("an impossible component with a deferred cliff still reports IMPOSSIBLE_COMPONENT", () => {
+    // A months cliff over a days grid can't be placed firing-blind — DEFERRED_CLIFF
+    // on its own — but here it rides the impossible component, so IMPOSSIBLE_COMPONENT
+    // still wins the precedence.
+    const out = evaluateProgram(
+      impossibleBesideChain({
+        type: "DAYS",
+        length: 30,
+        occurrences: 12,
+        cliff: makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+      }),
+      ctxInput(),
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "IMPOSSIBLE_COMPONENT",
+      eventId: "ipo",
+    });
+  });
+
+  // The eventId is omitted (not `eventId: undefined`) when the coexisting pending
+  // head has no single nameable event. Here the live chain's head is a dated start
+  // whose grid is held on a synthetic LATER OF over two events (#412): the tail
+  // pends but pendingHeadEvent finds no bare event to name, so the flip returns a
+  // bare `{ kind: "IMPOSSIBLE_COMPONENT" }`.
+  it("omits eventId when the live chain's head names no single event", () => {
+    const syntheticCliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("a")),
+        makeSingletonNode(makeVestingBaseEvent("b")),
+      ],
     };
     const program: Program = [
-      // Component A — contingent THEN chain headed on the unfired `ipo`.
+      // Component A — a dated head held on the synthetic cliff, plus a THEN tail.
       stmt(
         portion(1, 4),
-        makeSingletonNode(makeVestingBaseEvent("ipo")),
-        monthly2,
+        makeSingletonNode(makeVestingBaseDate("2024-01-01")),
+        {
+          ...monthly2,
+          cliff: syntheticCliff,
+        },
       ),
       {
         type: "STATEMENT",
@@ -532,23 +637,16 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
         expr: { type: "SCHEDULE", vesting_start: null, periodicity: monthly2 },
       },
       // Component B — the statically-impossible sibling that poisons the build.
-      stmt(portion(1, 2), impossibleStart, {
-        type: "MONTHS",
-        length: 1,
-        occurrences: 12,
-      }),
+      stmt(portion(1, 2), impossibleStart, monthly12),
     ];
 
     const out = evaluateProgram(program, ctxInput());
 
-    // The program is also dead (component B is impossible); EVENT_CHAINED_TAIL is
-    // reported alongside that deadness, not as the program's only defect.
     expect(out.interchange.status).toBe("unrepresentable");
     if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
-      kind: "EVENT_CHAINED_TAIL",
-      eventId: "ipo",
-    });
+    // No `eventId` key at all — deep-equal to the bare reason, which a materialized
+    // `eventId: undefined` would fail.
+    expect(out.interchange.reason).toEqual({ kind: "IMPOSSIBLE_COMPONENT" });
   });
 });
 

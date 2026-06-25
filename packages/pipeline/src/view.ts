@@ -53,6 +53,13 @@ export const reasonToString = (r: NonTemplateReason): string => {
         r.detail ??
         `A THEN segment chained behind a start waiting on event "${r.eventId}" can't be dated until that event fires.`
       );
+    case "IMPOSSIBLE_COMPONENT":
+      return (
+        r.detail ??
+        (r.eventId !== undefined
+          ? `A statically-impossible component on this grant can never be stored, even though a live portion still waiting on event "${r.eventId}" coexists with it.`
+          : "A statically-impossible component on this grant can never be stored.")
+      );
     case "DEFERRED_CLIFF":
       return (
         r.detail ??
