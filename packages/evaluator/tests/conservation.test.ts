@@ -151,6 +151,38 @@ const SHAPES: Shape[] = [
     events: ["ipo"],
   },
   {
+    // #412 — a held-cliff HEAD with a THEN tail. Dated head, but its grid is held
+    // on an unfired event cliff. Unfired the whole chain pends; fired the head folds
+    // and the tail re-anchors after it. The shares (1/2, 1/2) must conserve in every
+    // firing pattern — the tail can no longer date off the un-held grid end and
+    // double-count, nor vanish behind the hold.
+    name: "THEN tail behind a held-cliff head",
+    dsl: "1/2 VEST OVER 4 months EVERY 1 month CLIFF EVENT ipo THEN 1/2 VEST OVER 4 months EVERY 1 month",
+    amounts: [P(1, 2), P(1, 2)],
+    events: ["ipo"],
+  },
+  {
+    // #412 Decision A — the held cliff on an intermediate TAIL, behind a dated head.
+    // The dated head vests; the held tail folds (or pends); the last tail must not
+    // date off the held tail's un-held grid end. Shares (1/4, 1/4, 1/2) conserve
+    // across firing patterns.
+    name: "THEN tail behind a held-cliff tail",
+    dsl: "1/4 VEST OVER 4 months EVERY 1 month THEN 1/4 VEST OVER 4 months EVERY 1 month CLIFF EVENT ipo THEN 1/2 VEST OVER 4 months EVERY 1 month",
+    amounts: [P(1, 4), P(1, 4), P(1, 2)],
+    events: ["ipo"],
+  },
+  {
+    // #412 — a SYNTHETIC (multi-event) held cliff on the head. `LATER OF(a, b)`
+    // lowers to a synthetic event side, so the firing-pattern sweep exercises the
+    // partial-fire case (only `a`) as well as fully-fired (max(a,b) folds the head)
+    // and unfired (the whole chain pends). The tail's re-anchor reads the same fold
+    // point in every pattern, so the (1/2, 1/2) shares conserve throughout.
+    name: "THEN tail behind a synthetic held-cliff head",
+    dsl: "1/2 VEST OVER 4 months EVERY 1 month CLIFF LATER OF ( EVENT a , EVENT b ) THEN 1/2 VEST OVER 4 months EVERY 1 month",
+    amounts: [P(1, 2), P(1, 2)],
+    events: ["a", "b"],
+  },
+  {
     name: "two independent grids (events arm)",
     dsl: "1/2 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS 1/2 VEST FROM DATE 2024-06-15 OVER 2 months EVERY 1 month",
     amounts: [P(1, 2), P(1, 2)],

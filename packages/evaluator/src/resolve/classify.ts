@@ -16,7 +16,6 @@ import type {
   ResolutionContext,
   ImpossibleBlocker,
   ImpossibleInstallment,
-  OCTDate,
   ResolvedInstallment,
   SymbolicInstallment,
 } from "@vestlang/types";
@@ -34,14 +33,9 @@ import {
   isVoid,
   symbolicClaims,
 } from "./unresolved.js";
-import { disclosuresOf } from "./lower.js";
+import { disclosuresOf, laterOf } from "./lower.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { ClassifiedVerdict } from "./types.js";
-
-// The later of a firing and an optional time-baseline floor — the fold point of an
-// event-held cliff. OCTDate is ISO YYYY-MM-DD, so lexical order is calendar order.
-const laterOf = (firing: OCTDate, floor: OCTDate | undefined): OCTDate =>
-  floor !== undefined && floor > firing ? floor : firing;
 
 /**
  * Expand one resolved statement to its dated fraction-of-grant events, honoring a

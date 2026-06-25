@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { parse } from "@vestlang/dsl";
+import { normalizeProgram } from "@vestlang/normalizer";
 import type { OCTDate, VestingNodeExpr } from "@vestlang/types";
 import { lowerCliff, lowerDeferredCliff } from "../src/resolve/cliff";
+import { resolveStatements } from "../src/resolve/lower";
+import { createEvaluationContext } from "../src/utils";
 import {
   baseCtx,
   makeGatedNode,
@@ -396,4 +400,78 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
   // rejected at compile time (and the parser rejects it at any selector depth —
   // #110). The "needs the anchor → UNRESOLVED" path is still covered by the
   // DATE-cliff and event-cliff cases above, whose base is likewise not VESTING_START.
+});
+
+// #412 — a held cliff on a chain segment decides the handoff to the next tail. The
+// segment's bare grid end is no longer the handoff: an unfired hold ends nothing
+// (the tail pends), and a fired hold folds the grid at the firing so the tail
+// re-anchors after it. These pin the per-statement records `resolveStatements`
+// produces — what `anchorAfter` writes onto the following tail.
+describe("resolveStatements — a held head's cliff folds the chain handoff (#412)", () => {
+  const D =
+    "0.5 VEST OVER 4 months EVERY 1 month CLIFF EVENT ipo THEN 0.5 VEST OVER 4 months EVERY 1 month";
+  const resolve = (events: Record<string, OCTDate>) => {
+    const program = normalizeProgram(parse(D));
+    const ctxInput = {
+      grantDate: "2024-01-01" as OCTDate,
+      grantQuantity: 800,
+      events,
+    };
+    return resolveStatements(
+      program,
+      createEvaluationContext(ctxInput, "resolution"),
+    );
+  };
+
+  it("UNFIRED head → the tail is a pending-tail carrying the head's event blocker", () => {
+    const [headRes, tailRes] = resolve({});
+    // The head is dated with an unfired event hold.
+    expect(headRes.start.state).toBe("RESOLVED");
+    expect(headRes.cliff.state).toBe("EVENT_HELD");
+    if (headRes.cliff.state === "EVENT_HELD")
+      expect(headRes.cliff.firing).toBeUndefined();
+    // The handoff is held: the tail can't date, so it's a pending-tail with an
+    // UNRESOLVED start that names what it waits on.
+    expect(tailRes.chain.role).toBe("pending-tail");
+    expect(tailRes.start.state).toBe("UNRESOLVED");
+    if (tailRes.start.state === "UNRESOLVED")
+      expect(tailRes.start.blockers).toContainEqual({
+        type: "EVENT_NOT_YET_OCCURRED",
+        event: "ipo",
+      });
+  });
+
+  it("LATE firing → the tail re-anchors at the fold point (2025-12-01), not the bare grid end", () => {
+    const [, tailRes] = resolve({ ipo: "2025-12-01" });
+    // The handoff folded at the firing: the tail is a dated tail whose start is the
+    // fold point, NOT the head's bare grid end (2024-05-01). Its first tranche then
+    // grids one month later (2026-01-01).
+    expect(tailRes.chain.role).toBe("tail");
+    expect(tailRes.start.state).toBe("RESOLVED");
+    if (tailRes.start.state === "RESOLVED")
+      expect(tailRes.start.date).toBe("2025-12-01");
+  });
+
+  it("EARLY firing under a long head → the tail keeps the bare grid end (no fold-point pull-back)", () => {
+    const longHead =
+      "0.5 VEST OVER 24 months EVERY 1 month CLIFF EVENT ipo THEN 0.5 VEST OVER 4 months EVERY 1 month";
+    const program = normalizeProgram(parse(longHead));
+    const [, tailRes] = resolveStatements(
+      program,
+      createEvaluationContext(
+        {
+          grantDate: "2024-01-01",
+          grantQuantity: 800,
+          events: { ipo: "2024-06-01" },
+        },
+        "resolution",
+      ),
+    );
+    // The bare grid end (2026-01-01) is later than the fold point (2024-06-01), so
+    // it wins the max and the tail's start stays the bare end.
+    expect(tailRes.chain.role).toBe("tail");
+    expect(tailRes.start.state).toBe("RESOLVED");
+    if (tailRes.start.state === "RESOLVED")
+      expect(tailRes.start.date).toBe("2026-01-01");
+  });
 });

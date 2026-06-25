@@ -697,6 +697,82 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
   });
 });
 
+// #412 — a THEN tail behind a head whose grid is held on an unfired event cliff
+// can't be stored. The interchange build is firing-blind, so EVERY held cliff reads
+// unfired: the held head never hands off a date, the tail pends, and canonical can't
+// hold a tail with a fixed date when its start is held on an event. The verdict is
+// `unrepresentable`, NOT `template` (the old firing-blind build wrongly stored a
+// dated tail). It's also firing-invariant by construction — the build sees no firings.
+describe("interchange — a held-cliff head's THEN tail is unrepresentable (#412)", () => {
+  const fourMonths: VestingPeriod = {
+    type: "MONTHS",
+    length: 1,
+    occurrences: 4,
+  };
+  // 0.5 OVER 4mo CLIFF EVENT ipo  THEN  0.5 OVER 4mo, dated head.
+  const heldHeadChain = (cliff: VestingNodeExpr<"VESTING_START">): Program => [
+    stmt(portion(1, 2), makeSingletonNode(makeVestingBaseDate("2024-01-01")), {
+      ...fourMonths,
+      cliff,
+    }),
+    {
+      type: "STATEMENT",
+      chained: true,
+      amount: portion(1, 2),
+      expr: { type: "SCHEDULE", vesting_start: null, periodicity: fourMonths },
+    },
+  ];
+  const ctx = ctxInput({ grantDate: "2024-01-01", grantQuantity: 800 });
+
+  it("a bare event cliff head → unrepresentable, EVENT_CHAINED_TAIL naming the real event", () => {
+    const out = evaluateProgram(
+      heldHeadChain(makeSingletonNode(makeVestingBaseEvent("ipo"))),
+      ctx,
+    );
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.interchange.reason).toEqual({
+      kind: "EVENT_CHAINED_TAIL",
+      eventId: "ipo",
+    });
+  });
+
+  it("a synthetic (multi-event) cliff head → unrepresentable, DEFERRED_CLIFF (no single nameable event)", () => {
+    const syntheticCliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseEvent("a")),
+        makeSingletonNode(makeVestingBaseEvent("b")),
+      ],
+    };
+    const out = evaluateProgram(heldHeadChain(syntheticCliff), ctx);
+    expect(out.interchange.status).toBe("unrepresentable");
+    if (out.interchange.status !== "unrepresentable") return;
+    // No single real event names the hold (it's a LATER OF over two), so the
+    // catch-all reason — never an EVENT_CHAINED_TAIL pointing at a minted evt:<n>.
+    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+  });
+
+  it("the verdict is firing-invariant — a fired ipo doesn't make it storable", () => {
+    const program = heldHeadChain(
+      makeSingletonNode(makeVestingBaseEvent("ipo")),
+    );
+    const unfired = evaluateProgram(program, ctx).interchange;
+    // Pass a real firing: the interchange build still never reads it, so the
+    // verdict matches the unfired one exactly (still unrepresentable).
+    const fired = evaluateProgram(
+      program,
+      ctxInput({
+        grantDate: "2024-01-01",
+        grantQuantity: 800,
+        events: { ipo: "2025-12-01" },
+      }),
+    ).interchange;
+    expect(fired).toEqual(unfired);
+    expect(fired.status).toBe("unrepresentable");
+  });
+});
+
 describe("interchange — allocation is its own axis", () => {
   // Over-allocation and impossibility are two separate authoring mistakes; one
   // shouldn't hide the other. A program that is both over-allocated and impossible
