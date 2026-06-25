@@ -35,7 +35,11 @@ import {
   DEFAULT_VESTING_DAY_OF_MONTH,
   RUNTIME_BASE_KEYS,
 } from "@vestlang/types";
-import { advanceCursor, eq } from "@vestlang/primitives";
+import {
+  advanceCursor,
+  eq,
+  laterOf as laterOfDates,
+} from "@vestlang/primitives";
 import { eventBaseId, isGatedNode, referencesEvent } from "@vestlang/walk";
 import { evaluateScheduleExpr } from "../interpret/selectors.js";
 import { amountToFraction } from "../claims.js";
@@ -370,14 +374,14 @@ type ChainAnchor =
   | undefined;
 
 // The later of a firing and an optional time-baseline floor — the fold point of an
-// event-held cliff (max(cliffDate, firing)). OCTDate is ISO YYYY-MM-DD, so lexical
-// order is calendar order. Exported so classify.ts's events-arm expansion folds the
-// held grid at the SAME point this handoff re-anchors the tail to — if the two
-// drifted, a tail would date off a different fold than the head actually folds to.
-export const laterOf = (
-  firing: OCTDate,
-  floor: OCTDate | undefined,
-): OCTDate => (floor !== undefined && floor > firing ? floor : firing);
+// event-held cliff (max(cliffDate, firing)), used by the THEN-chain handoff fold
+// below. A thin asymmetric wrapper over the symmetric `laterOf` primitive: it
+// guards the absent floor (the firing alone) and keeps the firing-wins-on-tie
+// convention — when floor === firing, the firing-side date is returned. (The cliff
+// fold inside the shared grid helper applies the same max, but there the tie is
+// value-immaterial, so it can call the symmetric primitive directly.)
+const laterOf = (firing: OCTDate, floor: OCTDate | undefined): OCTDate =>
+  floor !== undefined && floor > firing ? laterOfDates(floor, firing) : firing;
 
 // Where a chain segment hands off to the next tail, given the segment's concrete
 // start, its lowered cliff, and the chain origin. Shared by `anchorAfter` (a head)
