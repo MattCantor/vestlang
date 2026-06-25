@@ -3,6 +3,7 @@ import { normalizeAndDedupe, type FindingSink } from "./utils.js";
 import {
   ChainedSchedule,
   Duration,
+  DurationOffsets,
   Offsets,
   RawSchedule,
   RawScheduleExpr,
@@ -113,7 +114,7 @@ function normalizeSchedule(s: RawSchedule, report?: FindingSink): Schedule {
 }
 
 function normalizeNode(
-  c: Duration | VestingNodeExpr,
+  c: Duration | DurationOffsets | VestingNodeExpr,
   anchor: SystemAnchorTag,
   report?: FindingSink,
 ): VestingNodeExpr {
@@ -123,6 +124,16 @@ function normalizeNode(
         type: "NODE",
         base: { type: anchor },
         offsets: [c],
+      };
+    // A bare multi-term offset selector arm. The grammar can't anchor it (an arm
+    // has no fixed system base at parse time), so the raw carrier reaches here and
+    // we anchor it to the slot base, spreading the already-aggregated offsets — the
+    // same NODE the written-out `grantDate + 20 days + 1 month` arm produces.
+    case "DURATION_OFFSETS":
+      return {
+        type: "NODE",
+        base: { type: anchor },
+        offsets: c.offsets,
       };
     case "NODE_LATER_OF":
     case "NODE_EARLIER_OF": {
@@ -138,8 +149,10 @@ function normalizeNode(
     case "NODE":
       return normalizeVestingNodeExpr(c, report);
     default:
+      // Label matches this function; the broad single-sourcing of these throw
+      // strings is deferred to #475.
       throw new Error(
-        `normalizeCliff: unexpected cliff type ${(c as { type?: string })?.type}`,
+        `normalizeNode: unexpected node type ${(c as { type?: string })?.type}`,
       );
   }
 }
@@ -154,14 +167,14 @@ function normalizeNode(
 // unable to re-introduce the mistake.
 
 function normalizeVestingStart(
-  c: Duration | VestingNodeExpr,
+  c: Duration | DurationOffsets | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr<"GRANT_DATE"> {
   return normalizeNode(c, "GRANT_DATE", report);
 }
 
 function normalizeCliff(
-  c: Duration | VestingNodeExpr,
+  c: Duration | DurationOffsets | VestingNodeExpr,
   report?: FindingSink,
 ): VestingNodeExpr<"VESTING_START"> {
   return normalizeNode(c, "VESTING_START", report);
