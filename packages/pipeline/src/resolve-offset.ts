@@ -121,7 +121,7 @@ export function runResolveOffset(
     // Render each disclosure into a sentence (same wording the evaluate path uses),
     // but only put the key on the wire when there's something to disclose — a
     // fully-resolved anchor keeps the plain { ok: true, date }. The structured fields
-    // (eventId, through, direction, inclusive) ride along via the spread.
+    // (eventId, through, direction, inclusive, consequence) ride along via the spread.
     if (result.assumptions.length === 0) {
       return { ok: true, date: result.date };
     }

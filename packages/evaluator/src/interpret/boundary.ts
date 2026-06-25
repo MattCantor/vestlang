@@ -17,7 +17,9 @@ import { foldBlocker } from "./blockerTree.js";
 //     blocker an inner constraint already minted must NOT blunt the inner relation
 //     down to the selector's coarser one — the inner descriptor is the tighter, more
 //     dangerous claim (e.g. an `AFTER` gate buried under a LATER OF). A fresh blocker
-//     (the common gate-mint case) has none yet, so it takes the one passed here.
+//     (the common gate-mint case) has none yet, so it takes the one passed here. This
+//     covers `consequence` too: a gate's `flips-to-impossible` survives a LATER OF
+//     re-stamp rather than being softened to the selector's `grid-shift`.
 //
 // The fold descends selector arms so an event buried in one still gets stamped;
 // impossible arms hold no pending events, so they're returned untouched (which also
@@ -38,6 +40,7 @@ export const withBoundary = (
               node.through && gt(node.through, date) ? node.through : date,
             direction: hasInner ? node.direction : descriptor.direction,
             inclusive: hasInner ? node.inclusive : descriptor.inclusive,
+            consequence: hasInner ? node.consequence : descriptor.consequence,
           };
         }
         case "UNRESOLVED_SELECTOR":

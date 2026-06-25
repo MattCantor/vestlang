@@ -54,6 +54,7 @@ describe("#251 AC1 — headline repro: commits to the date floor, discloses ipo"
         through: "2024-06-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
     // The same disclosure appears in resolution.pending.
@@ -245,6 +246,7 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
         through: "2024-09-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
     expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
@@ -270,6 +272,7 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
         through: "2024-09-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });
@@ -289,6 +292,7 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       through: "2024-06-01",
       direction: "before",
       inclusive: false,
+      consequence: "grid-shift",
     });
     expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
       through: "2024-06-01",
@@ -312,6 +316,7 @@ describe("#363 AC-6 — no regression on single-level / flattened cases", () => 
         through: "2024-06-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });
@@ -328,6 +333,7 @@ describe("#363 AC-6 — no regression on single-level / flattened cases", () => 
         through: "2024-06-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });
@@ -394,6 +400,7 @@ describe("#251 — a committed disclosure survives the unresolved routing arm", 
       through: "2024-06-01",
       direction: "before",
       inclusive: false,
+      consequence: "grid-shift",
     });
     // Sanity: portion 2's own pending cliff event is disclosed too — `e` rides
     // alongside it, it doesn't displace it.
@@ -415,6 +422,7 @@ describe("#251 AC17 — schedule-level EARLIER START OF behaves as the node-leve
         through: "2024-06-01",
         direction: "before",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });

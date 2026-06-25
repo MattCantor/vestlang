@@ -267,7 +267,9 @@ describe("runResolveOffset", () => {
           through: "2024-06-01",
           direction: "before",
           inclusive: false,
-          message: "ipo did not occur before 2024-06-01",
+          consequence: "grid-shift",
+          message:
+            "ipo did not occur before 2024-06-01 — a contradicting firing would shift the schedule",
         },
       ],
     });
@@ -348,10 +350,13 @@ describe("runResolveOffset", () => {
           // Decision 3: the outer LATER OF re-stamps the inner EARLIER OF's blocker
           // but must NOT blunt its before/exclusive relation to the selector's
           // coarser after — the inner descriptor is preserved, only the boundary
-          // widens to the outer-fold date.
+          // widens to the outer-fold date. Both arms are selectors, so the inner's
+          // grid-shift consequence survives the re-stamp unchanged.
           direction: "before",
           inclusive: false,
-          message: "e did not occur before 2024-09-01",
+          consequence: "grid-shift",
+          message:
+            "e did not occur before 2024-09-01 — a contradicting firing would shift the schedule",
         },
       ],
     });

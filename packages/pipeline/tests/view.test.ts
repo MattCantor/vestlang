@@ -214,6 +214,7 @@ describe("toScheduleView", () => {
             through: "2025-01-01",
             direction: "before",
             inclusive: true,
+            consequence: "grid-shift",
           },
         ],
       }),
@@ -224,7 +225,10 @@ describe("toScheduleView", () => {
     expect(a.through).toBe("2025-01-01");
     expect(a.direction).toBe("before");
     expect(a.inclusive).toBe(true);
-    expect(a.message).toBe("ipo did not occur on/before 2025-01-01");
+    expect(a.consequence).toBe("grid-shift");
+    expect(a.message).toBe(
+      "ipo did not occur on/before 2025-01-01 — a contradicting firing would shift the schedule",
+    );
   });
 
   it("leaves absenceAssumptions empty when the schedule assumes nothing", () => {
