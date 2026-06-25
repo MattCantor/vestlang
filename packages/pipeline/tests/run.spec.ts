@@ -360,6 +360,37 @@ describe("runEvaluate — breakdown is a partition of the headline (#442)", () =
     );
   });
 
+  // SD6 cross-segment merge: a backdated MULTI-statement THEN chain whose two
+  // segments BOTH have pre-grant occurrences. AC13 covers only the single-statement
+  // (intra-statement) fold; here the chain-group union must merge BOTH segments'
+  // pre-grant rows into ONE grant-date tranche, then keep the post-grant rows in
+  // (date, statementOrder, occurrence) order — the SD6 claim a per-member-only
+  // coalesce would miss (it would leave two same-date grant tranches).
+  it("a backdated multi-statement THEN chain merges both segments to one grant tranche", () => {
+    // Segment 1 (2024-06-01 OVER 4): occurrences 2024-07..2024-10, all pre-grant.
+    // Segment 2 (handoff 2024-10-01 OVER 4): 2024-11, 2024-12 pre-grant, 2025-01 AT
+    // grant, 2025-02 post-grant. Each occurrence is 1/8 of 800 = 100.
+    const r = runEvaluate(
+      "0.5 VEST FROM DATE 2024-06-01 OVER 4 months EVERY 1 month THEN " +
+        "0.5 VEST OVER 4 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 800 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // One entry for the whole chain. The grant-date tranche is 700 — segment 1's
+    // four pre-grant rows (400) PLUS segment 2's two pre-grant rows and its at-grant
+    // row (300). 700 exceeds either segment alone, so it can only come from merging
+    // across both members; then the lone post-grant row (2025-02-01) stays separate.
+    expect(r.breakdown).toHaveLength(1);
+    expect(r.breakdown[0].installments).toEqual([
+      { state: "RESOLVED", amount: 700, date: "2025-01-01" },
+      { state: "RESOLVED", amount: 100, date: "2025-02-01" },
+    ]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
   // AC10: the events/dated arm keys statementOrder in PROGRAM order — a non-dated
   // statement before a dated one keeps the dated statement's program-order key, and
   // the headline byte stream is unchanged from before the re-keying.
@@ -388,6 +419,49 @@ describe("runEvaluate — breakdown is a partition of the headline (#442)", () =
         symbolicDate: { type: "UNRESOLVED_VESTING_START" },
       },
     ]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
+  // A void dated sibling reaches the events arm when a contingent (event) start
+  // forces the program off the template via MULTIPLE_START_ORIGINS — which fires
+  // ahead of buildTemplate's cliff-IMPOSSIBLE guard, so the void dated statement
+  // never gets poisoned to the unresolved arm. Its IMPOSSIBLE shares must be SHOWN
+  // in the headline (the way an all-void program shows its dead shares), never
+  // skipped — otherwise the headline drops them while the partition keeps them, and
+  // the by-construction tie breaks (the #442 events-arm membership bug). The events
+  // arm now splits on `isDated`, agreeing with the partition.
+  it("contingent start + a void dated sibling: impossible shares show in the headline and tie", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month " +
+        "CLIFF vestingStart + 6 months BEFORE DATE 2020-01-01",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Both clauses are accounted for: 50 pending (clause 1) + 50 impossible
+    // (clause 2). The headline is no longer just [UNRESOLVED 50].
+    const unresolved = r.view.installments.filter(
+      (i) => i.state === "UNRESOLVED",
+    );
+    const impossible = r.view.installments.filter(
+      (i) => i.state === "IMPOSSIBLE",
+    );
+    expect(sumInstallments(unresolved)).toBe(50);
+    expect(sumInstallments(impossible)).toBe(50);
+    expect(sumInstallments(r.view.installments)).toBe(100);
+    // The partition ties the (now correct) headline, attributing 50 UNRESOLVED to
+    // clause 1 and 50 IMPOSSIBLE to clause 2.
+    expect(r.breakdown).toHaveLength(2);
+    expect(perEntry(r.breakdown)).toEqual([50, 50]);
+    expect(
+      r.breakdown[0].installments.every((i) => i.state === "UNRESOLVED"),
+    ).toBe(true);
+    expect(
+      r.breakdown[1].installments.every((i) => i.state === "IMPOSSIBLE"),
+    ).toBe(true);
     expect(sumBreakdown(r.breakdown)).toBe(
       sumInstallments(r.view.installments),
     );

@@ -251,9 +251,18 @@ describe("over-precise event-held cliff baseline is excluded (#386)", () => {
 // `resolveToCore` now surfaces that overflow directly, the same error the public
 // `compile`/`evaluateProgram` path always produced for this template. (The template
 // itself still BUILDS with the apportionment-bumped 0.3333333334; the throw is in the
-// allocation, not the build.) The stored-basis precision guard whose silence this
-// template once exercised is unchanged and positively covered by the lossy-basis warn
-// test above (`DSL_LOSSY`).
+// allocation, not the build.)
+//
+// This test no longer asserts what this template once did: the stored-basis guard
+// staying SILENT — no false-positive `precision-insufficient` when it sizes the cliff
+// lump against the apportioned 0.3333333334 rather than the exact 1/3. That
+// observation point is gone now that `resolveToCore` allocates eagerly and this
+// template overflows before any findings are produced, and it can't simply be moved to
+// a smaller grant: the silence needs BOTH a non-terminating apportioned statement basis
+// AND a non-terminating cliff, and their 10^10 × 10^10 product is exactly what trips
+// the MAX_SAFE guard regardless of grant size. The guard logic itself
+// (`@vestlang/utils`) is untouched; `DSL_LOSSY` above covers the guard FIRING, which is
+// the opposite direction from this lost silence assertion.
 describe("template-arm allocation surfaces the MAX_SAFE overflow (#386 / #442)", () => {
   const THEN_THIRDS =
     "1/3 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month";

@@ -42,7 +42,8 @@ import type { ClassifiedVerdict, StatementContribution } from "./types.js";
 
 // A resolution paired with its TRUE program-order key (1-based), carried through
 // the dated/resolved filters so the allocator and the partition both key on
-// program order rather than the filtered subset's position (SD2).
+// program order rather than the filtered subset's position (the same 1-based order
+// `buildTemplate` stamps on `RawEvent.statementOrder`).
 interface OrderedResolution {
   r: StmtResolution;
   order: number;
@@ -165,9 +166,9 @@ const allocateResolutions = (
  * statement, in program order, even when a statement contributes no rows). A dated
  * statement's installments are its `AllocationContribution` rows grant-date-coalesced
  * into the per-clause display shape; a pending / void statement's are its symbolic
- * tranches sized by the program-wide claim (SD7). The two together sum to the
- * headline by construction. Shared across the events/unresolved/impossible arms and
- * the template arm.
+ * tranches sized by its slice of the program-wide claim vector (`symbolicClaims`).
+ * The two together sum to the headline by construction. Shared across the
+ * events/unresolved/impossible arms and the template arm.
  */
 export const buildStatementContributions = (
   resolutions: StmtResolution[],
@@ -220,33 +221,33 @@ const eventsArm = (
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   const dated: OrderedResolution[] = [];
-  // Dated starts in this arm (RESOLVED or a committed floor) carry a cliff
-  // expandResolution can place — NONE, a resolved time cliff, or an event-held
-  // cliff (folded at the firing, or held to nothing while unfired). Dead cliffs
-  // route to the unresolved arm first, so the dated set here and isDated agree.
+  // Split each statement the same way the claim basis and the partition do — on
+  // `isDated` — so the headline stream and its per-statement partition count the
+  // very same statements (the by-construction tie). `isDated` is a dated start
+  // (RESOLVED or a committed floor) whose cliff can actually place a grid: NONE, a
+  // resolved time cliff, or a FIRED event-held cliff. A start whose cliff can't —
+  // a contradictory BEFORE/AFTER gate (IMPOSSIBLE), an unsettled gate (UNRESOLVED),
+  // or an unfired event hold — is NOT dated: expandResolution would skip its whole
+  // grid, dropping its shares from the stream. Such a statement reaches this arm
+  // when a contingent sibling forced the program to events via
+  // MULTIPLE_START_ORIGINS, ahead of buildTemplate's cliff guard. It routes through
+  // the symbolic branch, where its IMPOSSIBLE / held tranches ride into the headline
+  // — the same rendering the unresolved arm gives a mixed program.
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
-    // A dated start whose event-held cliff hasn't fired holds its whole grid — it
-    // can't materialize as dated tranches, so it renders symbolically alongside the
-    // other pending portions (its shares would otherwise vanish from the stream).
-    const heldUnfired =
-      r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
-    if (
-      (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") &&
-      !heldUnfired
-    ) {
+    // A committed floor's disclosures (via `disclosuresOf`) surface here regardless
+    // of which branch the statement takes, or they'd vanish from resolution.pending
+    // and the absence-assumption disclosure — the symbolic branch's
+    // unresolvedInstallments reads the cliff, not the start's absence assumptions.
+    blockers.push(...disclosuresOf(r.start));
+    if (isDated(r)) {
       dated.push({ r, order: i + 1 });
-      // The dated path never runs unresolvedInstallments (where blockers are
-      // otherwise gathered), so a committed floor's disclosures (via
-      // `disclosuresOf`) have to be surfaced here or they'd vanish from
-      // resolution.pending and the absence-assumption disclosure.
-      blockers.push(...disclosuresOf(r.start));
       return;
     }
-    // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE starts to the
-    // unresolved arm, and a pending chain head keeps its tails out of the
-    // events build too — so what lands here is a pending event or synthetic
-    // combinator start on a statement of its own.
+    // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE *starts* to the unresolved
+    // arm, and a pending chain head keeps its tails out of the events build too — so
+    // what lands here is a pending event, a synthetic combinator start, or a dated
+    // start whose cliff can't place a grid (a void or unsettled-cliff sibling).
     const ev = unresolvedInstallments(r, ctx, claims[i]);
     for (const inst of ev.installments) {
       if (inst.state !== "RESOLVED") symbolic.push(inst);
