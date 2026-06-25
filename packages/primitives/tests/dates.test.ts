@@ -9,6 +9,7 @@ import {
   lt,
   gt,
   eq,
+  laterOf,
   satisfiesRelation,
 } from "../src/dates";
 
@@ -300,6 +301,16 @@ describe("comparisons on ISO dates", () => {
     expect(gt("2024-01-02", "2024-01-01")).toBe(true);
     expect(eq("2024-01-02", "2024-01-02")).toBe(true);
     expect(lt("2024-01-02", "2024-01-01")).toBe(false);
+  });
+});
+
+describe("laterOf — the symmetric calendar max", () => {
+  it("returns the later date regardless of argument order", () => {
+    expect(laterOf("2024-01-01", "2024-06-30")).toBe("2024-06-30");
+    expect(laterOf("2024-06-30", "2024-01-01")).toBe("2024-06-30");
+  });
+  it("returns the shared date when the two are equal", () => {
+    expect(laterOf("2024-03-15", "2024-03-15")).toBe("2024-03-15");
   });
 });
 

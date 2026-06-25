@@ -22,8 +22,8 @@ import type {
 import {
   addPeriod,
   allocateEvents,
-  expandGrid,
-  type GridCliff,
+  expandStatementGrid,
+  type CliffInput,
   type RawEvent,
 } from "@vestlang/primitives";
 import { numericToFraction } from "@vestlang/utils";
@@ -33,7 +33,7 @@ import {
   isVoid,
   symbolicClaims,
 } from "./unresolved.js";
-import { disclosuresOf, laterOf } from "./lower.js";
+import { disclosuresOf } from "./lower.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
 import type { ClassifiedVerdict } from "./types.js";
 
@@ -59,12 +59,14 @@ const expandResolution = (
   const { type, length: period, occurrences } = r.periodicity;
   const dom = ctx.vesting_day_of_month;
 
-  let cliff: GridCliff;
+  // Map the lowered cliff state onto the firing-blind CliffInput; the shared helper
+  // owns the arm decision, the proportional fold, and the kernel call.
+  let cliff: CliffInput;
   if (r.cliff.state === "RESOLVED") {
     // A time-based cliff is a pure duration from the anchor (no origin).
     cliff = {
       kind: "fixed",
-      date: addPeriod(
+      baselineDate: addPeriod(
         anchor,
         r.cliff.cliff.length,
         r.cliff.cliff.period_type,
@@ -76,32 +78,39 @@ const expandResolution = (
     };
   } else if (r.cliff.state === "EVENT_HELD") {
     // An event-held cliff that landed in an events build via another cause (e.g.
-    // multiple start origins). Unfired, the hold gates the whole grid → emit
-    // nothing. Fired, the lump folds at max(cliff baseline date, firing) — the
-    // baseline contributes only its date as a floor, the lump's size is whatever
-    // share the grid accrued by then (proportional).
-    if (r.cliff.firing === undefined) return [];
-    const foldDate = laterOf(r.cliff.firing, r.cliff.cliffDate);
-    cliff = { kind: "proportional", date: foldDate };
+    // multiple start origins). Unfired, the hold gates the whole grid → skip
+    // (emit nothing). Fired, the lump folds at max(cliff baseline date, firing) —
+    // the baseline contributes only its date as a floor, the lump's size is
+    // whatever share the grid accrued by then (proportional).
+    cliff =
+      r.cliff.firing === undefined
+        ? { kind: "skip" }
+        : {
+            kind: "proportional",
+            firing: r.cliff.firing,
+            floor: r.cliff.cliffDate,
+          };
   } else if (r.cliff.state === "NONE") {
     cliff = { kind: "none" };
   } else {
     // UNRESOLVED / IMPOSSIBLE: nothing here is datable. Only a vacuous
     // 0-occurrence statement legitimately reaches this with nothing to lose.
-    return [];
+    cliff = { kind: "skip" };
   }
 
-  return expandGrid({
-    anchor,
-    origin,
-    period,
-    periodType: type,
-    occurrences,
-    stmtFraction: r.percentage,
-    statementOrder: order,
-    dom,
+  return expandStatementGrid(
+    {
+      anchor,
+      origin,
+      period,
+      periodType: type,
+      occurrences,
+      stmtFraction: r.percentage,
+      statementOrder: order,
+      dom,
+    },
     cliff,
-  });
+  );
 };
 
 /**

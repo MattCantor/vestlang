@@ -250,6 +250,11 @@ export const lt = (a: OCTDate, b: OCTDate): boolean => a < b;
 export const gt = (a: OCTDate, b: OCTDate): boolean => a > b;
 export const eq = (a: OCTDate, b: OCTDate): boolean => a === b;
 
+// The later of two dates — the calendar max. Symmetric, so argument order is
+// immaterial. (Callers that need a firing-wins-on-tie convention over an optional
+// floor wrap this in their own asymmetric form.)
+export const laterOf = (a: OCTDate, b: OCTDate): OCTDate => (a > b ? a : b);
+
 // Does `subject` satisfy a single BEFORE/AFTER bound anchored at `base`? This is
 // the one per-edge rule both the evaluator (deciding a fired/literal proviso) and
 // the linter (deciding whether a date window is empty) lean on, so it lives here
