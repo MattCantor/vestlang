@@ -3,6 +3,7 @@ import { normalizeProgram } from "../src/normalizer/index.js";
 import type {
   AndCondition,
   AtomCondition,
+  EarlierOfVestingNode,
   LaterOfVestingNode,
   Program,
 } from "@vestlang/types";
@@ -261,6 +262,122 @@ describe("cliff: selector dedupe + collapse", () => {
       cliff!.type === "NODE_EARLIER_OF" || cliff!.type === "NODE_LATER_OF",
     ).toBe(false);
     expect(cliff!.type === "NODE").toBe(true);
+  });
+});
+
+/* ------------------------
+ * #460: bare multi-term offset selector arm anchors per slot
+ * ------------------------ */
+
+describe("bare multi-term offset selector arm (#460)", () => {
+  // The carrier (DURATION_OFFSETS) is a raw normalizer input — gone post-normalize.
+  // Each test normalizes the bare form AND its written-out anchored equivalent and
+  // asserts deep equality: the anchored form normalizes to itself idempotently, so
+  // comparing both-normalized is the phase-correct check that the bare arm anchors to
+  // exactly the same NODE the author would have written out.
+
+  it("bare FROM arm normalizes to the grant-date-anchored NODE, deep-equal to written-out", () => {
+    const bare = getSingleton(
+      norm(
+        "VEST FROM EARLIER OF (+20 days +1 month, EVENT a) OVER 4 years EVERY 1 month",
+      ),
+    ).vesting_start;
+    const anchored = getSingleton(
+      norm(
+        "VEST FROM EARLIER OF (grantDate + 20 days + 1 month, EVENT a) OVER 4 years EVERY 1 month",
+      ),
+    ).vesting_start;
+
+    expect(bare).toEqual(anchored);
+    expect(bare).toEqual({
+      type: "NODE_EARLIER_OF",
+      items: [
+        {
+          type: "NODE",
+          base: { type: "GRANT_DATE" },
+          offsets: [
+            { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+            { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+          ],
+        },
+        { type: "NODE", base: { type: "EVENT", value: "a" }, offsets: [] },
+      ],
+    });
+    // The carrier tag must not survive normalization.
+    expect(JSON.stringify(bare)).not.toContain("DURATION_OFFSETS");
+  });
+
+  it("works under a CLIFF slot (vesting-start anchor), deep-equal to written-out", () => {
+    const bare = getSingleton(
+      norm(
+        "VEST OVER 12 months EVERY 1 month CLIFF EARLIER OF (+20 days +1 month, EVENT a)",
+      ),
+    ).periodicity.cliff;
+    const anchored = getSingleton(
+      norm(
+        "VEST OVER 12 months EVERY 1 month CLIFF EARLIER OF (vestingStart + 20 days + 1 month, EVENT a)",
+      ),
+    ).periodicity.cliff;
+
+    expect(bare).toEqual(anchored);
+    // Same arm text, different anchor per slot — the core design point.
+    expect(bare).toEqual({
+      type: "NODE_EARLIER_OF",
+      items: [
+        {
+          type: "NODE",
+          base: { type: "VESTING_START" },
+          offsets: [
+            { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+            { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+          ],
+        },
+        { type: "NODE", base: { type: "EVENT", value: "a" }, offsets: [] },
+      ],
+    });
+  });
+
+  it("anchors through nesting (depth >= 2 inside an outer selector)", () => {
+    const bare = getSingleton(
+      norm(
+        "VEST FROM LATER OF (EVENT x, EARLIER OF (+20 days +1 month, EVENT a)) OVER 4 years EVERY 1 month",
+      ),
+    ).vesting_start;
+    const anchored = getSingleton(
+      norm(
+        "VEST FROM LATER OF (EVENT x, EARLIER OF (grantDate + 20 days + 1 month, EVENT a)) OVER 4 years EVERY 1 month",
+      ),
+    ).vesting_start;
+
+    expect(bare).toEqual(anchored);
+    // The outer node is a LATER OF; its second item is an EARLIER OF whose first arm
+    // is the grant-date-anchored NODE — the carrier is reached and anchored through
+    // nesting, not just as a top-level selector peer.
+    expect(bare.type).toBe("NODE_LATER_OF");
+    const outer = bare as LaterOfVestingNode;
+    const inner = outer.items[1];
+    expect(inner.type).toBe("NODE_EARLIER_OF");
+    expect((inner as EarlierOfVestingNode<"GRANT_DATE">).items[0]).toEqual({
+      type: "NODE",
+      base: { type: "GRANT_DATE" },
+      offsets: [
+        { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+      ],
+    });
+  });
+
+  it("no regression — single-term bare arm anchors via the existing DURATION case", () => {
+    const vs = getSingleton(
+      norm(
+        "VEST FROM EARLIER OF (+3 months, EVENT a) OVER 4 years EVERY 1 month",
+      ),
+    ).vesting_start as EarlierOfVestingNode<"GRANT_DATE">;
+    expect(vs.items[0]).toEqual({
+      type: "NODE",
+      base: { type: "GRANT_DATE" },
+      offsets: [{ type: "DURATION", value: 3, unit: "MONTHS", sign: "PLUS" }],
+    });
   });
 });
 

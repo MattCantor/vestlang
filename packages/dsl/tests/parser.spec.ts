@@ -331,6 +331,94 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     });
   });
 
+  // #460: a bare multi-term offset USED AS A SELECTOR ARM (`EARLIER OF (+20 days
+  // +1 month, …)`) used to error at the second `+` (column 32) — the arm had no
+  // grammar alternative to fall into (VestingNode needs a base, Duration matches one
+  // term). The arm now parses to a raw un-anchored DURATION_OFFSETS carrier; the
+  // normalizer anchors it per slot. These [PARSE] tests assert the carrier shape,
+  // NOT a NODE (the NODE is a [NORMALIZE]-phase concern).
+  describe("multi-term bare offset selector arm (#460)", () => {
+    const SRC =
+      "VEST FROM EARLIER OF (+20 days +1 month, EVENT a) OVER 4 years EVERY 1 month";
+
+    // This test is also the grammar-order regression guard: MultiBareOffset must
+    // sit BEFORE Duration in GateExpr (50-gate.peggy). If it were moved after,
+    // Duration would greedily match the first term (`+20 days`), the parser would
+    // regress to the column-32 syntax error, and `first(SRC)` would throw here — so a
+    // future reordering is caught by this assertion. (The formerly-failing case now
+    // parses precisely because that ordering holds.)
+    it("the bare arm parses to the raw DURATION_OFFSETS carrier (months-first)", () => {
+      // For a selector arm the raw shape nests under `.items` — the bare arm is
+      // items[0], the `EVENT a` sibling is items[1]. (Distinct from the top-level
+      // #402 idiom, which reads vesting_start directly.)
+      const s = first(SRC);
+      expect(s.expr.vesting_start.type).toBe("NODE_EARLIER_OF");
+      expect(s.expr.vesting_start.items[0]).toEqual({
+        type: "DURATION_OFFSETS",
+        offsets: [
+          { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+          { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+        ],
+      });
+      // The sibling is the unchanged anchored EVENT node.
+      expect(s.expr.vesting_start.items[1]).toEqual({
+        type: "NODE",
+        base: { type: "EVENT", value: "a" },
+        offsets: [],
+      });
+    });
+
+    // The parse-time forbidden-anchor guards (hasSystemAnchor /
+    // nodeGateRefsVestingStart) still reject a forbidden sibling when the carrier is
+    // the OTHER arm — the carrier matches neither the NODE nor the selector branch, so
+    // it falls through to false and the sibling's anchor is checked as before.
+    it("still rejects a forbidden-anchor sibling (vestingStart under FROM)", () => {
+      expect(() =>
+        parse(
+          "VEST FROM EARLIER OF (+20 days +1 month, vestingStart) OVER 4 years EVERY 1 month",
+        ),
+      ).toThrowError(/vestingStart is a reserved system event/);
+    });
+
+    it("still rejects a forbidden-anchor sibling (grantDate under CLIFF)", () => {
+      expect(() =>
+        parse(
+          "VEST OVER 12 months EVERY 1 month CLIFF EARLIER OF (+20 days +1 month, grantDate)",
+        ),
+      ).toThrowError(/grantDate is a reserved system event/);
+    });
+
+    it("no regression — single-term bare arm stays a raw DURATION", () => {
+      // `+3 months` is one term, so MultiBareOffset (two-or-more) won't match and it
+      // falls through to Duration — proving the two-term minimum holds.
+      const s = first(
+        "VEST FROM EARLIER OF (+3 months, EVENT a) OVER 4 years EVERY 1 month",
+      );
+      expect(s.expr.vesting_start.items[0]).toEqual({
+        type: "DURATION",
+        value: 3,
+        unit: "MONTHS",
+        sign: "PLUS",
+      });
+    });
+
+    it("no regression — fully-anchored arm parses to the anchored NODE (no carrier)", () => {
+      // The anchored form has a base, so VestingNode wins ahead of MultiBareOffset and
+      // anchors at parse time — DURATION_OFFSETS must not appear.
+      const s = first(
+        "VEST FROM EARLIER OF (grantDate + 20 days + 1 month, EVENT a) OVER 4 years EVERY 1 month",
+      );
+      expect(s.expr.vesting_start.items[0]).toEqual({
+        type: "NODE",
+        base: { type: "GRANT_DATE" },
+        offsets: [
+          { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+          { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+        ],
+      });
+    });
+  });
+
   it("enforces SQL precedence: AND binds tighter than OR in `A AND B OR C`", () => {
     const s = first(
       `VEST FROM EVENT X BEFORE EVENT A AND BEFORE EVENT B OR BEFORE EVENT C`,

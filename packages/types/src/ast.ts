@@ -50,6 +50,18 @@ export type Offsets =
   | readonly [DurationMonth | DurationDay]
   | readonly [DurationMonth, DurationDay];
 
+// A raw, un-anchored multi-term offset emitted by the grammar for a bare selector
+// arm (`EARLIER OF (+20 days +1 month, …)`). It is purely a normalizer *input*: it
+// rides the `parse() as RawProgram` cast into normalizeNode, which anchors it to the
+// slot's system base (grantDate under FROM, vestingStart under CLIFF) and produces a
+// NODE. It is gone post-normalize, so it is deliberately NOT part of VestingNodeExpr
+// (it must not leak into the exhaustive walk/render/evaluator/inferrer/stringify
+// switches) and never appears in a normalized tag union.
+export interface DurationOffsets {
+  type: "DURATION_OFFSETS";
+  offsets: Offsets;
+}
+
 /* ------------------------
  * Vesting Base
  * ------------------------ */

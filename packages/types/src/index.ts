@@ -50,6 +50,7 @@ export {
   DurationMonth,
   DurationDay,
   Offsets,
+  DurationOffsets,
   VestingBase,
   VestingBaseDate,
   VestingBaseGrantDate,
