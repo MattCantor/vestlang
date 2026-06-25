@@ -9,17 +9,29 @@ import { foldBlocker } from "./blockerTree.js";
 // (`direction` + `inclusive`, see AbsenceDescriptor). That's what the schedule's
 // absence-assumption disclosure reports.
 //
-// Two merges, because a blocker can already carry a stamp from a gate nested inside
-// this one:
-//   - `through` keeps the later of the two dates — assuming absence over the wider
-//     window is the conservative watch-list claim.
-//   - the descriptor is preserved if already present. A selector re-stamping a
-//     blocker an inner constraint already minted must NOT blunt the inner relation
-//     down to the selector's coarser one — the inner descriptor is the tighter, more
-//     dangerous claim (e.g. an `AFTER` gate buried under a LATER OF). A fresh blocker
-//     (the common gate-mint case) has none yet, so it takes the one passed here. This
-//     covers `consequence` too: a gate's `flips-to-impossible` survives a LATER OF
-//     re-stamp rather than being softened to the selector's `grid-shift`.
+// A blocker can already carry a stamp from a gate nested inside this one, so the
+// merge turns on `hasInner` (does it already have a descriptor?):
+//   - a fresh blocker — the common gate-mint case — takes the date passed here as its
+//     `through` (later-of with whatever it had, though it had none), plus the
+//     descriptor passed here.
+//   - an already-stamped blocker keeps its inner descriptor (direction / inclusive /
+//     consequence). A selector re-stamping a gate an inner constraint already minted
+//     must NOT blunt the inner relation down to the selector's coarser one: the inner
+//     gate's claim is the tighter, more dangerous one (e.g. an `AFTER` gate buried
+//     under a LATER OF). A gate's `flips-to-impossible` survives a re-stamp rather
+//     than softening to the selector's `grid-shift`.
+//
+// `through` is merged by `consequence`, not by `hasInner` alone, because the danger
+// boundary lives in different places for the two inner kinds:
+//   - an inner *gate* (`flips-to-impossible`) dies the instant the gated event lands
+//     on the wrong side of *its own* date, no matter where the outer selector floor
+//     sits. So that inner date is the real watch boundary — keep it, don't widen it
+//     out to the selector's (later) floor.
+//   - an inner *selector* commit (`grid-shift`, e.g. a committed EARLIER_OF folded
+//     into an outer LATER_OF) only ever shifts the grid, and #363 discloses it through
+//     the *outer* fold's date — the window in which a firing could still move the
+//     final answer. So it keeps the later-of merge.
+// A fresh blocker has no inner stamp, so it also takes the later-of merge.
 //
 // The fold descends selector arms so an event buried in one still gets stamped;
 // impossible arms hold no pending events, so they're returned untouched (which also
@@ -34,10 +46,18 @@ export const withBoundary = (
       switch (node.type) {
         case "EVENT_NOT_YET_OCCURRED": {
           const hasInner = node.direction !== undefined;
+          // An inner gate stamps `through` together with the descriptor, so when its
+          // consequence is `flips-to-impossible` the preserved `through` is a real
+          // date. Every other case (no inner stamp, or an inner `grid-shift` selector
+          // commit) takes the later-of merge — keep `node.through` only when it's
+          // already the wider window.
+          const keepInnerThrough = node.consequence === "flips-to-impossible";
           return {
             ...node,
             through:
-              node.through && gt(node.through, date) ? node.through : date,
+              keepInnerThrough || (node.through && gt(node.through, date))
+                ? node.through
+                : date,
             direction: hasInner ? node.direction : descriptor.direction,
             inclusive: hasInner ? node.inclusive : descriptor.inclusive,
             consequence: hasInner ? node.consequence : descriptor.consequence,
