@@ -372,3 +372,56 @@ describe("presentSchedule — #464 committed EARLIER OF cliff flips pending", ()
     expect(presentSchedule(out).pending).toBe(false);
   });
 });
+
+// #473 — the materiality rule flips `present.pending` on two nested combinator
+// shapes, in opposite directions, because `pending` reads the resolution blocker
+// list (not the status). A dominated nested START loses its only pending entry (the
+// grid fully dates), while a material nested CLIFF gains one (the cliff now discloses
+// its assumed-absent event). These lock the consumer-visible flip both ways.
+describe("presentSchedule — #473 nested materiality flips pending both ways", () => {
+  const prog = (dsl: string) => normalizeProgram(parse(dsl));
+
+  it("dominated nested START → present.pending false (the vacuous disclosure is gone)", () => {
+    // FROM LATER OF (EARLIER OF (DATE 06-01, e), DATE 09-01): the inner floor is
+    // swamped, so under #473 it no longer discloses `e`. With nothing pending and the
+    // start dated at 2024-09-01, the schedule reads not-pending. (Before #473 it
+    // disclosed `e` vacuously and read pending.)
+    const out = evaluateProgram(
+      prog(
+        "VEST FROM LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month",
+      ),
+      { grantDate: "2024-01-01", events: {}, grantQuantity: 120 },
+    );
+    expect(out.resolution.status).toBe("template");
+    expect(presentSchedule(out).pending).toBe(false);
+  });
+
+  it("material nested CLIFF (anchored) → present.pending true (the cliff now discloses `e`)", () => {
+    // OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 09-01, e), DATE
+    // 06-01): the inner floor 2024-09-01 is the unique strict max, so the cliff
+    // discloses `e` into resolution.pending. (Before #473 the nested cliff was silent
+    // and read not-pending.)
+    const out = evaluateProgram(
+      prog(
+        "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)",
+      ),
+      { grantDate: "2024-01-01", events: {}, grantQuantity: 4800 },
+    );
+    expect(out.resolution.status).toBe("template");
+    expect(presentSchedule(out).pending).toBe(true);
+  });
+
+  it("material nested CLIFF (deferred) → present.pending true", () => {
+    // The deferred mirror: FROM EVENT g (unfired) holds the start, and the nested
+    // cliff's inner floor is still the strict max, so the cliff discloses `e`. The
+    // start's own `g` wait also keeps it pending; either way present.pending is true.
+    const out = evaluateProgram(
+      prog(
+        "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)",
+      ),
+      { grantDate: "2024-01-01", events: {}, grantQuantity: 4800 },
+    );
+    expect(out.resolution.status).toBe("template");
+    expect(presentSchedule(out).pending).toBe(true);
+  });
+});

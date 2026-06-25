@@ -88,8 +88,9 @@ const laterOfDateOrEvent: VestingNodeExpr<"GRANT_DATE"> = {
 // date floor (leaning on `ipo` staying absent) and the outer LATER OF reads that
 // floor — the #363 path. Firing-blind, no commit happens, so the storable verdict
 // must be invariant to `ipo`. Two date orderings: one where the inner floor is the
-// later of the two (the event is material), one where the outer date swamps it (the
-// event is immaterial but still disclosed closed-world).
+// later of the two (the event is material and discloses closed-world), one where the
+// outer date swamps it (the event is immaterial, so under the materiality rule it
+// stays silent closed-world — #473). Either way the storable verdict is invariant.
 const nestedLaterOverEarlier = (
   innerDate: string,
   outerDate: string,
@@ -228,10 +229,11 @@ const corpus: CorpusEntry[] = [
     events: { ipo: "2026-03-01" },
   },
   {
-    // #363 — same nesting, inner floor immaterial (the outer date swamps it). The
-    // closed-world reading still discloses ipo, but the storable verdict stays
-    // firing-invariant — the property this sweep pins.
-    name: "nested LATER OF over committed EARLIER OF (vacuous)",
+    // #363/#473 — same nesting, inner floor dominated (the outer date swamps it). The
+    // closed-world reading is now SILENT on ipo (a dominated floor can't move the
+    // max), while the storable verdict stays firing-invariant either way — the
+    // property this sweep pins, unchanged by the materiality flip.
+    name: "nested LATER OF over committed EARLIER OF (dominated — now silent)",
     program: [
       {
         type: "STATEMENT",
