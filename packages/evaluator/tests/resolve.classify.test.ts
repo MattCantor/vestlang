@@ -1123,7 +1123,12 @@ describe("classify — the events arm surfaces a committed floor's disclosures (
   const ipoBlocker: Blocker = {
     type: "EVENT_NOT_YET_OCCURRED",
     event: "ipo",
-    through: "2024-06-01",
+    boundary: {
+      through: "2024-06-01",
+      direction: "before",
+      inclusive: false,
+      consequence: "grid-shift",
+    },
   };
 
   const monthly2 = { type: "MONTHS" as const, length: 1, occurrences: 2 };

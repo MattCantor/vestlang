@@ -246,10 +246,12 @@ describe("lowerCliff", () => {
         {
           type: "EVENT_NOT_YET_OCCURRED",
           event: "fda",
-          through: "2026-01-31",
-          direction: "before",
-          inclusive: false,
-          consequence: "grid-shift",
+          boundary: {
+            through: "2026-01-31",
+            direction: "before",
+            inclusive: false,
+            consequence: "grid-shift",
+          },
         },
       ]);
     }

@@ -133,16 +133,15 @@ export interface AbsenceDescriptor {
 }
 
 export type UnresolvedBlocker =
-  | ({
+  | {
       type: "EVENT_NOT_YET_OCCURRED";
       event: string;
       // Set when this pending event was checked against a known date — a gate's
-      // boundary or the date a LATER OF already settled on. It's the boundary the
-      // schedule's absence-assumption disclosure reports the event stayed absent
-      // against. Left off when the event is simply awaited with nothing to compare
-      // it to (a bare FROM EVENT) — then the descriptor fields below are absent too.
-      through?: OCTDate;
-    } & Partial<AbsenceDescriptor>)
+      // boundary, or the date a LATER OF settled on — together with the relation that
+      // date guards against (the AbsenceDescriptor). Present together or not at all:
+      // a bare wait (FROM EVENT x, the vesting-start placeholder) carries no boundary.
+      boundary?: { through: OCTDate } & AbsenceDescriptor;
+    }
   | {
       type: "UNRESOLVED_SELECTOR";
       selector: SelectorTag;

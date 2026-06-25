@@ -307,7 +307,12 @@ describe("disclosuresOf — the shared committed-disclosure read (#368)", () => 
   const ipoBlocker: Blocker = {
     type: "EVENT_NOT_YET_OCCURRED",
     event: "ipo",
-    through: "2024-06-01",
+    boundary: {
+      through: "2024-06-01",
+      direction: "before",
+      inclusive: false,
+      consequence: "grid-shift",
+    },
   };
 
   it("a COMMITTED start passes its disclosures straight through", () => {

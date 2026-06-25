@@ -222,16 +222,18 @@ type UnresolvedBlocker =
   | {
       type: "EVENT_NOT_YET_OCCURRED";
       event: string;
-      through?: OCTDate;
-      direction?: "before" | "after"; // present iff `through` is
-      inclusive?: boolean;
-      consequence?: "grid-shift" | "flips-to-impossible";
+      boundary?: {
+        through: OCTDate;
+        direction: "before" | "after";
+        inclusive: boolean;
+        consequence: "grid-shift" | "flips-to-impossible";
+      };
     }
   | { type: "UNRESOLVED_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF"; blockers: Blocker[] }
   | { type: "UNRESOLVED_CONDITION"; condition: Omit<VestingNode, "type"> };
 ```
 
-`through` on `EVENT_NOT_YET_OCCURRED` is the date the event was measured against when it has one (a gate's date, or the date a `LATER OF` settled on), and `direction`/`inclusive`/`consequence` ride alongside it — together they're the boundary the schedule's [absence assumptions](#absence-assumptions) report. A bare wait with no date to compare against carries none of the four.
+`boundary` on `EVENT_NOT_YET_OCCURRED` is the date the event was measured against, together with the relation that date guards against — `through` (a gate's date, or the date a `LATER OF` settled on) plus `direction`/`inclusive`/`consequence`. The four travel as one sub-object: present together when the event was checked against a known date (it's the boundary the schedule's [absence assumptions](#absence-assumptions) report), absent entirely for a bare wait with no date to compare against.
 
 ### Impossible
 

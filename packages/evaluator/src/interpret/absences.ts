@@ -42,26 +42,17 @@ export const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
     foldBlocker<void>(top, (node) => {
       if (
         node.type !== "EVENT_NOT_YET_OCCURRED" ||
-        node.through === undefined ||
+        node.boundary === undefined ||
         isVestingStartPlaceholder(node)
       )
         return;
-      // A dated blocker always carries the full descriptor alongside `through` (they're
-      // stamped together in withBoundary), so direction/inclusive are present here.
-      // `consequence` has no honest default — unlike direction's "before" belt, neither
-      // value is safe to invent — so we assert the invariant rather than lie: a dated
-      // blocker without it would be a mint-site bug, and surfacing it as a throw is far
-      // better than publishing a wrong dead-grant-vs-shift verdict.
-      if (node.consequence === undefined)
-        throw new Error(
-          `dated absence blocker for "${node.event}" has no consequence`,
-        );
+      // The `boundary` carries `through` and the descriptor as one present-together
+      // unit — exactly the assumption's payload minus `eventId` — so it spreads in
+      // whole, with no defaulting and no invariant to police. A bare wait has no
+      // `boundary` and was already skipped above.
       const assumption: AbsenceAssumption = {
         eventId: node.event,
-        through: node.through,
-        direction: node.direction ?? "before",
-        inclusive: node.inclusive ?? false,
-        consequence: node.consequence,
+        ...node.boundary,
       };
       const key = groupKey(assumption);
       const prior = byRelation.get(key);

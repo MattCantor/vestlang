@@ -28,7 +28,7 @@ const findUnfired = (
 ): { through?: string } | undefined => {
   for (const b of bs) {
     if (b.type === "EVENT_NOT_YET_OCCURRED" && b.event === event)
-      return { through: b.through };
+      return { through: b.boundary?.through };
     if (b.type === "UNRESOLVED_SELECTOR" || b.type === "IMPOSSIBLE_SELECTOR") {
       const hit = findUnfired(b.blockers as Blocker[], event);
       if (hit) return hit;
