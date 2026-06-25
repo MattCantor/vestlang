@@ -155,6 +155,25 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(notes.some((n) => n.includes("grantDate defaulted"))).toBe(true);
   });
 
+  // An all-zero (but non-empty) input used to fall through to the generic
+  // "could not infer" toolError; the inferrer-core guard now returns a degenerate
+  // template, so the MCP seam surfaces a success envelope (#404).
+  it("returns a degenerate template for an all-zero, non-empty input", async () => {
+    const client = await connectClient();
+    const res = await callInfer(client, {
+      tranches: [{ date: "2025-02-01", amount: 0 }],
+    });
+
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      dsl: string;
+      diagnostics: { residualError: number; totalQuantity: number };
+    };
+    expect(sc.dsl).toBe("0 VEST FROM DATE 2025-02-01");
+    expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(sc.diagnostics.totalQuantity).toBe(0);
+  });
+
   it("rejects an empty tranches array via the input schema", async () => {
     const client = await connectClient();
     const res = await callInfer(client, { tranches: [] });

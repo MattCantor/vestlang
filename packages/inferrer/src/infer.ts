@@ -309,6 +309,49 @@ export function inferSchedule(input: InferInput): InferResult {
   const grantDateKnown = input.grantDate !== undefined;
   const grantDate = input.grantDate ?? firstDate;
 
+  // Every surviving tranche is zero, so the residual layer would decompose an
+  // empty date set into the empty program `[]` — which re-parses to nothing and
+  // trips core's non-empty-statements assertion downstream. Short-circuit to a
+  // single `0 VEST FROM DATE <earliest>` statement instead: a valid 1-statement
+  // template that evaluates to an empty installment stream. The degenerate
+  // program is exact by construction (total 0 → no installments to place), so
+  // residual and total are set to 0 directly rather than re-derived through a
+  // collapse — a deliberate verification-free exit.
+  if (totalQuantity === 0) {
+    const effectiveDayOfMonth = input.policy ?? DEFAULT_VESTING_DAY_OF_MONTH;
+    const component: SingleTrancheComponent = {
+      kind: "SINGLE_TRANCHE",
+      date: firstDate,
+      amount: 0,
+    };
+    const program: Program = [buildStatement(component, effectiveDayOfMonth)];
+    const degenerateNotes: string[] = [
+      "all tranches were zero; emitted a single zero-quantity statement",
+    ];
+    if (input.grantDate === undefined) {
+      degenerateNotes.push(
+        `grantDate defaulted to first tranche date (${firstDate})`,
+      );
+    }
+    return {
+      dsl: stringify(program),
+      program,
+      decomposition: {
+        uniforms: [],
+        singles: [{ date: firstDate, amount: 0 }],
+        cliffFolds: 0,
+        preGrantFolds: 0,
+      },
+      diagnostics: {
+        residualError: 0,
+        totalQuantity: 0,
+        vestingDayOfMonth: effectiveDayOfMonth,
+        cadenceTried: [],
+        notes: degenerateNotes,
+      },
+    };
+  }
+
   const notes: string[] = [];
 
   // The day-of-month convention is either fixed to a provided hint or searched
