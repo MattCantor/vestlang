@@ -107,19 +107,10 @@ export type LoweredCliff =
   //   - `symbolic`: no placeable grid, so the tranches are start-relative.
   //   - `dated`: the grid is placeable from the resolved start; only the cliff
   //     lump's exact spot is still open.
-  //   - `dated-floor`: a partial `LATER OF` whose `floor` is the resolved branch's
-  //     date — the lump can only move later than that lower bound, so every
-  //     pre-cliff tranche folds onto it.
-  // Used only for a non-event cliff that can't be placed yet (a cross-unit
-  // duration on the deferred path). An event-held cliff routes to EVENT_HELD even
-  // when pending — the hold is the state, never an absent field.
   | {
       state: "UNRESOLVED";
       blockers: Blocker[];
-      shape:
-        | { kind: "symbolic" }
-        | { kind: "dated" }
-        | { kind: "dated-floor"; floor: OCTDate };
+      shape: { kind: "symbolic" } | { kind: "dated" };
     }
   // A contradictory cliff, parallel to an IMPOSSIBLE start. The source's blockers
   // are already ImpossibleBlocker[], so no cast is needed when it's produced.
