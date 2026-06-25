@@ -182,7 +182,7 @@ describe("absenceAssumptions", () => {
     // LATER OF ( DATE 2027-01-01, EVENT ipo ): the date has settled but ipo could
     // still land later and become the answer (shifting the whole grid). So the
     // dangerous firing is *after* 2027-01-01 — direction `after`, exclusive (a tie
-    // keeps the date arm as the floor). #399 AC4.
+    // keeps the date arm as the floor).
     const laterOf: VestingNodeExpr<"GRANT_DATE"> = {
       type: "NODE_LATER_OF",
       items: [
@@ -236,7 +236,7 @@ describe("absenceAssumptions", () => {
 // #399 — the disclosure must point at the *dangerous* side of the boundary, not the
 // benign one. Each case is verified against the reference table in docs/scratch.
 describe("#399 — disclosure direction", () => {
-  it("AC1: AFTER gate discloses the after side, exclusive", () => {
+  it("AFTER gate discloses the after side, exclusive", () => {
     // `d AFTER e` holds iff `e <= d`; a firing of e after d flips it to impossible,
     // a firing exactly on d is benign. Direction after, exclusive (inclusive false).
     expect(
@@ -254,7 +254,7 @@ describe("#399 — disclosure direction", () => {
     ]);
   });
 
-  it("AC2: STRICTLY AFTER flips the boundary day to dangerous (inclusive)", () => {
+  it("STRICTLY AFTER flips the boundary day to dangerous (inclusive)", () => {
     // `d STRICTLY AFTER e` holds iff `e < d`; a firing on/after d is dangerous, so
     // the boundary day is in the window — inclusive true.
     expect(
@@ -272,7 +272,7 @@ describe("#399 — disclosure direction", () => {
     ]);
   });
 
-  it("AC3: a gated-event offset folds into the disclosed boundary", () => {
+  it("a gated-event offset folds into the disclosed boundary", () => {
     // `d BEFORE EVENT ipo - 6 months` holds iff `ipo - 6mo >= d`, i.e. a raw
     // `ipo >= d + 6mo`. The disclosed boundary is the subject date shifted by the
     // negation of the event's `-6 months` → 2025-07-01, direction before, exclusive.
@@ -291,7 +291,7 @@ describe("#399 — disclosure direction", () => {
     ]);
   });
 
-  it("AC10: a sound non-strict BEFORE gate discloses before/exclusive (off-by-one fix)", () => {
+  it("a sound non-strict BEFORE gate discloses before/exclusive (off-by-one fix)", () => {
     // `d BEFORE e` holds iff `e >= d`; a firing exactly on d keeps it valid, so the
     // dangerous window is strictly before d — exclusive. The boundary stays d.
     expect(
@@ -327,7 +327,7 @@ describe("#399 — disclosure direction", () => {
     ]);
   });
 
-  it("AC4: LATER OF discloses the after side, exclusive", () => {
+  it("LATER OF discloses the after side, exclusive", () => {
     expect(
       disclose(
         "VEST FROM LATER OF (DATE 2027-01-01, EVENT ipo) OVER 12 months EVERY 1 month",
@@ -343,7 +343,7 @@ describe("#399 — disclosure direction", () => {
     ]);
   });
 
-  it("AC5: the EVENT_NOT_YET_OCCURRED blocker carries the descriptor, not just `through`", () => {
+  it("the EVENT_NOT_YET_OCCURRED blocker carries the descriptor, not just `through`", () => {
     // The descriptor is minted where the AtomCondition is in hand, so it rides on the
     // pending blocker itself — not just on the post-derived assumption.
     const schedule = evaluateProgram(
@@ -410,5 +410,171 @@ describe("#399 — disclosure direction", () => {
       inclusive: false,
       consequence: "grid-shift",
     });
+  });
+});
+
+// #446 — a gate nested inside a LATER OF/EARLIER OF selector must disclose the inner
+// gate's *own* (tighter) boundary date, not the selector's later floor. The selector
+// re-stamps the inner blocker through its settled date; before this fix that re-stamp
+// kept the inner gate's direction but overwrote its `through` with the selector floor,
+// blending a correct relation onto the wrong date. Disclosure-only: the computed
+// vesting-start floor comes from the selector's `meta.date`, never from `through`, so
+// the dates pinned here must hold unchanged.
+describe("#446 — nested gate keeps its own boundary under a selector", () => {
+  // Evaluate to a settled template and read the committed vesting-start floor — the
+  // date the fix must leave untouched (it comes from the selector's `meta.date`, never
+  // from the disclosed `through`). Pass `ipo` to fire it where the gate stays valid; a
+  // gate-free selector needs no firing.
+  const settledStart = (dsl: string, ipo?: OCTDate): OCTDate | undefined => {
+    const out = evaluateProgram(
+      prog(dsl),
+      ctxInput({
+        grantDate: "2024-01-01",
+        grantQuantity: 1200,
+        events: ipo ? { ipo } : {},
+      }),
+    ).resolution;
+    return out.status === "template" ? out.runtime.startDate : undefined;
+  };
+
+  it("conflicting-direction nested gate discloses the inner date, not the selector floor", () => {
+    // The inner gate `2026-01-01 BEFORE EVENT ipo` dies if ipo fires strictly before
+    // 2026-01-01; the LATER OF floor is the *later* arm, 2027-01-01. The watch window
+    // is the inner gate's danger date (2026-01-01, before/exclusive), not 2027-01-01.
+    expect(
+      disclose(
+        "VEST FROM LATER OF (DATE 2027-01-01, DATE 2026-01-01 BEFORE EVENT ipo) OVER 12 months EVERY 1 month",
+      ),
+    ).toEqual([
+      {
+        eventId: "ipo",
+        through: "2026-01-01",
+        direction: "before",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+    ]);
+  });
+
+  it("the conflicting case's computed start stays the LATER OF floor (2027-01-01)", () => {
+    // The disclosure-only fix touches `through`, never the floor. ipo fired on
+    // 2026-06-01 keeps the `2026-01-01 BEFORE ipo` gate valid (ipo >= the date), so
+    // the LATER OF settles to its later arm, 2027-01-01 — unchanged by the fix.
+    expect(
+      settledStart(
+        "VEST FROM LATER OF (DATE 2027-01-01, DATE 2026-01-01 BEFORE EVENT ipo) OVER 12 months EVERY 1 month",
+        "2026-06-01",
+      ),
+    ).toBe("2027-01-01");
+  });
+
+  it("agreeing-direction nested gate also discloses the inner date, keeping `after`", () => {
+    // `2026-01-01 AFTER EVENT ipo` dies if ipo fires strictly after 2026-01-01. Same
+    // selector floor (2027-01-01), but the true danger date is the inner 2026-01-01,
+    // after/exclusive — the fix corrects the date while preserving the direction.
+    expect(
+      disclose(
+        "VEST FROM LATER OF (DATE 2027-01-01, DATE 2026-01-01 AFTER EVENT ipo) OVER 12 months EVERY 1 month",
+      ),
+    ).toEqual([
+      {
+        eventId: "ipo",
+        through: "2026-01-01",
+        direction: "after",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+    ]);
+    // ipo fired on 2026-01-01 keeps the `2026-01-01 AFTER ipo` gate valid (ipo <= the
+    // date), so the LATER OF still settles to 2027-01-01 — unchanged by the fix.
+    expect(
+      settledStart(
+        "VEST FROM LATER OF (DATE 2027-01-01, DATE 2026-01-01 AFTER EVENT ipo) OVER 12 months EVERY 1 month",
+        "2026-01-01",
+      ),
+    ).toBe("2027-01-01");
+  });
+
+  it("a plain (non-nested) selector discloses nothing and resolves to its floor", () => {
+    // No gate under the LATER OF — nothing to assume absent.
+    const dsl =
+      "VEST FROM LATER OF (DATE 2027-01-01, DATE 2026-01-01) OVER 12 months EVERY 1 month";
+    expect(disclose(dsl)).toEqual([]);
+    expect(settledStart(dsl)).toBe("2027-01-01");
+  });
+
+  it("a plain (non-nested) gate is untouched — the non-hasInner arm still takes the gate date", () => {
+    // Same shape as the bare non-strict BEFORE gate test above; pinned again here to guard that the through-preserve
+    // edit only fires under a selector re-stamp and leaves a bare gate's `through`
+    // (= the gate's own date) alone.
+    expect(
+      disclose(
+        "VEST FROM DATE 2025-01-01 BEFORE EVENT ipo OVER 12 months EVERY 1 month",
+      ),
+    ).toEqual([
+      {
+        eventId: "ipo",
+        through: "2025-01-01",
+        direction: "before",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+    ]);
+  });
+});
+
+// #446 sub-item (1) — a single compound gate already emits one direction-correct
+// record per conjunct (the per-conjunct recursion evaluates one atom at a time, and
+// the disclosure collapse keys on (event, direction, inclusive, consequence) so the
+// conjuncts stay distinct). Untested until now: the existing mixed-direction test is
+// two PLUS statements, not one compound gate. These pin the single-node compound shape.
+describe("#446 — compound gate discloses each conjunct's own direction", () => {
+  it("an AND of two opposite-direction gates discloses two per-conjunct records", () => {
+    // `BEFORE EVENT ipo AND AFTER EVENT board` — each conjunct mints its own boundary
+    // off the same subject date (2026-06-01). collectAbsences sorts by eventId, so
+    // board precedes ipo.
+    expect(
+      disclose(
+        "VEST FROM DATE 2026-06-01 BEFORE EVENT ipo AND AFTER EVENT board OVER 12 months EVERY 1 month",
+      ),
+    ).toEqual([
+      {
+        eventId: "board",
+        through: "2026-06-01",
+        direction: "after",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+      {
+        eventId: "ipo",
+        through: "2026-06-01",
+        direction: "before",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+    ]);
+  });
+
+  it("an OR of two opposite-direction gates discloses the same two per-conjunct records", () => {
+    expect(
+      disclose(
+        "VEST FROM DATE 2026-06-01 BEFORE EVENT ipo OR AFTER EVENT board OVER 12 months EVERY 1 month",
+      ),
+    ).toEqual([
+      {
+        eventId: "board",
+        through: "2026-06-01",
+        direction: "after",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+      {
+        eventId: "ipo",
+        through: "2026-06-01",
+        direction: "before",
+        inclusive: false,
+        consequence: "flips-to-impossible",
+      },
+    ]);
   });
 });
