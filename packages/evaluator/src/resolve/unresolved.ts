@@ -53,7 +53,7 @@ export const isVoid = (r: StmtResolution): boolean =>
 // event-held cliff is dated ONCE FIRED (core/expandResolution folds it at the
 // firing); while it's still held it renders symbolically (held tranches), so it's
 // not dated then — its shares must survive into the events/unresolved stream.
-const isDated = (r: StmtResolution): boolean =>
+export const isDated = (r: StmtResolution): boolean =>
   isDatedStart(r) &&
   (r.cliff.state === "NONE" ||
     r.cliff.state === "RESOLVED" ||

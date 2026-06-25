@@ -21,8 +21,10 @@ import type {
 } from "@vestlang/types";
 import {
   addPeriod,
-  allocateEvents,
+  allocateWithProvenance,
+  coalesceAtGrantDate,
   expandStatementGrid,
+  type AllocationContribution,
   type CliffInput,
   type RawEvent,
 } from "@vestlang/primitives";
@@ -30,12 +32,30 @@ import { numericToFraction } from "@vestlang/utils";
 import { makeResolvedInstallment } from "../interpret/makeTranches.js";
 import {
   unresolvedInstallments,
+  isDated,
   isVoid,
   symbolicClaims,
 } from "./unresolved.js";
 import { disclosuresOf } from "./lower.js";
 import type { StmtResolution, TemplateBuild } from "./lower.js";
-import type { ClassifiedVerdict } from "./types.js";
+import type { ClassifiedVerdict, StatementContribution } from "./types.js";
+
+// A resolution paired with its TRUE program-order key (1-based), carried through
+// the dated/resolved filters so the allocator and the partition both key on
+// program order rather than the filtered subset's position (the same 1-based order
+// `buildTemplate` stamps on `RawEvent.statementOrder`).
+interface OrderedResolution {
+  r: StmtResolution;
+  order: number;
+}
+
+// What `classify` hands back: the verdict plus the per-statement partition of the
+// headline allocation, seeded over the whole program (built here for the
+// events/unresolved/impossible arms; resolveToCore builds the template arm's).
+export interface ClassifyResult {
+  verdict: ClassifiedVerdict;
+  contributions: StatementContribution[];
+}
 
 /**
  * Expand one resolved statement to its dated fraction-of-grant events, honoring a
@@ -114,20 +134,77 @@ const expandResolution = (
 };
 
 /**
- * Dated tranches for every resolved statement: expand each to dated
- * fraction-events and hand the lot to the kernel's allocator, which orders them,
- * turns the fractions into exact integer shares, and folds anything pre-grant onto
- * the grant date. Statements whose start didn't resolve contribute nothing.
+ * Dated tranches for the resolved statements, plus the per-event provenance the
+ * partition is built from: expand each to dated fraction-events and hand the lot
+ * to the kernel's provenance-carrying allocator, which orders them, turns the
+ * fractions into exact integer shares, and folds anything pre-grant onto the grant
+ * date. `installments` is byte-identical to the old `allocateEvents` path;
+ * `contributions` is the same surviving rows keyed by program order.
  */
-const resolvedInstallments = (
-  resolutions: StmtResolution[],
+const allocateResolutions = (
+  dated: OrderedResolution[],
   ctx: ResolutionContext,
-): ResolvedInstallment[] =>
-  allocateEvents(
-    resolutions.flatMap((r, i) => expandResolution(r, i + 1, ctx)),
+): {
+  installments: ResolvedInstallment[];
+  contributions: AllocationContribution[];
+} => {
+  const { installments, contributions } = allocateWithProvenance(
+    dated.flatMap(({ r, order }) => expandResolution(r, order, ctx)),
     ctx.grantQuantity,
     ctx.grantDate,
-  ).map((t) => makeResolvedInstallment(t.date, t.amount));
+  );
+  return {
+    installments: installments.map((t) =>
+      makeResolvedInstallment(t.date, t.amount),
+    ),
+    contributions,
+  };
+};
+
+/**
+ * Build the per-statement partition, seeded over the WHOLE program (one entry per
+ * statement, in program order, even when a statement contributes no rows). A dated
+ * statement's installments are its `AllocationContribution` rows grant-date-coalesced
+ * into the per-clause display shape; a pending / void statement's are its symbolic
+ * tranches sized by its slice of the program-wide claim vector (`symbolicClaims`).
+ * The two together sum to the headline by construction. Shared across the
+ * events/unresolved/impossible arms and the template arm.
+ */
+export const buildStatementContributions = (
+  resolutions: StmtResolution[],
+  allocationContributions: AllocationContribution[],
+  claims: number[],
+  ctx: ResolutionContext,
+): StatementContribution[] => {
+  const rowsByOrder = new Map<number, AllocationContribution[]>();
+  for (const c of allocationContributions) {
+    const rows = rowsByOrder.get(c.statementOrder);
+    if (rows) rows.push(c);
+    else rowsByOrder.set(c.statementOrder, [c]);
+  }
+  return resolutions.map((r, i) => {
+    const statementOrder = i + 1;
+    if (isDated(r)) {
+      const rows = rowsByOrder.get(statementOrder) ?? [];
+      return {
+        statementOrder,
+        installments: coalesceAtGrantDate(rows, ctx.grantDate).map((t) =>
+          makeResolvedInstallment(t.date, t.amount),
+        ),
+      };
+    }
+    // A pending / void statement renders symbolically; its share is the
+    // program-wide claim, never a dated row.
+    return {
+      statementOrder,
+      installments: unresolvedInstallments(
+        r,
+        ctx,
+        claims[i],
+      ).installments.filter((inst) => inst.state !== "RESOLVED"),
+    };
+  });
+};
 
 /**
  * The events arm routes here when the *dated* part of the program forced it (a
@@ -139,60 +216,69 @@ const resolvedInstallments = (
  */
 const eventsArm = (
   build: Extract<TemplateBuild, { why: "events" }>,
-): ClassifiedVerdict => {
+): ClassifyResult => {
   const { ctx, resolutions, reason } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
-  const dated: StmtResolution[] = [];
-  // Dated starts in this arm (RESOLVED or a committed floor) carry a cliff
-  // expandResolution can place — NONE, a resolved time cliff, or an event-held
-  // cliff (folded at the firing, or held to nothing while unfired). Dead cliffs
-  // route to the unresolved arm first, so the dated set here and isDated agree.
+  const dated: OrderedResolution[] = [];
+  // Split each statement the same way the claim basis and the partition do — on
+  // `isDated` — so the headline stream and its per-statement partition count the
+  // very same statements (the by-construction tie). `isDated` is a dated start
+  // (RESOLVED or a committed floor) whose cliff can actually place a grid: NONE, a
+  // resolved time cliff, or a FIRED event-held cliff. A start whose cliff can't —
+  // a contradictory BEFORE/AFTER gate (IMPOSSIBLE), an unsettled gate (UNRESOLVED),
+  // or an unfired event hold — is NOT dated: expandResolution would skip its whole
+  // grid, dropping its shares from the stream. Such a statement reaches this arm
+  // when a contingent sibling forced the program to events via
+  // MULTIPLE_START_ORIGINS, ahead of buildTemplate's cliff guard. It routes through
+  // the symbolic branch, where its IMPOSSIBLE / held tranches ride into the headline
+  // — the same rendering the unresolved arm gives a mixed program.
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
-    // A dated start whose event-held cliff hasn't fired holds its whole grid — it
-    // can't materialize as dated tranches, so it renders symbolically alongside the
-    // other pending portions (its shares would otherwise vanish from the stream).
-    const heldUnfired =
-      r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
-    if (
-      (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") &&
-      !heldUnfired
-    ) {
-      dated.push(r);
-      // The dated path never runs unresolvedInstallments (where blockers are
-      // otherwise gathered), so a committed floor's disclosures (via
-      // `disclosuresOf`) have to be surfaced here or they'd vanish from
-      // resolution.pending and the absence-assumption disclosure.
-      blockers.push(...disclosuresOf(r.start));
+    // A committed floor's disclosures (via `disclosuresOf`) surface here regardless
+    // of which branch the statement takes, or they'd vanish from resolution.pending
+    // and the absence-assumption disclosure — the symbolic branch's
+    // unresolvedInstallments reads the cliff, not the start's absence assumptions.
+    blockers.push(...disclosuresOf(r.start));
+    if (isDated(r)) {
+      dated.push({ r, order: i + 1 });
       return;
     }
-    // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE starts to the
-    // unresolved arm, and a pending chain head keeps its tails out of the
-    // events build too — so what lands here is a pending event or synthetic
-    // combinator start on a statement of its own.
+    // buildTemplate already poisons UNRESOLVED/IMPOSSIBLE *starts* to the unresolved
+    // arm, and a pending chain head keeps its tails out of the events build too — so
+    // what lands here is a pending event, a synthetic combinator start, or a dated
+    // start whose cliff can't place a grid (a void or unsettled-cliff sibling).
     const ev = unresolvedInstallments(r, ctx, claims[i]);
     for (const inst of ev.installments) {
       if (inst.state !== "RESOLVED") symbolic.push(inst);
     }
     blockers.push(...ev.blockers);
   });
+  const alloc = allocateResolutions(dated, ctx);
   return {
-    kind: "events",
-    installments: [...resolvedInstallments(dated, ctx), ...symbolic],
-    blockers,
-    reason,
+    verdict: {
+      kind: "events",
+      installments: [...alloc.installments, ...symbolic],
+      blockers,
+      reason,
+    },
+    contributions: buildStatementContributions(
+      resolutions,
+      alloc.contributions,
+      claims,
+      ctx,
+    ),
   };
 };
 
 const unresolvedArm = (
   build: Extract<TemplateBuild, { why: "unresolved" }>,
-): ClassifiedVerdict => {
+): ClassifyResult => {
   const { ctx, resolutions } = build;
   const symbolic: SymbolicInstallment[] = [];
   const blockers: Blocker[] = [];
   // The fully-resolved siblings, kept to materialize their dated tranches below.
-  const resolvedResolutions: StmtResolution[] = [];
+  const resolvedResolutions: OrderedResolution[] = [];
   // Every statement renders off its resolution record, THEN tails included:
   // the chaining walk already injected a tail's start (a concrete handoff
   // date, or UNRESOLVED with the head's blockers while the head is pending).
@@ -214,7 +300,7 @@ const unresolvedArm = (
     // materialize them. (A vacuous 0-occurrence statement is also empty — treating
     // it as live keeps it out of the void rollup, the safe direction.)
     if (ev.installments.length === 0) {
-      resolvedResolutions.push(r);
+      resolvedResolutions.push({ r, order: i + 1 });
     }
     for (const inst of ev.installments) {
       if (inst.state !== "RESOLVED") symbolic.push(inst);
@@ -236,26 +322,39 @@ const unresolvedArm = (
         impossibleBlockers.push(...r.cliff.blockers);
     }
     return {
-      kind: "impossible",
-      installments: symbolic as ImpossibleInstallment[],
-      blockers: impossibleBlockers,
+      verdict: {
+        kind: "impossible",
+        installments: symbolic as ImpossibleInstallment[],
+        blockers: impossibleBlockers,
+      },
+      // No dated rows; every void statement draws its claim as one IMPOSSIBLE
+      // tranche, so the partition ties at the claimed total, not 0.
+      contributions: buildStatementContributions(resolutions, [], claims, ctx),
     };
   }
 
   // A mixed program is still unresolved, but its projection includes the resolved
   // siblings' dated tranches (sorted) ahead of the dateless symbolic ones.
-  const resolved = resolvedResolutions.length
-    ? resolvedInstallments(resolvedResolutions, ctx)
-    : [];
+  const alloc = resolvedResolutions.length
+    ? allocateResolutions(resolvedResolutions, ctx)
+    : { installments: [], contributions: [] };
   return {
-    kind: "unresolved",
-    installments: [...resolved, ...symbolic],
-    blockers,
+    verdict: {
+      kind: "unresolved",
+      installments: [...alloc.installments, ...symbolic],
+      blockers,
+    },
+    contributions: buildStatementContributions(
+      resolutions,
+      alloc.contributions,
+      claims,
+      ctx,
+    ),
   };
 };
 
-/** Map a non-template build to its verdict. */
+/** Map a non-template build to its verdict and per-statement partition. */
 export const classify = (
   build: Extract<TemplateBuild, { ok: false }>,
-): ClassifiedVerdict =>
+): ClassifyResult =>
   build.why === "unresolved" ? unresolvedArm(build) : eventsArm(build);

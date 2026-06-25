@@ -24,7 +24,11 @@ import {
 } from "@vestlang/utils";
 import { addPeriod, gt } from "./dates.js";
 import { allocateExact } from "./allocate.js";
-import { foldToGrantDate } from "./fold.js";
+import {
+  byDateOrderOccurrence,
+  foldToGrantDate,
+  relocateToCliffDate,
+} from "./fold.js";
 
 /**
  * One vesting date with the fraction of the whole grant it carries, before that
@@ -219,29 +223,57 @@ const cliffLump = (
 };
 
 /**
- * Turn fractional events into exact integer share counts. Events sort by date
- * (ties broken by statement order, then occurrence, so a cliff lump leads its day),
- * then a single running cumulative walks them: each amount is what rounding the
- * cumulative fraction down to whole shares adds beyond what's vested so far, so the
- * run telescopes to exactly `totalShares`. Events that round to nothing drop out.
- * Given a grant date, amounts dated before it aggregate onto it.
+ * One surviving (post-telescope) event, with the statement it came from and the
+ * integer shares it contributed. Index-aligned to the pre-fold `(dates, amounts)`
+ * the headline aggregates, but never merged across statements, so attribution
+ * survives. The date is folded the same way the headline is — a pre-grant row
+ * relocates to `grantDate` — so `Σ contributions === Σ installments`.
+ *
+ * #441 will later add a `scheduledDate` (the pre-fold grid position the relocation
+ * discards here) as one optional field. Do NOT name that field `gridDate`: it
+ * would collide with the exported `gridDate` function above.
  */
-export const allocateEvents = (
+export interface AllocationContribution {
+  date: OCTDate;
+  statementOrder: number; // 1-based program order (RawEvent.statementOrder)
+  occurrence: number; // RawEvent.occurrence (0 = cliff lump)
+  amount: number; // integer shares
+}
+
+/**
+ * The headline allocation paired with its per-event provenance. `installments` is
+ * byte-for-byte `allocateEvents(...)`; `contributions` is the same surviving rows
+ * un-merged, each tagged with its source statement.
+ */
+export interface ProvenancedAllocation {
+  installments: { date: OCTDate; amount: number }[];
+  contributions: AllocationContribution[];
+}
+
+/**
+ * Turn fractional events into exact integer share counts AND a per-event
+ * provenance carrier. Events sort by date (ties broken by statement order, then
+ * occurrence, so a cliff lump leads its day), then a single running cumulative
+ * walks them: each amount is what rounding the cumulative fraction down to whole
+ * shares adds beyond what's vested so far, so the run telescopes to exactly
+ * `totalShares`. Events that round to nothing drop out. Given a grant date, the
+ * headline aggregates pre-grant amounts onto it (`foldToGrantDate`), while each
+ * surviving contribution row relocates its own date to the grant date with no
+ * cross-statement summing — so the partition's total matches the headline's but
+ * keeps which statement vested what.
+ */
+export const allocateWithProvenance = (
   events: RawEvent[],
   totalShares: number,
   grantDate?: OCTDate,
-): { date: OCTDate; amount: number }[] => {
-  const sorted = [...events].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    if (a.statementOrder !== b.statementOrder)
-      return a.statementOrder - b.statementOrder;
-    return a.occurrence - b.occurrence;
-  });
+): ProvenancedAllocation => {
+  const sorted = [...events].sort(byDateOrderOccurrence);
 
   let cumulative: Fraction = ZERO;
   let vestedSoFar = 0;
   const dates: OCTDate[] = [];
   const amounts: number[] = [];
+  const contributions: AllocationContribution[] = [];
   for (const e of sorted) {
     cumulative = fracAdd(cumulative, e.fractionOfGrant);
     const amount = allocateExact(totalShares, cumulative, vestedSoFar);
@@ -249,10 +281,33 @@ export const allocateEvents = (
     vestedSoFar += amount;
     dates.push(e.date);
     amounts.push(amount);
+    contributions.push({
+      date: grantDate ? relocateToCliffDate(e.date, grantDate) : e.date,
+      statementOrder: e.statementOrder,
+      occurrence: e.occurrence,
+      amount,
+    });
   }
 
   const folded = grantDate
     ? foldToGrantDate(dates, amounts, grantDate)
     : { dates, amounts };
-  return folded.dates.map((date, i) => ({ date, amount: folded.amounts[i] }));
+  return {
+    installments: folded.dates.map((date, i) => ({
+      date,
+      amount: folded.amounts[i],
+    })),
+    contributions,
+  };
 };
+
+/**
+ * The headline-only allocation (no provenance). A thin wrapper over
+ * `allocateWithProvenance` so the two can't drift; its bytes are unchanged.
+ */
+export const allocateEvents = (
+  events: RawEvent[],
+  totalShares: number,
+  grantDate?: OCTDate,
+): { date: OCTDate; amount: number }[] =>
+  allocateWithProvenance(events, totalShares, grantDate).installments;

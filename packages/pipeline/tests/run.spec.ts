@@ -141,35 +141,51 @@ describe("runEvaluate", () => {
   });
 });
 
-// #401 (explicit-gap): the per-clause breakdown floors each clause against its own
-// cumulative, so on non-divisible fractions the per-clause amounts can sum to a
-// share less than the collapsed headline. This surfaces that gap in-band as
-// `breakdownResidual` (= Σheadline − Σbreakdown) plus a fixed `breakdownNote`,
-// WITHOUT changing any amount. The real reconcile is deferred to #442.
-describe("runEvaluate — breakdown residual (#401)", () => {
+// #442: the per-clause breakdown is a PARTITION of the one headline allocation —
+// each clause's slice of the single-cumulative round-down — so it sums to the
+// headline by construction (no residual, no marker). A clause adopts the headline's
+// odd-share placement rather than re-flooring against its own fresh cumulative.
+describe("runEvaluate — breakdown is a partition of the headline (#442)", () => {
   const sumBreakdown = (b: { installments: { amount: number }[] }[]) =>
     b.reduce((a, c) => a + sumInstallments(c.installments), 0);
+  const perEntry = (b: { installments: { amount: number }[] }[]) =>
+    b.map((c) => sumInstallments(c.installments));
 
-  // AC1: symbolic + resolved mix. The ipo clause is pending (33), the 2/3 clause
-  // resolves (66); breakdown sums to 99 against a headline of 100.
-  it("AC1: blocker case (symbolic + resolved) surfaces residual 1", () => {
-    const r = runEvaluate(
-      "1/3 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
-        "2/3 VEST OVER 1 month EVERY 1 month",
-      { grant_date: "2025-01-01", grant_quantity: 100 },
-    );
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(sumInstallments(r.view.installments)).toBe(100);
-    expect(sumBreakdown(r.breakdown)).toBe(99);
-    expect(r.breakdownResidual).toBe(1);
-    expect(typeof r.breakdownNote).toBe("string");
+  // AC1: a corpus of fully-resolved programs — the breakdown sums to the headline,
+  // including the canonical non-divisible 1/3 PLUS 1/3 PLUS 1/3 of 100.
+  it("AC1: by-construction sum across resolved programs", () => {
+    const cases: { dsl: string; q: number }[] = [
+      { dsl: "VEST OVER 12 months EVERY 1 month", q: 1200 },
+      {
+        dsl: "1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month",
+        q: 100,
+      },
+      {
+        dsl: "0.25 VEST OVER 12 months EVERY 1 month THEN 0.75 VEST OVER 36 months EVERY 1 month",
+        q: 48,
+      },
+      { dsl: "VEST OVER 4 years EVERY 1 month CLIFF 1 year", q: 100000 },
+      {
+        dsl: "VEST FROM EVENT ipo",
+        q: 1000,
+      },
+    ];
+    for (const { dsl, q } of cases) {
+      const r = runEvaluate(dsl, {
+        grant_date: "2025-01-01",
+        grant_quantity: q,
+        events: { ipo: "2025-06-01" },
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) continue;
+      expect(sumBreakdown(r.breakdown)).toBe(
+        sumInstallments(r.view.installments),
+      );
+    }
   });
 
-  // AC2/AC4: plain divide that rescues to a single headline line, while the
-  // breakdown keeps three per-clause floors (33 each). The residual is computed
-  // against the user-visible (rescued) headline and still reads 1.
-  it("AC2/AC4: rescue to one line keeps residual against the visible headline", () => {
+  // AC2: the odd share lands per the headline — 33/33/34, not 33/33/33.
+  it("AC2: odd share lands per the headline (33/33/34)", () => {
     const r = runEvaluate(
       "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
         "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
@@ -178,103 +194,303 @@ describe("runEvaluate — breakdown residual (#401)", () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // The headline rescues to one 100 line; the breakdown keeps three floors.
-    expect(sumInstallments(r.view.installments)).toBe(100);
     expect(r.breakdown).toHaveLength(3);
-    expect(sumBreakdown(r.breakdown)).toBe(99);
-    expect(r.breakdownResidual).toBe(1);
+    expect(perEntry(r.breakdown)).toEqual([33, 33, 34]);
+    expect(sumBreakdown(r.breakdown)).toBe(100);
+    expect(sumInstallments(r.view.installments)).toBe(100);
   });
 
-  // AC3: an even split ties, so the residual is 0 (still surfaced as a number,
-  // and the note still rides along).
-  it("AC3: even split ties at residual 0", () => {
+  // AC3: a resolved clause beside a pending-event clause still sums (counting the
+  // symbolic/UNRESOLVED amounts), and the pending clause keeps its blockers.
+  it("AC3: by-construction sum, partly pending / blocked", () => {
     const r = runEvaluate(
-      "0.5 VEST OVER 1 month EVERY 1 month PLUS " +
-        "0.5 VEST OVER 1 month EVERY 1 month",
+      "3/4 VEST OVER 12 months EVERY 1 month PLUS " +
+        "1/4 VEST FROM EVENT ipo OVER 12 months EVERY 1 month",
       { grant_date: "2025-01-01", grant_quantity: 100 },
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(sumInstallments(r.view.installments)).toBe(100);
-    expect(sumBreakdown(r.breakdown)).toBe(100);
-    expect(r.breakdownResidual).toBe(0);
-    expect(typeof r.breakdownNote).toBe("string");
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+    // The pending (ipo) clause is entry 1; its blockers are non-empty.
+    expect(r.breakdown[1].pendingBlockers.length).toBeGreaterThan(0);
+
+    // A pending-head THEN chain: the whole chain's claim still ties.
+    const chain = runEvaluate(
+      "1/3 VEST FROM EVENT ipo OVER 1 month EVERY 1 month " +
+        "THEN 2/3 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(chain.ok).toBe(true);
+    if (!chain.ok) return;
+    expect(chain.breakdown).toHaveLength(1);
+    expect(sumBreakdown(chain.breakdown)).toBe(
+      sumInstallments(chain.view.installments),
+    );
   });
 
-  // AC7: over-allocation. Two 2/3 grids on a 100-share grant reach 4/3 — valid is
-  // false. The residual is computed verbatim (66+67 headline − 66+66 breakdown =
-  // 1), and the note is NOT a validity claim.
-  it("AC7: residual is computed verbatim on a valid:false over-allocation", () => {
-    const r = runEvaluate(
+  // AC4: an all-void program does NOT sum to 0 — each void statement draws its full
+  // claim onto an IMPOSSIBLE installment, so the breakdown ties at the CLAIMED total.
+  it("AC4: all-void ties at the claimed total, per clause", () => {
+    const split = runEvaluate(
+      "2/3 VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01 OVER 1 month EVERY 1 month PLUS " +
+        "1/3 VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01 OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(split.ok).toBe(true);
+    if (!split.ok) return;
+    // The headline carries [66, 34], NOT 0; the breakdown matches per clause.
+    expect(split.view.installments.map((i) => i.amount)).toEqual([66, 34]);
+    expect(perEntry(split.breakdown)).toEqual([66, 34]);
+    expect(sumBreakdown(split.breakdown)).toBe(100);
+    // The dead clauses still carry their blockers.
+    expect(split.breakdown[0].deadBlockers.length).toBeGreaterThan(0);
+
+    const single = runEvaluate(
+      "VEST FROM DATE 2025-06-01 BEFORE DATE 2025-01-01 OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1200 },
+    );
+    expect(single.ok).toBe(true);
+    if (!single.ok) return;
+    expect(perEntry(single.breakdown)).toEqual([1200]);
+    expect(sumBreakdown(single.breakdown)).toBe(1200);
+  });
+
+  // AC5: an over-allocating schedule keeps its warning AND the breakdown ties to the
+  // (illegal) over-allocating headline. No residual/note appears.
+  it("AC5: over-allocating schedule still surfaces the warning, breakdown ties", () => {
+    const twoThirds = runEvaluate(
       "2/3 VEST OVER 1 month EVERY 1 month PLUS " +
         "2/3 VEST OVER 1 month EVERY 1 month",
       { grant_date: "2025-01-01", grant_quantity: 100 },
     );
+    expect(twoThirds.ok).toBe(true);
+    if (!twoThirds.ok) return;
+    expect(twoThirds.view.valid).toBe(false);
+    expect(
+      twoThirds.view.findings.some((f) => f.kind === "over-allocation"),
+    ).toBe(true);
+    expect(perEntry(twoThirds.breakdown)).toEqual([66, 67]);
+    expect(sumBreakdown(twoThirds.breakdown)).toBe(133);
+    expect(sumInstallments(twoThirds.view.installments)).toBe(133);
+    // The markers are gone.
+    expect("breakdownResidual" in twoThirds).toBe(false);
+    expect("breakdownNote" in twoThirds).toBe(false);
+
+    const sevenFifty = runEvaluate(
+      "750 VEST OVER 12 months EVERY 1 month PLUS 750 VEST OVER 12 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1000 },
+    );
+    expect(sevenFifty.ok).toBe(true);
+    if (!sevenFifty.ok) return;
+    expect(sevenFifty.view.valid).toBe(false);
+    expect(sumBreakdown(sevenFifty.breakdown)).toBe(
+      sumInstallments(sevenFifty.view.installments),
+    );
+  });
+
+  // AC6: a recovered #43-style schedule attributes to the ORIGINAL author clauses
+  // (one entry each), not the synthesized THEN-chain's segments.
+  it("AC6: recovered schedule attributes to original clauses", () => {
+    const r = runEvaluate(
+      "0.5 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS " +
+        "0.5 VEST FROM DATE 2024-03-01 OVER 4 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 800 },
+    );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.valid).toBe(false);
-    expect(sumInstallments(r.view.installments)).toBe(133);
-    expect(sumBreakdown(r.breakdown)).toBe(132);
-    expect(r.breakdownResidual).toBe(1);
-    // The note must not assert a correct grant total for an over-allocator.
-    expect(r.breakdownNote).not.toMatch(/authoritative total/i);
-    expect(r.breakdownNote).not.toMatch(/valid/i);
+    expect(r.recovered).toBeDefined();
+    // One entry per original clause, each its full 0.5 of 800 — a total-preserving
+    // mis-split ([800, 0]) would fail this.
+    expect(perEntry(r.breakdown)).toEqual([400, 400]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
   });
 
-  // AC4 as a property: across a spread of programs the residual is always a
-  // non-negative integer, and is 0 exactly when the breakdown ties the headline.
-  it("AC4: residual is a non-negative integer, 0 iff the breakdown ties", () => {
-    const cases: { dsl: string; q: number }[] = [
+  // AC12: a clause that rounds entirely to zero still yields one breakdown entry
+  // (installments: []), not a missing entry — the seed-over-the-whole-program
+  // invariant against allocateEvents dropping amount===0 rows.
+  it("AC12: a zero-rounding clause keeps an empty entry; sum still ties", () => {
+    // 1 share over two clauses: the single-cumulative allocator gives the share to
+    // the second clause (the first event rounds to 0 and drops), so the first
+    // clause rounds entirely to zero — but it KEEPS its entry (installments: []).
+    const r = runEvaluate(
+      "0.5 VEST OVER 1 month EVERY 1 month PLUS 0.5 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 1 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.breakdown).toHaveLength(2);
+    expect(perEntry(r.breakdown)).toEqual([0, 1]);
+    expect(r.breakdown[0].installments).toEqual([]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
+  // AC13: a backdated-start clause shows ONE merged grant-date tranche (today's
+  // per-clause fold shape), not several relocated rows.
+  it("AC13: a backdated start keeps its merged grant-date tranche", () => {
+    const r = runEvaluate(
+      "VEST FROM DATE 2024-06-01 OVER 12 months EVERY 1 month",
       {
-        dsl: "1/3 VEST OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 1 month EVERY 1 month",
-        q: 100,
-      },
-      {
-        dsl: "0.5 VEST OVER 1 month EVERY 1 month PLUS 0.5 VEST OVER 1 month EVERY 1 month",
-        q: 100,
-      },
-      {
-        dsl: "1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month PLUS 1/3 VEST OVER 1 month EVERY 1 month",
-        q: 100,
-      },
-      { dsl: "VEST OVER 12 months EVERY 1 month", q: 1200 },
-      {
-        dsl: "2/3 VEST OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 1 month EVERY 1 month",
-        q: 100,
-      },
-    ];
-    for (const { dsl, q } of cases) {
-      const r = runEvaluate(dsl, {
         grant_date: "2025-01-01",
-        grant_quantity: q,
-      });
-      expect(r.ok).toBe(true);
-      if (!r.ok) continue;
-      const residual = r.breakdownResidual;
-      expect(residual).toBeDefined();
-      if (residual === undefined) continue;
-      expect(Number.isInteger(residual)).toBe(true);
-      expect(residual).toBeGreaterThanOrEqual(0);
-      const ties =
-        sumInstallments(r.view.installments) === sumBreakdown(r.breakdown);
-      expect(residual === 0).toBe(ties);
-    }
+        grant_quantity: 1200,
+      },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.breakdown).toHaveLength(1);
+    const inst = r.breakdown[0].installments;
+    // Six pre/at-grant occurrences merge to one 700 tranche on the grant date,
+    // then five 100s — not eleven separate rows.
+    expect(inst.map((i) => (i.state === "RESOLVED" ? i.date : null))).toEqual([
+      "2025-01-01",
+      "2025-02-01",
+      "2025-03-01",
+      "2025-04-01",
+      "2025-05-01",
+      "2025-06-01",
+    ]);
+    expect(inst[0].amount).toBe(700);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
   });
 
-  // AC8: when the breakdown degrades to empty, both fields are omitted — there's
-  // nothing to reconcile, and a residual equal to the whole grant would mislead.
-  it("AC8: a degraded (empty) breakdown omits both fields", () => {
+  // SD6 cross-segment merge: a backdated MULTI-statement THEN chain whose two
+  // segments BOTH have pre-grant occurrences. AC13 covers only the single-statement
+  // (intra-statement) fold; here the chain-group union must merge BOTH segments'
+  // pre-grant rows into ONE grant-date tranche, then keep the post-grant rows in
+  // (date, statementOrder, occurrence) order — the SD6 claim a per-member-only
+  // coalesce would miss (it would leave two same-date grant tranches).
+  it("a backdated multi-statement THEN chain merges both segments to one grant tranche", () => {
+    // Segment 1 (2024-06-01 OVER 4): occurrences 2024-07..2024-10, all pre-grant.
+    // Segment 2 (handoff 2024-10-01 OVER 4): 2024-11, 2024-12 pre-grant, 2025-01 AT
+    // grant, 2025-02 post-grant. Each occurrence is 1/8 of 800 = 100.
+    const r = runEvaluate(
+      "0.5 VEST FROM DATE 2024-06-01 OVER 4 months EVERY 1 month THEN " +
+        "0.5 VEST OVER 4 months EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 800 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // One entry for the whole chain. The grant-date tranche is 700 — segment 1's
+    // four pre-grant rows (400) PLUS segment 2's two pre-grant rows and its at-grant
+    // row (300). 700 exceeds either segment alone, so it can only come from merging
+    // across both members; then the lone post-grant row (2025-02-01) stays separate.
+    expect(r.breakdown).toHaveLength(1);
+    expect(r.breakdown[0].installments).toEqual([
+      { state: "RESOLVED", amount: 700, date: "2025-01-01" },
+      { state: "RESOLVED", amount: 100, date: "2025-02-01" },
+    ]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
+  // AC10: the events/dated arm keys statementOrder in PROGRAM order — a non-dated
+  // statement before a dated one keeps the dated statement's program-order key, and
+  // the headline byte stream is unchanged from before the re-keying.
+  it("AC10: a non-dated clause before a dated one keeps program-order keying", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
+        "1/2 VEST OVER 1 month EVERY 1 month",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Entry 0 (the pending ipo clause) is symbolic; entry 1 (the dated clause) is
+    // the dated 50.
+    expect(
+      r.breakdown[0].installments.every((i) => i.state === "UNRESOLVED"),
+    ).toBe(true);
+    expect(r.breakdown[1].installments).toEqual([
+      { state: "RESOLVED", amount: 50, date: "2025-02-01" },
+    ]);
+    // Headline byte stream pinned (pre-#442 capture): dated 50 then symbolic 50.
+    expect(r.view.installments).toEqual([
+      { state: "RESOLVED", amount: 50, date: "2025-02-01" },
+      {
+        state: "UNRESOLVED",
+        amount: 50,
+        symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+      },
+    ]);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
+  // A void dated sibling reaches the events arm when a contingent (event) start
+  // forces the program off the template via MULTIPLE_START_ORIGINS — which fires
+  // ahead of buildTemplate's cliff-IMPOSSIBLE guard, so the void dated statement
+  // never gets poisoned to the unresolved arm. Its IMPOSSIBLE shares must be SHOWN
+  // in the headline (the way an all-void program shows its dead shares), never
+  // skipped — otherwise the headline drops them while the partition keeps them, and
+  // the by-construction tie breaks (the #442 events-arm membership bug). The events
+  // arm now splits on `isDated`, agreeing with the partition.
+  it("contingent start + a void dated sibling: impossible shares show in the headline and tie", () => {
+    const r = runEvaluate(
+      "1/2 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
+        "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month " +
+        "CLIFF vestingStart + 6 months BEFORE DATE 2020-01-01",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Both clauses are accounted for: 50 pending (clause 1) + 50 impossible
+    // (clause 2). The headline is no longer just [UNRESOLVED 50].
+    const unresolved = r.view.installments.filter(
+      (i) => i.state === "UNRESOLVED",
+    );
+    const impossible = r.view.installments.filter(
+      (i) => i.state === "IMPOSSIBLE",
+    );
+    expect(sumInstallments(unresolved)).toBe(50);
+    expect(sumInstallments(impossible)).toBe(50);
+    expect(sumInstallments(r.view.installments)).toBe(100);
+    // The partition ties the (now correct) headline, attributing 50 UNRESOLVED to
+    // clause 1 and 50 IMPOSSIBLE to clause 2.
+    expect(r.breakdown).toHaveLength(2);
+    expect(perEntry(r.breakdown)).toEqual([50, 50]);
+    expect(
+      r.breakdown[0].installments.every((i) => i.state === "UNRESOLVED"),
+    ).toBe(true);
+    expect(
+      r.breakdown[1].installments.every((i) => i.state === "IMPOSSIBLE"),
+    ).toBe(true);
+    expect(sumBreakdown(r.breakdown)).toBe(
+      sumInstallments(r.view.installments),
+    );
+  });
+
+  // AC14: a blocker-channel failure does NOT sink the amount channel — the
+  // breakdown still carries one amount-bearing entry per chain-group (sum ties),
+  // and only the blocker lists degrade to empty.
+  it("AC14: blocker-channel failure leaves the amount channel intact", () => {
     failClauseBreakdown = true;
     try {
-      const r = runEvaluate("VEST OVER 12 months EVERY 1 month", {
-        grant_date: "2025-01-01",
-        grant_quantity: 100,
-      });
+      const r = runEvaluate(
+        "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
+          "1/3 VEST OVER 1 month EVERY 1 month PLUS " +
+          "1/3 VEST OVER 1 month EVERY 1 month",
+        { grant_date: "2025-01-01", grant_quantity: 100 },
+      );
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect(r.breakdown).toEqual([]);
-      expect(r.breakdownResidual).toBeUndefined();
-      expect(r.breakdownNote).toBeUndefined();
+      // The breakdown is NOT []: one amount-bearing entry per clause, summing to
+      // the headline, with empty blocker lists.
+      expect(r.breakdown).toHaveLength(3);
+      expect(sumBreakdown(r.breakdown)).toBe(
+        sumInstallments(r.view.installments),
+      );
+      for (const entry of r.breakdown) {
+        expect(entry.pendingBlockers).toEqual([]);
+        expect(entry.deadBlockers).toEqual([]);
+      }
     } finally {
       failClauseBreakdown = false;
     }

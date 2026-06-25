@@ -16,8 +16,6 @@ import type {
   EvaluatedScheduleVerdict,
   InterchangeVerdict,
 } from "@vestlang/types";
-import { compileToInstallments } from "@vestlang/core";
-import { makeResolvedInstallment } from "./interpret/makeTranches.js";
 import { partitionResolutionBlockers } from "./interpret/blockerTree.js";
 import { collectAbsences } from "./interpret/absences.js";
 import type { ResolveResult } from "./resolve/types.js";
@@ -29,11 +27,6 @@ import type { ResolveResult } from "./resolve/types.js";
 const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
   switch (result.kind) {
     case "template": {
-      const compiled = compileToInstallments(
-        result.template,
-        result.totalShares,
-        result.runtime,
-      );
       // Pending witnesses (unfired atomic EVENT starts). A `template` can be
       // representable yet carry blockers + an empty/partial projection.
       const { pending, dead } = partitionResolutionBlockers(result.blockers);
@@ -42,13 +35,12 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
         template: result.template,
         runtime: result.runtime,
         sourceMap: result.sourceMap, // synthetic-event definitions (may be {})
-        // Dated tranches first, then symbolic UNRESOLVED ones for any pending
-        // EVENT-based statements (unfired atomic events / unsettled combinators).
-        // The pending installments are empty when every statement has a known start.
-        installments: [
-          ...compiled.map((c) => makeResolvedInstallment(c.date, c.amount)),
-          ...result.pendingInstallments,
-        ],
+        // Dated tranches first (allocated by the resolver off the shared
+        // expansion, so byte-identical to core.compile), then symbolic UNRESOLVED
+        // ones for any pending EVENT-based statements (unfired atomic events /
+        // unsettled combinators). The pending installments are empty when every
+        // statement has a known start.
+        installments: [...result.installments, ...result.pendingInstallments],
         pending,
         dead,
       };

@@ -7,23 +7,27 @@
 // The signatures deliberately differ — an "as of" date only appears where it
 // means something. Don't fold them back into one ctx argument.
 
-import { evaluateProgramAsOf, evaluateClauseGroups } from "@vestlang/evaluator";
+import {
+  evaluateProgramAsOf,
+  evaluateClauseGroups,
+  chainGroupIndices,
+  type StatementContribution,
+} from "@vestlang/evaluator";
+import { coalesceAtGrantDate } from "@vestlang/primitives";
 import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type {
   Finding,
   Installment,
   OCTDate,
+  Program,
+  ResolutionContextInput,
+  ResolvedInstallment,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
 import { buildContext, buildAsOfContext } from "./context.js";
-import {
-  computeSummary,
-  filterByWindow,
-  sumAmounts,
-  type Summary,
-} from "./summary.js";
+import { computeSummary, filterByWindow, type Summary } from "./summary.js";
 import { errorFindings, formatFinding } from "./findings.js";
 
 // The grant a schedule is evaluated against. `events.grantDate` is injected by
@@ -93,78 +97,105 @@ export type WindowView = {
 // tail has no start without its head) and so report as one entry. No verdict — a
 // clause has no storable schedule of its own (the grant stores one template). This
 // is for attribution: which clause produced what, and which is still waiting on
-// something. Each clause is its own evaluation against the whole grant, so floor
-// rounding telescopes only within a clause — on non-divisible portions the
-// breakdown's amounts can differ from the collapsed schedule's by a share (1/3 PLUS
-// 2/3 of 100 reads 33 + 66 against a collapsed 100). The collapsed schedule is the
-// authority; the breakdown explains, it doesn't reconcile.
+// something. The amounts are a true PARTITION of the headline allocation — each
+// clause's slice of the one single-cumulative allocation — so they sum to the
+// collapsed schedule by construction (a clause adopts the headline's odd-share
+// placement, e.g. 1/3 PLUS 1/3 PLUS 1/3 of 100 reads 33/33/34 here and in the
+// headline). When the headline itself over-allocates, the partition still ties to
+// it, but that total isn't a legal allocation — `valid`/`findings` carry that.
 export type ClauseBreakdown = Pick<
   ScheduleView,
   "installments" | "pendingBlockers" | "deadBlockers"
 >;
 
-// Attribute the program to its clause-groups. A second resolution pass, separate
-// from the collapse — the only way to keep each clause's tranches apart once the
-// collapse has merged them. Wrapped so a breakdown failure degrades to no
-// breakdown rather than sinking the whole-program result, which already succeeded.
+// A chain-group's installments: the union of its member statements' partition
+// slices, re-coalesced at the grant date so a THEN chain's pre-grant rows across
+// its segments merge into one grant-date tranche (a backdated start shows one
+// merged tranche, not several). Dated tranches lead, symbolic ones follow — the
+// per-clause shape a separate evaluation produced before.
+function groupInstallments(
+  members: StatementContribution[],
+  grantDate: OCTDate,
+): Installment[] {
+  const dated: { date: OCTDate; statementOrder: number; amount: number }[] = [];
+  const symbolic: Installment[] = [];
+  for (const m of members) {
+    for (const inst of m.installments) {
+      if (inst.state === "RESOLVED")
+        dated.push({
+          date: inst.date,
+          statementOrder: m.statementOrder,
+          amount: inst.amount,
+        });
+      else symbolic.push(inst);
+    }
+  }
+  const coalesced = coalesceAtGrantDate(dated, grantDate).map(
+    (t): ResolvedInstallment => ({
+      state: "RESOLVED",
+      amount: t.amount,
+      date: t.date,
+    }),
+  );
+  return [...coalesced, ...symbolic];
+}
+
+// Attribute the program to its clause-groups, joining TWO channels positionally by
+// chain-group index. The AMOUNT channel is the program's partition
+// (`contributions`) rolled up by THEN chain — a true partition of the headline, so
+// it sums by construction and CANNOT throw (it's read off the already-computed
+// outcome). The BLOCKER channel is `evaluateClauseGroups`'s per-clause
+// pending/dead lists; it re-resolves each clause and so CAN throw. Both passes
+// group the SAME (original) program by the same chain logic, so they emit entries
+// in the same order. Only the blocker pass is wrapped: on its failure the
+// amount-bearing entries still stand with empty blocker lists, so the breakdown
+// never degrades to `[]` (which would silently re-open the sum gap).
 function clauseBreakdown(
-  program: Parameters<typeof evaluateClauseGroups>[0],
-  ctx: Parameters<typeof evaluateClauseGroups>[1],
+  program: Program,
+  ctx: ResolutionContextInput,
+  contributions: StatementContribution[],
+  grantDate: OCTDate,
 ): ClauseBreakdown[] {
+  const groupIndex = chainGroupIndices(program);
+  const groups: StatementContribution[][] = [];
+  contributions.forEach((c, i) => {
+    const g = groupIndex[i];
+    (groups[g] ??= []).push(c);
+  });
+  const amounts = groups.map((members) =>
+    groupInstallments(members, grantDate),
+  );
+
+  let blockers:
+    | Pick<ScheduleView, "pendingBlockers" | "deadBlockers">[]
+    | undefined;
   try {
-    return evaluateClauseGroups(program, ctx)
+    blockers = evaluateClauseGroups(program, ctx)
       .map(toScheduleView)
-      .map(({ installments, pendingBlockers, deadBlockers }) => ({
-        installments,
+      .map(({ pendingBlockers, deadBlockers }) => ({
         pendingBlockers,
         deadBlockers,
       }));
   } catch {
-    return [];
+    blockers = undefined;
   }
+
+  return amounts.map((installments, g) => ({
+    installments,
+    pendingBlockers: blockers?.[g]?.pendingBlockers ?? [],
+    deadBlockers: blockers?.[g]?.deadBlockers ?? [],
+  }));
 }
-
-// Fixed sentence carried in-band so a consumer reading only the JSON learns the
-// breakdown is attribution-only and which figure is authoritative — it doesn't
-// have to consult the tool description. Worded so it's NOT a validity claim: it
-// says the collapsed schedule is the figure to reconcile *against*, not that the
-// grant total is correct (the schedule may itself over-allocate; `valid`/
-// `findings` carry that verdict).
-const BREAKDOWN_NOTE =
-  "Per-clause amounts are attribution-only and floored independently; they can " +
-  "sum to less than the headline by the rounding residual. Reconcile per-clause " +
-  "amounts against the collapsed schedule, not the other way around.";
-
-// The rounding residual: the headline the user sees (post-recovery) minus the sum
-// of every breakdown entry's installments. Each clause floors against its own
-// fresh cumulative, so on non-divisible fractions the per-clause floors can sum to
-// a share less than the collapsed headline; this surfaces that gap as a number
-// (typically 1, 0 when they tie). It stays well-defined when the headline is a
-// rescued single line — we subtract from `view.installments`, the figure the user
-// reads — and is computed verbatim even on an over-allocating (`valid: false`)
-// schedule, since it's still Σheadline − Σbreakdown there. Returned non-negative
-// by construction: the collapse recovers the odd share the per-clause floors drop,
-// so it never under-counts the breakdown.
-const breakdownResidual = (
-  installments: Installment[],
-  breakdown: ClauseBreakdown[],
-): number =>
-  sumAmounts(installments) -
-  breakdown.reduce((a, b) => a + sumAmounts(b.installments), 0);
 
 // Evaluate a grant. The program collapses into ONE schedule with one verdict and
 // one allocation finding (`view`); on top of that the breakdown shows what each
-// clause contributed, for callers that want per-clause attribution.
+// clause contributed, as a partition of that one allocation — so the per-clause
+// amounts sum to the headline by construction.
 //
 // The collapse runs template recovery: an events-only program whose realized
 // projection happens to have a single-template form is rescued back to a
-// template, transparently.
-//
-// `breakdownResidual`/`breakdownNote` ride along only when there's a breakdown to
-// reconcile — a degraded (empty) breakdown omits both, since there's nothing to
-// compare against and a residual equal to the whole grant would mislead. The real
-// reconcile (making the per-clause floors themselves sum to the headline) is
-// deferred to #442; this only makes the existing gap visible.
+// template, transparently. The breakdown attributes to the ORIGINAL author
+// clauses either way (the partition is the pre-rescue one).
 export function runEvaluate(
   dsl: string,
   g: GrantInput,
@@ -172,8 +203,6 @@ export function runEvaluate(
   view: ScheduleView;
   recovered?: RecoveredView;
   breakdown: ClauseBreakdown[];
-  breakdownResidual?: number;
-  breakdownNote?: string;
 }> {
   const parsed = parseToProgram(dsl);
   if (!parsed.ok) return parsed;
@@ -181,7 +210,12 @@ export function runEvaluate(
   try {
     const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
     const view = toScheduleView(outcome.schedule);
-    const breakdown = clauseBreakdown(parsed.program, ctx);
+    const breakdown = clauseBreakdown(
+      parsed.program,
+      ctx,
+      outcome.contributions,
+      g.grant_date,
+    );
     const recovered = outcome.rescued
       ? {
           from: outcome.recovered.from,
@@ -197,15 +231,6 @@ export function runEvaluate(
       view,
       breakdown,
       ...(recovered ? { recovered } : {}),
-      // Omit both when the breakdown degraded to empty — there's nothing to
-      // reconcile, and a residual equal to the whole grant would read as a gap
-      // that isn't one.
-      ...(breakdown.length > 0
-        ? {
-            breakdownResidual: breakdownResidual(view.installments, breakdown),
-            breakdownNote: BREAKDOWN_NOTE,
-          }
-        : {}),
     };
   } catch (err) {
     return { ok: false, error: toEvaluationError(err) };

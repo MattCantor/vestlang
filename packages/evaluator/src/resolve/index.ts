@@ -16,11 +16,12 @@ import type {
   VestingScheduleTemplate,
 } from "@vestlang/types";
 import {
+  allocateWithProvenance,
   installmentCapMessage,
   lt,
   MAX_INSTALLMENTS,
 } from "@vestlang/primitives";
-import { assertValidVestingScheduleTemplate } from "@vestlang/core";
+import { expandTemplateToRawEvents } from "@vestlang/core";
 import { programInstallmentTotal } from "@vestlang/walk";
 import {
   allocationFindingsFromFractions,
@@ -28,16 +29,17 @@ import {
   numericToFraction,
 } from "@vestlang/utils";
 import { createEvaluationContext } from "../utils.js";
+import { makeResolvedInstallment } from "../interpret/makeTranches.js";
 import { eventCaseFindings } from "./event-case.js";
 import { resolveStatements, buildTemplate } from "./lower.js";
 import type { StmtResolution } from "./lower.js";
-import { classify } from "./classify.js";
-import {
-  isDatedStart,
-  unresolvedInstallments,
-  symbolicClaims,
-} from "./unresolved.js";
-import type { ResolveResult, ResolveVerdict } from "./types.js";
+import { classify, buildStatementContributions } from "./classify.js";
+import { isDatedStart, symbolicClaims } from "./unresolved.js";
+import type {
+  ResolveResult,
+  ResolveVerdict,
+  StatementContribution,
+} from "./types.js";
 
 // The template arm's stored statement fractions, index-aligned to the resolutions.
 // A cliff's basis on this arm must be the *stored* statement decimal the realizer
@@ -112,50 +114,48 @@ export const resolveToCore = (
   });
 
   let verdict: ResolveVerdict;
+  let contributions: StatementContribution[];
   if (build.ok) {
-    assertValidVestingScheduleTemplate(build.template);
+    // Expand + allocate once off the shared core expansion (which retains the
+    // safe-integer guard and BOTH assertValid* checks — so the template/runtime is
+    // validated here, replacing the standalone assertValidVestingScheduleTemplate
+    // that used to sit on this line). `installments` is byte-identical to
+    // core.compile; `contributions` carries the per-event provenance the breakdown
+    // partition is built from.
+    const alloc = allocateWithProvenance(
+      expandTemplateToRawEvents(
+        build.template,
+        build.totalShares,
+        build.runtime,
+      ),
+      build.totalShares,
+      build.runtime.grantDate,
+    );
+    const installments = alloc.installments.map((t) =>
+      makeResolvedInstallment(t.date, t.amount),
+    );
 
-    // Collect symbolic installments for statements whose start is still pending —
-    // a contingent-start head (unfired atomic event / unsettled combinator) AND the
-    // pending-tails chained behind it. core.compile skips the whole contingent
-    // template (the sentinel-skip), so without this the tails' share claims would
-    // vanish from the stream — the conservation bug a single-event-head THEN chain
-    // would otherwise hit, now that such a chain is a `template` rather than
-    // `unresolved`.
-    //
-    // Lump amounts come from the program-wide claim cursor, so pending claims +
-    // compiled tranches telescope to the same total the allocator will deliver.
-    //
-    // Notes on what we discard from the producer:
-    //  - Blockers: buildTemplate already gathered the contingent head's blockers
-    //    onto build.blockers, and under a template-ok build every cliff is NONE
-    //    or RESOLVED, so the producer would return the same blockers again —
-    //    pushing them would duplicate every pending blocker.
-    //  - The inst.state check is type narrowing, not filtering: a pending start
-    //    produces only UNRESOLVED installments (one whole-portion lump, or
-    //    start+N steps for a partially-settled combinator / a pending-tail).
-    //  - A dated start whose event-held cliff hasn't fired is also collected: the
-    //    whole grid is held, so core.compile emits nothing for it, and without this
-    //    its claim would vanish from the stream. unresolvedInstallments renders it
-    //    as the held (symbolic) tranches. A *fired* held cliff is materialized by
-    //    core.compile instead, so it's excluded here.
+    // The per-statement partition, seeded over the whole program. The pending
+    // channel (the symbolic installments for statements whose start is still
+    // pending — a contingent-start head and the pending-tails behind it, plus a
+    // dated start whose event-held cliff hasn't fired) is exactly the non-dated
+    // statements' slice of that partition, so we read it straight off rather than
+    // re-running the producer. core.compile skips a contingent template (the
+    // sentinel-skip), so these symbolic claims are what keep the held shares in the
+    // stream — and they telescope to the same total the allocator delivers.
     const claims = symbolicClaims(resolutions, totalShares);
-    const pendingInstallments: UnresolvedInstallment[] = [];
-    resolutions.forEach((r, i) => {
-      const heldUnfired =
-        r.cliff.state === "EVENT_HELD" && r.cliff.firing === undefined;
-      if (
-        r.start.state === "PENDING_EVENT" ||
-        r.start.state === "SYNTHETIC_EVENT" ||
-        r.chain.role === "pending-tail" ||
-        heldUnfired
-      ) {
-        for (const inst of unresolvedInstallments(r, ctx, claims[i])
-          .installments) {
-          if (inst.state === "UNRESOLVED") pendingInstallments.push(inst);
-        }
-      }
-    });
+    contributions = buildStatementContributions(
+      resolutions,
+      alloc.contributions,
+      claims,
+      ctx,
+    );
+    const pendingInstallments: UnresolvedInstallment[] = contributions.flatMap(
+      (c) =>
+        c.installments.filter(
+          (inst): inst is UnresolvedInstallment => inst.state === "UNRESOLVED",
+        ),
+    );
 
     verdict = {
       kind: "template",
@@ -163,13 +163,16 @@ export const resolveToCore = (
       runtime: build.runtime,
       totalShares: build.totalShares,
       sourceMap: build.sourceMap,
+      installments,
       blockers: build.blockers,
       pendingInstallments,
     };
   } else {
     // Doesn't fit one template: classify into the non-template arms (events /
     // unresolved, or the all-void rollup to impossible). See `classify`.
-    verdict = classify(build);
+    const classified = classify(build);
+    verdict = classified.verdict;
+    contributions = classified.contributions;
   }
 
   // Read the literal user-supplied firings (`ctxInput.events`), not the rebuilt
@@ -183,6 +186,7 @@ export const resolveToCore = (
       ...precision,
       ...eventCaseFindings(program, ctxInput.events),
     ],
+    contributions,
   };
 };
 

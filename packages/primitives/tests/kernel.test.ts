@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Fraction, OCTDate } from "@vestlang/types";
 import {
   allocateEvents,
+  allocateWithProvenance,
   expandGrid,
   gridDate,
   type GridCliff,
@@ -492,4 +493,71 @@ describe("allocateEvents", () => {
       { date: "2025-02-01", amount: 100 },
     ]);
   });
+});
+
+// #442: allocateWithProvenance must agree with allocateEvents on the headline,
+// byte for byte, and its per-event provenance must conserve the same total.
+describe("allocateWithProvenance", () => {
+  // A spread of event bags: a plain grid, a mixed multi-statement same-date bag,
+  // a non-divisible split, and a backdated grid that folds onto the grant date.
+  const bags: {
+    label: string;
+    events: RawEvent[];
+    total: number;
+    grant?: OCTDate;
+  }[] = [
+    { label: "plain 4-grid", events: grid(4, { kind: "none" }), total: 1000 },
+    {
+      label: "non-divisible 3-grid",
+      events: grid(3, { kind: "none" }),
+      total: 100,
+    },
+    {
+      label: "two same-date statements",
+      events: [
+        {
+          date: "2025-02-01",
+          fractionOfGrant: frac(1, 3),
+          statementOrder: 1,
+          occurrence: 1,
+        },
+        {
+          date: "2025-02-01",
+          fractionOfGrant: frac(1, 3),
+          statementOrder: 2,
+          occurrence: 1,
+        },
+        {
+          date: "2025-02-01",
+          fractionOfGrant: frac(1, 3),
+          statementOrder: 3,
+          occurrence: 1,
+        },
+      ],
+      total: 100,
+    },
+    {
+      label: "backdated grid folding onto the grant date",
+      events: grid(6, { kind: "none" }, 1, "2024-10-01"),
+      total: 600,
+      grant: "2025-01-01",
+    },
+  ];
+
+  for (const { label, events, total, grant } of bags) {
+    it(`agrees with allocateEvents and conserves the total: ${label}`, () => {
+      const prov = allocateWithProvenance(events, total, grant);
+      // The headline is byte-identical to allocateEvents.
+      expect(prov.installments).toEqual(allocateEvents(events, total, grant));
+      // The contributions conserve the same total.
+      const sum = (xs: { amount: number }[]) =>
+        xs.reduce((a, x) => a + x.amount, 0);
+      expect(sum(prov.contributions)).toBe(sum(prov.installments));
+      // Every contribution carries its source statement and a folded date (no
+      // contribution sits before the grant date).
+      if (grant !== undefined) {
+        for (const c of prov.contributions) expect(c.date >= grant).toBe(true);
+      }
+    });
+  }
 });

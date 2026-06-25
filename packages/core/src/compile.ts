@@ -177,15 +177,20 @@ const expandStatement = (
 };
 
 /**
- * Core compile, numeric. Expands every statement onto the shared grid, then hands
- * the whole event stream to the kernel's allocator, which orders it and turns the
- * fractions into exact integer shares (with the grant-date fold applied).
+ * Expand a template + runtime to the raw fraction-events the allocator consumes —
+ * the front half of `compile`, split out so the evaluator can run its own
+ * provenance-carrying allocate over the same expansion (one allocation algorithm
+ * feeds the public compile path and the eval-time breakdown). It RETAINS the full
+ * compile-path validation: the safe-integer guard plus both `assertValid*` checks,
+ * so no caller gets a silently-unvalidated expansion. The output is a pre-allocation
+ * `RawEvent[]` carrying the `statementOrder` core already stamps — categorically not
+ * an installment and not attribution.
  */
-const compileRaw = (
+export const expandTemplateToRawEvents = (
   template: VestingScheduleTemplate,
   totalShares: number,
   runtime: VestingRuntime,
-): CompiledInstallment[] => {
+): RawEvent[] => {
   // Safe-integer, not merely integer: Number.isInteger(2 ** 53 + 2) is true,
   // but the allocator's Number cast needs MAX_SAFE (see floorSharesAt).
   if (!Number.isSafeInteger(totalShares) || totalShares < 0) {
@@ -216,9 +221,24 @@ const compileRaw = (
     rawEvents.push(...result.events);
     dateCursor = result.nextCursor;
   }
-
-  return allocateEvents(rawEvents, totalShares, runtime.grantDate);
+  return rawEvents;
 };
+
+/**
+ * Core compile, numeric. Expands every statement onto the shared grid, then hands
+ * the whole event stream to the kernel's allocator, which orders it and turns the
+ * fractions into exact integer shares (with the grant-date fold applied).
+ */
+const compileRaw = (
+  template: VestingScheduleTemplate,
+  totalShares: number,
+  runtime: VestingRuntime,
+): CompiledInstallment[] =>
+  allocateEvents(
+    expandTemplateToRawEvents(template, totalShares, runtime),
+    totalShares,
+    runtime.grantDate,
+  );
 
 /**
  * Compile to numeric installments ({ date, amount: number }), for extended's
