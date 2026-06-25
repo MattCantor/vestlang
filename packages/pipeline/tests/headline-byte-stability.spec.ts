@@ -166,6 +166,48 @@ describe("headline byte-stability — golden literals (#442 / D1)", () => {
     ).toEqual([{ state: "IMPOSSIBLE", amount: 1200 }]);
   });
 
+  // DELIBERATE CARVE-OUT — the one program whose headline this change INTENTIONALLY
+  // moves. Every other literal in this file is a pre-change capture asserted to be
+  // unchanged; this one is the post-change CORRECTED headline, deliberately NOT
+  // byte-identical to the old code, and pinned here so the change is on the record.
+  //
+  // The program pairs a contingent event start (clause 1, waiting on `ipo`) with a
+  // statically-dead dated clause (clause 2: its cliff demands a 2025-07-01 date fall
+  // BEFORE 2020-01-01, which it never can). The contingent sibling forces the whole
+  // grant off the single-template path, and the dead clause rides along into the same
+  // multi-grid stream. The OLD code silently dropped clause 2's 50 shares from this
+  // stream — it emitted only `[UNRESOLVED 50]` and the missing 50 vanished from the
+  // headline while still showing up in the per-clause breakdown, so the two no longer
+  // added up. The fix routes the dead clause through the symbolic renderer like every
+  // other non-vesting clause, so its 50 dead shares now SHOW as IMPOSSIBLE rows. The
+  // headline is therefore the full grant again (50 pending + 50 impossible = 100) and
+  // the per-clause breakdown sums back to it. This corrects a pre-existing
+  // share-dropping bug; it is the expected difference from the prior code, not a
+  // regression.
+  it("CARVE-OUT: contingent start + a dead dated sibling now shows the dropped 50", () => {
+    expect(
+      headline(
+        "1/2 VEST FROM EVENT ipo OVER 1 month EVERY 1 month PLUS " +
+          "1/2 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month " +
+          "CLIFF vestingStart + 6 months BEFORE DATE 2020-01-01",
+        { grant_date: "2025-01-01", grant_quantity: 100 },
+      ),
+    ).toEqual([
+      // Clause 1 — the whole pending half on one undated row.
+      {
+        state: "UNRESOLVED",
+        amount: 50,
+        symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+      },
+      // Clause 2 — its 50 dead shares, spread across the grid it would have vested
+      // on, now SHOWN as IMPOSSIBLE (the old code dropped these entirely).
+      ...[4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 5].map((amount) => ({
+        state: "IMPOSSIBLE" as const,
+        amount,
+      })),
+    ]);
+  });
+
   it("persist/rehydrate projection for a resolved contingent start", () => {
     const persisted = runPersist({
       dsl: "VEST FROM EVENT ipo OVER 12 months EVERY 1 month",

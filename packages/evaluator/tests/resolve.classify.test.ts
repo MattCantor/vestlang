@@ -16,6 +16,7 @@ import type {
 } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
 import { classify } from "../src/resolve/classify";
+import { isDated } from "../src/resolve/unresolved";
 import type { StmtResolution } from "../src/resolve/lower";
 import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
@@ -28,6 +29,7 @@ import {
   makeVestingBaseEvent,
   makeVestingBaseGrantDate,
   makeDuration,
+  makeImpossibleConditionBlocker,
   makeVestingBaseVestingStart,
 } from "./helpers";
 
@@ -1161,6 +1163,49 @@ describe("classify — the events arm surfaces a committed floor's disclosures (
       why: "events",
       reason: { kind: "OVERLAPPING_ABSOLUTE_STARTS" },
       resolutions: [committed, resolvedSibling],
+      ctx: baseCtx({ grantDate: "2024-01-01", grantQuantity: 4800 }),
+    });
+    expect(verdict.kind).toBe("events");
+    expect(verdict.blockers).toContainEqual(ipoBlocker);
+  });
+
+  // Same committed floor, but now its own cliff can't place a grid (a dead
+  // BEFORE/AFTER gate → IMPOSSIBLE). That sends the statement down the SYMBOLIC
+  // branch of the events arm rather than the dated one — the symbolic renderer reads
+  // the cliff, not the start's absence assumptions, so it never re-derives the
+  // floor's disclosures. They survive only because the arm harvests
+  // `disclosuresOf(start)` for every statement up front, before it splits dated from
+  // symbolic. This codebase has lost disclosures exactly this way before (a renderer
+  // that only surfaced them on one branch), so pin that a committed floor riding the
+  // symbolic branch still discloses.
+  const committedDeadCliff: StmtResolution = {
+    percentage: { numerator: 1, denominator: 2 },
+    periodicity: monthly2,
+    start: {
+      state: "COMMITTED",
+      date: "2024-06-01",
+      base: { type: "DATE" },
+      disclosures: [ipoBlocker],
+    },
+    cliff: {
+      state: "IMPOSSIBLE",
+      blockers: [
+        makeImpossibleConditionBlocker(makeVestingBaseDate("2020-01-01")),
+      ],
+    },
+    chain: headHead,
+  };
+
+  it("a committed floor on the symbolic branch (dead cliff) still discloses", () => {
+    // The dead cliff means this statement is NOT dated, so it cannot take the dated
+    // branch that the old code relied on to push the disclosure.
+    expect(isDated(committedDeadCliff)).toBe(false);
+
+    const { verdict } = classify({
+      ok: false,
+      why: "events",
+      reason: { kind: "MULTIPLE_START_ORIGINS" },
+      resolutions: [committedDeadCliff, resolvedSibling],
       ctx: baseCtx({ grantDate: "2024-01-01", grantQuantity: 4800 }),
     });
     expect(verdict.kind).toBe("events");
