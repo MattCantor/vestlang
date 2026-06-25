@@ -274,23 +274,19 @@ function handleSelector<T extends Schedule | VestingNode>(
   // Partial resolution branch for LATER_OF: emit the known floor for the
   // projection but keep the meta UNRESOLVED (the resolved arm is an upper bound).
   if (policy.partialEmit && !allSettled && hasAnySettled) {
-    const best = reduceBest(settled, policy.selector);
+    const { picked, date } = reduceBest(settled, policy.selector);
     // The latest arm settled so far is the answer only as long as the arms we're
     // still waiting on don't land even later. So its date is the boundary we're
     // assuming each of those pending events stays absent through — and a firing
     // *after* it is the dangerous one (it would push the floor later).
     const stamped = withBoundary(
       collectBlockers(live),
-      best.date,
+      date,
       policy.disclosure,
     );
     return {
       type: "PICKED",
-      picked: best.picked,
-      // The latest settled arm's date is the pivot: a lower bound the pending arms
-      // can only push later. This is the single origin of that value — the cliff
-      // lowering reads it straight off the pick rather than re-deriving it.
-      pivot: best.date,
+      picked,
       meta: {
         type: "UNRESOLVED",
         blockers:
@@ -389,17 +385,14 @@ export function evaluateScheduleExpr(
     (leaf) => {
       const res = evaluateVestingNodeExpr(leaf.vesting_start, ctx);
       // Re-wrap a picked vesting start around the schedule leaf, one arm at a time
-      // so each keeps its own concrete meta (and a committed/partial pick stays
-      // distinct on the way up): partial carries its required pivot, committed its
-      // CommittedNode meta, resolved its ResolvedNode meta. The non-PICKED arms
+      // so each keeps its own concrete meta (partial its UnresolvedNode, committed
+      // its CommittedNode, resolved its ResolvedNode). Splitting the guards is what
+      // keeps each returned `meta` narrowed to a single node type — a combined
+      // `res.type === "PICKED"` branch would widen it to the union and break the
+      // assignment to the PickReturn discriminated union. The non-PICKED arms
       // (UNRESOLVED / IMPOSSIBLE) pass straight through.
       if (isPickedPartial(res)) {
-        return {
-          type: "PICKED",
-          picked: leaf,
-          meta: res.meta,
-          pivot: res.pivot,
-        };
+        return { type: "PICKED", picked: leaf, meta: res.meta };
       }
       if (isPickedCommitted(res)) {
         return { type: "PICKED", picked: leaf, meta: res.meta };

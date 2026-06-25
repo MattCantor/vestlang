@@ -10,10 +10,7 @@ import type {
 // three ways on `meta.type` (all arms stay `type: "PICKED"`):
 //   - resolved:  the pick has fully settled to a date.
 //   - partial:   a partially-resolved LATER_OF — `picked` is the latest of the
-//     arms settled so far, still waiting on the rest. `pivot` is that latest
-//     settled arm's date: a lower bound the pending arms can only push later,
-//     never earlier. Required on this arm so any construction site that omits it
-//     fails the build — the partial pick can't exist without knowing its floor.
+//     arms settled so far, still waiting on the rest.
 //   - committed: an EARLIER_OF that settled to its resolved floor in `resolution`
 //     mode (see CommittedNode). It has a date like RESOLVED, but its meta also
 //     carries the still-pending siblings' disclosures, so it's a distinct arm
@@ -30,7 +27,6 @@ export interface PickedResolved<T> extends PickedBase<T> {
 
 export interface PickedPartial<T> extends PickedBase<T> {
   meta: UnresolvedNode;
-  pivot: OCTDate;
 }
 
 export interface PickedCommitted<T> extends PickedBase<T> {
