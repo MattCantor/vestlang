@@ -15,7 +15,7 @@ import type {
   ResolutionStatus,
   SourceMap,
 } from "@vestlang/types";
-import { toScheduleView } from "../src/view";
+import { reasonToString, toScheduleView } from "../src/view";
 
 // The view carries both verdicts. We stub the resolution side (status, the two
 // blocker lists, installments, the events-only reason, the template-arm source map)
@@ -230,5 +230,23 @@ describe("toScheduleView", () => {
   it("leaves absenceAssumptions empty when the schedule assumes nothing", () => {
     const view = toScheduleView(stub({ status: "template" }));
     expect(view.absenceAssumptions).toEqual([]);
+  });
+});
+
+describe("reasonToString — IMPOSSIBLE_COMPONENT (#381)", () => {
+  // The new reason names the impossibility in its prose; when a live chain coexists
+  // (the `eventId` is carried), the sentence mentions that too.
+  it("renders a sentence naming the impossibility, mentioning the coexisting event", () => {
+    const prose = reasonToString({
+      kind: "IMPOSSIBLE_COMPONENT",
+      eventId: "ipo",
+    });
+    expect(prose).toMatch(/impossib/i);
+    expect(prose).toContain("ipo");
+  });
+
+  it("renders without an event when none is carried", () => {
+    const prose = reasonToString({ kind: "IMPOSSIBLE_COMPONENT" });
+    expect(prose).toMatch(/impossib/i);
   });
 });

@@ -390,6 +390,17 @@ export type NonTemplateReason =
   // `FROM EVENT x`, or the anchor's DSL definition when the head is a
   // combinator/gated/offset expression.
   | { kind: "EVENT_CHAINED_TAIL"; eventId: string; detail?: string }
+  // A statically-impossible component (a start that contradicts itself — e.g. a
+  // date required to fall strictly before its own date — independent of any
+  // firing) coexists on the grant with a live, still-pending portion. The
+  // impossible component on its own would roll the schedule up to `impossible`;
+  // the live portion keeps it off that all-void rollup, so the impossibility
+  // surfaces here as the *reason* the grant can't be stored as one template —
+  // the hardest constraint leads, ahead of any pending-chain or cliff cause.
+  // `eventId`, when present, is the event the coexisting live chain's head is
+  // waiting on (carried so the pending part isn't lost from the reason); omitted
+  // when no single event names it.
+  | { kind: "IMPOSSIBLE_COMPONENT"; eventId?: string; detail?: string }
   // The cliff can only be placed once we know when an event fired, so we can't
   // pin it down ahead of time and there's nothing storable to hand over.
   | { kind: "DEFERRED_CLIFF"; detail?: string };
@@ -409,13 +420,17 @@ export type NonTemplateReason =
  *                        template (e.g. two independent date grids, or more than
  *                        one distinct start origin — MULTIPLE_START_ORIGINS).
  *   - "unrepresentable"  the record keeper has no home for it at all, even as bare
- *                        events. Two causes today: a cliff that can't be placed
- *                        until a firing is known (DEFERRED_CLIFF), and a THEN tail
- *                        behind a head still waiting on an event (EVENT_CHAINED_TAIL)
- *                        — no cliff, just a sequence that can't be dated yet. (An
- *                        event-anchored cliff used to land here too; it now stores
- *                        as a template — a time `cliff` plus an `event_condition` —
- *                        so `unrepresentable` is largely vacated for cliffs.)
+ *                        events. Three causes today: a statically-impossible
+ *                        component coexisting with a live pending portion
+ *                        (IMPOSSIBLE_COMPONENT — the impossibility leads, since it
+ *                        can never be stored regardless of firings), a cliff that
+ *                        can't be placed until a firing is known (DEFERRED_CLIFF),
+ *                        and a THEN tail behind a head still waiting on an event
+ *                        (EVENT_CHAINED_TAIL) — no cliff, just a sequence that can't
+ *                        be dated yet. (An event-anchored cliff used to land here
+ *                        too; it now stores as a template — a time `cliff` plus an
+ *                        `event_condition` — so `unrepresentable` is largely vacated
+ *                        for cliffs.)
  *   - "impossible"       self-contradictory no matter what events fire (e.g. a date
  *                        required to fall after a strictly later date).
  */

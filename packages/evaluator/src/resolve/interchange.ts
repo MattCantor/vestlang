@@ -42,11 +42,16 @@ import { brandStatic } from "../interpret/blockerTree.js";
 
 /**
  * Why an unresolved build can't be stored, read off the per-statement records.
- * Two distinct causes, in precedence order:
+ * Three distinct causes, in precedence order:
  *
- *   - EVENT_CHAINED_TAIL a THEN tail sits behind a head still waiting on an event,
- *                        with no cliff anywhere — the tail just can't be dated yet.
- *   - DEFERRED_CLIFF     a cliff that can't be placed until some firing is known.
+ *   - IMPOSSIBLE_COMPONENT a statically-impossible component (a contradictory start,
+ *                          true regardless of firings) coexists with a live pending
+ *                          portion. The hardest constraint — it can never be stored
+ *                          no matter what fires — so it leads, ahead of the tail and
+ *                          cliff causes both (#381).
+ *   - EVENT_CHAINED_TAIL   a THEN tail sits behind a head still waiting on an event,
+ *                          with no cliff anywhere — the tail just can't be dated yet.
+ *   - DEFERRED_CLIFF       a cliff that can't be placed until some firing is known.
  *
  * (The old EVENT_CLIFF cause is gone: an event-held cliff now stores as a template
  * — a time `cliff` plus an `event_condition` — so it never lands in this build at
@@ -58,27 +63,39 @@ import { brandStatic } from "../interpret/blockerTree.js";
  * DEFERRED_CLIFF is also the catch-all when nothing more specific is identifiable.
  */
 const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
+  // A statically-impossible component leads. Such a start (e.g. a date dated
+  // strictly before its own date — a contradiction with no firing involved) trips
+  // the IMPOSSIBLE-start guard in lower.ts, which routes the whole build to
+  // `unresolved()` *before* contingent-start promotion. On its own it would roll
+  // the interchange up to `impossible`; but paired with a live pending portion (a
+  // still-pending event head isn't void, so it survives isVoid/classify), the
+  // program lands `unresolved` here instead, and the soft chained-tail/cliff
+  // reasons would mask the hard fact that this grant can never be stored at all. So
+  // the impossibility is the headline. We still carry the coexisting pending head's
+  // event (when nameable) as an optional `eventId`, so the live part isn't lost
+  // from the reason — but the impossibility leads, ahead of cliffs and firings.
+  if (resolutions.some((r) => r.start.state === "IMPOSSIBLE")) {
+    const head = pendingHeadEvent(resolutions);
+    // Carry the coexisting pending head's event when one is nameable; omit the key
+    // entirely otherwise (not a materialized `eventId: undefined`).
+    return {
+      kind: "IMPOSSIBLE_COMPONENT",
+      ...(head !== undefined ? { eventId: head } : {}),
+    };
+  }
+
   const hasDeferredCliff = resolutions.some(
     (r) => r.cliff.state === "UNRESOLVED",
   );
   if (!hasDeferredCliff) {
-    // This branch is live. A lone single-event-head THEN chain promotes to a
-    // contingent-start `template` (see buildTemplate), so on its own it never gets
-    // here — but pair that chain with a statically-impossible sibling component and
-    // it does. The impossible sibling (e.g. a start dated strictly before its own
-    // date — a contradiction with no firing involved) trips the IMPOSSIBLE-start
-    // guard in lower.ts, which routes the whole build to `unresolved()` *before*
-    // contingent-start promotion ever runs. Meanwhile the chain's pending head
-    // survives isVoid/classify untouched — a head still waiting on an event isn't
-    // void, only a flatly-impossible start (or a dated start + impossible cliff) is.
-    // So the build lands `unresolved`, there's no deferred cliff, and the tail walks
-    // back to its still-pending head: EVENT_CHAINED_TAIL.
-    //
-    // Note the doubled diagnosis: such a program is at once dead (that impossible
-    // sibling) and pending (the live chain). We report EVENT_CHAINED_TAIL *alongside*
-    // the deadness, not instead of it — an impossible sibling on its own rolls the
-    // interchange up to `impossible`, but the live pending head keeps this program
-    // off that all-void rollup, leaving the chained-tail reason to surface.
+    // A pending chained tail with no deferred cliff and no impossible component (the
+    // impossible-component case was already taken above). The build still routed to
+    // `unresolved` because a head can't hand off a date yet — its grid is held on an
+    // unfired event cliff (#412), so the tail can't be placed. (A lone single-event-
+    // head THEN chain promotes to a contingent-start `template` in buildTemplate, so
+    // a plain pending-event head never reaches here on its own.) The tail walks back
+    // to that held head, and the reason names the event it waits on:
+    // EVENT_CHAINED_TAIL.
     const head = pendingHeadEvent(resolutions);
     if (head !== undefined)
       return { kind: "EVENT_CHAINED_TAIL", eventId: head };
