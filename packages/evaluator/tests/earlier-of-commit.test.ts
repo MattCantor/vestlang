@@ -420,6 +420,26 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     expect(findUnfired(schedule.resolution.pending, "g")).toBeUndefined();
     expect(findUnfired(schedule.resolution.pending, "f")).toBeDefined();
   });
+
+  it("fired inner event — the nested fold is RESOLVED (not COMMITTED), so nothing discloses", () => {
+    // Grant 2024-01-01, 120 shares over 12 months / 1 month, but now `e` is FIRED at
+    // 2024-05-01. The inner EARLIER OF resolves to the real firing (RESOLVED, not a
+    // commit-on-absence), and the outer LATER OF takes max(2024-05-01, 2024-06-01) =
+    // 2024-06-01 — both arms RESOLVED, no committed winner. This pins the fired-arm
+    // branch of the gate: `isPickedCommitted(winner)` is false, so the harvest skips
+    // and a fired event is never an absence assumption (AC-3).
+    const dsl =
+      "VEST FROM LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01) OVER 12 months EVERY 1 month";
+    const schedule = evaluateProgram(
+      prog(dsl),
+      ctx({ events: { e: "2024-05-01" } }),
+    );
+    if (schedule.resolution.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    expect(schedule.resolution.runtime.startDate).toBe("2024-06-01");
+    expect(schedule.absenceAssumptions).toEqual([]);
+    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
 });
 
 // #363 AC-6 — the single-level and same-selector-flattened cases must still
@@ -513,6 +533,24 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-09-01)";
     const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
+    if (schedule.resolution.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    expect(schedule.absenceAssumptions).toEqual([]);
+    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
+
+  it("fired inner event: CLIFF LATER OF (EARLIER OF (DATE 09-01, EVENT e), DATE 06-01) with `e` fired stays silent", () => {
+    // Grant 2024-01-01, 4800 shares over 48 months / 1 month, the material ordering,
+    // but `e` is FIRED at 2024-05-01. The inner EARLIER OF resolves to the real firing
+    // (RESOLVED), so the whole-expression fold is RESOLVED, not COMMITTED — pinning the
+    // fired-arm branch of `committedCliffDisclosures`, which returns `[]`. A fired event
+    // is no absence assumption (AC-3).
+    const dsl =
+      "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)";
+    const schedule = evaluateProgram(
+      prog(dsl),
+      ctx({ grantQuantity: 4800, events: { e: "2024-05-01" } }),
+    );
     if (schedule.resolution.status !== "template")
       throw new Error(`expected template, got ${schedule.resolution.status}`);
     expect(schedule.absenceAssumptions).toEqual([]);
