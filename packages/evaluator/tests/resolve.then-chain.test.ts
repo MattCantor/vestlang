@@ -16,6 +16,7 @@ import type {
   OCTDate,
   Program,
   Statement,
+  VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
 import { evaluateProgram, evaluateProgramAsOf } from "../src/index";
@@ -98,6 +99,15 @@ const then = (amount: Amount, periodicity: VestingPeriod): Statement => ({
 const dates = (events: { date?: OCTDate }[]) => events.map((e) => e.date);
 const installmentDates = (installments: Installment[]) =>
   installments.map((i) => (i.state === "RESOLVED" ? i.date : undefined));
+// The resolved tranches only — symbolic/pending installments dropped, not mapped to
+// undefined (unlike `installmentDates`). `datedTranches` keeps date + amount,
+// `datedDates` just the dates; both used by the #412 fold tests.
+const datedTranches = (installments: Installment[]) =>
+  installments.flatMap((i) =>
+    i.state === "RESOLVED" ? [{ date: i.date, amount: i.amount }] : [],
+  );
+const datedDates = (installments: Installment[]) =>
+  installments.flatMap((i) => (i.state === "RESOLVED" ? [i.date] : []));
 const sum = (events: { amount: string }[]) =>
   events.reduce((a, e) => a + Number(e.amount), 0);
 // Resolved installments carry a numeric amount, unlike compile's string output.
@@ -943,5 +953,352 @@ describe("resolveToCore — pending-head chain, tail gated event cliff (R2-B14)"
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
+  });
+});
+
+// #412 — a THEN tail must not vest before its head's grid releases. When the head
+// carries an unfired event cliff (`CLIFF EVENT ipo`), the head's grid is HELD: it
+// folds at the firing (or at max(cliff floor, firing)). A tail behind it can't be
+// dated off the head's bare grid end — that put the second half of the grant on the
+// timeline months before the first half released. The fix folds the chain handoff:
+// an unfired held head hands off nothing (the tail pends), a fired one re-anchors at
+// max(bareGridEnd, foldPoint).
+describe("resolveToCore — THEN tail behind a held-cliff head (#412)", () => {
+  const fourMonths = { type: "MONTHS", length: 1, occurrences: 4 } as const;
+  // 0.5 OVER 4mo CLIFF EVENT ipo  THEN  0.5 OVER 4mo. Grant 800 → 400 / 400.
+  const heldHeadChain = (): Program => [
+    head(portion(1, 2), "2024-01-01", {
+      ...fourMonths,
+      cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+    }),
+    then(portion(1, 2), fourMonths),
+  ];
+  const ctx = (events: Record<string, OCTDate> = {}) =>
+    ctxInput({ grantDate: "2024-01-01", grantQuantity: 800, events });
+
+  it("UNFIRED head → the tail is pending, not dated", () => {
+    // No firing: the head's grid is held, so the tail can't be placed at all. It
+    // must NOT date 2024-06..09 (the old bug); it pends, waiting on ipo.
+    const result = resolveToCore(heldHeadChain(), ctx());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // Nothing dated leaks out before the hold clears.
+    expect(
+      installmentDates(result.installments).every((d) => d === undefined),
+    ).toBe(true);
+    // The tail discloses what it waits on — the head's real event.
+    expect(result.blockers).toContainEqual({
+      type: "EVENT_NOT_YET_OCCURRED",
+      event: "ipo",
+    });
+    // Conservation: both halves still accounted for (400 head + 400 tail).
+    expect(total(result.installments)).toBe(800);
+  });
+
+  it("LATE firing → the tail re-anchors at the fold point, never before it", () => {
+    // ipo fires 2025-12-01, ~18 months after the head's bare grid end (2024-05-01).
+    // The head's 400 folds onto 2025-12-01; the tail must start AFTER that, so its
+    // first tranche is 2026-01-01 — not 2024-06-01. foldPoint wins the max.
+    const result = resolveToCore(heldHeadChain(), ctx({ ipo: "2025-12-01" }));
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    const dated = datedTranches(result.installments);
+    expect(dated).toEqual([
+      { date: "2025-12-01", amount: 400 }, // the head's held grid, folded
+      { date: "2026-01-01", amount: 100 },
+      { date: "2026-02-01", amount: 100 },
+      { date: "2026-03-01", amount: 100 },
+      { date: "2026-04-01", amount: 100 },
+    ]);
+    // No tail tranche precedes the head's fold — the inversion is gone.
+    expect(dated.slice(1).every((t) => t.date >= "2025-12-01")).toBe(true);
+    expect(total(result.installments)).toBe(800);
+  });
+
+  it("EARLY firing under a LONG head → tail still chains off the bare grid end (no regression)", () => {
+    // 24-month head, ipo fires early (2024-06-01). The bare grid end (2026-01-01)
+    // is LATER than the fold point (2024-06-01), so the bare end wins the max and
+    // the chain stays a single dated template — exactly as before #412. A blanket
+    // fold-point re-anchor would wrongly pull the tail back to mid-2024.
+    const program: Program = [
+      head(portion(1, 2), "2024-01-01", {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 24,
+        cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+      }),
+      then(portion(1, 2), { type: "MONTHS", length: 1, occurrences: 4 }),
+    ];
+    const result = resolveToCore(program, ctx({ ipo: "2024-06-01" }));
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    const dated = events.map((e) => e.date);
+    // The head runs through 2026-01-01; the tail's four tranches follow, the first
+    // at 2026-02-01 — unchanged from the pre-#412 behaviour.
+    expect(dated.slice(-4)).toEqual([
+      "2026-02-01",
+      "2026-03-01",
+      "2026-04-01",
+      "2026-05-01",
+    ]);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(800);
+  });
+
+  it("TIME-baseline cliff floor wins the fold point over an early firing", () => {
+    // CLIFF LATER OF(vestingStart + 12 months, EVENT ipo) on a 24-month head, ipo
+    // fired early (2024-03-01). The fold point is max(cliffDate 2025-01-01, firing
+    // 2024-03-01) = the 12-month floor. The head's grid still ends 2026-01-01 (the
+    // bare end beats the floor), so the chain stays one template; the floor folds
+    // the head's pre-cliff tranches onto 2025-01-01.
+    const cliff: VestingNodeExpr<"VESTING_START"> = {
+      type: "NODE_LATER_OF",
+      items: [
+        makeSingletonNode(makeVestingBaseVestingStart(), [
+          makeDuration(12, "MONTHS", "PLUS"),
+        ]),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
+      ],
+    };
+    const program: Program = [
+      head(portion(1, 2), "2024-01-01", {
+        type: "MONTHS",
+        length: 1,
+        occurrences: 24,
+        cliff,
+      }),
+      then(portion(1, 2), { type: "MONTHS", length: 1, occurrences: 4 }),
+    ];
+    const result = resolveToCore(program, ctx({ ipo: "2024-03-01" }));
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") return;
+    const events = compile(result.template, result.totalShares, result.runtime);
+    // The head's pre-cliff accrual folds onto the 12-month floor.
+    expect(events[0].date).toBe("2025-01-01");
+    // The tail's four tranches still follow the head's grid end (2026-01-01).
+    expect(events.map((e) => e.date).slice(-4)).toEqual([
+      "2026-02-01",
+      "2026-03-01",
+      "2026-04-01",
+      "2026-05-01",
+    ]);
+    expect(events.reduce((s, e) => s + Number(e.amount), 0)).toBe(800);
+  });
+
+  it("day-of-month preserved through the re-anchor", () => {
+    // The chain origin sits on the 31st (head FROM 2024-01-31). After the late
+    // firing folds the head onto the firing date (day 1), the re-anchored tail must
+    // grid on the origin's day-of-month (the 31st, clamped per month) — NOT on the
+    // fold date's day. This is what proves the re-anchor steps off the origin, not
+    // the fold date.
+    const program: Program = [
+      head(portion(1, 2), "2024-01-31", {
+        ...fourMonths,
+        cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+      }),
+      then(portion(1, 2), fourMonths),
+    ];
+    const result = resolveToCore(
+      program,
+      ctxInput({
+        grantDate: "2024-01-01",
+        grantQuantity: 800,
+        events: { ipo: "2025-12-01" },
+      }),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    const dated = datedDates(result.installments);
+    // Head folds on the firing (2025-12-01); the tail grids on the origin's day —
+    // the 31st, clamping onto each month's last day — re-anchored after the fold.
+    expect(dated).toEqual([
+      "2025-12-01",
+      "2026-01-31",
+      "2026-02-28",
+      "2026-03-31",
+      "2026-04-30",
+    ]);
+    expect(total(result.installments)).toBe(800);
+  });
+
+  it("MULTI-segment: the hold propagates through every downstream tail", () => {
+    // 0.4 CLIFF EVENT ipo THEN 0.3 THEN 0.3. Grant 1000 → 400 / 300 / 300.
+    const multi = (): Program => [
+      head(portion(4, 10), "2024-01-01", {
+        ...fourMonths,
+        cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+      }),
+      then(portion(3, 10), fourMonths),
+      then(portion(3, 10), fourMonths),
+    ];
+
+    // Unfired: BOTH tails pend (neither dated), blocker disclosed once.
+    const unfired = resolveToCore(
+      multi(),
+      ctxInput({ grantDate: "2024-01-01", grantQuantity: 1000 }),
+    );
+    expect(unfired.kind).toBe("unresolved");
+    if (unfired.kind !== "unresolved") return;
+    expect(
+      installmentDates(unfired.installments).every((d) => d === undefined),
+    ).toBe(true);
+    expect(total(unfired.installments)).toBe(1000);
+
+    // Late firing: tail1 re-anchors after the fold, tail2 continues off tail1.
+    const fired = resolveToCore(
+      multi(),
+      ctxInput({
+        grantDate: "2024-01-01",
+        grantQuantity: 1000,
+        events: { ipo: "2025-12-01" },
+      }),
+    );
+    expect(fired.kind).toBe("events");
+    if (fired.kind !== "events") return;
+    const dated = datedTranches(fired.installments);
+    expect(dated).toEqual([
+      { date: "2025-12-01", amount: 400 }, // head folded
+      { date: "2026-01-01", amount: 75 }, // tail1
+      { date: "2026-02-01", amount: 75 },
+      { date: "2026-03-01", amount: 75 },
+      { date: "2026-04-01", amount: 75 },
+      { date: "2026-05-01", amount: 75 }, // tail2 continues off tail1's end
+      { date: "2026-06-01", amount: 75 },
+      { date: "2026-07-01", amount: 75 },
+      { date: "2026-08-01", amount: 75 },
+    ]);
+    // No tail tranche precedes the head's fold.
+    expect(dated.slice(1).every((t) => t.date >= "2025-12-01")).toBe(true);
+    expect(total(fired.installments)).toBe(1000);
+  });
+});
+
+// #412 Decision A — the inversion when the held cliff is on an intermediate TAIL,
+// not the head. A dated head hands off to a tail whose OWN cliff is an unfired
+// event hold; a later tail must not date off that held tail's grid end either.
+describe("resolveToCore — THEN tail behind a held-cliff TAIL (#412 Decision A)", () => {
+  const fourMonths = { type: "MONTHS", length: 1, occurrences: 4 } as const;
+  // 0.4 (dated head) THEN 0.3 CLIFF EVENT ipo THEN 0.3. Grant 1000 → 400/300/300.
+  const chain = (): Program => [
+    head(portion(4, 10), "2024-01-01", fourMonths),
+    then(portion(3, 10), {
+      ...fourMonths,
+      cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
+    }),
+    then(portion(3, 10), fourMonths),
+  ];
+
+  it("UNFIRED tail cliff → the dated head vests, the second tail pends behind the held tail", () => {
+    const result = resolveToCore(
+      chain(),
+      ctxInput({ grantDate: "2024-01-01", grantQuantity: 1000 }),
+    );
+    // The held tail folds the handoff to PENDING, so the chain can't be one
+    // template; it's unresolved with the dated head's tranches alongside the
+    // pending remainder.
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // The dated head still materializes (2024-02..05); the held tail + the tail
+    // behind it ride symbolically.
+    expect(datedDates(result.installments)).toEqual([
+      "2024-02-01",
+      "2024-03-01",
+      "2024-04-01",
+      "2024-05-01",
+    ]);
+    expect(result.blockers).toContainEqual({
+      type: "EVENT_NOT_YET_OCCURRED",
+      event: "ipo",
+    });
+    expect(total(result.installments)).toBe(1000);
+  });
+
+  it("LATE firing → the held tail folds, the tail behind it re-anchors after the fold", () => {
+    const result = resolveToCore(
+      chain(),
+      ctxInput({
+        grantDate: "2024-01-01",
+        grantQuantity: 1000,
+        events: { ipo: "2025-12-01" },
+      }),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    const dated = datedTranches(result.installments);
+    expect(dated).toEqual([
+      { date: "2024-02-01", amount: 100 }, // dated head, 400 over 4mo
+      { date: "2024-03-01", amount: 100 },
+      { date: "2024-04-01", amount: 100 },
+      { date: "2024-05-01", amount: 100 },
+      { date: "2025-12-01", amount: 300 }, // held tail folds on the firing
+      { date: "2026-01-01", amount: 75 }, // last tail re-anchors after the fold
+      { date: "2026-02-01", amount: 75 },
+      { date: "2026-03-01", amount: 75 },
+      { date: "2026-04-01", amount: 75 },
+    ]);
+    // The last tail never precedes the held tail's fold.
+    expect(dated.slice(5).every((t) => t.date >= "2025-12-01")).toBe(true);
+    expect(total(result.installments)).toBe(1000);
+  });
+});
+
+// #412 — a SYNTHETIC (multi-event) held cliff on the head, at the RESOLUTION level.
+// The head holds on `LATER OF(EVENT a, EVENT b)`, which lowers to a synthetic
+// event side (no single nameable event). The pending tail must surface the REAL
+// underlying events `a`/`b` (the selector tree), never the minted `evt:<n>` id — the
+// disclosure unresolved.ts now sources from the held cliff's own blockers. Once both
+// fire, the head folds onto the later of them and the tail re-anchors after the fold.
+describe("resolveToCore — THEN tail behind a SYNTHETIC held-cliff head (#412)", () => {
+  const fourMonths = { type: "MONTHS", length: 1, occurrences: 4 } as const;
+  const syntheticCliff: VestingNodeExpr<"VESTING_START"> = {
+    type: "NODE_LATER_OF",
+    items: [
+      makeSingletonNode(makeVestingBaseEvent("a")),
+      makeSingletonNode(makeVestingBaseEvent("b")),
+    ],
+  };
+  // 1/2 OVER 4mo CLIFF LATER OF(EVENT a, EVENT b)  THEN  1/2 OVER 4mo. 800 → 400/400.
+  const chain = (): Program => [
+    head(portion(1, 2), "2024-01-01", { ...fourMonths, cliff: syntheticCliff }),
+    then(portion(1, 2), fourMonths),
+  ];
+  const ctx = (events: Record<string, OCTDate> = {}) =>
+    ctxInput({ grantDate: "2024-01-01", grantQuantity: 800, events });
+
+  it("UNFIRED a/b → the pending tail surfaces the REAL events, no synthetic id", () => {
+    const result = resolveToCore(chain(), ctx());
+    expect(result.kind).toBe("unresolved");
+    if (result.kind !== "unresolved") return;
+    // The disclosed blocker is the real selector tree over a/b — not a minted
+    // `evt:<n>`, and not an EVENT_CHAINED_TAIL (that path needs a single named event).
+    const rendered = JSON.stringify(result.blockers);
+    expect(rendered).toContain('"event":"a"');
+    expect(rendered).toContain('"event":"b"');
+    expect(rendered).toContain("UNRESOLVED_SELECTOR");
+    expect(rendered).not.toContain("evt:");
+    expect(rendered).not.toContain("EVENT_CHAINED_TAIL");
+    // Conservation: nothing dated leaks before the hold clears; both halves survive.
+    expect(
+      installmentDates(result.installments).every((d) => d === undefined),
+    ).toBe(true);
+    expect(total(result.installments)).toBe(800);
+  });
+
+  it("BOTH fired → the head folds on the later event, the tail re-anchors after it", () => {
+    // a fires 2025-03-01, b fires 2025-06-01; the LATER OF folds onto 2025-06-01.
+    const result = resolveToCore(
+      chain(),
+      ctx({ a: "2025-03-01", b: "2025-06-01" }),
+    );
+    expect(result.kind).toBe("events");
+    if (result.kind !== "events") return;
+    expect(datedTranches(result.installments)).toEqual([
+      { date: "2025-06-01", amount: 400 }, // head folds on max(a, b)
+      { date: "2025-07-01", amount: 100 }, // tail re-anchors at max(bareEnd, 2025-06-01)
+      { date: "2025-08-01", amount: 100 },
+      { date: "2025-09-01", amount: 100 },
+      { date: "2025-10-01", amount: 100 },
+    ]);
+    expect(total(result.installments)).toBe(800);
   });
 });

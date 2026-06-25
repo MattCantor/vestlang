@@ -380,6 +380,23 @@ describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3/#255
   });
 });
 
+// #412: a THEN tail behind a head whose grid is held on an unfired event cliff is
+// not storable — canonical can't hold a fixed-date tail whose start waits on an
+// event. The interchange verdict is unrepresentable, so `representable` reads false.
+describe("runEvaluate — a held-cliff head's THEN tail is not representable (#412)", () => {
+  it("reports unrepresentable / representable=false", () => {
+    const r = runEvaluate(
+      "1/2 VEST OVER 4 months EVERY 1 month CLIFF EVENT ipo " +
+        "THEN 1/2 VEST OVER 4 months EVERY 1 month",
+      { grant_date: "2024-01-01", grant_quantity: 800 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.interchange.status).toBe("unrepresentable");
+    expect(r.view.representable).toBe(false);
+  });
+});
+
 // R2-B14 / #255: a gated event cliff stores as a synthetic event_condition (the
 // gate captured in its recipe), so the schedule is a storable template.
 describe("runEvaluate — gated event cliff stores as a template (R2-B14/#255)", () => {

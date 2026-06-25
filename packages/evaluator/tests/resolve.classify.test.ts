@@ -285,10 +285,17 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
   });
 
   it("two statements with a byte-identical synthetic event side share one minted id", () => {
-    // Dedup by rendered recipe: a head dated grid plus two THEN tails, each tail
-    // carrying the same `CLIFF LATER OF(EVENT a, EVENT b)`. Both tails' event sides
-    // render byte-identically, so they collapse onto ONE synthetic `evt:<n>` and
-    // one sidecar entry rather than minting `evt:1` and `evt:2`.
+    // Dedup by rendered recipe: a CONTINGENT head (`FROM EVENT ipo`, unfired) plus
+    // two THEN tails, each tail carrying the same `CLIFF LATER OF(EVENT a, EVENT b)`.
+    // The contingent head hoists the sentinel start; both tails are pending-tails
+    // whose event sides render byte-identically, so they collapse onto ONE synthetic
+    // `evt:<n>` and one sidecar entry rather than minting `evt:1` and `evt:2`.
+    //
+    // (The head must be contingent, not a dated grid. A dated head with a held tail
+    // cliff no longer stores as one template: the held cliff folds the chain handoff
+    // off the firing, so a later tail can't date off the un-held grid end — #412.
+    // The held-tail inversion is exercised in resolve.then-chain / resolve.cliff; the
+    // contingent head is what keeps both tails on the template path that dedups.)
     const eventCliff = (): VestingNodeExpr<"VESTING_START"> => ({
       type: "NODE_LATER_OF",
       items: [
@@ -315,7 +322,7 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
     const program: Program = [
       stmt(
         portion(1, 3),
-        makeSingletonNode(makeVestingBaseDate("2025-01-01")),
+        makeSingletonNode(makeVestingBaseEvent("ipo")),
         monthly12(),
       ),
       tail(eventCliff()),
@@ -325,18 +332,20 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
 
-    // Both tails reference the same minted id (the head carries none).
+    // Both tails reference the same minted id (the head carries none — it hoists the
+    // sentinel start instead).
     const id1 = result.template.statements[1].event_condition?.event_id;
     const id2 = result.template.statements[2].event_condition?.event_id;
     expect(id1).toMatch(/^evt:\d+$/);
     expect(id2).toBe(id1);
 
-    // Exactly one `evt:<n>` sidecar entry — the dedup collapsed the two byte-equal
-    // recipes onto one.
+    // Two sidecar entries — the reserved `evt:start` for the contingent head, plus
+    // exactly ONE `evt:<n>`: the dedup collapsed the two byte-equal cliff recipes.
     const syntheticKeys = Object.keys(result.sourceMap).filter((k) =>
       /^evt:\d+$/.test(k),
     );
     expect(syntheticKeys).toEqual([id1]);
+    expect(result.sourceMap["evt:start"]).toBeDefined();
   });
 });
 

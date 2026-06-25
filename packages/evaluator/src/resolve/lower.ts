@@ -369,36 +369,100 @@ type ChainAnchor =
   // didn't resolve to anything a tail could continue from.
   | undefined;
 
+// The later of a firing and an optional time-baseline floor — the fold point of an
+// event-held cliff (max(cliffDate, firing)). OCTDate is ISO YYYY-MM-DD, so lexical
+// order is calendar order. Exported so classify.ts's events-arm expansion folds the
+// held grid at the SAME point this handoff re-anchors the tail to — if the two
+// drifted, a tail would date off a different fold than the head actually folds to.
+export const laterOf = (
+  firing: OCTDate,
+  floor: OCTDate | undefined,
+): OCTDate => (floor !== undefined && floor > firing ? floor : firing);
+
+// Where a chain segment hands off to the next tail, given the segment's concrete
+// start, its lowered cliff, and the chain origin. Shared by `anchorAfter` (a head)
+// and the dated-tail loop (a tail), so a held cliff folds the handoff identically
+// wherever it sits in the chain.
+//
+// The handoff cursor is the segment's bare grid end — `advanceCursor` of the start —
+// EXCEPT when an event-held cliff is in force:
+//   - unfired (no `firing`): the held grid hasn't ended, so there's nothing to hand
+//     off. The tail can't vest until the event arrives → a PENDING anchor carrying
+//     the held cliff's own blockers (the real underlying events, never the minted
+//     `evt:<n>`). Firing-blind, every held cliff reads unfired, so the interchange
+//     build always takes this branch.
+//   - fired: the grid folds at `max(cliffDate, firing)`, so a tail behind it can't
+//     start before that fold. The handoff is `max(bareGridEnd, foldPoint)` — the
+//     bare end already wins for an early firing under a long grid (the counter-case),
+//     and the fold point wins for a late firing, so the tail never precedes its
+//     head's fold. No extra step past the max: `bareGridEnd` is already the advanced
+//     cursor, and the fold point is an absolute date the next tail grids off directly.
+const handoffAnchor = (
+  start: OCTDate,
+  base: { type: "DATE" } | { type: "EVENT"; eventId: string },
+  offsetExpr: VestingNodeExpr | undefined,
+  cliff: LoweredCliff,
+  periodicity: StmtResolution["periodicity"],
+  origin: OCTDate,
+  dom: ResolutionContext["vesting_day_of_month"],
+): ChainAnchor => {
+  // An unfired event hold ends nothing, so there's no date to hand off (and no need
+  // to advance the grid). Short-circuit before the cursor math.
+  if (cliff.state === "EVENT_HELD" && cliff.firing === undefined) {
+    return { kind: "PENDING", blockers: cliff.blockers ?? [] };
+  }
+
+  const { occurrences, length, type } = periodicity;
+  const bareGridEnd = advanceCursor(
+    start,
+    occurrences,
+    length,
+    type,
+    dom,
+    origin,
+  );
+  // A fired hold pulls the handoff forward to its fold point when that lands after
+  // the bare grid end; otherwise the bare end stands. (The unfired hold already
+  // returned above, so an EVENT_HELD cliff here always has a firing.)
+  const cursor =
+    cliff.state === "EVENT_HELD" && cliff.firing !== undefined
+      ? laterOf(laterOf(cliff.firing, cliff.cliffDate), bareGridEnd)
+      : bareGridEnd;
+
+  return base.type === "EVENT"
+    ? {
+        kind: "EVENT",
+        eventId: base.eventId,
+        ...(offsetExpr ? { offsetExpr } : {}),
+        cursor,
+        origin,
+      }
+    : { kind: "DATE", cursor, origin };
+};
+
 /** The anchor a following THEN tail inherits from the statement just resolved. */
 const anchorAfter = (
   r: StmtResolution,
   dom: ResolutionContext["vesting_day_of_month"],
 ): ChainAnchor => {
-  const { occurrences, length, type } = r.periodicity;
   // A committed start is a concrete date too, so a chain hands off from it exactly
-  // as from a RESOLVED one.
+  // as from a RESOLVED one. This statement heads the chain, so it is its own origin:
+  // passing its start as the origin makes this first handoff a step from the vesting
+  // day onto itself (no effect); the origin only bites on later handoffs, once the
+  // cursor has drifted off the vesting day or clamped onto a short month. The cliff
+  // is read too — a head held on an unfired event hasn't ended, so it hands off
+  // nothing (PENDING); a fired held cliff folds the handoff at max(cliffDate, firing)
+  // so the tail can't vest before the head releases.
   if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
-    // This statement heads the chain, so it is its own origin. Passing its start
-    // as the origin makes this first handoff a step from the vesting day onto
-    // itself (no effect); the origin only bites on later handoffs, once the cursor
-    // has drifted off the vesting day or clamped onto a short month.
-    const cursor = advanceCursor(
+    return handoffAnchor(
       r.start.date,
-      occurrences,
-      length,
-      type,
+      r.start.base,
+      r.start.offsetExpr,
+      r.cliff,
+      r.periodicity,
+      r.start.date,
       dom,
-      r.start.date,
     );
-    return r.start.base.type === "EVENT"
-      ? {
-          kind: "EVENT",
-          eventId: r.start.base.eventId,
-          ...(r.start.offsetExpr ? { offsetExpr: r.start.offsetExpr } : {}),
-          cursor,
-          origin: r.start.date,
-        }
-      : { kind: "DATE", cursor, origin: r.start.date };
   }
   // PENDING_EVENT / SYNTHETIC_EVENT / UNRESOLVED: the start has no date, so any
   // tail behind it is pending on whatever the head is waiting on.
@@ -471,55 +535,60 @@ export const resolveStatements = (
       }
 
       const date = anchor.cursor;
+      const origin = anchor.origin;
+      // The handoff date is this tail's start. A cliff on the tail therefore
+      // measures from the handoff, exactly as a head cliff measures from the
+      // head's start, with no special casing. An event-origin tail keeps the
+      // head's event id (and any offset recipe) so buildTemplate can tell the chain
+      // apart from two independent portions that happen to share an event.
+      const base: { type: "DATE" } | { type: "EVENT"; eventId: string } =
+        anchor.kind === "EVENT"
+          ? { type: "EVENT", eventId: anchor.eventId }
+          : { type: "DATE" };
+      const offsetExpr =
+        anchor.kind === "EVENT" ? anchor.offsetExpr : undefined;
+      // Pass the chain origin so a sub-annual cliff counts its pre-cliff tranches
+      // on the same grid this tail vests on — the grant's vesting day — rather than
+      // on the handoff day the previous segment happened to end on.
+      const cliff = lowerCliff(
+        p.cliff,
+        date,
+        p.type,
+        p.length,
+        p.occurrences,
+        ctx,
+        origin,
+      );
       out.push({
         percentage,
         periodicity,
-        // The handoff date is this tail's start. A cliff on the tail therefore
-        // measures from the handoff, exactly as a head cliff measures from the
-        // head's start, with no special casing. An event-origin tail keeps the
-        // head's event id so buildTemplate can tell the chain apart from two
-        // independent portions that happen to share an event.
-        start:
-          anchor.kind === "EVENT"
-            ? {
-                state: "RESOLVED",
-                date,
-                base: { type: "EVENT", eventId: anchor.eventId },
-                ...(anchor.offsetExpr ? { offsetExpr: anchor.offsetExpr } : {}),
-              }
-            : { state: "RESOLVED", date, base: { type: "DATE" } },
-        // Pass the chain origin so a sub-annual cliff counts its pre-cliff
-        // tranches on the same grid this tail vests on — the grant's vesting day
-        // — rather than on the handoff day the previous segment happened to end on.
-        cliff: lowerCliff(
-          p.cliff,
+        start: {
+          state: "RESOLVED",
           date,
-          p.type,
-          p.length,
-          p.occurrences,
-          ctx,
-          anchor.origin,
-        ),
+          base,
+          ...(offsetExpr ? { offsetExpr } : {}),
+        },
+        cliff,
         // A dated tail: the handoff produced a date, and `origin` is the chain's
         // starting date (not this tail's handoff) so a later materialization
         // grids the tail on the grant's vesting day.
-        chain: { role: "tail", origin: anchor.origin },
+        chain: { role: "tail", origin },
       });
-      anchor = {
-        ...anchor,
-        // Step the next handoff off the chain origin's day-of-month, so the rest
-        // of the chain stays on the grant's vesting day rather than on whatever
-        // day this segment ended on. The `...anchor` spread keeps `origin` for
-        // later tails.
-        cursor: advanceCursor(
-          date,
-          p.occurrences,
-          p.length,
-          p.type,
-          dom,
-          anchor.origin,
-        ),
-      };
+      // The next handoff steps off this tail's grid end on the chain origin's
+      // day-of-month — but a held cliff on the tail itself (Decision A) folds that
+      // handoff exactly as it does on a head: an unfired hold yields nothing (PENDING,
+      // so every later tail pends behind it), a fired one re-anchors at
+      // max(gridEnd, foldPoint). `handoffAnchor` reads the tail's lowered cliff and
+      // returns the right anchor for both, preserving the chain origin and event id.
+      anchor = handoffAnchor(
+        date,
+        base,
+        offsetExpr,
+        cliff,
+        periodicity,
+        origin,
+        dom,
+      );
       continue;
     }
 
@@ -735,15 +804,17 @@ export const buildTemplate = (
     // sentinel-skip / re-derived start handles dating), so we only run the
     // cursor/eq continuation check on the dated path.
     if (!hasContingentStart) {
-      // A resolved/committed dated start. (A pending head can't appear here — the
-      // contingent branch owns those — so the remaining non-dated cases are the
-      // poisons already turned away above.)
+      // A resolved/committed dated start.
       if (r.start.state === "RESOLVED" || r.start.state === "COMMITTED") {
         const date = r.start.date;
         if (cursor === undefined) {
           startDate = date;
         } else if (!eq(date, cursor)) {
           // A second independent DATE grid that doesn't chain — not one template.
+          // This is also where a fired held-cliff head's re-anchored tail lands
+          // (#412): the head's grid folds at its firing, so the tail's start jumps
+          // past the bare cursor and the chain can't be one DATE template — it
+          // routes to the events arm, which dates the fold and the tail correctly.
           return events({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
         }
         // The continuation check above compares each statement's start against
@@ -762,7 +833,14 @@ export const buildTemplate = (
           startDate ?? date,
         );
       } else {
-        return unresolved(); // narrowing; unreachable after the guards above
+        // A pending-tail's UNRESOLVED start. Reachable when a dated head's grid is
+        // held on an unfired event cliff (firing-blind, or the event hasn't fired):
+        // the head isn't contingent, so this dated path runs, and its tails came
+        // back as pending-tails (#412). They can't date here → route to the
+        // unresolved arm, where the held-head chain reports as EVENT_CHAINED_TAIL /
+        // DEFERRED_CLIFF. (A pending *head* start can't appear: the contingent branch
+        // owns those, and an UNRESOLVED head was turned away by the guard above.)
+        return unresolved();
       }
     }
 

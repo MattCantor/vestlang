@@ -202,14 +202,15 @@ export const unresolvedInstallments = (
     // installments here. Unfired, the whole grid is held: render the held tranches
     // symbolically so the shares survive into the events/unresolved stream (the
     // template arm instead lets core.compile hold them, and discloses the blocker
-    // in buildTemplate). A bare event side names its event on the blocker; a
-    // synthetic one's held-ness rides on the symbolic installments alone.
+    // in buildTemplate). The hold's witnesses are the cliff's OWN pending blockers —
+    // the real underlying events. A bare side carries `EVENT_NOT_YET_OCCURRED(real
+    // id)`; a synthetic side (a `LATER OF` over events, a gate) names the real `a`/`b`
+    // via its selector tree, never the minted `evt:<n>`. Both ride onto the held
+    // tranches AND onto the returned blocker list so a held-head chain's tail (#412)
+    // discloses what it's waiting on, not just a bare symbolic lump.
     case "EVENT_HELD": {
       if (r.cliff.firing !== undefined) return EMPTY;
-      const blocker: Blocker[] =
-        r.cliff.event.kind === "bare"
-          ? [{ type: "EVENT_NOT_YET_OCCURRED", event: r.cliff.event.eventId }]
-          : [];
+      const blocker: Blocker[] = r.cliff.blockers ?? [];
       // Disclose the cliff floor on each held tranche: a `LATER OF` cliff whose
       // time arm resolved carries that date as `cliffDate` (the earliest anything
       // could land), so surface it as the tranche's `floor` without disturbing its

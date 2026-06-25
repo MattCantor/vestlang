@@ -88,12 +88,19 @@ const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
 
 /**
  * The event a chained tail is waiting on: a THEN tail whose start went UNRESOLVED
- * because its chain head is a pending event. We walk back from each such tail to the
- * nearest non-chained head and read what it waits on — the named event for a bare
- * `FROM EVENT x`, or the anchor's DSL definition for a combinator/gated/offset head
- * (no synthetic id exists yet on this path; the definition is the same dedup key
- * `buildTemplate` would mint one from). Undefined when no chained tail is pending
- * on a head we can name.
+ * because its chain head can't hand off a date yet. Two ways a head holds:
+ *   - its *start* is a pending event (a bare `FROM EVENT x`, or a
+ *     combinator/gated/offset start), or
+ *   - its start is dated but its *cliff* is held on an unfired event (`CLIFF EVENT x`,
+ *     `CLIFF LATER OF(…, EVENT x)`) — firing-blind, every such cliff reads unfired,
+ *     so the held grid never ends and the tail can't be placed (#412).
+ *
+ * We walk back from each pending tail to the nearest non-chained head and read what
+ * it waits on — the named event for a single bare event, or the anchor/cliff DSL
+ * definition for a combinator/gated/offset side (no synthetic id exists yet on this
+ * path; the definition is the same dedup key `buildTemplate` would mint one from, and
+ * naming it routes the caller to DEFERRED_CLIFF since it isn't a single event id).
+ * Undefined when no chained tail is pending on a head we can name.
  */
 const pendingHeadEvent = (
   resolutions: StmtResolution[],
@@ -101,7 +108,7 @@ const pendingHeadEvent = (
   for (let i = 0; i < resolutions.length; i++) {
     const r = resolutions[i];
     // A pending-tail is a chained tail whose start went UNRESOLVED behind a head
-    // still waiting on an event — exactly the role's definition, so no separate
+    // that can't hand off a date — exactly the role's definition, so no separate
     // start-state clause is needed.
     if (r.chain.role !== "pending-tail") continue;
     for (let j = i - 1; j >= 0; j--) {
@@ -112,6 +119,21 @@ const pendingHeadEvent = (
       if (head.start.state === "PENDING_EVENT") return head.start.eventId;
       if (head.start.state === "SYNTHETIC_EVENT")
         return stringifyVestingNodeExpr(head.start.expr);
+      // A dated head whose grid is held on an unfired event cliff. A bare event side
+      // names its real event (→ EVENT_CHAINED_TAIL); a synthetic side (multiple
+      // events, an offset, a gate) has no single id to name. In the synthetic case
+      // we `break` (not `return undefined`) so the outer scan keeps looking at later
+      // pending-tails: a sibling chain on a bare-event head can still name its event,
+      // and only if NONE can does the caller fall back to DEFERRED_CLIFF. This is a
+      // deliberate first-match-then-continue, consistent with the sibling terminals
+      // above — it's a label refinement, not a precedence change (#381 owns ordering).
+      if (
+        head.cliff.state === "EVENT_HELD" &&
+        head.cliff.firing === undefined
+      ) {
+        if (head.cliff.event.kind === "bare") return head.cliff.event.eventId;
+        break;
+      }
       break; // the head resolved to something datable — not this cause
     }
   }
