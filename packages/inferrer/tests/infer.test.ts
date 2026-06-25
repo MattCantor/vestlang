@@ -300,6 +300,103 @@ describe("inferSchedule — degenerate", () => {
   });
 });
 
+describe("inferSchedule — zero-total tranche set", () => {
+  // A non-empty input whose surviving mass is all zero would otherwise decompose
+  // an empty date set into the empty program and trip core's non-empty assertion.
+  // The guard returns a single `0 VEST FROM DATE <earliest>` statement instead.
+
+  it("(a) single all-zero tranche → degenerate template, no throw", () => {
+    const result = inferSchedule({
+      tranches: [{ date: d("2025-02-01"), amount: 0 }],
+    });
+
+    expect(result.dsl).toBe("0 VEST FROM DATE 2025-02-01");
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.diagnostics.totalQuantity).toBe(0);
+    expect(result.decomposition.singles).toHaveLength(1);
+    expect(result.decomposition.singles[0]).toEqual({
+      date: "2025-02-01",
+      amount: 0,
+    });
+    expect(result.decomposition.uniforms).toHaveLength(0);
+    expect(result.decomposition.cliffFolds).toBe(0);
+  });
+
+  it("(b) multiple zero tranches on different dates → single statement at earliest", () => {
+    const result = inferSchedule({
+      tranches: [
+        { date: d("2025-05-01"), amount: 0 },
+        { date: d("2025-01-01"), amount: 0 },
+        { date: d("2025-03-01"), amount: 0 },
+      ],
+    });
+
+    expect(result.dsl).toBe("0 VEST FROM DATE 2025-01-01");
+    expect(result.diagnostics.totalQuantity).toBe(0);
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.program).toHaveLength(1);
+  });
+
+  it("(c) the degenerate DSL round-trips to an empty installment stream at residual 0", () => {
+    // Bespoke forward-only check — NOT runRoundTrip, which would re-infer the
+    // (empty) evaluated stream and throw InferInputError. Re-parse + normalize the
+    // emitted DSL, evaluate against the same anchor with grantQuantity 0, and
+    // assert it produces no RESOLVED tranches (no installment with amount > 0).
+    const result = inferSchedule({
+      tranches: [{ date: d("2025-02-01"), amount: 0 }],
+    });
+
+    const program = normalizeProgram(parse(result.dsl));
+    const reTranches = evalAllResolved(program, {
+      grantDate: d("2025-02-01"),
+      events: {},
+      grantQuantity: 0,
+      vesting_day_of_month: result.diagnostics.vestingDayOfMonth,
+    });
+
+    expect(reTranches).toHaveLength(0);
+    expect(reTranches.some((t) => t.amount > 0)).toBe(false);
+  });
+
+  it("(d) fix is in core — direct call returns a result and never throws", () => {
+    expect(() =>
+      inferSchedule({ tranches: [{ date: d("2025-02-01"), amount: 0 }] }),
+    ).not.toThrow();
+  });
+
+  it("(e) mixed input still drops zeros (regression, behavior unchanged)", () => {
+    const result = inferSchedule({
+      tranches: [
+        { date: d("2025-01-01"), amount: 0 },
+        { date: d("2025-03-01"), amount: 100 },
+        { date: d("2025-05-01"), amount: 0 },
+      ],
+    });
+
+    expect(result.dsl).toBe("100 VEST FROM DATE 2025-03-01");
+    expect(result.diagnostics.totalQuantity).toBe(100);
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.decomposition.singles).toEqual([
+      { date: "2025-03-01", amount: 100 },
+    ]);
+  });
+
+  it("(i) a caller-supplied policy is echoed, not overridden", () => {
+    const withPolicy = inferSchedule({
+      tranches: [{ date: d("2025-02-01"), amount: 0 }],
+      policy: "15",
+    });
+    expect(withPolicy.diagnostics.vestingDayOfMonth).toBe("15");
+
+    const withoutPolicy = inferSchedule({
+      tranches: [{ date: d("2025-02-01"), amount: 0 }],
+    });
+    expect(withoutPolicy.diagnostics.vestingDayOfMonth).toBe(
+      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    );
+  });
+});
+
 describe("inferSchedule — policy detection", () => {
   it("month-end schedule (seeded on day 31) → detects VESTING_START_DAY policy", () => {
     const ctx = {
