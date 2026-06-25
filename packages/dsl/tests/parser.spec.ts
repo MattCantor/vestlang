@@ -287,22 +287,20 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
 
   // #402: a bare, anchorless offset of two-or-more terms used to error at the
   // second `+` (only the single-term `+3 months` parsed). It now aggregates the
-  // same way an anchored node does — months-first — over an implicit grantDate
-  // base, so the bare form and the written-out `grantDate + …` form agree.
-  it("aggregates a multi-term bare offset over an implicit grantDate base (#402)", () => {
+  // same way an anchored node does — months-first. Since #475 retired the From
+  // grammar wrapper, FROM no longer anchors it at parse time: the bare form parses
+  // to the raw un-anchored DURATION_OFFSETS carrier and normalizeNode anchors it to
+  // grantDate. The post-normalize equivalence to the written-out `grantDate + …`
+  // form is asserted in the normalizer suite (normalizer.test.ts, #475).
+  it("aggregates a multi-term bare offset to a raw DURATION_OFFSETS carrier (#402, #475)", () => {
     const s = first(`VEST FROM +20 days +1 month`);
-    const start = s.expr.vesting_start;
-    expect(start).toEqual({
-      type: "NODE",
-      base: { type: "GRANT_DATE" },
+    expect(s.expr.vesting_start).toEqual({
+      type: "DURATION_OFFSETS",
       offsets: [
         { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
         { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
       ],
     });
-    // Byte-identical to the explicitly-anchored form.
-    const anchored = first(`VEST FROM grantDate + 20 days + 1 month`);
-    expect(start).toEqual(anchored.expr.vesting_start);
   });
 
   it("leaves the single-term bare offset as a bare DURATION (#402)", () => {
@@ -317,13 +315,15 @@ describe("Constraints (AND/OR precedence, ATOM leaves)", () => {
     });
   });
 
-  it("aggregates a multi-term bare cliff over an implicit vestingStart base (#402)", () => {
+  // Same #475 retirement on the CLIFF side: the bare multi-term cliff now parses to
+  // the raw DURATION_OFFSETS carrier and normalizeNode anchors it to vestingStart.
+  // The post-normalize equivalence to `vestingStart + …` is in normalizer.test.ts.
+  it("aggregates a multi-term bare cliff to a raw DURATION_OFFSETS carrier (#402, #475)", () => {
     const s = first(
       `VEST OVER 12 months EVERY 1 month CLIFF 20 days + 1 month`,
     );
     expect(s.expr.periodicity.cliff).toEqual({
-      type: "NODE",
-      base: { type: "VESTING_START" },
+      type: "DURATION_OFFSETS",
       offsets: [
         { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
         { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },

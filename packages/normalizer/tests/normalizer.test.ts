@@ -382,6 +382,62 @@ describe("bare multi-term offset selector arm (#460)", () => {
 });
 
 /* ------------------------
+ * #475: top-level bare multi-term offset anchors per slot
+ * ------------------------ */
+
+describe("top-level bare multi-term offset anchors per slot (#475)", () => {
+  // A top-level `FROM +20d +1mo` / `CLIFF 20d +1mo` used to anchor at parse time via
+  // the #459 grammar wrappers. #475 retired those: the bare form now parses to the
+  // same DURATION_OFFSETS carrier the selector arms use and normalizeNode anchors it
+  // per slot. The behavior-preservation bar is that the normalized output stays
+  // byte-identical to the written-out anchored form. (These equivalences moved here
+  // from the parser suite, where they no longer hold at parse — see parser.spec.ts.)
+
+  it("bare FROM offset normalizes to the grant-date-anchored NODE, deep-equal to written-out", () => {
+    const bare = getSingleton(
+      norm("VEST FROM +20 days +1 month"),
+    ).vesting_start;
+    const anchored = getSingleton(
+      norm("VEST FROM grantDate + 20 days + 1 month"),
+    ).vesting_start;
+
+    expect(bare).toEqual(anchored);
+    expect(bare).toEqual({
+      type: "NODE",
+      base: { type: "GRANT_DATE" },
+      offsets: [
+        { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+      ],
+    });
+    // The carrier tag must not survive normalization.
+    expect(JSON.stringify(bare)).not.toContain("DURATION_OFFSETS");
+  });
+
+  it("bare CLIFF offset normalizes to the vesting-start-anchored NODE, deep-equal to written-out", () => {
+    const bare = getSingleton(
+      norm("VEST OVER 12 months EVERY 1 month CLIFF 20 days + 1 month"),
+    ).periodicity.cliff;
+    const anchored = getSingleton(
+      norm(
+        "VEST OVER 12 months EVERY 1 month CLIFF vestingStart + 20 days + 1 month",
+      ),
+    ).periodicity.cliff;
+
+    expect(bare).toEqual(anchored);
+    expect(bare).toEqual({
+      type: "NODE",
+      base: { type: "VESTING_START" },
+      offsets: [
+        { type: "DURATION", value: 1, unit: "MONTHS", sign: "PLUS" },
+        { type: "DURATION", value: 20, unit: "DAYS", sign: "PLUS" },
+      ],
+    });
+    expect(JSON.stringify(bare)).not.toContain("DURATION_OFFSETS");
+  });
+});
+
+/* ------------------------
  * Idempotence
  * ------------------------ */
 

@@ -7,12 +7,13 @@
 // base) still wins via VestingNode ahead of both.
 GateExpr = GateSelector / VestingNode / MultiBareOffset / Duration
 
-// A bare, anchorless multi-term offset used as a selector arm. Unlike the top-level
-// BareFromOffset / BareCliffOffset wrappers (70-schedule.peggy), an arm has no fixed
-// system base at grammar time — the same text anchors to grantDate under a FROM slot
-// and vestingStart under a CLIFF slot — so we emit a raw un-anchored carrier and let
-// normalizeNode anchor it per slot. Reuses MultiOffsets (two-or-more terms, aggregated
-// months-first by normalizeOffsets).
+// A bare, anchorless multi-term offset (`+20 days +1 month`) with no fixed system base
+// at grammar time — the same text anchors to grantDate under a FROM slot and
+// vestingStart under a CLIFF slot, and inside a selector arm there's no base to pick
+// until its slot is known. So we emit a raw un-anchored carrier and let normalizeNode
+// anchor it per slot. Reached both directly under a top-level FROM/CLIFF and as a
+// selector arm. Reuses MultiOffsets (two-or-more terms, aggregated months-first by
+// normalizeOffsets).
 MultiBareOffset
   = offsets:MultiOffsets { return { type: "DURATION_OFFSETS", offsets }; }
 

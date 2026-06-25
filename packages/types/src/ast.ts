@@ -50,8 +50,10 @@ export type Offsets =
   | readonly [DurationMonth | DurationDay]
   | readonly [DurationMonth, DurationDay];
 
-// A raw, un-anchored multi-term offset emitted by the grammar for a bare selector
-// arm (`EARLIER OF (+20 days +1 month, …)`). It is purely a normalizer *input*: it
+// A raw, un-anchored multi-term offset (`+20 days +1 month`) emitted by the grammar
+// wherever a bare offset has no fixed system base at parse time: directly under a
+// top-level FROM/CLIFF slot, or as a selector arm (`EARLIER OF (+20 days +1 month, …)`)
+// that can't pick a base until its slot is known. It is purely a normalizer *input*: it
 // rides the `parse() as RawProgram` cast into normalizeNode, which anchors it to the
 // slot's system base (grantDate under FROM, vestingStart under CLIFF) and produces a
 // NODE. It is gone post-normalize, so it is deliberately NOT part of VestingNodeExpr
@@ -246,7 +248,7 @@ export interface VestingPeriod<P extends Phase = "normalized"> {
   length: number;
   cliff?: P extends "normalized"
     ? VestingNodeExpr<"VESTING_START"> | undefined
-    : Duration | VestingNodeExpr<"VESTING_START"> | undefined;
+    : Duration | DurationOffsets | VestingNodeExpr<"VESTING_START"> | undefined;
 }
 
 export type RawVestingPeriod = VestingPeriod<"raw">;
@@ -259,7 +261,7 @@ export interface Schedule<P extends Phase = "normalized"> {
   type: "SCHEDULE";
   vesting_start: P extends "normalized"
     ? VestingNodeExpr<"GRANT_DATE">
-    : VestingNodeExpr<"GRANT_DATE"> | null;
+    : VestingNodeExpr<"GRANT_DATE"> | DurationOffsets | null;
   periodicity: VestingPeriod<P>;
 }
 
