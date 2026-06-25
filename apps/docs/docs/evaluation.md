@@ -70,10 +70,13 @@ interface AbsenceAssumption {
   through: OCTDate; // the boundary the event is assumed to have stayed absent against
   direction: "before" | "after"; // which side of `through` a dangerous firing falls
   inclusive: boolean; // whether the boundary day itself is in the dangerous window
+  consequence: "grid-shift" | "flips-to-impossible"; // what that firing would do
 }
 ```
 
-The claim is direction-aware, because the firing that would move the result lands on one _side_ of the boundary. `VEST FROM DATE 2025-01-01 BEFORE EVENT ipo` (ipo unfired) holds iff `ipo` lands on or after `2025-01-01`, so the dangerous firing is `ipo` _before_ that date — it discloses `{ eventId: "ipo", through: "2025-01-01", direction: "before", inclusive: false }` (a firing exactly on the boundary keeps the gate valid, so the boundary day is excluded). Flip the gate to `AFTER` and the dangerous side flips with it: `VEST FROM DATE 2025-01-01 AFTER EVENT ipo` discloses `direction: "after"` — a firing of `ipo` _after_ `2025-01-01` is what flips it to `impossible`. `STRICTLY` makes the boundary day dangerous (`inclusive: true`); a gated-event offset folds into the boundary (`... BEFORE EVENT ipo - 6 months` discloses `through: 2025-07-01`, the date a _raw_ `ipo` firing flips at). The list is a watch-list of the firings (including backdated ones) that would move the result, each pointing at the side to re-check; a date-only or fully-fired schedule discloses none.
+The claim is direction-aware, because the firing that would move the result lands on one _side_ of the boundary. `VEST FROM DATE 2025-01-01 BEFORE EVENT ipo` (ipo unfired) holds iff `ipo` lands on or after `2025-01-01`, so the dangerous firing is `ipo` _before_ that date — it discloses `{ eventId: "ipo", through: "2025-01-01", direction: "before", inclusive: false, consequence: "flips-to-impossible" }` (a firing exactly on the boundary keeps the gate valid, so the boundary day is excluded; it's a gate, so a dangerous firing kills the grant — `flips-to-impossible`). Flip the gate to `AFTER` and the dangerous side flips with it: `VEST FROM DATE 2025-01-01 AFTER EVENT ipo` discloses `direction: "after"` — a firing of `ipo` _after_ `2025-01-01` is what flips it to `impossible`. `STRICTLY` makes the boundary day dangerous (`inclusive: true`); a gated-event offset folds into the boundary (`... BEFORE EVENT ipo - 6 months` discloses `through: 2025-07-01`, the date a _raw_ `ipo` firing flips at). The list is a watch-list of the firings (including backdated ones) that would move the result, each pointing at the side to re-check; a date-only or fully-fired schedule discloses none.
+
+`consequence` says how much is at stake when that firing lands — a distinction `direction` can't carry, because a gate and a selector can guard the same side. A gate (`BEFORE`/`AFTER EVENT`) firing on the dangerous side leaves the gate unsatisfiable, so the grant **`flips-to-impossible`** (a dead grant). A selector (EARLIER/LATER OF) firing only re-anchors the start, so it's a **`grid-shift`** — still a valid schedule, just moved. So `VEST FROM DATE 2025-01-01 AFTER EVENT ipo` (gate) and `VEST FROM LATER OF (DATE 2025-01-01, EVENT ipo)` (selector) disclose the same `{direction: "after", inclusive: false}` but opposite `consequence`, and the rendered message reflects it ("... would void the grant" vs "... would shift the schedule").
 
 A bare `VEST FROM EVENT ipo` — no `BEFORE`/`AFTER` date to measure against — is simply pending. It has no _dated_ assumption, so it discloses nothing and surfaces only as a blocker.
 
@@ -222,12 +225,13 @@ type UnresolvedBlocker =
       through?: OCTDate;
       direction?: "before" | "after"; // present iff `through` is
       inclusive?: boolean;
+      consequence?: "grid-shift" | "flips-to-impossible";
     }
   | { type: "UNRESOLVED_SELECTOR"; selector: "EARLIER_OF" | "LATER_OF"; blockers: Blocker[] }
   | { type: "UNRESOLVED_CONDITION"; condition: Omit<VestingNode, "type"> };
 ```
 
-`through` on `EVENT_NOT_YET_OCCURRED` is the date the event was measured against when it has one (a gate's date, or the date a `LATER OF` settled on), and `direction`/`inclusive` ride alongside it — together they're the boundary the schedule's [absence assumptions](#absence-assumptions) report. A bare wait with no date to compare against carries none of the three.
+`through` on `EVENT_NOT_YET_OCCURRED` is the date the event was measured against when it has one (a gate's date, or the date a `LATER OF` settled on), and `direction`/`inclusive`/`consequence` ride alongside it — together they're the boundary the schedule's [absence assumptions](#absence-assumptions) report. A bare wait with no date to compare against carries none of the four.
 
 ### Impossible
 

@@ -14,11 +14,16 @@ import { isVestingStartPlaceholder } from "./vestingNode/vestingBase.js";
 // One event can be gated two ways on one grant — `... BEFORE EVENT ipo` in one
 // statement and `... AFTER EVENT ipo` in another — and those guard opposite sides of
 // the boundary; collapsing them on the id alone would silently drop one direction
-// (the #399 bug for the gate-both-ways shape). So the key is the relation too. Within
-// a group (same event, same direction/strictness) the latest `through` wins —
-// assuming absence over the wider window is the stronger, safe claim.
+// (the #399 bug for the gate-both-ways shape). So the key is the relation too. The
+// relation is (direction, inclusive, consequence): a gate and a selector can guard the
+// *same* event on the same side (e.g. `… AFTER EVENT ipo` gating one portion while a
+// `LATER OF (…, EVENT ipo)` anchors another) and differ only in consequence — keying
+// without it would collapse the dead-grant watch and the grid-shift watch into one,
+// silently dropping a risk type (the #399 collapse bug, now for consequence). Within a
+// group the latest `through` wins — assuming absence over the wider window is the
+// stronger, safe claim.
 const groupKey = (a: AbsenceAssumption): string =>
-  `${a.eventId}|${a.direction}|${a.inclusive ? "1" : "0"}`;
+  `${a.eventId}|${a.direction}|${a.inclusive ? "1" : "0"}|${a.consequence}`;
 
 /**
  * Closed-world resolution reads "no firing on record" as "hasn't happened" — so
@@ -41,13 +46,22 @@ export const collectAbsences = (blockers: Blocker[]): AbsenceAssumption[] => {
         isVestingStartPlaceholder(node)
       )
         return;
-      // A dated blocker always carries the descriptor alongside `through` (they're
+      // A dated blocker always carries the full descriptor alongside `through` (they're
       // stamped together in withBoundary), so direction/inclusive are present here.
+      // `consequence` has no honest default — unlike direction's "before" belt, neither
+      // value is safe to invent — so we assert the invariant rather than lie: a dated
+      // blocker without it would be a mint-site bug, and surfacing it as a throw is far
+      // better than publishing a wrong dead-grant-vs-shift verdict.
+      if (node.consequence === undefined)
+        throw new Error(
+          `dated absence blocker for "${node.event}" has no consequence`,
+        );
       const assumption: AbsenceAssumption = {
         eventId: node.event,
         through: node.through,
         direction: node.direction ?? "before",
         inclusive: node.inclusive ?? false,
+        consequence: node.consequence,
       };
       const key = groupKey(assumption);
       const prior = byRelation.get(key);

@@ -120,9 +120,16 @@ export type SymbolicDate =
 //     admits it (benign, exclusive), a strict gate excludes it (dangerous,
 //     inclusive). The two selectors compare strictly, so their boundary day is
 //     always benign (exclusive).
+//   - `consequence` — what the dangerous firing actually does, which isn't derivable
+//     from `direction`. A gate (`BEFORE`/`AFTER EVENT`) and a selector (EARLIER/LATER
+//     OF) can guard the same side of the same boundary yet differ here: a gate firing
+//     on the dangerous side makes the gate unsatisfiable, so the grant
+//     `flips-to-impossible`; a selector firing only moves the start, so it's a
+//     `grid-shift` — still a valid schedule, just re-anchored.
 export interface AbsenceDescriptor {
   direction: "before" | "after";
   inclusive: boolean;
+  consequence: "grid-shift" | "flips-to-impossible";
 }
 
 export type UnresolvedBlocker =
@@ -479,7 +486,9 @@ export type InterchangeVerdict =
  * and `direction` + `inclusive` (the `AbsenceDescriptor`) say which side of it a
  * dangerous firing of `eventId` falls — so a consumer re-checks the side that could
  * actually flip the answer (a `BEFORE`/EARLIER OF watch is the on/before side, an
- * `AFTER`/LATER OF watch the on/after side).
+ * `AFTER`/LATER OF watch the on/after side). `consequence` then says how much is at
+ * stake if that firing lands: `flips-to-impossible` (a gate the grant can't satisfy →
+ * dead grant) vs `grid-shift` (a selector re-anchoring → the schedule just moves).
  */
 export interface AbsenceAssumption extends AbsenceDescriptor {
   eventId: string;

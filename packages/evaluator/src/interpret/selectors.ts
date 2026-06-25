@@ -159,7 +159,13 @@ const EARLIER_POLICY: SelectorPolicy = {
   partialEmit: false,
   earlierCommits: true,
   impossibleArmPoisons: false,
-  disclosure: { direction: "before", inclusive: false },
+  // A pending arm landing earlier only pulls the start in — the schedule re-anchors,
+  // it doesn't die. So a selector watch is a `grid-shift`, never `flips-to-impossible`.
+  disclosure: {
+    direction: "before",
+    inclusive: false,
+    consequence: "grid-shift",
+  },
 };
 
 const LATER_POLICY: SelectorPolicy = {
@@ -168,7 +174,12 @@ const LATER_POLICY: SelectorPolicy = {
   partialEmit: true,
   earlierCommits: false,
   impossibleArmPoisons: true,
-  disclosure: { direction: "after", inclusive: false },
+  // A pending arm landing later just pushes the floor out — same `grid-shift`.
+  disclosure: {
+    direction: "after",
+    inclusive: false,
+    consequence: "grid-shift",
+  },
 };
 
 /** Build the IMPOSSIBLE node a selector reports when dead arms sink it. */

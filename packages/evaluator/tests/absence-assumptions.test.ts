@@ -93,7 +93,12 @@ const findUnfired = (
   bs: Blocker[],
   event: string,
 ):
-  | { through?: OCTDate; direction?: "before" | "after"; inclusive?: boolean }
+  | {
+      through?: OCTDate;
+      direction?: "before" | "after";
+      inclusive?: boolean;
+      consequence?: "grid-shift" | "flips-to-impossible";
+    }
   | undefined => {
   for (const b of bs) {
     if (b.type === "EVENT_NOT_YET_OCCURRED" && b.event === event)
@@ -101,6 +106,7 @@ const findUnfired = (
         through: b.through,
         direction: b.direction,
         inclusive: b.inclusive,
+        consequence: b.consequence,
       };
     if (b.type === "UNRESOLVED_SELECTOR" || b.type === "IMPOSSIBLE_SELECTOR") {
       const hit = findUnfired(b.blockers as Blocker[], event);
@@ -126,12 +132,14 @@ describe("absenceAssumptions", () => {
         through: "2025-01-01",
         direction: "before",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
       {
         eventId: "milestone",
         through: "2026-03-01",
         direction: "before",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -200,6 +208,7 @@ describe("absenceAssumptions", () => {
         through: "2027-01-01",
         direction: "after",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });
@@ -210,14 +219,15 @@ describe("absenceAssumptions", () => {
       stmt(portion(1, 2), dateBeforeEvent("2026-03-01", "ipo")),
     ];
     const out = evaluateProgram(program, ctxInput());
-    // Both are sound BEFORE gates (before/exclusive), so they share a relation group
-    // and collapse to the later (wider) boundary.
+    // Both are sound BEFORE gates (before/exclusive, both flips-to-impossible), so they
+    // share a relation group and collapse to the later (wider) boundary.
     expect(out.absenceAssumptions).toEqual([
       {
         eventId: "ipo",
         through: "2026-03-01",
         direction: "before",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -239,6 +249,7 @@ describe("#399 — disclosure direction", () => {
         through: "2025-01-01",
         direction: "after",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -256,6 +267,7 @@ describe("#399 — disclosure direction", () => {
         through: "2025-01-01",
         direction: "after",
         inclusive: true,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -274,6 +286,7 @@ describe("#399 — disclosure direction", () => {
         through: "2025-07-01",
         direction: "before",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -291,6 +304,7 @@ describe("#399 — disclosure direction", () => {
         through: "2025-01-01",
         direction: "before",
         inclusive: false,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -308,6 +322,7 @@ describe("#399 — disclosure direction", () => {
         through: "2025-01-01",
         direction: "before",
         inclusive: true,
+        consequence: "flips-to-impossible",
       },
     ]);
   });
@@ -323,6 +338,7 @@ describe("#399 — disclosure direction", () => {
         through: "2027-01-01",
         direction: "after",
         inclusive: false,
+        consequence: "grid-shift",
       },
     ]);
   });
@@ -340,6 +356,7 @@ describe("#399 — disclosure direction", () => {
       through: "2025-01-01",
       direction: "after",
       inclusive: false,
+      consequence: "flips-to-impossible",
     });
   });
 
@@ -356,13 +373,42 @@ describe("#399 — disclosure direction", () => {
       through: "2026-01-01",
       direction: "before",
       inclusive: false,
+      consequence: "flips-to-impossible",
     });
     expect(out).toContainEqual({
       eventId: "ipo",
       through: "2025-01-01",
       direction: "after",
       inclusive: false,
+      consequence: "flips-to-impossible",
     });
     expect(out).toHaveLength(2);
+  });
+
+  // AC-6 — the groupKey carries consequence. A gate and a selector watching the SAME
+  // event on the SAME side (after/exclusive here) differ only in consequence; without
+  // it in the key they'd collapse into one entry and one risk-type would vanish. The
+  // gate portion mints flips-to-impossible through 2025-01-01, the LATER OF portion
+  // grid-shift through 2025-06-01 — both `(ipo, after, false)`, kept apart by the tag.
+  it("a gate and a selector on the same event+side disclose both consequences", () => {
+    const dsl =
+      "1/2 VEST FROM DATE 2025-01-01 AFTER EVENT ipo OVER 12 months EVERY 1 month " +
+      "PLUS 1/2 VEST FROM LATER OF (DATE 2025-06-01, EVENT ipo) OVER 12 months EVERY 1 month";
+    const out = disclose(dsl);
+    expect(out).toHaveLength(2);
+    expect(out).toContainEqual({
+      eventId: "ipo",
+      through: "2025-01-01",
+      direction: "after",
+      inclusive: false,
+      consequence: "flips-to-impossible",
+    });
+    expect(out).toContainEqual({
+      eventId: "ipo",
+      through: "2025-06-01",
+      direction: "after",
+      inclusive: false,
+      consequence: "grid-shift",
+    });
   });
 });

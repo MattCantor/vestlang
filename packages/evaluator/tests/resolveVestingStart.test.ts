@@ -58,6 +58,7 @@ describe("resolveVestingStart", () => {
           through: "2024-06-01",
           direction: "before",
           inclusive: false,
+          consequence: "grid-shift",
         },
       ],
     });

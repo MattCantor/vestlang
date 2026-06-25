@@ -96,13 +96,24 @@ const gateBoundary = (
         addMonthsExact,
         true,
       ),
-      descriptor: { direction: direct, inclusive },
+      // A gate that fires on the dangerous side can never be satisfied, so the grant
+      // dies — not just re-anchors. That's the gate-vs-selector distinction a consumer
+      // can't read off `direction` (a selector guarding the same side only shifts).
+      descriptor: {
+        direction: direct,
+        inclusive,
+        consequence: "flips-to-impossible",
+      },
     };
   }
   if (baseDate !== undefined) {
     return {
       through: baseDate,
-      descriptor: { direction: opposite, inclusive },
+      descriptor: {
+        direction: opposite,
+        inclusive,
+        consequence: "flips-to-impossible",
+      },
     };
   }
   return undefined;

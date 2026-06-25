@@ -55,6 +55,18 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
   });
 });
 
+describe("mcp-server / absenceAssumptions consequence in descriptions (#448)", () => {
+  it("the evaluate and resolve_offset descriptions enumerate `consequence`", async () => {
+    for (const tool of ["vestlang_evaluate", "vestlang_resolve_offset"]) {
+      const description = await descriptionOf(tool);
+      // The absence record now carries the grid-shift vs flips-to-impossible tag;
+      // a client reading the description must see it listed alongside the other
+      // fields.
+      expect(description, tool).toContain("consequence");
+    }
+  });
+});
+
 describe("mcp-server / vestlang_evaluate_as_of description (#379)", () => {
   it("no longer advertises a cliff field in the summary roll-up", async () => {
     // The vestigial cliff-date summary field was removed, so the tool description

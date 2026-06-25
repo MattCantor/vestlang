@@ -375,6 +375,7 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
       through: "2030-01-01",
       direction: "before",
       inclusive: false,
+      consequence: "grid-shift",
     });
 
     // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still
