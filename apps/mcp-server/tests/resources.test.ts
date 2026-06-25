@@ -22,4 +22,19 @@ describe("MCP resources", () => {
       expect(text.trim().length).toBeGreaterThan(0);
     },
   );
+
+  // #469 — the evaluation doc is a live MCP resource that CI can't typecheck, so the
+  // blocker shape it documents can silently drift from the type. Guard the migration:
+  // the EVENT_NOT_YET_OCCURRED arm carries a nested `boundary?:`, not the old flat
+  // `direction?:` / `inclusive?:` / `consequence?:` / `through?:` fields.
+  it("documents the EVENT_NOT_YET_OCCURRED blocker with a nested boundary, not flat fields", () => {
+    const evaluation = RESOURCES.find((r) => r.name === "evaluation");
+    expect(evaluation).toBeDefined();
+    const text = readFileSync(resolve(REPO_ROOT, evaluation!.path), "utf8");
+    expect(text).toContain("boundary?:");
+    // None of the four old flat fields may reappear as an optional blocker member.
+    expect(text).not.toMatch(
+      /\b(?:through|direction|inclusive|consequence)\?:/,
+    );
+  });
 });

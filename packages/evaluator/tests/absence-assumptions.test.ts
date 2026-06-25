@@ -103,10 +103,10 @@ const findUnfired = (
   for (const b of bs) {
     if (b.type === "EVENT_NOT_YET_OCCURRED" && b.event === event)
       return {
-        through: b.through,
-        direction: b.direction,
-        inclusive: b.inclusive,
-        consequence: b.consequence,
+        through: b.boundary?.through,
+        direction: b.boundary?.direction,
+        inclusive: b.boundary?.inclusive,
+        consequence: b.boundary?.consequence,
       };
     if (b.type === "UNRESOLVED_SELECTOR" || b.type === "IMPOSSIBLE_SELECTOR") {
       const hit = findUnfired(b.blockers as Blocker[], event);
