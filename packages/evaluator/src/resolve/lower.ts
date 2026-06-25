@@ -878,21 +878,20 @@ export const buildTemplate = (
       event_condition = { event_id: eventId };
       if (r.cliff.firing !== undefined) {
         recordFiring(eventId, r.cliff.firing);
-      } else {
-        // The hold is still in force (firing-blind, or the event hasn't fired).
-        // Disclose it on the template verdict's blocker list so resolution.pending
-        // reflects the held grid — the projection itself is empty until it fires.
-        // We carry the event side's OWN blockers (set on the cliff when unfired):
-        // for a bare side that's `EVENT_NOT_YET_OCCURRED(real id)`; for a synthetic
-        // side it names the real underlying events (`a`/`b`), never the minted
-        // `evt:<n>` — pushing the synthetic id here would leak an internal name to
-        // MCP/CLI consumers. Pushing nothing would silently hide a held grant (the
-        // template arm has no symbolic-installment fallback), so the carried
-        // blockers are the only disclosure that the grid is held. The interchange
-        // build is firing-blind and never reads these, so this stays
-        // firing-invariant.
-        blockers.push(...(r.cliff.blockers ?? []));
       }
+      // Disclose the hold's blockers on the template verdict's blocker list so
+      // resolution.pending reflects what the cliff is leaning on. Two sources, both
+      // carried on `r.cliff.blockers` (see the field's doc on LoweredCliff):
+      //   - an unfired hold names its real underlying events (`a`/`b`), never the
+      //     minted `evt:<n>` — pushing the synthetic id here would leak an internal
+      //     name to MCP/CLI consumers. Pushing nothing would silently hide a held
+      //     grant (the template arm has no symbolic-installment fallback);
+      //   - a committed inner `EARLIER OF` that won the outer `LATER OF` (firing
+      //     defined via its floor) discloses its assumed-absent event (#473).
+      // The push is unconditional — `r.cliff.blockers` is empty for a real firing and
+      // for a dominated/tied commit, so it adds nothing there. The interchange build
+      // is firing-blind and never reads these, so this stays firing-invariant.
+      blockers.push(...(r.cliff.blockers ?? []));
     }
 
     // The internal share is an exact Fraction; the stored field is a Numeric

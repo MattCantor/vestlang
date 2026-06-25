@@ -57,6 +57,20 @@ function collectBlockers<T>(x: PickReturn<T>[]): Blocker[] {
   return blockers;
 }
 
+// The pending-sibling half of `collectBlockers`: harvest only the arms that are
+// still open (UNRESOLVED / IMPOSSIBLE) and skip every settled arm — RESOLVED and
+// COMMITTED alike. A pending sibling can still land and move a LATER_OF's max, so
+// its blockers ride up unconditionally; a committed sibling's disclosures do not —
+// those are gated on whether it actually won the fold (`winnerIsStrictMax`).
+function collectPendingBlockers<T>(x: PickReturn<T>[]): Blocker[] {
+  const blockers: Blocker[] = [];
+  for (const r of x) {
+    if (r.type === "PICKED") continue;
+    blockers.push(...r.blockers);
+  }
+  return blockers;
+}
+
 function collectImpossibleBlockers<T>(x: PickReturn<T>[]): ImpossibleBlocker[] {
   const blockers: ImpossibleBlocker[] = [];
   for (const r of x) {
@@ -82,6 +96,18 @@ type SettledPick<T> = PickedResolved<T> | PickedCommitted<T>;
 const isSettled = <T>(x: PickReturn<T>): x is SettledPick<T> =>
   isPickedResolved(x) || isPickedCommitted(x);
 
+// Is the fold's chosen arm the UNIQUE strict max — every other settled arm strictly
+// earlier than it? `reduceBest` selects with strict `lt` (`dateIsBetter`), so on a
+// tie the first-written arm wins arbitrarily; gating a committed arm's disclosure on
+// "it won" alone would then be order-dependent. Requiring a strict max removes that:
+// a tied (or later) sibling floor already pins a LATER_OF's max, so the committed
+// arm's event can never move the answer and stays silent — both tie orders alike.
+const winnerIsStrictMax = <T>(
+  winner: SettledPick<T>,
+  settled: SettledPick<T>[],
+): boolean =>
+  settled.every((s) => s === winner || lt(s.meta.date, winner.meta.date));
+
 // Pick the better of two dates for the selector: the earlier for EARLIER_OF, the
 // later for LATER_OF.
 const dateIsBetter = (
@@ -94,26 +120,32 @@ const dateIsBetter = (
     : lt(incumbent, candidate);
 
 /** Reduce a non-empty array of settled picks (RESOLVED or COMMITTED) to the
- *  single best pick + its date. Both arms of SettledPick carry `meta.date`, so a
- *  committed inner pick folds on its floor exactly like a resolved one. */
+ *  single best pick, its date, and the winning arm itself. Both arms of
+ *  SettledPick carry `meta.date`, so a committed inner pick folds on its floor
+ *  exactly like a resolved one. The winner is returned so the caller can ask
+ *  whether it committed and whether it was the unique strict max before harvesting
+ *  its disclosures (the materiality gate); on a tie it's the first-written arm,
+ *  consistent with `bestDate`. */
 function reduceBest<T>(
   settled: SettledPick<T>[],
   selector: SelectorTag,
-): { picked: T; date: OCTDate } {
+): { picked: T; date: OCTDate; winner: SettledPick<T> } {
   // settled is non-empty by construction when we call this; every member carries
   // a date (RESOLVED or COMMITTED), so `meta.date` is always present.
   let bestDate = settled[0].meta.date;
   let picked = settled[0].picked;
+  let winner = settled[0];
 
   for (const r of settled) {
     const date = r.meta.date;
     if (dateIsBetter(date, bestDate, selector)) {
       bestDate = date;
       picked = r.picked;
+      winner = r;
     }
   }
 
-  return { picked, date: bestDate };
+  return { picked, date: bestDate, winner };
 }
 
 /* ------------------------
@@ -151,6 +183,20 @@ type SelectorPolicy = {
   // strict `lt` (a tie keeps the incumbent), so the settled date itself is benign —
   // exclusive either way.
   disclosure: AbsenceDescriptor;
+  // Which blockers the fold carries up, given the live arms, the winning arm, and
+  // every settled arm. The two policies diverge here: a LATER_OF discloses a
+  // committed arm's assumptions only when that arm is the unique strict max (an
+  // equal-or-later sibling already pins the max, so the committed event can't move
+  // it); an EARLIER_OF stays winner-blind, because a pending arm firing earlier can
+  // pull a currently-losing committed arm into the winning position. Blocker
+  // harvesting reads `Blocker[]` off `.blockers` / `.meta.disclosures`, so it's
+  // T-independent — `unknown` matches the `selectorIsSatisfied` pattern and the
+  // call sites pass `PickReturn<T>[]` / `SettledPick<T>` by array covariance.
+  harvest: (
+    live: PickReturn<unknown>[],
+    winner: SettledPick<unknown>,
+    settled: SettledPick<unknown>[],
+  ) => Blocker[];
 };
 
 const EARLIER_POLICY: SelectorPolicy = {
@@ -166,6 +212,11 @@ const EARLIER_POLICY: SelectorPolicy = {
     inclusive: false,
     consequence: "grid-shift",
   },
+  // Winner-blind: an EARLIER_OF takes the min, so a pending arm firing earlier can
+  // pull a now-losing committed arm into the winning position — gating on the
+  // current winner would wrongly silence those. Harvest every committed arm's
+  // disclosures, as before (Decision 2).
+  harvest: (live) => collectBlockers(live),
 };
 
 const LATER_POLICY: SelectorPolicy = {
@@ -180,6 +231,17 @@ const LATER_POLICY: SelectorPolicy = {
     inclusive: false,
     consequence: "grid-shift",
   },
+  // Materiality-gated: pending siblings always ride up (one could still land later
+  // and move the max), but a committed arm's own disclosures only do so when that
+  // arm both won the fold AND was the unique strict max. A swamped or tied committed
+  // floor can never move a LATER_OF's max, so its assumed-absent event is immaterial
+  // and stays silent (#473 / #363 over-disclosure).
+  harvest: (live, winner, settled) => [
+    ...collectPendingBlockers(live),
+    ...(isPickedCommitted(winner) && winnerIsStrictMax(winner, settled)
+      ? winner.meta.disclosures
+      : []),
+  ],
 };
 
 /** Build the IMPOSSIBLE node a selector reports when dead arms sink it. */
@@ -226,15 +288,18 @@ function handleSelector<T extends Schedule | VestingNode>(
 
   // Every live arm settled → the selector settles to the best of them. If any arm
   // was a committed inner pick (an EARLIER_OF that leaned on assumed-absent
-  // siblings), those assumptions are harvested by `collectBlockers` and re-stamped
+  // siblings), those assumptions are harvested by `policy.harvest` and re-stamped
   // through this fold's date. With assumptions in hand we settle to COMMITTED so
   // they're carried up (#363); with none — the common case, e.g. all arms plain
-  // RESOLVED — we settle to RESOLVED exactly as before. (Firing-blind modes never
-  // commit, so the harvest is empty there and this stays RESOLVED.)
+  // RESOLVED, OR a LATER_OF whose committed arm was swamped/tied and so immaterial
+  // (#473) — we settle to RESOLVED exactly as before. (Firing-blind modes never
+  // commit, so the harvest is empty there and this stays RESOLVED.) Every live arm
+  // is settled here, so the pending-sibling half of the harvest is empty and the
+  // LATER_OF gate reduces to the winner's materiality.
   if (policy.selectorIsSatisfied(live)) {
-    const { picked, date } = reduceBest(settled, policy.selector);
+    const { picked, date, winner } = reduceBest(settled, policy.selector);
     const disclosures = withBoundary(
-      collectBlockers(live),
+      policy.harvest(live, winner, settled),
       date,
       policy.disclosure,
     );
@@ -274,13 +339,16 @@ function handleSelector<T extends Schedule | VestingNode>(
   // Partial resolution branch for LATER_OF: emit the known floor for the
   // projection but keep the meta UNRESOLVED (the resolved arm is an upper bound).
   if (policy.partialEmit && !allSettled && hasAnySettled) {
-    const { picked, date } = reduceBest(settled, policy.selector);
+    const { picked, date, winner } = reduceBest(settled, policy.selector);
     // The latest arm settled so far is the answer only as long as the arms we're
     // still waiting on don't land even later. So its date is the boundary we're
     // assuming each of those pending events stays absent through — and a firing
-    // *after* it is the dangerous one (it would push the floor later).
+    // *after* it is the dangerous one (it would push the floor later). The
+    // still-pending siblings ride up via `collectPendingBlockers`; a committed
+    // settled arm discloses only when it's the unique strict max of the settled set
+    // (it is, vacuously, when it's the only settled arm — #363 AC-5).
     const stamped = withBoundary(
-      collectBlockers(live),
+      policy.harvest(live, winner, settled),
       date,
       policy.disclosure,
     );

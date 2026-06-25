@@ -95,11 +95,15 @@ export type LoweredCliff =
       // The resolved condition firing (resolution mode, event fired). Undefined
       // when firing-blind or still pending.
       firing?: OCTDate;
-      // The event side's own pending blockers, set only while the hold is unfired
-      // (no `firing`). buildTemplate discloses the hold off these so the held grid
-      // names the REAL underlying events (`a`/`b`), never the minted synthetic id —
-      // an `evt:<n>` would leak an internal name out to MCP/CLI consumers. Omitted
-      // (and unread) once fired.
+      // The disclosures buildTemplate surfaces off the hold. Either the unfired
+      // event side's own pending blockers (so the held grid names the REAL
+      // underlying events `a`/`b`, never the minted synthetic id — an `evt:<n>`
+      // would leak an internal name out to MCP/CLI consumers), OR, when the event
+      // side committed via an inner `EARLIER OF` that was the unique strict max of
+      // the outer `LATER OF`, that inner's assumed-absent event (the materiality-gated
+      // disclosure, #473). buildTemplate pushes them whether or not the hold fired;
+      // empty for a real firing and for a dominated/tied commit, so the push is a
+      // no-op there.
       blockers?: Blocker[];
     }
   // A pending cliff the renderer reproduces without re-resolving. `shape` carries
@@ -155,6 +159,21 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
     return res.meta.type === "UNRESOLVED" ? res.meta.blockers : [];
   }
   return res.blockers;
+};
+
+/** Fold the WHOLE cliff expression through the now-materiality-gated selector and
+ *  read the gated disclosures off it: a committed inner `EARLIER OF` that's the
+ *  unique strict max of the outer `LATER OF` rides up COMMITTED carrying its
+ *  assumed-absent event, while a swamped/tied inner, a dated win, or a real firing
+ *  folds RESOLVED with nothing to disclose. Shared by both cliff paths (#473); the
+ *  caller passes the ctx its path resolves under — the start overlay on the anchored
+ *  path, the plain (start-blind) ctx on the deferred one. */
+const committedCliffDisclosures = (
+  cliffExpr: VestingNodeExpr<"VESTING_START">,
+  ctx: ResolutionContext,
+): Blocker[] => {
+  const whole = evaluateVestingNodeExpr(cliffExpr, ctx);
+  return isPickedCommitted(whole) ? whole.meta.disclosures : [];
 };
 
 // Count the grid occurrences whose vesting date falls at or before `cliffDate`,
@@ -450,11 +469,19 @@ const lowerEventCliff = (
   // over events; a partial/unresolved one leaves `firing` undefined.
   const firing = pickedDate(eventRes);
 
-  // While the hold is unfired, carry the event side's own pending blockers so
-  // buildTemplate discloses on the real events (the synthetic recipe's underlying
-  // `a`/`b`), never the minted `evt:<n>`. Only when non-empty, so a fired record is
-  // untouched.
-  const blockers = firing === undefined ? blockersOf(eventRes) : [];
+  // What buildTemplate discloses off the hold:
+  //   - genuinely pending event side (no firing) → its own real-event blockers, so
+  //     the held grid names `a`/`b`, never the minted `evt:<n>`;
+  //   - a committed inner that won the fold (firing defined via its floor) → the
+  //     gated disclosures off the whole-expression fold (the inner's assumed-absent
+  //     `e`);
+  //   - a real firing, or a dominated/tied commit → the gated fold didn't commit, so
+  //     nothing is disclosed (a fired event is no absence assumption; a swamped floor
+  //     can't move the answer).
+  const blockers =
+    firing === undefined
+      ? blockersOf(eventRes)
+      : committedCliffDisclosures(cliffExpr, overlayCtx);
 
   return {
     state: "EVENT_HELD",
@@ -521,14 +548,22 @@ export const lowerDeferredCliff = (
     }
 
     // The event side is firing-blind here (the start itself is pending), so the
-    // hold always stands. Resolve it anyway to carry its real-event blockers — the
-    // hold then discloses on the underlying events, not the minted synthetic id.
-    // Drop any vestingStart placeholder: that pending-ness is the start's, reported
-    // on the start, not doubled onto the cliff.
+    // hold always stands. Resolve the event arms to carry their real-event blockers —
+    // the hold then discloses on the underlying events, not the minted synthetic id.
+    // Separately, harvest the whole-expression fold's gated disclosures: a committed
+    // inner `EARLIER OF` that's the unique strict max of the outer `LATER OF` rides up
+    // with its assumed-absent event, which `blockersOf(eventRes)` alone misses (it
+    // returns `[]` for a committed pick). The two never double-count: a committed
+    // event side has no `blockersOf` to give, and a pending event side leaves the
+    // whole fold partial so the gated harvest is empty. A `vestingStart`-relative time
+    // arm can't resolve here, so the fold stays partial and domination is left
+    // undecided (silent, by design — N3). Drop any vestingStart placeholder: that
+    // pending-ness is the start's, not the cliff's.
     const eventRes = evaluateVestingNodeExpr(joinLaterOf(eventArms), ctx);
-    const blockers = blockersOf(eventRes).filter(
-      (b) => !isVestingStartPlaceholder(b),
-    );
+    const blockers = [
+      ...blockersOf(eventRes),
+      ...committedCliffDisclosures(cliffExpr, ctx),
+    ].filter((b) => !isVestingStartPlaceholder(b));
 
     return {
       state: "EVENT_HELD",
