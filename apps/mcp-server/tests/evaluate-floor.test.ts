@@ -33,18 +33,22 @@ async function connectClient(): Promise<Client> {
   return client;
 }
 
-const evaluate = async (
-  client: Client,
-  dsl: string,
-): Promise<Installment[]> => {
+type EvalView = {
+  interchange: { status: string };
+  installments: Installment[];
+};
+
+const evaluateView = async (client: Client, dsl: string): Promise<EvalView> => {
   const res = (await client.callTool({
     name: "vestlang_evaluate",
     arguments: { dsl, grant_date: "2025-01-01", grant_quantity: 4800 },
   })) as CallResult;
   expect(res.isError).toBeFalsy();
-  return (res.structuredContent as { installments: Installment[] })
-    .installments;
+  return res.structuredContent as EvalView;
 };
+
+const evaluate = async (client: Client, dsl: string): Promise<Installment[]> =>
+  (await evaluateView(client, dsl)).installments;
 
 describe("#447 — cliff floor rides the vestlang_evaluate passthrough", () => {
   it("discloses the floor on a held LATER OF cliff (ipo unfired)", async () => {
@@ -84,5 +88,49 @@ describe("#447 — cliff floor rides the vestlang_evaluate passthrough", () => {
         (i) => i.symbolicDate !== undefined && !("floor" in i.symbolicDate),
       ),
     ).toBe(true);
+  });
+});
+
+// #463 — the two exact DSLs the dead `dated-floor` arm was once mis-credited for.
+// Both route elsewhere (the EVENT_HELD disclose / the deferred symbolic lump), so
+// these lock the documented baseline so the arm's deletion stays a no-op.
+describe("#463 — dead-code baseline for the two probe DSLs", () => {
+  it("(a) partial LATER OF cliff holds the monthly grid and discloses the date floor", async () => {
+    const client = await connectClient();
+    const { interchange, installments } = await evaluateView(
+      client,
+      "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (DATE 2026-06-01, EVENT fda)",
+    );
+
+    // Storable as one template; the held tranches keep their honest monthly
+    // cadence and carry the resolved date arm as the floor (never folded onto it).
+    expect(interchange.status).toBe("template");
+    expect(installments).toHaveLength(48);
+    expect(installments[0].symbolicDate).toEqual({
+      type: "UNRESOLVED_CLIFF",
+      date: "2025-02-01",
+      floor: "2026-06-01",
+    });
+    expect(installments[47].symbolicDate?.date).toBe("2029-01-01");
+    expect(
+      installments.every(
+        (i) =>
+          i.state === "UNRESOLVED" && i.symbolicDate?.floor === "2026-06-01",
+      ),
+    ).toBe(true);
+  });
+
+  it("(b) cross-unit deferred cliff is a single unrepresentable lump", async () => {
+    const client = await connectClient();
+    const { interchange, installments } = await evaluateView(
+      client,
+      "VEST FROM EVENT ipo OVER 48 months EVERY 1 month CLIFF +100 days",
+    );
+
+    // The cliff can't be placed until ipo fires, so there's no storable form.
+    expect(interchange.status).toBe("unrepresentable");
+    expect(installments).toHaveLength(1);
+    expect(installments[0].state).toBe("UNRESOLVED");
+    expect(installments[0].symbolicDate?.type).toBe("UNRESOLVED_VESTING_START");
   });
 });

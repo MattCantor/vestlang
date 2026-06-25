@@ -20,7 +20,6 @@ import { claimAllocator } from "../claims.js";
 import {
   makeImpossibleSchedule,
   makeStartPlusSchedule,
-  makeUnresolvedCliffInstallment,
   makeUnresolvedCliffSchedule,
   makeUnresolvedVestingStartSchedule,
 } from "../interpret/makeTranches.js";
@@ -231,9 +230,9 @@ export const unresolvedInstallments = (
           // placeable grid) is only ever produced for a start that has no date
           // yet — and those starts return far above this point, through the
           // pending-start arms. By the time we get here the start has a concrete
-          // date, and a dated start always lowers its cliff to a "dated" or
-          // "dated-floor" shape, never "symbolic". So this pairing — dated start,
-          // symbolic cliff — can't be built from any real schedule.
+          // date, and a dated start always lowers its cliff to a "dated" shape,
+          // never "symbolic". So this pairing — dated start, symbolic cliff —
+          // can't be built from any real schedule.
           //
           // We throw rather than render because the inputs here are already
           // folded onto the grant date, and the symbolic builder would re-derive
@@ -250,17 +249,6 @@ export const unresolvedInstallments = (
           );
         case "dated":
           return makeUnresolvedCliffSchedule(dates, amounts, blockers);
-        case "dated-floor": {
-          // A partial LATER OF: the cliff can only land at or after the resolved
-          // branch's date, so fold every pre-cliff tranche onto that lower bound.
-          const folded = foldToGrantDate(dates, amounts, shape.floor);
-          return {
-            installments: folded.dates.map((d, i) =>
-              makeUnresolvedCliffInstallment(d, folded.amounts[i]),
-            ),
-            blockers,
-          };
-        }
         default:
           return assertNever(shape);
       }

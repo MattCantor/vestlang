@@ -60,9 +60,11 @@ describe("evaluateVestingNodeExpr selectors", () => {
     expect(
       (res as { meta: { blockers: { type: string }[] } }).meta.blockers[0].type,
     ).toBe("EVENT_NOT_YET_OCCURRED");
-    // The partial pick carries its pivot: the latest settled arm's date — here the
-    // only resolved arm, 2024-02-01. This is the single source of truth the cliff
-    // lowering reads as the `dated-floor` floor, so pin it to the resolved-arm date.
+    // The partial pick carries its pivot: the latest settled arm's lower bound —
+    // here the only resolved arm, 2024-02-01. It's a required field of the
+    // start-side partial-pick contract (PickedPartial.pivot), so pin it to the
+    // resolved-arm date. (Whether `pivot` still has a value-read site at all is
+    // tracked separately in #481.)
     expect(isPickedPartial(res)).toBe(true);
     if (isPickedPartial(res)) {
       expect(res.pivot).toBe("2024-02-01");

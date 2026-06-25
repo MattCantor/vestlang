@@ -97,9 +97,9 @@ export function makeUnresolvedVestingStartSchedule(
  * Unresolved Cliff
  * ------------------------ */
 
-// Exported for the partial-LATER-OF fold in resolve/unresolved.ts, which builds
-// the cliff installments itself rather than going through the schedule scaffold.
-// The caller carries the blockers on the surrounding InstallmentSet.
+// The per-installment builder for an unresolved (held) cliff grid:
+// makeUnresolvedCliffSchedule (below) lays out a whole grid of these, and the
+// export lets makeTranches.test.ts pin one directly.
 //
 // `floor` (optional) is the cliff's disclosed lower bound — the earliest the
 // tranche could land (a resolved `LATER OF` time-arm date). Threaded through to
