@@ -12,6 +12,7 @@
 import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
 import type {
   Blocker,
+  BreakdownInstallment,
   Finding,
   ImpossibleBlocker,
   ImpossibleInstallment,
@@ -29,10 +30,13 @@ import type {
 // emits one breakdown entry per clause. A statement is either dated (its
 // ResolvedInstallments) or symbolic (its pending / void tranches), never both, and
 // the slices together sum to the headline by construction. Carries NO blockers —
-// those ride the separate per-clause channel in the pipeline.
+// those ride the separate per-clause channel in the pipeline. A dated statement's
+// folded grant-date line may carry the pre-fold `scheduled` partition (#441), so the
+// element type is the breakdown-specific `BreakdownInstallment` (eval-time only — it
+// never reaches a stored/wire shape).
 export interface StatementContribution {
   statementOrder: number; // 1-based program order
-  installments: Installment[];
+  installments: BreakdownInstallment[];
 }
 
 export type ResolveVerdict =

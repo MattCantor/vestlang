@@ -107,6 +107,8 @@ export {
   ResolvedInstallment,
   Installment,
   SymbolicInstallment,
+  ScheduledFold,
+  BreakdownInstallment,
   SourceMapEntry,
   SourceMap,
   InstallmentSet,

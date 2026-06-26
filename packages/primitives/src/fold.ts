@@ -3,8 +3,8 @@
 // `foldToGrantDate`; in-repo the fold is reached via that wrapper (the kernel's
 // grant-date fold and the evaluator's unresolved-arm folds).
 
-import type { OCTDate } from "@vestlang/types";
-import { eq, lt } from "./dates.js";
+import type { OCTDate, ScheduledFold } from "@vestlang/types";
+import { eq, gt, lt } from "./dates.js";
 
 // The boundary both the fold and the provenance allocator key on: a date before
 // the anchor relocates onto it, a date at or after it stays put. The fold
@@ -96,12 +96,15 @@ export function foldToGrantDate(
 // A row in the display-coalescing pass: a date and the integer it carries, plus
 // the provenance keys the merged order sorts on. The keys are optional so the
 // rollup can hand in already-coalesced installments (which no longer carry them)
-// and fall back to a stable date sort.
+// and fall back to a stable date sort. `scheduled` is the pre-fold partition the
+// row carries INTO the merge (#441) — a per-statement folded line forwards its
+// whole list, a singleton elsewhere; absent on a row with nothing to preserve.
 export interface CoalesceRow {
   date: OCTDate;
   amount: number;
   statementOrder?: number;
   occurrence?: number;
+  scheduled?: ScheduledFold[];
 }
 
 // The one allocation/merge order: by date, then statement order, then occurrence
@@ -132,11 +135,18 @@ export const byDateOrderOccurrence = (
  * allocator uses — so a THEN chain's segments merge in the order they'd allocate.
  * A missing `grantDate` (no grant-date fold in play) just returns the rows
  * date-ordered.
+ *
+ * The merged grant-date tranche also carries `scheduled` (#441): the pre-fold
+ * partition of every row that landed on the grant date, globally date-ascending by
+ * `scheduledDate`. It is emitted ONLY when at least one of those positions sits
+ * strictly before the grant date (something was genuinely pulled forward); a tranche
+ * built only of native grant-date rows, and the `grantDate === undefined` path, stay
+ * bare — byte-identical to before the field existed.
  */
 export function coalesceAtGrantDate(
   rows: CoalesceRow[],
   grantDate: OCTDate | undefined,
-): { date: OCTDate; amount: number }[] {
+): { date: OCTDate; amount: number; scheduled?: ScheduledFold[] }[] {
   const sorted = [...rows].sort(byDateOrderOccurrence);
   if (grantDate === undefined)
     return sorted.map((r) => ({ date: r.date, amount: r.amount }));
@@ -145,15 +155,43 @@ export function coalesceAtGrantDate(
   // are the contiguous front of the sorted run, summed into one tranche.
   let grantSum = 0;
   let sawGrant = false;
-  const out: { date: OCTDate; amount: number }[] = [];
+  const grantFolds: ScheduledFold[] = [];
+  const out: { date: OCTDate; amount: number; scheduled?: ScheduledFold[] }[] =
+    [];
   for (const r of sorted) {
     if (eq(r.date, grantDate)) {
       grantSum += r.amount;
       sawGrant = true;
+      // A row carries its own pre-fold list (a per-statement folded line forwards
+      // it); a row without one is a native grant-date share, a singleton at its
+      // own date.
+      grantFolds.push(
+        ...(r.scheduled ?? [{ scheduledDate: r.date, amount: r.amount }]),
+      );
     } else {
       out.push({ date: r.date, amount: r.amount });
     }
   }
-  if (sawGrant) out.unshift({ date: grantDate, amount: grantSum });
+  if (sawGrant) {
+    // The rows fed in pre-sorted by (date, statementOrder, occurrence) and each
+    // row's own sublist is already scheduledDate-ascending, so this stable sort by
+    // scheduledDate makes the concatenation globally ascending while a tie keeps
+    // the statementOrder/occurrence order.
+    grantFolds.sort((a, b) =>
+      lt(a.scheduledDate, b.scheduledDate)
+        ? -1
+        : gt(a.scheduledDate, b.scheduledDate)
+          ? 1
+          : 0,
+    );
+    const pulledForward = grantFolds.some((s) =>
+      lt(s.scheduledDate, grantDate),
+    );
+    out.unshift(
+      pulledForward
+        ? { date: grantDate, amount: grantSum, scheduled: grantFolds }
+        : { date: grantDate, amount: grantSum },
+    );
+  }
   return out;
 }

@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import type { Installment } from "@vestlang/types";
 import {
   runEvaluate,
+  runAsOf,
+  runVestedBetween,
   runPersist,
   runRehydrate,
   type GrantInput,
@@ -206,6 +208,64 @@ describe("headline byte-stability — golden literals (#442 / D1)", () => {
         amount,
       })),
     ]);
+  });
+
+  // #441 (D3, AC5): the breakdown gains `scheduled` for a backdated fold, but the
+  // HEADLINE / as-of / window stay folded and bare — no `scheduled` key leaks onto
+  // any installment they read (those share `ResolvedInstallment` / the wire shape).
+  // The full 13-line view is pinned via `toEqual`, which forbids the extra prop.
+  describe("backdated fold — headline / as-of / window stay bare (#441)", () => {
+    const BACKDATED =
+      "100 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 3 months";
+    const BACKDATED_GRANT: GrantInput = {
+      grant_date: "2025-01-01",
+      grant_quantity: 100,
+    };
+
+    it("the headline is the bare 13-line fold with no scheduled key", () => {
+      const view = headline(BACKDATED, BACKDATED_GRANT);
+      expect(view).toEqual([
+        { state: "RESOLVED", amount: 25, date: "2025-01-01" },
+        { state: "RESOLVED", amount: 6, date: "2025-04-01" },
+        { state: "RESOLVED", amount: 6, date: "2025-07-01" },
+        { state: "RESOLVED", amount: 6, date: "2025-10-01" },
+        { state: "RESOLVED", amount: 7, date: "2026-01-01" },
+        { state: "RESOLVED", amount: 6, date: "2026-04-01" },
+        { state: "RESOLVED", amount: 6, date: "2026-07-01" },
+        { state: "RESOLVED", amount: 6, date: "2026-10-01" },
+        { state: "RESOLVED", amount: 7, date: "2027-01-01" },
+        { state: "RESOLVED", amount: 6, date: "2027-04-01" },
+        { state: "RESOLVED", amount: 6, date: "2027-07-01" },
+        { state: "RESOLVED", amount: 6, date: "2027-10-01" },
+        { state: "RESOLVED", amount: 7, date: "2028-01-01" },
+      ]);
+      for (const inst of view) expect("scheduled" in inst).toBe(false);
+    });
+
+    it("as-of and window installments carry no scheduled property", () => {
+      const asof = runAsOf(BACKDATED, BACKDATED_GRANT, "2030-01-01");
+      expect(asof.ok).toBe(true);
+      if (!asof.ok) return;
+      for (const inst of [
+        ...asof.vested,
+        ...asof.unvested,
+        ...asof.impossible,
+      ]) {
+        expect("scheduled" in inst).toBe(false);
+      }
+
+      const window = runVestedBetween(
+        BACKDATED,
+        BACKDATED_GRANT,
+        "2024-01-01",
+        "2030-01-01",
+      );
+      expect(window.ok).toBe(true);
+      if (!window.ok) return;
+      for (const inst of window.installments) {
+        expect("scheduled" in inst).toBe(false);
+      }
+    });
   });
 
   it("persist/rehydrate projection for a resolved contingent start", () => {

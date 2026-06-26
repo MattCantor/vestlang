@@ -13,16 +13,16 @@ import {
   chainGroupIndices,
   type StatementContribution,
 } from "@vestlang/evaluator";
-import { coalesceAtGrantDate } from "@vestlang/primitives";
+import { coalesceAtGrantDate, type CoalesceRow } from "@vestlang/primitives";
 import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type {
+  BreakdownInstallment,
   Finding,
   Installment,
   OCTDate,
   Program,
   ResolutionContextInput,
-  ResolvedInstallment,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { parseToProgram, toEvaluationError, type Result } from "./parse.js";
@@ -103,38 +103,55 @@ export type WindowView = {
 // placement, e.g. 1/3 PLUS 1/3 PLUS 1/3 of 100 reads 33/33/34 here and in the
 // headline). When the headline itself over-allocates, the partition still ties to
 // it, but that total isn't a legal allocation — `valid`/`findings` carry that.
+// `installments` is the breakdown-specific union (a folded grant-date line may carry
+// the pre-fold `scheduled` partition, #441), so it's declared directly rather than
+// Pick-ed off the headline `ScheduleView` (whose `installments` stays the bare,
+// scheduled-free shared shape). The two blocker lists still ride the Pick.
 export type ClauseBreakdown = Pick<
   ScheduleView,
-  "installments" | "pendingBlockers" | "deadBlockers"
->;
+  "pendingBlockers" | "deadBlockers"
+> & {
+  installments: BreakdownInstallment[];
+};
 
 // A chain-group's installments: the union of its member statements' partition
 // slices, re-coalesced at the grant date so a THEN chain's pre-grant rows across
 // its segments merge into one grant-date tranche (a backdated start shows one
 // merged tranche, not several). Dated tranches lead, symbolic ones follow — the
-// per-clause shape a separate evaluation produced before.
+// per-clause shape a separate evaluation produced before. Each RESOLVED member row
+// forwards its already-built `scheduled` list (a per-statement folded line hands it
+// on; a bare grant-date row carries no list, and `coalesceAtGrantDate` normalizes
+// it to a singleton at its own date), so a THEN chain whose
+// head and tail each folded pre-grant rows ends with ONE grant-date line carrying
+// the union of both segments' pre-fold positions (#441).
 function groupInstallments(
   members: StatementContribution[],
   grantDate: OCTDate,
-): Installment[] {
-  const dated: { date: OCTDate; statementOrder: number; amount: number }[] = [];
+): BreakdownInstallment[] {
+  const dated: CoalesceRow[] = [];
   const symbolic: Installment[] = [];
   for (const m of members) {
     for (const inst of m.installments) {
       if (inst.state === "RESOLVED")
         dated.push({
           date: inst.date,
+          // A member contributes at most one grant-date folded line, so occurrence
+          // defaults to 0; statementOrder keeps the cross-member merge order.
           statementOrder: m.statementOrder,
           amount: inst.amount,
+          // A bare row carries no list; `coalesceAtGrantDate` normalizes it to a
+          // singleton at the row's own date, so don't duplicate that fallback here.
+          scheduled: inst.scheduled,
         });
       else symbolic.push(inst);
     }
   }
   const coalesced = coalesceAtGrantDate(dated, grantDate).map(
-    (t): ResolvedInstallment => ({
+    (t): BreakdownInstallment => ({
       state: "RESOLVED",
       amount: t.amount,
       date: t.date,
+      ...(t.scheduled ? { scheduled: t.scheduled } : {}),
     }),
   );
   return [...coalesced, ...symbolic];
