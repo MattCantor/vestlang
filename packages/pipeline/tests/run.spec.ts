@@ -631,6 +631,9 @@ describe("runEvaluate — scheduled (pre-fold) dates on the breakdown (#441)", (
     expect(r.breakdown).toHaveLength(1);
     const line = r.breakdown[0].installments[0];
     expect(line.state).toBe("RESOLVED");
+    // Assert presence before the narrowing guard, so a regression that dropped
+    // `scheduled` fails here rather than short-circuiting to a vacuous pass.
+    expect(line.state === "RESOLVED" && "scheduled" in line).toBe(true);
     if (line.state !== "RESOLVED" || !line.scheduled) return;
     // The head's two pre-grant occurrences + the tail's pre-grant occurrence + the
     // tail's native grant-date occurrence — the merged dates, globally ascending.

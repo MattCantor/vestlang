@@ -4,7 +4,7 @@
 // grant-date fold and the evaluator's unresolved-arm folds).
 
 import type { OCTDate, ScheduledFold } from "@vestlang/types";
-import { eq, lt } from "./dates.js";
+import { eq, gt, lt } from "./dates.js";
 
 // The boundary both the fold and the provenance allocator key on: a date before
 // the anchor relocates onto it, a date at or after it stays put. The fold
@@ -177,7 +177,13 @@ export function coalesceAtGrantDate(
     // row's own sublist is already scheduledDate-ascending, so this stable sort by
     // scheduledDate makes the concatenation globally ascending while a tie keeps
     // the statementOrder/occurrence order.
-    grantFolds.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+    grantFolds.sort((a, b) =>
+      lt(a.scheduledDate, b.scheduledDate)
+        ? -1
+        : gt(a.scheduledDate, b.scheduledDate)
+          ? 1
+          : 0,
+    );
     const pulledForward = grantFolds.some((s) =>
       lt(s.scheduledDate, grantDate),
     );

@@ -120,7 +120,8 @@ export type ClauseBreakdown = Pick<
 // merged tranche, not several). Dated tranches lead, symbolic ones follow — the
 // per-clause shape a separate evaluation produced before. Each RESOLVED member row
 // forwards its already-built `scheduled` list (a per-statement folded line hands it
-// on; a natural grant-date line normalizes to a singleton), so a THEN chain whose
+// on; a bare grant-date row carries no list, and `coalesceAtGrantDate` normalizes
+// it to a singleton at its own date), so a THEN chain whose
 // head and tail each folded pre-grant rows ends with ONE grant-date line carrying
 // the union of both segments' pre-fold positions (#441).
 function groupInstallments(
@@ -138,9 +139,9 @@ function groupInstallments(
           // defaults to 0; statementOrder keeps the cross-member merge order.
           statementOrder: m.statementOrder,
           amount: inst.amount,
-          scheduled: inst.scheduled ?? [
-            { scheduledDate: inst.date, amount: inst.amount },
-          ],
+          // A bare row carries no list; `coalesceAtGrantDate` normalizes it to a
+          // singleton at the row's own date, so don't duplicate that fallback here.
+          scheduled: inst.scheduled,
         });
       else symbolic.push(inst);
     }
