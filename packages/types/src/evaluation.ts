@@ -264,6 +264,41 @@ export type Installment =
 export type SymbolicInstallment = UnresolvedInstallment | ImpossibleInstallment;
 
 /* ------------------------
+ * Breakdown installments (eval-time only)
+ * ------------------------ */
+
+// One pre-fold position a folded grant-date line absorbed: the grid date a share
+// would have vested on before the grant-date fold relocated it, paired with the
+// integer shares that landed there. The merge primitive carries these into the
+// fold and the breakdown row type surfaces them; it lives here (not in the
+// evaluator) because `@vestlang/primitives` references it on its `CoalesceRow`.
+export interface ScheduledFold {
+  scheduledDate: OCTDate;
+  amount: number;
+}
+
+// A breakdown-only RESOLVED line that can carry the pre-fold partition of a
+// grant-date fold. `scheduled` is present iff at least one contribution was pulled
+// forward (some `scheduledDate` strictly before the grant date); when present it
+// is the FULL partition of this line — every pre-grant row at its own date plus any
+// share natively scheduled for the grant date — so `Σ scheduled.amount === amount`.
+// Absent on every non-folded line. Deliberately a separate type from
+// `ResolvedInstallment`: that shared shape feeds the headline / evaluate_as_of /
+// vested_between / the wire `Installment`, and `scheduled` must never reach those.
+// Kept module-local (not index-exported) — referenced only to build the
+// `BreakdownInstallment` union below.
+interface BreakdownResolvedInstallment extends ResolvedInstallment {
+  scheduled?: ScheduledFold[];
+}
+
+// The installment shape the per-clause breakdown carries. Only a RESOLVED line is
+// ever folded, so the pending / impossible arms stay the plain shared types.
+export type BreakdownInstallment =
+  | BreakdownResolvedInstallment
+  | UnresolvedInstallment
+  | ImpossibleInstallment;
+
+/* ------------------------
  * Source map
  * ------------------------ */
 

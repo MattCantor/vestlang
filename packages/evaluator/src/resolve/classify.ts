@@ -26,6 +26,7 @@ import {
   expandStatementGrid,
   type AllocationContribution,
   type CliffInput,
+  type CoalesceRow,
   type RawEvent,
 } from "@vestlang/primitives";
 import { numericToFraction } from "@vestlang/utils";
@@ -186,10 +187,25 @@ export const buildStatementContributions = (
     const statementOrder = i + 1;
     if (isDated(r)) {
       const rows = rowsByOrder.get(statementOrder) ?? [];
+      // Each contribution rides in as a CoalesceRow keyed on its program order, and
+      // seeds a singleton `scheduled` at its PRE-FOLD grid position (`scheduledDate`,
+      // not the relocated `date`) so a pre-grant row keeps where it would have
+      // vested. coalesceAtGrantDate then merges any rows that landed on the grant
+      // date into one tranche and concatenates their pre-fold lists.
+      const coalesceRows: CoalesceRow[] = rows.map((c) => ({
+        date: c.date,
+        amount: c.amount,
+        statementOrder: c.statementOrder,
+        occurrence: c.occurrence,
+        scheduled: [{ scheduledDate: c.scheduledDate, amount: c.amount }],
+      }));
       return {
         statementOrder,
-        installments: coalesceAtGrantDate(rows, ctx.grantDate).map((t) =>
-          makeResolvedInstallment(t.date, t.amount),
+        installments: coalesceAtGrantDate(coalesceRows, ctx.grantDate).map(
+          (t) => ({
+            ...makeResolvedInstallment(t.date, t.amount),
+            ...(t.scheduled ? { scheduled: t.scheduled } : {}),
+          }),
         ),
       };
     }

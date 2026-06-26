@@ -382,8 +382,26 @@ describe("runEvaluate — breakdown is a partition of the headline (#442)", () =
     // row (300). 700 exceeds either segment alone, so it can only come from merging
     // across both members; then the lone post-grant row (2025-02-01) stays separate.
     expect(r.breakdown).toHaveLength(1);
+    // The folded 700 line now carries the pre-fold partition (#441): segment 1's
+    // four pre-grant rows (2024-07..2024-10) + segment 2's two pre-grant rows
+    // (2024-11, 2024-12) + segment 2's native grant-date row (2025-01-01), all @100,
+    // Σ === 700 === line.amount — only reachable by merging across both members. The
+    // lone post-grant row stays bare.
     expect(r.breakdown[0].installments).toEqual([
-      { state: "RESOLVED", amount: 700, date: "2025-01-01" },
+      {
+        state: "RESOLVED",
+        amount: 700,
+        date: "2025-01-01",
+        scheduled: [
+          { scheduledDate: "2024-07-01", amount: 100 },
+          { scheduledDate: "2024-08-01", amount: 100 },
+          { scheduledDate: "2024-09-01", amount: 100 },
+          { scheduledDate: "2024-10-01", amount: 100 },
+          { scheduledDate: "2024-11-01", amount: 100 },
+          { scheduledDate: "2024-12-01", amount: 100 },
+          { scheduledDate: "2025-01-01", amount: 100 },
+        ],
+      },
       { state: "RESOLVED", amount: 100, date: "2025-02-01" },
     ]);
     expect(sumBreakdown(r.breakdown)).toBe(
@@ -494,6 +512,136 @@ describe("runEvaluate — breakdown is a partition of the headline (#442)", () =
     } finally {
       failClauseBreakdown = false;
     }
+  });
+});
+
+// #441: a backdated start folds its pre-grant rows onto the grant date and the
+// breakdown preserves where each would have vested, as a `scheduled` list on the
+// folded line. Present iff at least one row was pulled forward; the full partition
+// of the line (Σ scheduled.amount === line.amount); no 0-share phantom; never on the
+// headline.
+describe("runEvaluate — scheduled (pre-fold) dates on the breakdown (#441)", () => {
+  // AC1: a single backdated statement folds and carries the full pre-fold partition.
+  it("AC1: a backdated start carries the pre-fold scheduled partition", () => {
+    const r = runEvaluate(
+      "100 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const inst0 = r.breakdown[0].installments[0];
+    expect(inst0).toEqual({
+      state: "RESOLVED",
+      date: "2025-01-01",
+      amount: 25,
+      scheduled: [
+        { scheduledDate: "2024-04-01", amount: 6 },
+        { scheduledDate: "2024-07-01", amount: 6 },
+        { scheduledDate: "2024-10-01", amount: 6 },
+        { scheduledDate: "2025-01-01", amount: 7 },
+      ],
+    });
+    // The list is the full partition of the line.
+    if (inst0.state === "RESOLVED" && inst0.scheduled) {
+      expect(sumInstallments(inst0.scheduled)).toBe(inst0.amount);
+    }
+  });
+
+  // AC2: a non-folded line carries no `scheduled` key, and a wholly on-time
+  // schedule never carries one anywhere.
+  it("AC2: non-folded and wholly on-time lines have no scheduled key", () => {
+    const backdated = runEvaluate(
+      "100 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(backdated.ok).toBe(true);
+    if (!backdated.ok) return;
+    // The first on-schedule line after the fold (2025-04-01) is not folded.
+    const onSchedule = backdated.breakdown[0].installments[1];
+    expect(onSchedule).toEqual({
+      state: "RESOLVED",
+      amount: 6,
+      date: "2025-04-01",
+    });
+    expect("scheduled" in onSchedule).toBe(false);
+
+    const onTime = runEvaluate(
+      "100 VEST FROM DATE 2025-01-01 OVER 48 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(onTime.ok).toBe(true);
+    if (!onTime.ok) return;
+    for (const entry of onTime.breakdown) {
+      for (const inst of entry.installments) {
+        expect("scheduled" in inst).toBe(false);
+      }
+    }
+  });
+
+  // AC3: a contribution that floored to 0 never appears in a populated list, and a
+  // wholly-elided catch-up emits no `scheduled` key at all.
+  it("AC3: a dropped 0-row never sneaks into a populated scheduled list", () => {
+    const seven = runEvaluate(
+      "7 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 7 },
+    );
+    expect(seven.ok).toBe(true);
+    if (!seven.ok) return;
+    const folded = seven.breakdown[0].installments[0];
+    // Only the surviving 2024-10-01 row folds forward — no phantom 2024-04-01 /
+    // 2024-07-01 / 2025-01-01 rows that floored to 0.
+    expect(folded).toEqual({
+      state: "RESOLVED",
+      date: "2025-01-01",
+      amount: 1,
+      scheduled: [{ scheduledDate: "2024-10-01", amount: 1 }],
+    });
+    if (folded.state === "RESOLVED" && folded.scheduled) {
+      // Σ ties the line AND no entry is a 0-share phantom (the Σ check alone would
+      // not catch one, since adding 0 leaves the sum unchanged).
+      expect(sumInstallments(folded.scheduled)).toBe(folded.amount);
+      expect(folded.scheduled.every((s) => s.amount !== 0)).toBe(true);
+    }
+
+    // The fully-elided case: the whole 2024 catch-up floors to 0, so there is no
+    // grant-date tranche and no `scheduled` key anywhere.
+    const three = runEvaluate(
+      "VEST FROM DATE 2024-01-01 OVER 48 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 3 },
+    );
+    expect(three.ok).toBe(true);
+    if (!three.ok) return;
+    for (const entry of three.breakdown) {
+      for (const inst of entry.installments) {
+        expect("scheduled" in inst).toBe(false);
+      }
+    }
+  });
+
+  // AC4: a backdated portioned THEN chain merges both segments' pre-grant rows into
+  // one grant-date line after the pipeline rollup (the Point-1 → Point-2 merge).
+  it("AC4: a THEN chain re-coalesce preserves scheduled across the rollup", () => {
+    const r = runEvaluate(
+      "0.5 VEST FROM DATE 2024-01-01 OVER 6 months EVERY 3 months THEN " +
+        "0.5 VEST OVER 6 months EVERY 3 months",
+      { grant_date: "2025-01-01", grant_quantity: 100 },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.breakdown).toHaveLength(1);
+    const line = r.breakdown[0].installments[0];
+    expect(line.state).toBe("RESOLVED");
+    if (line.state !== "RESOLVED" || !line.scheduled) return;
+    // The head's two pre-grant occurrences + the tail's pre-grant occurrence + the
+    // tail's native grant-date occurrence — the merged dates, globally ascending.
+    expect(line.scheduled.map((s) => s.scheduledDate)).toEqual([
+      "2024-04-01",
+      "2024-07-01",
+      "2024-10-01",
+      "2025-01-01",
+    ]);
+    expect(sumInstallments(line.scheduled)).toBe(line.amount);
+    expect(line.amount).toBe(100);
   });
 });
 

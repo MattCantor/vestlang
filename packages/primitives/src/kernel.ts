@@ -229,12 +229,15 @@ const cliffLump = (
  * survives. The date is folded the same way the headline is — a pre-grant row
  * relocates to `grantDate` — so `Σ contributions === Σ installments`.
  *
- * #441 will later add a `scheduledDate` (the pre-fold grid position the relocation
- * discards here) as one optional field. Do NOT name that field `gridDate`: it
- * would collide with the exported `gridDate` function above.
+ * `scheduledDate` keeps the pre-fold grid position the relocation discards on
+ * `date`, so a consumer can still report when a folded share would have vested
+ * along the schedule (#441). The two are equal off the relocation path. Named
+ * `scheduledDate`, not `gridDate` — that would collide with the exported `gridDate`
+ * function above.
  */
 export interface AllocationContribution {
   date: OCTDate;
+  scheduledDate: OCTDate; // the pre-fold grid position (= RawEvent.date)
   statementOrder: number; // 1-based program order (RawEvent.statementOrder)
   occurrence: number; // RawEvent.occurrence (0 = cliff lump)
   amount: number; // integer shares
@@ -283,6 +286,7 @@ export const allocateWithProvenance = (
     amounts.push(amount);
     contributions.push({
       date: grantDate ? relocateToCliffDate(e.date, grantDate) : e.date,
+      scheduledDate: e.date,
       statementOrder: e.statementOrder,
       occurrence: e.occurrence,
       amount,
