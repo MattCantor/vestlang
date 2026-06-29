@@ -1,0 +1,10 @@
+{
+  "name": "@opencaptablecoalition/ocf-types",
+  "version": "0.0.0",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts"
+    }
+  }
+}

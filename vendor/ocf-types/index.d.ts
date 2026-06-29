@@ -10,13 +10,14 @@
 //            OCFVestingTermsV2; never use `unstable`/`none`, which drop it)
 //
 // DO NOT EDIT BY HAND. Stop-gap until @opencaptablecoalition/ocf-types ships on
-// npm. Consumers import the FINAL specifier via the tsconfig "paths" alias:
+// npm. This directory is a local node-resolvable package (see its package.json);
+// consumers reach the FINAL specifier through a `file:` dependency on it:
 //   import type { … } from "@opencaptablecoalition/ocf-types";
 //
 // Regenerate : pnpm ocf:refresh-types -- <Open-Cap-Format-OCF checkout> [ref]
-// Replacement path (this file + the tsconfig alias):
+// Replacement path:
 //   1. PR 587 merges to main -> pnpm ocf:refresh-types -- <checkout> main
-//   2. Release tarball exists  -> npm i -D <tarball-url>; delete this file + alias
+//   2. Release tarball exists  -> npm i -D <tarball-url>; drop the file: dep + this dir
 //   3. npm publish             -> npm i -D @opencaptablecoalition/ocf-types
 // ============================================================================
 

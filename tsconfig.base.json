@@ -11,12 +11,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "types": ["vitest/globals"],
-    // Vendored stop-gap for the not-yet-published OCF types: alias the final
-    // package specifier at the repo-root vendored .d.ts. Paths inherited via
-    // `extends` resolve relative to this file (repo root), so `./vendor/…` is
-    // correct from the nested package configs. Drop this when the package ships.
-    "paths": {
-      "@opencaptablecoalition/ocf-types": ["./vendor/ocf-types.d.ts"],
-    },
   },
 }

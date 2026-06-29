@@ -3,13 +3,17 @@
 # Refresh the vendored OCF types from Open-Cap-Format-OCF.
 #
 # TEMPORARY tooling: the whole vendored-types transport (this script + the
-# tsconfig `paths` alias + vendor/ocf-types.d.ts) goes away once
-# @opencaptablecoalition/ocf-types is published to npm. Until then, regenerate
-# with this after the schema repo's types change.
+# vendor/ocf-types/ local package, referenced by a `file:` dependency) goes away
+# once @opencaptablecoalition/ocf-types is published to npm. Until then,
+# regenerate with this after the schema repo's types change.
 #
 #   pnpm ocf:refresh-types -- <path-to-Open-Cap-Format-OCF> [git-ref]
 #   e.g. pnpm ocf:refresh-types -- ~/code/Open-Cap-Format-OCF ca06c7f2
 #   (after PR 587 merges:   ... -- ~/code/Open-Cap-Format-OCF main)
+#
+# This rewrites vendor/ocf-types/index.d.ts in place. A `file:` directory dep is
+# captured at install time, so after refreshing you must re-run `pnpm install`
+# and commit the updated pnpm-lock.yaml.
 #
 # It runs `npm install --ignore-scripts` and the type generator IN THE SCHEMA
 # REPO, so only point it at a checkout you trust.
@@ -25,7 +29,8 @@ PR="#587"
 BRANCH="vesting-dom-plumbing"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-DEST="$ROOT/vendor/ocf-types.d.ts"
+DEST="$ROOT/vendor/ocf-types/index.d.ts"
+mkdir -p "$(dirname "$DEST")"
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT
 
@@ -54,13 +59,14 @@ SHA="$(git -C "$FMT_DIR" rev-parse --short HEAD)"
 //            OCFVestingTermsV2; never use \`unstable\`/\`none\`, which drop it)
 //
 // DO NOT EDIT BY HAND. Stop-gap until @opencaptablecoalition/ocf-types ships on
-// npm. Consumers import the FINAL specifier via the tsconfig "paths" alias:
+// npm. This directory is a local node-resolvable package (see its package.json);
+// consumers reach the FINAL specifier through a \`file:\` dependency on it:
 //   import type { … } from "@opencaptablecoalition/ocf-types";
 //
 // Regenerate : pnpm ocf:refresh-types -- <Open-Cap-Format-OCF checkout> [ref]
-// Replacement path (this file + the tsconfig alias):
+// Replacement path:
 //   1. PR 587 merges to main -> pnpm ocf:refresh-types -- <checkout> main
-//   2. Release tarball exists  -> npm i -D <tarball-url>; delete this file + alias
+//   2. Release tarball exists  -> npm i -D <tarball-url>; drop the file: dep + this dir
 //   3. npm publish             -> npm i -D @opencaptablecoalition/ocf-types
 // ============================================================================
 
@@ -68,4 +74,5 @@ EOF
   cat "$TMP"
 } >"$DEST"
 
-echo "Vendored vendor/ocf-types.d.ts from ${BRANCH} ${PR} (${SHA})"
+echo "Vendored vendor/ocf-types/index.d.ts from ${BRANCH} ${PR} (${SHA})"
+echo "Next: re-run 'pnpm install' and commit the updated pnpm-lock.yaml."
