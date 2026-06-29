@@ -15,49 +15,37 @@ import {
 
 // Day-of-month + overflow cases mirror evaluator/tests/time.addMonths.test.ts,
 // adapted to the direct VestingDayOfMonth parameter.
-describe("addMonthsRule — 31 / overflow scenarios", () => {
+describe("addMonthsRule — LAST_DAY_OF_MONTH", () => {
   it("Jan 31 +1mo -> Feb last day (leap year)", () => {
-    expect(addMonthsRule("2024-01-31", 1, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+    expect(addMonthsRule("2024-01-31", 1, "LAST_DAY_OF_MONTH")).toBe(
       "2024-02-29",
     );
   });
 
-  it("Non-leap year", () => {
-    expect(addMonthsRule("2023-01-31", 1, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+  it("non-leap year clamps to Feb 28", () => {
+    expect(addMonthsRule("2023-01-31", 1, "LAST_DAY_OF_MONTH")).toBe(
       "2023-02-28",
-    );
-  });
-
-  it("30 or last -> 29 (leap Feb)", () => {
-    expect(addMonthsRule("2024-01-31", 1, "30_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-02-29",
-    );
-  });
-
-  it("29 or last -> 29", () => {
-    expect(addMonthsRule("2024-01-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-02-29",
     );
   });
 });
 
-describe("addMonthsRule — VESTING_START_DAY_OR_LAST_DAY_OF_MONTH", () => {
+describe("addMonthsRule — VESTING_START_DAY", () => {
   it("keep original day (31) but clamp to April 30", () => {
-    expect(
-      addMonthsRule("2024-03-31", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2024-04-30");
+    expect(addMonthsRule("2024-03-31", 1, "VESTING_START_DAY")).toBe(
+      "2024-04-30",
+    );
   });
 
   it("original day 30 -> Feb clamps to 29 (leap)", () => {
-    expect(
-      addMonthsRule("2024-01-30", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2024-02-29");
+    expect(addMonthsRule("2024-01-30", 1, "VESTING_START_DAY")).toBe(
+      "2024-02-29",
+    );
   });
 
   it("original day 30 -> Feb clamps to 28 (non-leap)", () => {
-    expect(
-      addMonthsRule("2023-01-30", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2023-02-28");
+    expect(addMonthsRule("2023-01-30", 1, "VESTING_START_DAY")).toBe(
+      "2023-02-28",
+    );
   });
 
   it("defaults to VESTING_START_DAY policy when omitted", () => {
@@ -72,111 +60,103 @@ describe("addMonthsRule — origin carries the day-of-month across a clamp", () 
   // day to aim for, so the schedule springs back to the 31st where it fits.
   it("steps from Feb 28 but lands on Mar 31 when origin is Jan 31", () => {
     expect(
-      addMonthsRule(
-        "2025-02-28",
-        1,
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-        "2025-01-31",
-      ),
+      addMonthsRule("2025-02-28", 1, "VESTING_START_DAY", "2025-01-31"),
     ).toBe("2025-03-31");
   });
 
   it("clamps the origin day to April's last day (30)", () => {
     expect(
-      addMonthsRule(
-        "2025-02-28",
-        2,
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-        "2025-01-31",
-      ),
+      addMonthsRule("2025-02-28", 2, "VESTING_START_DAY", "2025-01-31"),
     ).toBe("2025-04-30");
   });
 
   it("without an origin, the day comes from the date being stepped from", () => {
     // No origin argument: Feb 28 stays the reference, so March holds the 28th.
-    expect(
-      addMonthsRule("2025-02-28", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2025-03-28");
+    expect(addMonthsRule("2025-02-28", 1, "VESTING_START_DAY")).toBe(
+      "2025-03-28",
+    );
   });
 });
 
-describe("addMonthsRule — fixed numeric day + multi-month", () => {
-  it("explicit day 15", () => {
-    expect(addMonthsRule("2024-01-31", 1, "15")).toBe("2024-02-15");
-  });
-
-  it("leap-day +12mo -> non-leap Feb clamps", () => {
-    expect(addMonthsRule("2024-02-29", 12, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+describe("addMonthsRule — LAST_DAY_OF_MONTH across multi-month skips", () => {
+  it("leap-day +12mo -> non-leap Feb stays month-end", () => {
+    expect(addMonthsRule("2024-02-29", 12, "LAST_DAY_OF_MONTH")).toBe(
       "2025-02-28",
     );
   });
 
   it("skip Feb by +2 and land on Mar 31", () => {
-    expect(addMonthsRule("2024-01-31", 2, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+    expect(addMonthsRule("2024-01-31", 2, "LAST_DAY_OF_MONTH")).toBe(
       "2024-03-31",
     );
   });
 
   it("+13 months to non-leap Feb clamps to 28", () => {
-    expect(addMonthsRule("2024-01-31", 13, "31_OR_LAST_DAY_OF_MONTH")).toBe(
+    expect(addMonthsRule("2024-01-31", 13, "LAST_DAY_OF_MONTH")).toBe(
       "2025-02-28",
     );
   });
 });
 
-// AC#4 — pin each of the four named policies' output through pickDay (via
-// addMonthsRule), and a numeric day, against the same Jan-31 + 1mo step into a
-// short month. After the union split, pickDay narrows the numeric branch off and
-// switches exhaustively over the named policies; these cases lock the resolved
-// day each branch produces so a future refactor can't quietly cross the wires.
+// Pin each of the four OCF day-of-month policies' output through pickDay (via
+// addMonthsRule). pickDay switches exhaustively over the policies with an
+// assertNever default, so these cases lock the resolved day each branch produces
+// and a future refactor can't quietly cross the wires. The shared Jan-31 + 1mo
+// step lands in a short month, where VESTING_START_DAY (from a 31st origin) and
+// LAST_DAY_OF_MONTH coincide on the month-end; the longer-month block below pulls
+// the computable policies apart.
 describe("addMonthsRule — pickDay per day-of-month policy", () => {
-  // Jan 31 + 1mo lands in February, the month that forces every policy's clamp.
-  it("29_OR_LAST clamps to Feb 28 (non-leap)", () => {
-    expect(addMonthsRule("2023-01-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2023-02-28",
-    );
-  });
-
-  it("29_OR_LAST resolves to Feb 29 (leap)", () => {
-    expect(addMonthsRule("2024-01-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-02-29",
-    );
-  });
-
-  it("30_OR_LAST clamps to the month end below 30", () => {
-    expect(addMonthsRule("2023-01-31", 1, "30_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2023-02-28",
-    );
-  });
-
-  it("31_OR_LAST clamps to the month end below 31", () => {
-    expect(addMonthsRule("2024-01-31", 1, "31_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-02-29",
-    );
-  });
-
-  it("VESTING_START tracks the origin's day, clamped to month end", () => {
+  it("VESTING_START_DAY tracks the origin's day, clamped to month end", () => {
     // Default origin: the date being stepped from. Jan 31's day-of-month (31)
     // clamps onto February.
-    expect(
-      addMonthsRule("2024-01-31", 1, "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2024-02-29");
+    expect(addMonthsRule("2024-01-31", 1, "VESTING_START_DAY")).toBe(
+      "2024-02-29",
+    );
     // Explicit origin: the day comes from Jan 31 even when stepping from a
-    // clamped Feb 28 (see the origin tests below for the full story).
+    // clamped Feb 28 (see the origin tests above for the full story).
     expect(
-      addMonthsRule(
-        "2025-02-28",
-        1,
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-        "2025-01-31",
-      ),
+      addMonthsRule("2025-02-28", 1, "VESTING_START_DAY", "2025-01-31"),
     ).toBe("2025-03-31");
   });
 
-  it("a numeric day picks itself, with the clamp a provable no-op (≤28)", () => {
-    expect(addMonthsRule("2023-01-31", 1, "28")).toBe("2023-02-28");
-    expect(addMonthsRule("2024-01-31", 1, "15")).toBe("2024-02-15");
-    expect(addMonthsRule("2024-01-31", 1, "01")).toBe("2024-02-01");
+  it("FIRST_DAY_OF_MONTH lands on the 1st across short, long and leap months", () => {
+    expect(addMonthsRule("2023-01-31", 1, "FIRST_DAY_OF_MONTH")).toBe(
+      "2023-02-01", // non-leap Feb
+    );
+    expect(addMonthsRule("2024-01-31", 1, "FIRST_DAY_OF_MONTH")).toBe(
+      "2024-02-01", // leap Feb
+    );
+    expect(addMonthsRule("2024-03-31", 1, "FIRST_DAY_OF_MONTH")).toBe(
+      "2024-04-01", // 30-day month
+    );
+    expect(addMonthsRule("2024-05-15", 1, "FIRST_DAY_OF_MONTH")).toBe(
+      "2024-06-01", // 31-day month, mid-month start
+    );
+  });
+
+  it("LAST_DAY_OF_MONTH lands on the calendar last day", () => {
+    expect(addMonthsRule("2023-01-31", 1, "LAST_DAY_OF_MONTH")).toBe(
+      "2023-02-28", // non-leap Feb
+    );
+    expect(addMonthsRule("2024-01-31", 1, "LAST_DAY_OF_MONTH")).toBe(
+      "2024-02-29", // leap Feb
+    );
+    expect(addMonthsRule("2024-03-15", 1, "LAST_DAY_OF_MONTH")).toBe(
+      "2024-04-30", // 30-day month, regardless of the start's day
+    );
+  });
+
+  it("VESTING_START_DAY_MINUS_ONE throws — its day math lands in #493", () => {
+    expect(() =>
+      addMonthsRule("2024-01-31", 1, "VESTING_START_DAY_MINUS_ONE"),
+    ).toThrow("not yet implemented (#493)");
+    // The same throw surfaces through addPeriod's MONTHS and YEARS paths.
+    expect(() =>
+      addPeriod("2024-01-15", 1, "MONTHS", "VESTING_START_DAY_MINUS_ONE"),
+    ).toThrow("not yet implemented (#493)");
+    expect(() =>
+      addPeriod("2024-01-15", 1, "YEARS", "VESTING_START_DAY_MINUS_ONE"),
+    ).toThrow("not yet implemented (#493)");
   });
 });
 
@@ -204,9 +184,9 @@ describe("addPeriod", () => {
   });
 
   it("MONTHS honors the day-of-month policy", () => {
-    expect(
-      addPeriod("2024-01-31", 1, "MONTHS", "31_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2024-02-29");
+    expect(addPeriod("2024-01-31", 1, "MONTHS", "LAST_DAY_OF_MONTH")).toBe(
+      "2024-02-29",
+    );
   });
 
   it("YEARS = months × 12 (with day-of-month clamping)", () => {
@@ -216,13 +196,7 @@ describe("addPeriod", () => {
 
   it("forwards the origin to the month stepper", () => {
     expect(
-      addPeriod(
-        "2025-02-28",
-        1,
-        "MONTHS",
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-        "2025-01-31",
-      ),
+      addPeriod("2025-02-28", 1, "MONTHS", "VESTING_START_DAY", "2025-01-31"),
     ).toBe("2025-03-31");
   });
 });
@@ -238,7 +212,7 @@ describe("advanceCursor — origin forwarding", () => {
         1,
         1,
         "MONTHS",
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        "VESTING_START_DAY",
         "2025-01-31",
       ),
     ).toBe("2025-03-31");
@@ -469,30 +443,27 @@ describe("monthsBetween", () => {
   });
 });
 
-// The pickDay policy cases above all step into February, where 29/30/31_OR_LAST
-// collapse onto the same month-end and can't be told apart. These step into
-// longer months, where each policy resolves to a distinct day — pinning that
-// 29_OR_LAST really means 29 (not the 30/31 fall-through) and 30_OR_LAST means 30.
-describe("addMonthsRule — pickDay policies are distinct outside a short month", () => {
-  it("29_OR_LAST resolves to 29 in a 30-day month (not 30)", () => {
-    // Mar 31 + 1mo → April (30 days): 29_OR_LAST picks 29; the 30_OR_LAST
-    // fall-through would pick 30.
-    expect(addMonthsRule("2024-03-31", 1, "29_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-04-29",
+// The per-policy cases above mostly step into February, where VESTING_START_DAY
+// (from a 31st origin) and LAST_DAY_OF_MONTH collapse onto the same month-end.
+// Stepping into a longer month from a mid-month start pulls the three computable
+// policies apart — each resolves to a distinct day.
+describe("addMonthsRule — the computable policies are distinct in a long month", () => {
+  // Mar 15 + 1mo → April (30 days).
+  it("VESTING_START_DAY keeps the origin's day (15)", () => {
+    expect(addMonthsRule("2024-03-15", 1, "VESTING_START_DAY")).toBe(
+      "2024-04-15",
     );
   });
 
-  it("30_OR_LAST resolves to 30 in a 31-day month (not 31)", () => {
-    // Jan 31 + 2mo → March (31 days): 30_OR_LAST picks 30; the 31_OR_LAST
-    // fall-through would pick 31.
-    expect(addMonthsRule("2024-01-31", 2, "30_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-03-30",
+  it("FIRST_DAY_OF_MONTH ignores the origin and picks the 1st", () => {
+    expect(addMonthsRule("2024-03-15", 1, "FIRST_DAY_OF_MONTH")).toBe(
+      "2024-04-01",
     );
   });
 
-  it("31_OR_LAST resolves to the full 31 in a 31-day month", () => {
-    expect(addMonthsRule("2024-01-31", 2, "31_OR_LAST_DAY_OF_MONTH")).toBe(
-      "2024-03-31",
+  it("LAST_DAY_OF_MONTH ignores the origin and picks the 30th", () => {
+    expect(addMonthsRule("2024-03-15", 1, "LAST_DAY_OF_MONTH")).toBe(
+      "2024-04-30",
     );
   });
 });

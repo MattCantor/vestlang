@@ -4,7 +4,7 @@
 // engine substrate:
 //   - the day-of-month policy is passed directly as a VestingDayOfMonth value
 //     (there's no evaluator context here to read it off); it defaults to the
-//     canonical default, VESTING_START_DAY_OR_LAST_DAY_OF_MONTH.
+//     canonical default, VESTING_START_DAY.
 //   - comparisons are plain string comparisons. Zero-padded ISO dates sort
 //     lexicographically, so this matches calendar order without pulling in
 //     date-fns — primitives ships date-fns-free.
@@ -18,10 +18,7 @@ import type {
   PeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import {
-  DEFAULT_VESTING_DAY_OF_MONTH,
-  isNumericDayOfMonth,
-} from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 
 // ISO-string ↔ Date (UTC midnight).
@@ -102,25 +99,21 @@ export function addMonthsRule(
   const lastDay = utcMidnight(ty, tm + 1, 0).getUTCDate();
 
   const pickDay = (): number => {
-    // A fixed numeric day "01"–"28" picks itself. The clamp is provably a no-op
-    // here — every value the guard admits is ≤28, below every month's last day —
-    // but it's kept as an executable statement of the "day ≤ month length"
-    // invariant the named policies below have to enforce for real.
-    if (isNumericDayOfMonth(dayOfMonth)) {
-      return Math.min(parseInt(dayOfMonth, 10), lastDay);
-    }
-    // The four named policies resolve to a month-end fallback. Exhaustive over
-    // `NamedDayPolicy`, so a fifth named policy is a typecheck error at the
-    // `assertNever` default rather than a silent fall-through.
+    // Every policy resolves through this switch — no numeric/parseInt branch.
+    // Exhaustive over the four OCF policies, so a fifth member is a typecheck
+    // error at the `assertNever` default rather than a silent fall-through.
     switch (dayOfMonth) {
-      case "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH":
+      case "VESTING_START_DAY":
+        // Track the grant's vesting day, clamped down on short months.
         return Math.min(toDate(origin).getUTCDate(), lastDay);
-      case "29_OR_LAST_DAY_OF_MONTH":
-        return Math.min(29, lastDay);
-      case "30_OR_LAST_DAY_OF_MONTH":
-        return Math.min(30, lastDay);
-      case "31_OR_LAST_DAY_OF_MONTH":
-        return Math.min(31, lastDay);
+      case "FIRST_DAY_OF_MONTH":
+        return 1;
+      case "LAST_DAY_OF_MONTH":
+        return lastDay;
+      case "VESTING_START_DAY_MINUS_ONE":
+        // The day-before-start math lands in #493; until then it can't be
+        // projected, so fail loudly rather than guess.
+        throw new Error("not yet implemented (#493)");
       default:
         return assertNever(dayOfMonth);
     }
@@ -132,7 +125,7 @@ export function addMonthsRule(
 /**
  * Whole calendar months from `from` to `to`, plus the leftover days — the
  * closed-form inverse of `addMonthsRule` under its default
- * VESTING_START_DAY_OR_LAST_DAY_OF_MONTH rule. So
+ * VESTING_START_DAY rule. So
  * `monthsBetween(d, addMonthsRule(d, k))` is `{ diff: k, remainderDays: 0 }`
  * for every k.
  *
