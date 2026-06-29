@@ -25,6 +25,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
+    "ocf:refresh-types": "bash scripts/refresh-ocf-types.sh",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "changeset publish"

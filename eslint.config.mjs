@@ -24,6 +24,9 @@ export default tseslint.config(
       // isn't in tsconfig.lint.json) and the type-aware rules would throw.
       "**/.claude/**",
       "packages/dsl/src/generated/**",
+      // Generated, vendored OCF types: not in tsconfig.lint.json's program, so
+      // the type-aware parser would throw before any inline disable could apply.
+      "vendor/**",
       "apps/docs/**",
       "docs/**",
       "**/*.peggy",
