@@ -472,9 +472,12 @@ describe("rehydrate — day-of-month sourced from the artifact, not the caller",
   it("re-resolves the start exact under the stored rule (2025-02-28), ignoring ctxInput", () => {
     const { template, sourceMap, runtime } = storedFromDsl(
       DSL,
-      ctxInput({ grantQuantity: 400, vesting_day_of_month: "15" }),
+      ctxInput({
+        grantQuantity: 400,
+        vesting_day_of_month: "LAST_DAY_OF_MONTH",
+      }),
     );
-    expect(runtime.vestingDayOfMonth).toBe("15");
+    expect(runtime.vestingDayOfMonth).toBe("LAST_DAY_OF_MONTH");
 
     const result = rehydrate(
       template,
@@ -490,16 +493,16 @@ describe("rehydrate — day-of-month sourced from the artifact, not the caller",
     expect(result.startToApply).toEqual({ date: "2025-02-28" });
     expect(result.runtime.startDate).toBe("2025-02-28");
 
-    // The grid re-snaps off the 2025-02-28 start to the stored "15" — proof the
-    // stored rule (not the caller's default) drove the runtime the grid compiles
-    // under.
+    // The grid re-snaps off the 2025-02-28 start to the stored LAST_DAY_OF_MONTH —
+    // proof the stored rule (not the caller's default) drove the runtime the grid
+    // compiles under.
     const installments = compileToInstallments(template, 400, result.runtime);
     expect(installments).toHaveLength(4);
     expect(installments.map((i) => i.date)).toEqual([
-      "2025-03-15",
-      "2025-04-15",
-      "2025-05-15",
-      "2025-06-15",
+      "2025-03-31",
+      "2025-04-30",
+      "2025-05-31",
+      "2025-06-30",
     ]);
   });
 });
@@ -507,12 +510,12 @@ describe("rehydrate — day-of-month sourced from the artifact, not the caller",
 describe("rehydrate — #253 round-trip consistency (exact start, re-snapped grid)", () => {
   const DSL = "VEST FROM EVENT ipo + 1 month OVER 4 MONTHS EVERY 1 MONTH";
 
-  it("persist→rehydrate reproduces the same exact-start, 15th-grid schedule", () => {
-    // Evaluate once with the IPO already fired (Jan 31), under rule "15", to get
-    // the live schedule (a fired contingent start is a dated `template`).
+  it("persist→rehydrate reproduces the same exact-start, month-end-grid schedule", () => {
+    // Evaluate once with the IPO already fired (Jan 31), under LAST_DAY_OF_MONTH, to
+    // get the live schedule (a fired contingent start is a dated `template`).
     const liveCtx = ctxInput({
       grantQuantity: 400,
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       events: { ipo: "2025-01-31" },
     });
     const liveProgram = normalizeProgram(parse(DSL));
@@ -522,19 +525,23 @@ describe("rehydrate — #253 round-trip consistency (exact start, re-snapped gri
       i.state === "RESOLVED" ? i.date : i.state,
     );
     expect(liveDates).toEqual([
-      "2025-03-15",
-      "2025-04-15",
-      "2025-05-15",
-      "2025-06-15",
+      "2025-03-31",
+      "2025-04-30",
+      "2025-05-31",
+      "2025-06-30",
     ]);
 
     // The persisted form: build the stored artifact with the IPO STILL unfired,
-    // then rehydrate once it fires. The stored runtime carries the frozen "15".
+    // then rehydrate once it fires. The stored runtime carries the frozen
+    // LAST_DAY_OF_MONTH.
     const { template, sourceMap, runtime } = storedFromDsl(
       DSL,
-      ctxInput({ grantQuantity: 400, vesting_day_of_month: "15" }),
+      ctxInput({
+        grantQuantity: 400,
+        vesting_day_of_month: "LAST_DAY_OF_MONTH",
+      }),
     );
-    expect(runtime.vestingDayOfMonth).toBe("15");
+    expect(runtime.vestingDayOfMonth).toBe("LAST_DAY_OF_MONTH");
 
     const rehydrated = rehydrate(
       template,
@@ -542,7 +549,7 @@ describe("rehydrate — #253 round-trip consistency (exact start, re-snapped gri
       runtime,
       ctxInput({
         grantQuantity: 400,
-        vesting_day_of_month: "15",
+        vesting_day_of_month: "LAST_DAY_OF_MONTH",
         events: { ipo: "2025-01-31" },
       }),
     );
@@ -555,10 +562,10 @@ describe("rehydrate — #253 round-trip consistency (exact start, re-snapped gri
       rehydrated.runtime,
     );
     expect(fromRehydrated.map((i) => i.date)).toEqual([
-      "2025-03-15",
-      "2025-04-15",
-      "2025-05-15",
-      "2025-06-15",
+      "2025-03-31",
+      "2025-04-30",
+      "2025-05-31",
+      "2025-06-30",
     ]);
     expect(sum(fromRehydrated)).toBe(400);
   });

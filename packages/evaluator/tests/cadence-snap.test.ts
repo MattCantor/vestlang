@@ -2,7 +2,7 @@
 // cadence (the grid, and a cliff's own vestingStart anchor) snaps to the
 // day-of-month policy. These run the real evaluate path (parse → normalize →
 // evaluateProgram) at user altitude, because the program-level facts — a gate
-// clearing under a numeric policy, the cliff still snapping, the cliff.percentage
+// clearing under a non-default policy, the cliff still snapping, the cliff.percentage
 // on the typed interchange template — aren't visible at the offset surface. The
 // offset-exactness unit assertions live in vestingBase.test.ts.
 
@@ -71,23 +71,26 @@ describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", 
     ]);
   });
 
-  it("clears the SAME exact gate under policy '15' (was dead before #253)", () => {
-    const s = evaluate(DSL, { events, vesting_day_of_month: "15" });
+  it("clears the SAME exact gate under policy LAST_DAY_OF_MONTH (was dead before #253)", () => {
+    const s = evaluate(DSL, {
+      events,
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
+    });
     expect(s.resolution.status).toBe("template");
     expect(allResolved(s.resolution.installments)).toBe(true);
-    // The grid snaps to the 15th, so only 5 installments accrue by 07-12 (Jul-15
+    // The grid snaps to month-end, so only 5 installments accrue by 07-12 (Jul-31
     // is after) → a 416 lump (5/12 of 1000, cumulative round-down), remainder over
     // the 7 later installments. The amounts differ from the default run; the gate
     // verdict does NOT.
     expect(s.resolution.installments).toEqual([
       { state: "RESOLVED", amount: 416, date: "2025-07-12" },
-      { state: "RESOLVED", amount: 84, date: "2025-07-15" },
-      { state: "RESOLVED", amount: 83, date: "2025-08-15" },
-      { state: "RESOLVED", amount: 83, date: "2025-09-15" },
-      { state: "RESOLVED", amount: 84, date: "2025-10-15" },
-      { state: "RESOLVED", amount: 83, date: "2025-11-15" },
-      { state: "RESOLVED", amount: 83, date: "2025-12-15" },
-      { state: "RESOLVED", amount: 84, date: "2026-01-15" },
+      { state: "RESOLVED", amount: 84, date: "2025-07-31" },
+      { state: "RESOLVED", amount: 83, date: "2025-08-31" },
+      { state: "RESOLVED", amount: 83, date: "2025-09-30" },
+      { state: "RESOLVED", amount: 84, date: "2025-10-31" },
+      { state: "RESOLVED", amount: 83, date: "2025-11-30" },
+      { state: "RESOLVED", amount: 83, date: "2025-12-31" },
+      { state: "RESOLVED", amount: 84, date: "2026-01-31" },
     ]);
   });
 });
@@ -101,8 +104,8 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
   const DSL =
     "1000 VEST FROM EVENT ipo OVER 48 months EVERY 1 month CLIFF 12 months";
 
-  it("no firing → storable template with cliff.percentage 12/48 (under policy '15')", () => {
-    const s = evaluate(DSL, { vesting_day_of_month: "15" });
+  it("no firing → storable template with cliff.percentage 12/48 (under policy LAST_DAY_OF_MONTH)", () => {
+    const s = evaluate(DSL, { vesting_day_of_month: "LAST_DAY_OF_MONTH" });
     expect(s.interchange.status).toBe("template");
     if (s.interchange.status !== "template") return; // narrow
     const stmt = s.interchange.template.statements[0];
@@ -115,9 +118,9 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     });
   });
 
-  it("with firing → the cliff lump lands on the policy day (the 15th), 250 shares", () => {
+  it("with firing → the cliff lump lands on the policy day (the month-end), 250 shares", () => {
     const s = evaluate(DSL, {
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       events: { ipo: "2025-03-10" },
     });
     expect(s.resolution.status).toBe("template");
@@ -125,17 +128,17 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
       (i) => i.state === "RESOLVED",
     );
     // The cliff lump is the 12th grid installment — 1/4 of 1000 = 250 — on the
-    // snapped policy day (the 15th), unchanged from pre-#253.
+    // snapped policy day (March's month-end), unchanged from pre-#253.
     expect(resolved[0]).toEqual({
       state: "RESOLVED",
       amount: 250,
-      date: "2026-03-15",
+      date: "2026-03-31",
     });
   });
 
   it("no firing under the DEFAULT policy → same storable cliff.percentage", () => {
     const s = evaluate(DSL, {
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "VESTING_START_DAY",
     });
     expect(s.interchange.status).toBe("template");
     if (s.interchange.status !== "template") return; // narrow
@@ -148,7 +151,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
 
   it("with firing under the DEFAULT policy → 250 lump on the default grid day", () => {
     const s = evaluate(DSL, {
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "VESTING_START_DAY",
       events: { ipo: "2025-03-10" },
     });
     expect(s.resolution.status).toBe("template");
@@ -156,8 +159,8 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
       (i) => i.state === "RESOLVED",
     );
     // The default grid keeps ipo's day (the 10th); the cliff lands on the 12th
-    // installment, 2026-03-10 — the same 250 lump shape as the "15" run, on the
-    // default grid day.
+    // installment, 2026-03-10 — the same 250 lump shape as the LAST_DAY_OF_MONTH
+    // run, on the default grid day.
     expect(resolved[0]).toEqual({
       state: "RESOLVED",
       amount: 250,
@@ -167,21 +170,21 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
 });
 
 // ---- AC7: the recurring grid is unchanged — a monthly schedule under policy
-// '15' still lands every installment on the 15th. (The day-of-month wrapper's own
-// snap is pinned separately in time.addMonths.test.ts.)
+// LAST_DAY_OF_MONTH still lands every installment on the month-end. (The
+// day-of-month wrapper's own snap is pinned separately in time.addMonths.test.ts.)
 
-describe("#253 AC7 — recurring grid unchanged (still snaps to the 15th)", () => {
-  it("a monthly schedule under policy '15' lands every installment on the 15th", () => {
+describe("#253 AC7 — recurring grid unchanged (still snaps to the month-end)", () => {
+  it("a monthly schedule under policy LAST_DAY_OF_MONTH lands every installment on the month-end", () => {
     const s = evaluate(
       "1000 VEST FROM DATE 2025-01-10 OVER 4 months EVERY 1 month",
-      { vesting_day_of_month: "15" },
+      { vesting_day_of_month: "LAST_DAY_OF_MONTH" },
     );
     expect(s.resolution.status).toBe("template");
     expect(dates(s.resolution.installments)).toEqual([
-      "2025-02-15",
-      "2025-03-15",
-      "2025-04-15",
-      "2025-05-15",
+      "2025-02-28",
+      "2025-03-31",
+      "2025-04-30",
+      "2025-05-31",
     ]);
   });
 });

@@ -24,7 +24,7 @@ describe("#320 AC2 — reading firings off an interchange context is a type erro
     const interchange: InterchangeContext = {
       grantDate: "2025-01-01",
       grantQuantity: 100,
-      vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       mode: "interchange",
     };
     // @ts-expect-error — the interchange arm carries no `events` field at all (TS2339)
@@ -33,7 +33,7 @@ describe("#320 AC2 — reading firings off an interchange context is a type erro
     const firing: FiringContext = {
       grantDate: "2025-01-01",
       grantQuantity: 100,
-      vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       mode: "resolution",
       events: { ipo: "2025-03-01" },
     };
@@ -51,7 +51,7 @@ describe("#320 AC2 — constructing an interchange context with events is a type
     const bad: InterchangeContext = {
       grantDate: "2025-01-01",
       grantQuantity: 100,
-      vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       mode: "interchange",
       // @ts-expect-error — the interchange arm forbids carrying firings (surfaces as
       // excess-property TS2353; @ts-expect-error matches whichever error TS reports)
@@ -62,7 +62,7 @@ describe("#320 AC2 — constructing an interchange context with events is a type
     const ok: FiringContext = {
       grantDate: "2025-01-01",
       grantQuantity: 100,
-      vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
       mode: "rehydrate",
       events: { ipo: "2025-03-01" },
     };

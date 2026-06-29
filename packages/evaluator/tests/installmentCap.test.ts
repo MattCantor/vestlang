@@ -14,7 +14,7 @@ const ctx: AsOfContextInput = {
   events: {},
   grantQuantity: 1000,
   asOf: "2025-06-01",
-  vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  vesting_day_of_month: "VESTING_START_DAY",
 };
 
 const prog = (dsl: string) => normalizeProgram(parse(dsl));

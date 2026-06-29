@@ -40,9 +40,7 @@ describe("evaluateProgramWithRecovery", () => {
     });
     expect(outcome.recovered.dsl).toContain("THEN");
     expect(outcome.recovered.residualError).toBe(0);
-    expect(outcome.recovered.vestingDayOfMonth).toBe(
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    expect(outcome.recovered.vestingDayOfMonth).toBe("VESTING_START_DAY");
   });
 
   // #75.2: recovery is gated on firing-invariance (event-freeness), not on a

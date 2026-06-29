@@ -116,7 +116,7 @@ Because each tranche floors the running cumulative, an installment that the sche
   events: Record<string, OCTDate | undefined>, // genuine named events (e.g. ipo)
   grantQuantity: number,
   asOf: OCTDate,
-  vesting_day_of_month?: VestingDayOfMonth,     // default VESTING_START_DAY_OR_LAST_DAY_OF_MONTH
+  vesting_day_of_month?: VestingDayOfMonth,     // default VESTING_START_DAY
 }
 ```
 
@@ -124,7 +124,7 @@ Because each tranche floors the running cumulative, an installment that the sche
 - **`events`** — the genuine named events the DSL references (e.g. `ipo`). A name absent from the map is treated as unfired, not as never-occurring.
 - **`grantQuantity`** — the share count the amounts allocate against.
 - **`asOf`** — the clock a scenario is read against; the CLI and MCP front-ends default it to today. It's used to partition installments into vested / not-yet-vested ([`vestlang_evaluate_as_of`](./common_queries.md)); it does **not** decide whether a date is _known_ — a guaranteed-future literal date resolves like any other.
-- **`vesting_day_of_month`** — an optional OCF convention field, with the canonical default shown. Allocation is always cumulative round-down — the interchange has no allocation field.
+- **`vesting_day_of_month`** — an optional OCF convention field, one of the four `OCFVestingDayOfMonthPolicy` values (`VESTING_START_DAY` [default], `FIRST_DAY_OF_MONTH`, `LAST_DAY_OF_MONTH`, `VESTING_START_DAY_MINUS_ONE`); there are no numeric day-of-month values. Allocation is always cumulative round-down — the interchange has no allocation field.
 
 All dates are `OCTDate` — an ISO `YYYY-MM-DD` string.
 

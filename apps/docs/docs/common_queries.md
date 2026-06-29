@@ -156,7 +156,7 @@ can't be recovered. And `(2025-01-31 + 1 month) + 1 month → 2025-03-28` while
 `2025-01-31 + 2 months → 2025-03-31`. Don't compose period additions step by
 step when you mean a single span.
 
-Example: `date=2025-01-31, length=1, unit=months, rule=31_OR_LAST_DAY_OF_MONTH`
+Example: `date=2025-01-31, length=1, unit=months, rule=LAST_DAY_OF_MONTH`
 → `2025-02-28`.
 
 ### `vestlang_date_diff`
@@ -185,4 +185,11 @@ returns `{ ok: false, error: { ruleId: "offset-unresolved", … } }` whose
 Apply a `vesting_day_of_month` rule to a date's year+month without crossing
 months. Answers: "under rule X, what day does this month's tranche fall on?"
 
-Example: `date=2026-02-15, rule=29_OR_LAST_DAY_OF_MONTH` → `2026-02-28`.
+The rule is one of the four `OCFVestingDayOfMonthPolicy` values — `VESTING_START_DAY`
+(the default; track the start's own day, clamped down on short months),
+`FIRST_DAY_OF_MONTH`, `LAST_DAY_OF_MONTH`, or `VESTING_START_DAY_MINUS_ONE`. There
+are no numeric day-of-month values, and no `29`/`30` clamping policies — a month-end
+result comes from `LAST_DAY_OF_MONTH` or from `VESTING_START_DAY` clamping a late
+start day down to the month's last day.
+
+Example: `date=2026-02-15, rule=LAST_DAY_OF_MONTH` → `2026-02-28`.

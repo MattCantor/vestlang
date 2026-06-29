@@ -19,7 +19,7 @@ import {
 const ctx = baseCtx({
   grantDate: "2025-01-01",
   events: { ipo: "2026-04-01" },
-  vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+  vesting_day_of_month: "VESTING_START_DAY",
 });
 const anchor = "2025-01-01" as OCTDate;
 

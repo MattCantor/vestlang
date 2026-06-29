@@ -469,9 +469,9 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
     );
   });
 
-  it("a numeric vesting day pulling the cliff before the anchor throws", () => {
-    // Anchor 2025-01-15, a length-0 MONTHS cliff under vesting day 05 snaps to
-    // 2025-01-05 — before the grant began. The two throws read distinctly.
+  it("a vesting-day policy pulling the cliff before the anchor throws", () => {
+    // Anchor 2025-01-15, a length-0 MONTHS cliff under FIRST_DAY_OF_MONTH snaps to
+    // 2025-01-01 — before the grant began. The two throws read distinctly.
     const template: VestingScheduleTemplate = {
       id: "t1",
       statements: [
@@ -494,7 +494,7 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
     expect(() =>
       compile(template, 400, {
         startDate: "2025-01-15",
-        vestingDayOfMonth: "05",
+        vestingDayOfMonth: "FIRST_DAY_OF_MONTH",
       }),
     ).toThrow(/falls before the statement's start/);
   });
@@ -833,10 +833,10 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
     // Default policy preserves the start day (the 15th).
     const def = compile(monthly12, 1200, { startDate: "2025-01-15" });
     expect(def[0].date).toBe("2025-02-15");
-    // A fixed-day policy pins every installment to the 1st.
+    // FIRST_DAY_OF_MONTH pins every installment to the 1st.
     const firstOfMonth = compile(monthly12, 1200, {
       startDate: "2025-01-15",
-      vestingDayOfMonth: "01",
+      vestingDayOfMonth: "FIRST_DAY_OF_MONTH",
     });
     expect(firstOfMonth[0].date).toBe("2025-02-01");
   });

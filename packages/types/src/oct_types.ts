@@ -28,7 +28,6 @@ type ArrayCoversOCF =
     ? true
     : false;
 const _coversOCF: ArrayCoversOCF = true;
-void _coversOCF;
 
 /**
  * The canonical day-of-month convention applied when a runtime carries no

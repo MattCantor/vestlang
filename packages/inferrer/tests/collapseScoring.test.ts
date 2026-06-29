@@ -11,7 +11,7 @@ import {
 } from "../src/verify.js";
 import type { TrancheInput } from "../src/types.js";
 
-const DOM = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const;
+const DOM = "VESTING_START_DAY" as const;
 
 /** Re-evaluate an emitted DSL the way a consumer does — one collapsed program
  * walk — and sum RESOLVED installments by date. */

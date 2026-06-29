@@ -55,7 +55,7 @@ describe("mcp-server / calendar-date validation at the tool boundary", () => {
     const client = await connectClient();
     const res = await call(client, "vestlang_resolve_vesting_day", {
       date: "2026-02-30",
-      rule: "15",
+      rule: "VESTING_START_DAY",
     });
     expect(res.isError).toBe(true);
   });

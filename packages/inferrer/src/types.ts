@@ -11,7 +11,7 @@ export interface InferInput {
   tranches: TrancheInput[];
   grantDate?: OCTDate;
   /** Optional provenance hint. When provided, the day-of-month convention is
-   * fixed instead of searched (→ 1-policy search; omitted → full 32-policy search).
+   * fixed instead of searched (→ 1-policy search; omitted → full candidate search).
    *
    * A hint is trusted as ground truth and EXCLUDES other conventions from the
    * search. If a hint is wrong but still admits a residual-0 fit, the result is a

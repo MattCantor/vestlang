@@ -3,66 +3,41 @@ import { addPeriod, dateDiff, resolveVestingDay } from "../src/date-math.js";
 
 describe("addPeriod", () => {
   it("adds months with day clamping (leap year)", () => {
-    const r = addPeriod("2024-01-31", 1, "months", "31_OR_LAST_DAY_OF_MONTH");
+    const r = addPeriod("2024-01-31", 1, "months", "LAST_DAY_OF_MONTH");
     expect(r).toBe("2024-02-29");
   });
 
   it("adds months with day clamping (non-leap year)", () => {
-    const r = addPeriod("2023-01-31", 1, "months", "31_OR_LAST_DAY_OF_MONTH");
+    const r = addPeriod("2023-01-31", 1, "months", "LAST_DAY_OF_MONTH");
     expect(r).toBe("2023-02-28");
   });
 
   it("adds years", () => {
-    const r = addPeriod(
-      "2025-01-15",
-      4,
-      "years",
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    const r = addPeriod("2025-01-15", 4, "years", "VESTING_START_DAY");
     expect(r).toBe("2029-01-15");
   });
 
   it("adds weeks as 7 × days", () => {
-    const r = addPeriod(
-      "2025-01-01",
-      2,
-      "weeks",
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    const r = addPeriod("2025-01-01", 2, "weeks", "VESTING_START_DAY");
     expect(r).toBe("2025-01-15");
   });
 
   it("subtracts via negative length", () => {
-    const r = addPeriod(
-      "2025-06-15",
-      -3,
-      "months",
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    const r = addPeriod("2025-06-15", -3, "months", "VESTING_START_DAY");
     expect(r).toBe("2025-03-15");
   });
 });
 
 describe("addPeriod — year range", () => {
   it("keeps a sub-100 year instead of shifting it ~+1900", () => {
-    expect(
-      addPeriod(
-        "0050-06-15",
-        1,
-        "months",
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      ),
-    ).toBe("0050-07-15");
+    expect(addPeriod("0050-06-15", 1, "months", "VESTING_START_DAY")).toBe(
+      "0050-07-15",
+    );
   });
 
   it("throws cleanly instead of emitting a malformed date past 9999", () => {
     expect(() =>
-      addPeriod(
-        "9999-12-31",
-        1,
-        "years",
-        "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-      ),
+      addPeriod("9999-12-31", 1, "years", "VESTING_START_DAY"),
     ).toThrow(/range/);
   });
 
@@ -70,7 +45,7 @@ describe("addPeriod — year range", () => {
   // past the year guard and surface as "0NaN-NaN-NaN". The days and weeks paths
   // must reject just as cleanly as years does.
   it("throws cleanly on a day count that overflows, not a NaN date", () => {
-    const rule = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const;
+    const rule = "VESTING_START_DAY" as const;
     expect(() => addPeriod("2025-01-01", 300_000_000, "days", rule)).toThrow(
       /range/,
     );
@@ -121,25 +96,27 @@ describe("dateDiff — dispatch and response shaping", () => {
 });
 
 describe("resolveVestingDay", () => {
-  it("clamps Feb under 29_OR_LAST_DAY_OF_MONTH (non-leap)", () => {
-    expect(resolveVestingDay("2026-02-15", "29_OR_LAST_DAY_OF_MONTH")).toBe(
+  it("snaps Feb to the month end under LAST_DAY_OF_MONTH (non-leap)", () => {
+    expect(resolveVestingDay("2026-02-15", "LAST_DAY_OF_MONTH")).toBe(
       "2026-02-28",
     );
   });
 
-  it("clamps Feb under 31_OR_LAST_DAY_OF_MONTH (leap)", () => {
-    expect(resolveVestingDay("2024-02-15", "31_OR_LAST_DAY_OF_MONTH")).toBe(
+  it("snaps Feb to the month end under LAST_DAY_OF_MONTH (leap)", () => {
+    expect(resolveVestingDay("2024-02-15", "LAST_DAY_OF_MONTH")).toBe(
       "2024-02-29",
     );
   });
 
-  it("returns day 15 for numeric rule '15' regardless of input day", () => {
-    expect(resolveVestingDay("2025-03-07", "15")).toBe("2025-03-15");
+  it("pins to the 1st under FIRST_DAY_OF_MONTH regardless of input day", () => {
+    expect(resolveVestingDay("2025-03-07", "FIRST_DAY_OF_MONTH")).toBe(
+      "2025-03-01",
+    );
   });
 
   it("preserves input day under VESTING_START_DAY rule when in range", () => {
-    expect(
-      resolveVestingDay("2025-03-20", "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH"),
-    ).toBe("2025-03-20");
+    expect(resolveVestingDay("2025-03-20", "VESTING_START_DAY")).toBe(
+      "2025-03-20",
+    );
   });
 });

@@ -265,7 +265,7 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
   const cliffCtx = baseCtx({
     grantDate: "2024-01-01",
     events: {},
-    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    vesting_day_of_month: "VESTING_START_DAY",
   });
 
   it("lowerCliff reports 2 of 4 (a half) on the clamped grid", () => {

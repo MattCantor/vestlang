@@ -33,12 +33,12 @@ describe("#417 AC3 — toStoredTerms copies present RuntimeBase fields, omits ab
     const runtime: VestingRuntime = {
       startDate: "2025-01-01",
       grantDate: "2024-12-01",
-      vestingDayOfMonth: "15",
+      vestingDayOfMonth: "LAST_DAY_OF_MONTH",
     };
     const stored = toStoredTerms(runtime);
     expect(stored.startDate).toBe("2025-01-01");
     expect(stored.grantDate).toBe("2024-12-01");
-    expect(stored.vestingDayOfMonth).toBe("15");
+    expect(stored.vestingDayOfMonth).toBe("LAST_DAY_OF_MONTH");
     expect(Object.keys(stored).sort()).toEqual([
       "grantDate",
       "startDate",
@@ -113,10 +113,13 @@ describe("#417 AC4 — vestingDayOfMonth survives resolveInterchange when non-de
   });
 
   it("a non-default vestingDayOfMonth lands in the stored runtime", () => {
-    const verdict = resolveInterchange(program, ctxInput("15"));
+    const verdict = resolveInterchange(program, ctxInput("LAST_DAY_OF_MONTH"));
     expect(verdict.status).toBe("template");
     if (verdict.status !== "template") return;
-    expect(verdict.runtime).toHaveProperty("vestingDayOfMonth", "15");
+    expect(verdict.runtime).toHaveProperty(
+      "vestingDayOfMonth",
+      "LAST_DAY_OF_MONTH",
+    );
   });
 
   it("the default vestingDayOfMonth is omitted (re-applied on read)", () => {

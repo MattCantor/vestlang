@@ -126,9 +126,10 @@ export function evaluateVestingBase(
 
 // Walk the node's offsets onto its base date. A DAYS offset is the same exact
 // calendar step everywhere. A MONTHS offset diverges on `snap`: true makes it
-// cadence (consult the day-of-month policy on the context, so a fixed "15" pulls
-// it to the 15th), false makes it an exact duration (keep the day, clamp to
-// month-end on a shorter month, never read the policy). Only a cliff's own
+// cadence (consult the day-of-month policy on the context, so e.g.
+// `LAST_DAY_OF_MONTH` pulls it to the month-end), false makes it an exact duration
+// (keep the day, clamp to month-end on a shorter month, never read the policy).
+// Only a cliff's own
 // `vestingStart` anchor passes `snap` true — see `evaluateVestingBase`. The walk
 // itself lives in `stepByOffsets`; here we just pick which month-stepper it uses.
 function applyOffsets(

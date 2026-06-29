@@ -7,7 +7,7 @@ import { inferSchedule } from "../src/index.js";
 import { segmentSequential } from "../src/sequential.js";
 import type { TrancheInput } from "../src/types.js";
 
-const DOM = "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
+const DOM = "VESTING_START_DAY";
 
 // A grant whose monthly rate doubles for two months and then drops back. It's one
 // schedule with a rate change, not two grants — but the overlapping-train
@@ -231,7 +231,7 @@ describe("inferSchedule — THEN survives month-end clamping", () => {
     // statements read as independent grids → events-only.
     const dated =
       "150 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 450 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
-    expect(collapse(dated, "31_OR_LAST_DAY_OF_MONTH").resolution.status).toBe(
+    expect(collapse(dated, "LAST_DAY_OF_MONTH").resolution.status).toBe(
       "events-only",
     );
   });
