@@ -1,4 +1,4 @@
-// AC#2 / AC#3 — the day-of-month type is OCF v2's four-value policy enum, and the
+// The day-of-month type is OCF v2's four-value policy enum, and the
 // switch `pickDay` runs is exhaustive over all four. The exhaustiveness fixture
 // mirrors the evaluator's `resolve.chain-du.types.test.ts`: a complete
 // `assertNever`-terminated switch compiles, and a deliberately-incomplete one
@@ -7,7 +7,7 @@
 //
 // The type-level assertions are validated by `tsc -p tsconfig.lint.json` (the
 // root `typecheck`, which includes `tests`); the runtime assertions run under
-// vitest. The 5th-member guarantee in AC#3 lives in `pickDay` itself, which `tsc`
+// vitest. The 5th-member guarantee lives in `pickDay` itself, which `tsc`
 // checks every CI run — adding a member to the OCF union without a matching `case`
 // there breaks the build. This file pins the same shape independently of that call
 // site. The authoritative array↔OCF drift guard lives in `@vestlang/types`'
@@ -30,7 +30,7 @@ const OCF_POLICIES = [
   "VESTING_START_DAY_MINUS_ONE",
 ] as const;
 
-describe("VESTING_DAY_OF_MONTH_VALUES is the 4-value OCF policy set (AC#2)", () => {
+describe("VESTING_DAY_OF_MONTH_VALUES is the 4-value OCF policy set", () => {
   it("holds exactly the four policies in declaration order", () => {
     expect(VESTING_DAY_OF_MONTH_VALUES).toEqual(OCF_POLICIES);
     expect(VESTING_DAY_OF_MONTH_VALUES).toHaveLength(4);
@@ -41,7 +41,7 @@ describe("VESTING_DAY_OF_MONTH_VALUES is the 4-value OCF policy set (AC#2)", () 
   });
 });
 
-describe("VestingDayOfMonth is the OCF policy union (AC#2)", () => {
+describe("VestingDayOfMonth is the OCF policy union", () => {
   it("equals exactly the four policy literals — no numeric days, no named/numeric split", () => {
     expectTypeOf<VestingDayOfMonth>().toEqualTypeOf<
       | "VESTING_START_DAY"
@@ -86,7 +86,7 @@ function residualIsNonEmpty(
   return assertNever(p);
 }
 
-describe("VestingDayOfMonth switch is exhaustive (AC#3)", () => {
+describe("VestingDayOfMonth switch is exhaustive", () => {
   it("classifies all four policies", () => {
     expect(VESTING_DAY_OF_MONTH_VALUES.map(classifyPolicy)).toEqual([
       "start",

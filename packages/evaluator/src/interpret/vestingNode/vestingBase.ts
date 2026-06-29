@@ -129,9 +129,9 @@ export function evaluateVestingBase(
 // cadence (consult the day-of-month policy on the context, so e.g.
 // `LAST_DAY_OF_MONTH` pulls it to the month-end), false makes it an exact duration
 // (keep the day, clamp to month-end on a shorter month, never read the policy).
-// Only a cliff's own
-// `vestingStart` anchor passes `snap` true — see `evaluateVestingBase`. The walk
-// itself lives in `stepByOffsets`; here we just pick which month-stepper it uses.
+// Only a cliff's own `vestingStart` anchor passes `snap` true — see
+// `evaluateVestingBase`. The walk itself lives in `stepByOffsets`; here we just
+// pick which month-stepper it uses.
 function applyOffsets(
   base: OCTDate,
   offsets: Offsets,
