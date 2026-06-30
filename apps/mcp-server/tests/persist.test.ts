@@ -623,12 +623,12 @@ describe("mcp-server / persistence tool pair", () => {
 
   it("exact start, projection grid snaps under the stored day-of-month rule", async () => {
     const client = await connectClient();
-    // Persist under rule "15" — non-default, so the rule is frozen into the runtime.
+    // Persist under LAST_DAY_OF_MONTH — non-default, so the rule is frozen into the runtime.
     const persisted = await persistOk(client, {
       dsl: OFFSET_SYNTHETIC_DSL,
       grant_date: "2025-01-01",
       grant_quantity: 400,
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
     });
 
     // Rehydrate with no day-of-month arg (it no longer exists) — ipo on a month-end.
@@ -640,15 +640,16 @@ describe("mcp-server / persistence tool pair", () => {
 
     // The re-derived start is the EXACT offset (#253): ipo on Jan 31 + 1 month keeps
     // day 31 and clamps to Feb's last day (2025-02-28) — a displacement never
-    // consults the "15" policy. The projection GRID still re-snaps to the 15th off
-    // that start, so the stored rule shows up there, not in the start date.
+    // consults the LAST_DAY_OF_MONTH policy. The projection GRID still re-snaps to
+    // the month-end off that start, so the stored rule shows up there, not in the
+    // start date.
     expect(out.start_to_apply).toEqual({ date: "2025-02-28" });
-    expect(out.projection[0].date).toBe("2025-03-15");
+    expect(out.projection[0].date).toBe("2025-03-31");
     expect(out.projection).toEqual([
-      { date: "2025-03-15", amount: 100 },
-      { date: "2025-04-15", amount: 100 },
-      { date: "2025-05-15", amount: 100 },
-      { date: "2025-06-15", amount: 100 },
+      { date: "2025-03-31", amount: 100 },
+      { date: "2025-04-30", amount: 100 },
+      { date: "2025-05-31", amount: 100 },
+      { date: "2025-06-30", amount: 100 },
     ]);
   });
 

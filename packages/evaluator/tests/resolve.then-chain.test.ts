@@ -207,7 +207,7 @@ describe("resolveToCore — month-end day-of-month (#34 fixed in core)", () => {
     const result = resolveToCore(
       janEnd,
       ctxInput({
-        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        vesting_day_of_month: "VESTING_START_DAY",
       }),
     );
     if (result.kind !== "template") throw new Error("expected template");
@@ -218,7 +218,7 @@ describe("resolveToCore — month-end day-of-month (#34 fixed in core)", () => {
   it("month-end policy: each tranche returns to the last day of its month", () => {
     const result = resolveToCore(
       janEnd,
-      ctxInput({ vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH" }),
+      ctxInput({ vesting_day_of_month: "LAST_DAY_OF_MONTH" }),
     );
     if (result.kind !== "template") throw new Error("expected template");
     const events = compile(result.template, result.totalShares, result.runtime);
@@ -240,7 +240,7 @@ describe("resolveToCore — month-end chain, resolve pre-pass agrees with core",
     then(portion(1, 3), monthly1),
   ];
   const defaultPolicy = ctxInput({
-    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    vesting_day_of_month: "VESTING_START_DAY",
   });
 
   it("resolves each tail's start to the sprung-back day, not the clamped one", () => {
@@ -463,7 +463,7 @@ describe("resolveToCore — split-invariance across origins and periods", () => 
   //     (2028-02-29); a pre-fix tail handed Feb 28 never recovered the 29th.
   // The rest preserve their day across the step and should sit still.
   const monthEndPolicy = {
-    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    vesting_day_of_month: "VESTING_START_DAY",
   } as const;
 
   // Four uniform tranches: a one-tranche head plus a three-tranche tail, every

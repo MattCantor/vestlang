@@ -109,7 +109,7 @@ export interface Cliff {
 //                    held back and emitted as a single aggregate on grantDate
 //                    (an implicit cliff at grant date).
 //   - vestingDayOfMonth — additive-optional convention field; omitted ⇒ the
-//                    canonical default (VESTING_START_DAY_OR_LAST_DAY_OF_MONTH).
+//                    canonical default (VESTING_START_DAY).
 //                    Allocation is always CUMULATIVE_ROUND_DOWN — the interchange
 //                    has no allocation field.
 export interface RuntimeBase {

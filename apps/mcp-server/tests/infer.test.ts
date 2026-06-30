@@ -61,7 +61,7 @@ function tranchesFromDsl(
     grantDate,
     events: {},
     grantQuantity,
-    vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+    vesting_day_of_month: "VESTING_START_DAY",
   }).resolution.installments;
   return installments
     .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
@@ -111,9 +111,7 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
       .diagnostics as {
       vestingDayOfMonth: unknown;
     };
-    expect(diagnostics.vestingDayOfMonth).toBe(
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    expect(diagnostics.vestingDayOfMonth).toBe("VESTING_START_DAY");
   });
 
   // With grant_date supplied, the lump a year out is a cliff (cliffFolds=1); this

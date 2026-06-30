@@ -18,8 +18,7 @@ import type {
 // is a coincident cliff, reshape it" and "leave it alone", and prove the reshape
 // never changes the schedule it represents.
 
-const DEFAULT_POLICY: VestingDayOfMonth =
-  "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH";
+const DEFAULT_POLICY: VestingDayOfMonth = "VESTING_START_DAY";
 
 function uniform(
   startDate: string,
@@ -108,21 +107,21 @@ describe("splitCoincidentCliffs — reshapes a genuine coincident cliff", () => 
   });
 
   it("snapping policy: reshapes when the lump is on the train's ACTUAL first installment", () => {
-    // Under the 29th-of-month convention this train's seed (Jan 1) is not where it
-    // vests — its first installment is Jan 29. A lump on Jan 29 IS coincident.
-    const policy: VestingDayOfMonth = "29_OR_LAST_DAY_OF_MONTH";
+    // Under the month-end convention this train's seed (Jan 1) is not where it
+    // vests — its first installment is Jan 31. A lump on Jan 31 IS coincident.
+    const policy: VestingDayOfMonth = "LAST_DAY_OF_MONTH";
     const train = uniform("2024-01-01", 1000, 6);
-    const input: Component[] = [train, single("2024-01-29", 2000)];
+    const input: Component[] = [train, single("2024-01-31", 2000)];
 
-    // sanity: the train really does vest on the 29th, not on its Jan-1 seed.
-    expect([...footprint([train], policy).keys()]).toContain("2024-01-29");
+    // sanity: the train really does vest on the 31st, not on its Jan-1 seed.
+    expect([...footprint([train], policy).keys()]).toContain("2024-01-31");
     expect([...footprint([train], policy).keys()]).not.toContain("2024-01-01");
 
     const out = splitCoincidentCliffs(input, policy);
 
     expect(out).toEqual([
       uniform("2024-02-29", 1000, 5), // starts at the train's SECOND installment
-      single("2024-01-29", 3000),
+      single("2024-01-31", 3000),
     ]);
     expect(footprint(out, policy)).toEqual(footprint(input, policy));
   });
@@ -131,11 +130,11 @@ describe("splitCoincidentCliffs — reshapes a genuine coincident cliff", () => 
 describe("splitCoincidentCliffs — leaves non-cliffs alone", () => {
   it("snapping policy: a lump on the train's SEED date (but not its real first installment) is not reshaped", () => {
     // The regression guard. Off-grid hire-date case: train seeded Jan 1 but
-    // vesting on the 29th, with a lump on Jan 1 (the grant date). That lump is a
+    // vesting on the 31st, with a lump on Jan 1 (the grant date). That lump is a
     // genuine pre-grant lump, NOT a coincident cliff — it must pass through so
     // foldPreGrant can handle it. (Comparing against the seed date instead of the
     // evaluated first installment would wrongly fold it.)
-    const policy: VestingDayOfMonth = "29_OR_LAST_DAY_OF_MONTH";
+    const policy: VestingDayOfMonth = "LAST_DAY_OF_MONTH";
     const input: Component[] = [
       uniform("2024-01-01", 1000, 6),
       single("2024-01-01", 3000),

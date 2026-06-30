@@ -20,12 +20,12 @@ const applyTest = (x: {
   expect(got).toBe(x.expected);
 };
 
-describe("Handles 31 / overflow scenarios", () => {
+describe("LAST_DAY_OF_MONTH — 31 / overflow scenarios", () => {
   it("Jan 31 +1 -> Feb last day (leap year)", () => {
     applyTest({
       src: "2024-01-31",
       months: 1,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
+      rule: "LAST_DAY_OF_MONTH",
       expected: "2024-02-29",
     });
   });
@@ -34,36 +34,27 @@ describe("Handles 31 / overflow scenarios", () => {
     applyTest({
       src: "2023-01-31",
       months: 1,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
+      rule: "LAST_DAY_OF_MONTH",
       expected: "2023-02-28",
     });
   });
 
-  it("30 or last -> still last (29)", () => {
+  it("Leap-day +12 months → non-leap Feb clamps", () => {
     applyTest({
-      src: "2024-01-31",
-      months: 1,
-      rule: "30_OR_LAST_DAY_OF_MONTH",
-      expected: "2024-02-29",
-    });
-  });
-
-  it("29 or last → 29", () => {
-    applyTest({
-      src: "2024-01-31",
-      months: 1,
-      rule: "29_OR_LAST_DAY_OF_MONTH",
-      expected: "2024-02-29",
+      src: "2024-02-29",
+      months: 12,
+      rule: "LAST_DAY_OF_MONTH",
+      expected: "2025-02-28",
     });
   });
 });
 
-describe("Vesting start day or last day", () => {
+describe("VESTING_START_DAY — anniversary, clamped to month end", () => {
   it("Keep original day (31) but clamp to April 30", () => {
     applyTest({
       src: "2024-03-31",
       months: 1,
-      rule: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      rule: "VESTING_START_DAY",
       expected: "2024-04-30",
     });
   });
@@ -72,7 +63,7 @@ describe("Vesting start day or last day", () => {
     applyTest({
       src: "2024-01-30",
       months: 1,
-      rule: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      rule: "VESTING_START_DAY",
       expected: "2024-02-29",
     });
   });
@@ -81,37 +72,8 @@ describe("Vesting start day or last day", () => {
     applyTest({
       src: "2023-01-30",
       months: 1,
-      rule: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      rule: "VESTING_START_DAY",
       expected: "2023-02-28",
-    });
-  });
-});
-
-describe("Exact numeric day rules ('DD')", () => {
-  it("Explicit day 15", () => {
-    applyTest({
-      src: "2024-01-31",
-      months: 1,
-      rule: "15",
-      expected: "2024-02-15",
-    });
-  });
-
-  it("Explicit 31 → clamp to last day of Feb", () => {
-    applyTest({
-      src: "2024-01-31",
-      months: 1,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
-      expected: "2024-02-29",
-    });
-  });
-
-  it("Leap-day +12 months → non-leap Feb clamps", () => {
-    applyTest({
-      src: "2024-02-29",
-      months: 12,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
-      expected: "2025-02-28",
     });
   });
 });
@@ -121,7 +83,7 @@ describe("Multiple months forward", () => {
     applyTest({
       src: "2024-01-31",
       months: 2,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
+      rule: "LAST_DAY_OF_MONTH",
       expected: "2024-03-31",
     });
   });
@@ -130,7 +92,7 @@ describe("Multiple months forward", () => {
     applyTest({
       src: "2024-01-31",
       months: 13,
-      rule: "31_OR_LAST_DAY_OF_MONTH",
+      rule: "LAST_DAY_OF_MONTH",
       expected: "2025-02-28",
     });
   });

@@ -72,9 +72,7 @@ describe("mcp-server / vestlang_evaluate recovery", () => {
     );
     expect(sc.recovered?.dsl).toContain("THEN");
     expect(sc.recovered?.residualError).toBe(0);
-    expect(sc.recovered?.vestingDayOfMonth).toBe(
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
-    );
+    expect(sc.recovered?.vestingDayOfMonth).toBe("VESTING_START_DAY");
   });
 
   // Two grids on different days of the month interleave with no single-template

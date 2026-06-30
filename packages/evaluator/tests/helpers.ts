@@ -35,7 +35,7 @@ export const baseCtx = (
 ): ResolutionContext => ({
   grantDate: "2025-01-01",
   events: {},
-  vesting_day_of_month: "31_OR_LAST_DAY_OF_MONTH",
+  vesting_day_of_month: "LAST_DAY_OF_MONTH",
   grantQuantity: 100,
   // The selector layer reads mode off the context; default to the closed-world
   // reading (where an EARLIER_OF commits) since that's the common case under test.

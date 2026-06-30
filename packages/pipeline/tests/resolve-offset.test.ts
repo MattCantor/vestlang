@@ -120,25 +120,26 @@ describe("runResolveOffset", () => {
   });
 
   // #253 — a displacement offset is exact: it does NOT consult the
-  // vesting_day_of_month policy. So `DATE 2025-01-31 + 1 month` under rule "15"
-  // keeps day 31 and clamps to Feb's last day (2025-02-28); it never snaps to the
-  // 15th. (Pre-#253 this returned 2025-02-15.)
+  // vesting_day_of_month policy. So `DATE 2025-01-31 + 1 month` under
+  // FIRST_DAY_OF_MONTH keeps day 31 and clamps to Feb's last day (2025-02-28); it
+  // never snaps to the 1st. (FIRST_DAY_OF_MONTH is the discriminating rule here —
+  // a month-end rule would coincide with the day-31 clamp and prove nothing.)
   it("steps an explicit-rule offset exactly, not onto the policy day", () => {
     const r = runResolveOffset({
       expr: "DATE 2025-01-31 + 1 month",
       grant_date: "2025-01-01",
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "FIRST_DAY_OF_MONTH",
     });
     expect(r).toEqual({ ok: true, date: "2025-02-28" });
   });
 
   // #253 — and a non-clamping day is kept verbatim under the same rule: the 10th
-  // stays the 10th, not the 15th.
+  // stays the 10th, not the 1st.
   it("keeps a non-clamping offset day under an explicit rule (no snap)", () => {
     const r = runResolveOffset({
       expr: "DATE 2025-01-10 + 1 month",
       grant_date: "2025-01-01",
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "FIRST_DAY_OF_MONTH",
     });
     expect(r).toEqual({ ok: true, date: "2025-02-10" });
   });

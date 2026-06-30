@@ -355,7 +355,7 @@ export function inferSchedule(input: InferInput): InferResult {
   const notes: string[] = [];
 
   // The day-of-month convention is either fixed to a provided hint or searched
-  // over all candidates (a 1-policy vs full 32-policy search). The
+  // over all candidates (a 1-policy vs full candidate-set search). The
   // winner-selection and explicit-list fallback below are identical regardless of
   // how many attempts there are — a wrong hint simply yields no clean fit and
   // falls back, rather than being silently widened.

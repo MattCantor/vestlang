@@ -24,8 +24,9 @@ import { ISO_DATE } from "./iso-date.js";
  * Zod schemas for the artifact (the rehydrate tool's input)
  * ------------------------ */
 
-// The OCT VestingDayOfMonth enum, as it rides in a stored runtime — derived from
-// the canonical value array so a dropped value fails typecheck here too.
+// The OCF VestingDayOfMonthPolicy enum (the four v2 day-of-month policies), as it
+// rides in a stored runtime — derived from the canonical value array so a dropped
+// value fails typecheck here too.
 const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
 
 // The stored runtime is `StoredTerms` — firing-free by construction (eventFirings

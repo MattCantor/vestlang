@@ -120,7 +120,7 @@ describe("#345 AC#1 — every tool returns { ok: true } and a falsy isError on v
       ],
       [
         "vestlang_resolve_vesting_day",
-        { date: "2026-02-15", rule: "29_OR_LAST_DAY_OF_MONTH" },
+        { date: "2026-02-15", rule: "LAST_DAY_OF_MONTH" },
       ],
     ];
 

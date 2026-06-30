@@ -14,9 +14,9 @@ import {
 /**
  * Step `months` calendar months, snapping to the day-of-month policy on the
  * context. This is the *cadence* stepper: the recurring grid and a cliff's own
- * `vestingStart` anchor land on the grant's vesting day, so a fixed "15" policy
- * pulls each month to the 15th. Displacement offsets must NOT use this — see
- * `addMonthsExact`.
+ * `vestingStart` anchor land on the grant's vesting day, so e.g. a
+ * `LAST_DAY_OF_MONTH` policy pulls each month to its month-end. Displacement
+ * offsets must NOT use this — see `addMonthsExact`.
  */
 export const addMonthsRule = (
   iso: OCTDate,

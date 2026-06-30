@@ -260,9 +260,9 @@ describe("expandGrid", () => {
   });
 
   it("a fixed cliff dated before the anchor throws", () => {
-    // A zero-length MONTHS cliff under a numeric vesting-day-of-month lower than the
-    // anchor's day snaps before the anchor: 2025-01-15 with dom 05 → 2025-01-05,
-    // before the vesting start. Nothing can vest there.
+    // The fixed cliff is pinned at 2025-01-05, before the 2025-01-15 anchor; under
+    // FIRST_DAY_OF_MONTH the grid itself also lands earlier in the month. Either
+    // way the cliff falls before the vesting start, where nothing can vest.
     expect(() =>
       expandGrid({
         anchor: "2025-01-15",
@@ -272,7 +272,7 @@ describe("expandGrid", () => {
         occurrences: 4,
         stmtFraction: ONE,
         statementOrder: 1,
-        dom: "05",
+        dom: "FIRST_DAY_OF_MONTH",
         cliff: { kind: "fixed", date: "2025-01-05", percentage: frac(1, 4) },
       }),
     ).toThrow(/falls before the statement's start/);
@@ -286,7 +286,7 @@ describe("gridDate", () => {
       origin: "2025-01-31",
       period: 1,
       periodType: "MONTHS",
-      dom: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      dom: "VESTING_START_DAY",
     });
     expect([at(1), at(2), at(3)]).toEqual([
       "2025-02-28",

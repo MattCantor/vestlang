@@ -82,11 +82,14 @@ describe("evaluateVestingBase", () => {
 // ---- Issue #253: a displacement MONTHS offset is exact — it never consults the
 // day-of-month policy. Only cadence (the grid, and a cliff's own vestingStart
 // anchor) snaps. These assert the rule at the offset-application surface, with a
-// fixed numeric policy ("15") that would visibly snap if the bug were live.
+// non-default policy (FIRST_DAY_OF_MONTH) that would visibly snap to the 1st if
+// the bug were live. FIRST_DAY_OF_MONTH is the discriminating choice here: its
+// snap day (the 1st) differs from every keep-day result below — including the
+// day-31 clamp (Feb 28), where a month-end policy would coincide and prove nothing.
 
-// The schedule's own anchor, resolved under policy "15".
-const dom15 = (date: string): ResolvedNode => {
-  const ctx = baseCtx({ vesting_day_of_month: "15" });
+// The schedule's own anchor, resolved under FIRST_DAY_OF_MONTH.
+const domFirst = (date: string): ResolvedNode => {
+  const ctx = baseCtx({ vesting_day_of_month: "FIRST_DAY_OF_MONTH" });
   const res = evaluateVestingBase(
     makeSingletonNode(makeVestingBaseDate(date), [
       makeDuration(1, "MONTHS", "PLUS"),
@@ -98,17 +101,17 @@ const dom15 = (date: string): ResolvedNode => {
 };
 
 describe("evaluateVestingBase — offset exactness under a fixed policy (#253)", () => {
-  // AC1: a DATE start offset keeps its day under "15", not the 15th.
+  // AC1: a DATE start offset keeps its day under FIRST_DAY_OF_MONTH, not the 1st.
   it("DATE + 1 month keeps the day (2025-01-10 → 2025-02-10), not the policy day", () => {
-    expect(dom15("2025-01-10")).toEqual({
+    expect(domFirst("2025-01-10")).toEqual({
       type: "RESOLVED",
       date: "2025-02-10",
     });
   });
 
-  // AC1 clamp arm: keep day 31, clamp to Feb's last day — never the 15th.
-  it("DATE 2025-01-31 + 1 month clamps to 2025-02-28 (keep-day-31), not the 15th", () => {
-    expect(dom15("2025-01-31")).toEqual({
+  // AC1 clamp arm: keep day 31, clamp to Feb's last day — never the 1st.
+  it("DATE 2025-01-31 + 1 month clamps to 2025-02-28 (keep-day-31), not the 1st", () => {
+    expect(domFirst("2025-01-31")).toEqual({
       type: "RESOLVED",
       date: "2025-02-28",
     });
@@ -117,7 +120,7 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   // AC1: under the default policy the keep-day offset is unchanged.
   it("DATE + 1 month under the default policy is also 2025-02-10", () => {
     const ctx = baseCtx({
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "VESTING_START_DAY",
     });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2025-01-10"), [
@@ -132,7 +135,7 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   // AC3: an EVENT-anchored start offset is exact on both arms.
   it("EVENT ipo + 6 months keeps the day (ipo 2025-01-20 → 2025-07-20)", () => {
     const ctx = baseCtx({
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "FIRST_DAY_OF_MONTH",
       events: { ipo: "2025-01-20" },
     });
     const res = evaluateVestingBase(
@@ -147,7 +150,7 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
 
   it("EVENT ipo + 6 months clamps (ipo 2025-08-31 → 2026-02-28)", () => {
     const ctx = baseCtx({
-      vesting_day_of_month: "15",
+      vesting_day_of_month: "FIRST_DAY_OF_MONTH",
       events: { ipo: "2025-08-31" },
     });
     const res = evaluateVestingBase(
@@ -162,11 +165,11 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
 
   // AC3 default-policy arm: the same EVENT offsets are unchanged under the
   // canonical default — addMonthsExact never reads the policy, so keep-day and
-  // clamp land identically to the "15" runs above.
+  // clamp land identically to the FIRST_DAY_OF_MONTH runs above.
   it("EVENT ipo + 6 months under the default policy is unchanged (keep-day + clamp)", () => {
     const at = (ipo: string) => {
       const ctx = baseCtx({
-        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        vesting_day_of_month: "VESTING_START_DAY",
         events: { ipo },
       });
       return evaluateVestingBase(
@@ -182,9 +185,9 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   });
 
   // AC5 / Decision 2: a gate base steps exact regardless of its anchor — a DATE
-  // gate reference + 1 month under "15" resolves to the 10th, not the 15th.
-  it("a DATE gate base + 1 month is exact (role 'gate'): 2025-02-10, not the 15th", () => {
-    const ctx = baseCtx({ vesting_day_of_month: "15" });
+  // gate reference + 1 month under FIRST_DAY_OF_MONTH resolves to the 10th, not the 1st.
+  it("a DATE gate base + 1 month is exact (role 'gate'): 2025-02-10, not the 1st", () => {
+    const ctx = baseCtx({ vesting_day_of_month: "FIRST_DAY_OF_MONTH" });
     const res = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2025-01-10"), [
         makeDuration(1, "MONTHS", "PLUS"),
@@ -197,10 +200,11 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
 
   // The cadence cliff: a node's OWN vestingStart anchor with a MONTHS offset
   // snaps to the policy day. This is the one case role 'anchor' snaps — proving
-  // the discriminator isn't blanket-exact.
-  it("a vestingStart cliff anchor + 1 month SNAPS to the policy day (the 15th)", () => {
+  // the discriminator isn't blanket-exact. Under FIRST_DAY_OF_MONTH the snap lands
+  // on the 1st (2025-02-01), distinct from the exact keep-day 2025-02-10.
+  it("a vestingStart cliff anchor + 1 month SNAPS to the policy day (the 1st)", () => {
     const ctx: CliffEvaluationContext = {
-      ...baseCtx({ vesting_day_of_month: "15" }),
+      ...baseCtx({ vesting_day_of_month: "FIRST_DAY_OF_MONTH" }),
       vestingStart: "2025-01-10",
     };
     const res = evaluateVestingBase(
@@ -210,7 +214,7 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
       ctx,
       "anchor",
     );
-    expect(res).toEqual({ type: "RESOLVED", date: "2025-02-15" });
+    expect(res).toEqual({ type: "RESOLVED", date: "2025-02-01" });
   });
 
   // Same vestingStart anchor, but referenced as a GATE: exact, not snapped (the
@@ -219,7 +223,7 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   // avoid: keying on base.type alone would snap it.
   it("a vestingStart GATE base + 1 month is exact (the #351 case): 2025-02-10", () => {
     const ctx: CliffEvaluationContext = {
-      ...baseCtx({ vesting_day_of_month: "15" }),
+      ...baseCtx({ vesting_day_of_month: "FIRST_DAY_OF_MONTH" }),
       vestingStart: "2025-01-10",
     };
     const res = evaluateVestingBase(
@@ -233,10 +237,10 @@ describe("evaluateVestingBase — offset exactness under a fixed policy (#253)",
   });
 
   // AC2: spelling invariance — `+ 1 month` and `+ 30 days` differ only by the
-  // calendar, neither jumps to the 15th.
+  // calendar, neither jumps to the 1st.
   it("spelling invariance: +1 month (02-10) and +30 days (02-09) differ only by the calendar", () => {
-    const monthRes = dom15("2025-01-10");
-    const ctx = baseCtx({ vesting_day_of_month: "15" });
+    const monthRes = domFirst("2025-01-10");
+    const ctx = baseCtx({ vesting_day_of_month: "FIRST_DAY_OF_MONTH" });
     const dayRes = evaluateVestingBase(
       makeSingletonNode(makeVestingBaseDate("2025-01-10"), [
         makeDuration(30, "DAYS", "PLUS"),

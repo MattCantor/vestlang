@@ -177,7 +177,9 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
 
   it("off-grid lump (hire date) on the grant date → vesting start on the train's day-of-month", () => {
     // Hire/vesting-start 2023-09-29 (~3 months + 2 days before a 2024-01-01
-    // grant): the train lands on the 29th, the lump on the arbitrary grant date.
+    // grant): under VESTING_START_DAY the train tracks the start's own day (the
+    // 29th, clamped where a month is short) and the lump lands on the arbitrary
+    // grant date.
     const tranches: TrancheInput[] = [
       { date: d("2024-01-01"), amount: 3000 },
       { date: d("2024-01-29"), amount: 1000 },
@@ -191,7 +193,7 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
     const result = inferSchedule({
       tranches,
       grantDate: d("2024-01-01"),
-      policy: "29_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
@@ -211,16 +213,16 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
       grantDate: d("2024-01-01"),
       events: {},
       grantQuantity: 100000,
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      vesting_day_of_month: "VESTING_START_DAY",
     });
 
     // Hint the policy: this case exercises rounded-train folding, not convention
-    // detection, and the full 32-policy search over jittery 48-tranche input is
-    // slow (a property of the B&B decompose, not the fold).
+    // detection, and the full policy search over jittery 48-tranche input is slow
+    // (a property of the B&B decompose, not the fold).
     const result = inferSchedule({
       tranches: full,
       grantDate: d("2024-01-01"),
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
@@ -384,15 +386,15 @@ describe("inferSchedule — zero-total tranche set", () => {
   it("(i) a caller-supplied policy is echoed, not overridden", () => {
     const withPolicy = inferSchedule({
       tranches: [{ date: d("2025-02-01"), amount: 0 }],
-      policy: "15",
+      policy: "LAST_DAY_OF_MONTH",
     });
-    expect(withPolicy.diagnostics.vestingDayOfMonth).toBe("15");
+    expect(withPolicy.diagnostics.vestingDayOfMonth).toBe("LAST_DAY_OF_MONTH");
 
     const withoutPolicy = inferSchedule({
       tranches: [{ date: d("2025-02-01"), amount: 0 }],
     });
     expect(withoutPolicy.diagnostics.vestingDayOfMonth).toBe(
-      "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      "VESTING_START_DAY",
     );
   });
 });
@@ -403,7 +405,7 @@ describe("inferSchedule — policy detection", () => {
       grantDate: d("2024-01-31"),
       events: {},
       grantQuantity: 48000,
-      vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH" as const,
+      vesting_day_of_month: "VESTING_START_DAY" as const,
     };
     const stmt = normalizeProgram(
       parse("48000 VEST FROM DATE 2024-01-31 OVER 48 months EVERY 1 month"),
@@ -417,18 +419,18 @@ describe("inferSchedule — policy detection", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    // Either VESTING_START_DAY_OR_LAST (with seed day 31) or 31_OR_LAST
-    // produces identical tranches for this input — both are valid
+    // Either VESTING_START_DAY (with seed day 31) or LAST_DAY_OF_MONTH produces
+    // identical tranches for this month-end input — both are valid
     // reconstructions. The inferrer picks whichever gives the simplest
-    // decomposition; 31_OR_LAST wins because it allows a single 48-run
+    // decomposition; LAST_DAY_OF_MONTH wins because it allows a single 48-run
     // starting from the first tranche (2024-02-29).
     expect(result.diagnostics.vestingDayOfMonth).toMatch(
-      /VESTING_START_DAY_OR_LAST_DAY_OF_MONTH|31_OR_LAST_DAY_OF_MONTH/,
+      /VESTING_START_DAY|LAST_DAY_OF_MONTH/,
     );
     expect(result.decomposition.uniforms.length).toBe(1);
   });
 
-  it("day-15 schedule → detects day-15 policy", () => {
+  it("mid-month schedule (the 15th) → folds into a single VESTING_START_DAY train", () => {
     const tranches: TrancheInput[] = [];
     for (let i = 0; i < 12; i++) {
       const month = 2 + i;
@@ -525,63 +527,63 @@ describe("inferSchedule — round-trip", () => {
       dsl: "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month",
       grantDate: "2024-01-01",
       grantQuantity: 48000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "12-month monthly",
       dsl: "12000 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 month",
       grantDate: "2024-01-01",
       grantQuantity: 12000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "48-month monthly with 1-year cliff",
       dsl: "48000 VEST FROM DATE 2024-01-01 OVER 48 months EVERY 1 month CLIFF 12 months",
       grantDate: "2024-01-01",
       grantQuantity: 48000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "40-month monthly with 6-month cliff",
       dsl: "40000 VEST FROM DATE 2024-01-01 OVER 40 months EVERY 1 month CLIFF 6 months",
       grantDate: "2024-01-01",
       grantQuantity: 40000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "20-month monthly starting mid-year",
       dsl: "20000 VEST FROM DATE 2024-03-01 OVER 20 months EVERY 1 month",
       grantDate: "2024-03-01",
       grantQuantity: 20000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "month-end seed (day 31, exercises drift-fix path)",
       dsl: "48000 VEST FROM DATE 2024-01-31 OVER 48 months EVERY 1 month",
       grantDate: "2024-01-31",
       grantQuantity: 48000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
-      name: "day-15 numeric policy",
+      name: "month-end policy (LAST_DAY_OF_MONTH)",
       dsl: "12000 VEST FROM DATE 2024-01-15 OVER 12 months EVERY 1 month",
       grantDate: "2024-01-15",
       grantQuantity: 12000,
-      policy: "15",
+      policy: "LAST_DAY_OF_MONTH",
     },
     {
       name: "quarterly cadence over 3 years",
       dsl: "36000 VEST FROM DATE 2024-01-01 OVER 36 months EVERY 3 months",
       grantDate: "2024-01-01",
       grantQuantity: 36000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
     {
       name: "multi-statement program (PLUS composition)",
       dsl: "24000 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 1 month PLUS 24000 VEST FROM DATE 2025-06-01",
       grantDate: "2024-01-01",
       grantQuantity: 48000,
-      policy: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+      policy: "VESTING_START_DAY",
     },
   ];
 
@@ -612,7 +614,7 @@ describe("inferSchedule — rounded trains", () => {
         grantDate: d("2024-01-01"),
         events: {},
         grantQuantity: c.total,
-        vesting_day_of_month: "VESTING_START_DAY_OR_LAST_DAY_OF_MONTH",
+        vesting_day_of_month: "VESTING_START_DAY",
       };
       const stmt = normalizeProgram(
         parse(

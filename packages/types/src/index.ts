@@ -1,10 +1,7 @@
-export type { VestingDayOfMonth, NamedDayPolicy } from "./oct_types.js";
+export type { VestingDayOfMonth } from "./oct_types.js";
 export {
-  NUMERIC_DAY_OF_MONTH_VALUES,
-  NAMED_DAY_POLICY_VALUES,
   VESTING_DAY_OF_MONTH_VALUES,
   DEFAULT_VESTING_DAY_OF_MONTH,
-  isNumericDayOfMonth,
 } from "./oct_types.js";
 export type {
   PeriodType,

@@ -109,7 +109,7 @@ live inside an { ok: true, ... } result.`;
  * ------------------------ */
 
 // Consumes the canonical value array from @vestlang/types rather than re-spelling
-// the 32 codes here — a dropped or renamed entry fails typecheck at the source.
+// the four policy codes here — a dropped or renamed entry fails typecheck at the source.
 const VESTING_DAY_OF_MONTH = z.enum(VESTING_DAY_OF_MONTH_VALUES);
 
 const DSL_INPUT = z
@@ -669,7 +669,7 @@ export function createServer(): McpServer {
     {
       title: "Normalize a date under a VestingDayOfMonth rule",
       description:
-        "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does 29_OR_LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
+        "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
       inputSchema: z.strictObject({
         date: ISO_DATE,
         rule: VESTING_DAY_OF_MONTH,
