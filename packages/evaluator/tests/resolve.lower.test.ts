@@ -7,9 +7,11 @@ import type {
   ResolutionContextInput,
   OCTDate,
   Program,
+  VestingDayOfMonth,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import {
   rehydrate,
   resolveInterchange,
@@ -349,5 +351,112 @@ describe("disclosuresOf — the shared committed-disclosure read (#368)", () => 
         blockers: [ipoBlocker],
       }),
     ).toEqual([]);
+  });
+});
+
+// The producer carries the day-of-month onto each OCF segment, mirroring the
+// grant-level runtime stamp: a non-default policy is stamped, the default omitted
+// (an absent field already reads as the default). It's gated to MONTHS/YEARS — OCF
+// gives the field meaning only there.
+describe("lowering stamps the day-of-month onto the produced segments", () => {
+  const dayCtx = (
+    vesting_day_of_month: VestingDayOfMonth,
+    grantQuantity = 1200,
+  ): ResolutionContextInput => ({
+    grantDate: "2025-01-01",
+    events: {},
+    grantQuantity,
+    vesting_day_of_month,
+  });
+
+  const monthsProgram: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-15")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 12,
+    }),
+  ];
+
+  const daysProgram: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-15")), {
+      type: "DAYS",
+      length: 30,
+      occurrences: 4,
+    }),
+  ];
+
+  it("a non-default policy over a MONTHS schedule lands on the segment", () => {
+    const verdict = resolveInterchange(
+      monthsProgram,
+      dayCtx("LAST_DAY_OF_MONTH"),
+    );
+    expect(verdict.status).toBe("template");
+    if (verdict.status !== "template") return;
+    expect(
+      scheduleOf(verdict.template.statements[0])!.vesting_day_of_month,
+    ).toBe("LAST_DAY_OF_MONTH");
+  });
+
+  it("the default policy is omitted from the segment", () => {
+    const verdict = resolveInterchange(
+      monthsProgram,
+      dayCtx(DEFAULT_VESTING_DAY_OF_MONTH),
+    );
+    expect(verdict.status).toBe("template");
+    if (verdict.status !== "template") return;
+    expect(
+      "vesting_day_of_month" in scheduleOf(verdict.template.statements[0])!,
+    ).toBe(false);
+  });
+
+  it("a DAYS schedule never carries the field, even under a non-default policy", () => {
+    // OCF gives the field meaning only on MONTHS/YEARS; a DAYS grid steps by raw
+    // days and ignores it on read, so stamping it would write an inert field.
+    const verdict = resolveInterchange(
+      daysProgram,
+      dayCtx("LAST_DAY_OF_MONTH"),
+    );
+    expect(verdict.status).toBe("template");
+    if (verdict.status !== "template") return;
+    expect(
+      "vesting_day_of_month" in scheduleOf(verdict.template.statements[0])!,
+    ).toBe(false);
+  });
+});
+
+// A produced schedule carries the policy on its segments AND on the grant-level
+// runtime. On reload the segments are authoritative — proven by clearing the
+// reloaded runtime value and watching the grid stay on the stamped policy.
+describe("a reloaded schedule grids off the stored segment, not the runtime value", () => {
+  const program: Program = [
+    stmt(portion(1, 1), makeSingletonNode(makeVestingBaseDate("2025-01-15")), {
+      type: "MONTHS",
+      length: 1,
+      occurrences: 12,
+    }),
+  ];
+  const ctx: ResolutionContextInput = {
+    grantDate: "2025-01-01",
+    events: {},
+    grantQuantity: 1200,
+    vesting_day_of_month: "LAST_DAY_OF_MONTH",
+  };
+
+  it("compiles to the non-default grid even with the reloaded runtime value cleared", () => {
+    const stored = resolveInterchange(program, ctx);
+    if (stored.status !== "template") throw new Error("expected template");
+
+    // Clear the reloaded runtime's day-of-month: a segment-blind reader would now
+    // fall to the canonical default (the start day, the 15th). The segment still
+    // carries LAST_DAY_OF_MONTH, so the first installment must stay on the month-end.
+    const cleared = { ...stored.runtime, vestingDayOfMonth: undefined };
+    expect(compile(stored.template, 1200, cleared)[0].date).toBe("2025-02-28");
+
+    // The full reload with the runtime value intact lands the same grid — the two
+    // carriers agree for a vestlang-produced template, which is why the clearing
+    // above is what actually proves the segment drove the grid.
+    expect(compile(stored.template, 1200, stored.runtime)[0].date).toBe(
+      "2025-02-28",
+    );
   });
 });

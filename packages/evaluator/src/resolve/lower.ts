@@ -929,6 +929,19 @@ export const buildTemplate = (
           occurrences,
           period: length,
           period_type: type,
+          // OCF places the day-of-month policy on the segment, so stamp it there
+          // for a faithful template — but only where it carries meaning. The field
+          // is meaningful only on a month/year cadence; a DAYS grid steps by raw
+          // days and ignores it on read, so emitting it there would write an
+          // OCF-inert field a vestlang-blind reader can't act on (keep the
+          // period_type gate). YEARS never reaches here — the DSL desugars a year to
+          // 12 months upstream, so `type` is DAYS or MONTHS — leaving MONTHS as the
+          // one cadence to stamp. And, mirroring the runtime stamp below, the default
+          // is omitted — an absent field already reads as the default.
+          ...(ctx.vesting_day_of_month !== DEFAULT_VESTING_DAY_OF_MONTH &&
+          type === "MONTHS"
+            ? { vesting_day_of_month: ctx.vesting_day_of_month }
+            : {}),
           ...(cliff ? { cliff } : {}),
         },
         ...(event_condition ? { event_condition } : {}),

@@ -151,7 +151,14 @@ const expandStatement = (
   dateCursor: OCTDate | undefined,
   firingFor: (eventId: string) => OCTDate | undefined,
 ): { events: RawEvent[]; nextCursor: OCTDate | undefined } | null => {
-  const dom = runtime.vestingDayOfMonth;
+  // OCF carries the day-of-month policy per-segment, so prefer the segment's own
+  // value; the grant-level runtime value is the fallback, and the canonical default
+  // backstops both (the primitives stepper applies it when `dom` is undefined). A
+  // pure milestone has no segment, so it takes the runtime value — inert there,
+  // since a milestone folds as a single lump and the policy only bites on a
+  // MONTHS/YEARS grid.
+  const schedule = scheduleOf(statement);
+  const dom = schedule?.vesting_day_of_month ?? runtime.vestingDayOfMonth;
 
   // An unresolved contingent placeholder: skip it. (Pure projection guard reading
   // the sentinel value — see CONTINGENT_START_SENTINEL. Distinct from the
@@ -170,7 +177,12 @@ const expandStatement = (
   const events = expandAnchored(statement, anchor, dom, firingFor, origin);
   // A pure milestone carries no schedule, so it advances the chain cursor by the
   // same degenerate one-lump params the kernel folds it on (see MILESTONE_GRID).
-  const grid = scheduleOf(statement) ?? MILESTONE_GRID;
+  const grid = schedule ?? MILESTONE_GRID;
+  // The handoff to the next statement's anchor is computed with this (the producing)
+  // segment's day-of-month policy. Moot for a vestlang-produced template — every
+  // segment shares one policy — but for an ingested template whose segments carry
+  // differing policies, the next anchor lands on the policy of the segment that
+  // produced it.
   const nextCursor = advanceCursor(
     anchor,
     grid.occurrences,

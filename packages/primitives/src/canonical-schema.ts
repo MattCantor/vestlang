@@ -168,9 +168,10 @@ export const EVENT_CONDITION = z.strictObject({
 });
 
 // The time grid (with its optional cliff). Present on a scheduled statement;
-// absent on a pure milestone. `vesting_day_of_month` is the full OCF segment's
-// optional day-of-month policy: accepted so a payload carrying it isn't rejected by
-// the strict object, but not read here (the engine ignores it for now).
+// absent on a pure milestone. `vesting_day_of_month` is the OCF segment's optional
+// day-of-month policy: the compiler reads it per-segment (preferring it over the
+// grant-level runtime value), and it's meaningful only on a MONTHS/YEARS cadence —
+// a DAYS grid ignores it.
 export const SCHEDULE = z.strictObject({
   occurrences: boundedInt(1, "must be an integer >= 1"),
   period: boundedInt(0, "must be an integer >= 0"),
