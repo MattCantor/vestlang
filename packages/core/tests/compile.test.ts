@@ -771,6 +771,8 @@ describe("compile — dual emit + runtime conventions (core additions)", () => {
   });
 
   it("vestingDayOfMonth runtime convention shifts the day-of-month", () => {
+    // monthly12's segments carry no policy, so this also exercises the reader's
+    // fallback to the grant-level runtime value (and to the default when absent).
     // Default policy preserves the start day (the 15th).
     const def = compile(monthly12, 1200, { startDate: "2025-01-15" });
     expect(def[0].date).toBe("2025-02-15");
@@ -1124,7 +1126,8 @@ describe("compile — per-segment day-of-month policy", () => {
   it("the segment's policy drives its grid over both the runtime value and the default", () => {
     // A mid-month start (the 15th) under a FIRST_DAY_OF_MONTH segment: every
     // installment snaps to the 1st. A segment-blind reader would land on the 15th
-    // (the default / runtime value), so the 1st is the discriminating answer.
+    // (the default / runtime value), so landing on the 1st is what shows the
+    // segment was honored.
     const template = mkTemplate("first-of-month", [
       {
         order: 1,
