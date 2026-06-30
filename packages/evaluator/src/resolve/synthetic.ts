@@ -1,7 +1,7 @@
 import type {
   SourceMap,
   StoredTerms,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "@vestlang/types";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 
@@ -131,7 +131,7 @@ export const classifyStartPartition = (
 // propagates as the bug it is rather than dressing up as a user refusal. The three
 // halves carry distinct, stable message substrings so a caller can tell them apart.
 export const assertSavePartition = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   runtime: StoredTerms,
   sourceMap: SourceMap,
 ): void => {

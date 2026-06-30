@@ -6,7 +6,7 @@
 //
 // It is firing-blind and pure: the firing arrives as a plain resolved date, never
 // a `firingFor` lookup or a `Map` read. Each caller's only remaining job is to map
-// its own source shape (a raw `VestingStatement` + firing lookup on the compile
+// its own source shape (a raw `OCFVestingStatement` + firing lookup on the compile
 // side; an already-lowered `LoweredCliff` on the resolution side) into the common
 // `CliffInput` below. `GridCliff` stays an internal detail here — callers no longer
 // build one.

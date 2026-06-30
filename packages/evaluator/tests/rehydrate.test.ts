@@ -28,12 +28,13 @@ import {
   isRehydrateUnexpectedStartError,
   isSyntheticNamespaceError,
 } from "../src/resolve/index";
-import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
+import type { SourceMap, OCFVestingTermsV2 } from "@vestlang/types";
 import {
   makeSingletonNode,
   makeVestingBaseEvent,
   makeDuration,
   makeVestingBaseGrantDate,
+  mkTemplate,
 } from "./helpers";
 
 // Build a stored `template` artifact straight from DSL, the way persist does:
@@ -208,24 +209,21 @@ describe("rehydrate — parse ∘ stringify fixpoint", () => {
 const corruptStartArtifact = (
   definition: string,
 ): {
-  template: VestingScheduleTemplate;
+  template: OCFVestingTermsV2;
   sourceMap: SourceMap;
   runtime: { grantDate: string; startDate: string };
 } => ({
-  template: {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "1",
+  template: mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  },
+      percentage: "1",
+    },
+  ]),
   sourceMap: { "evt:start": { definition } },
   runtime: { grantDate: "2025-01-01", startDate: CONTINGENT_START_SENTINEL },
 });
@@ -268,9 +266,8 @@ describe("rehydrate — corrupt evt:start recipe", () => {
 // from. A pure corruption guard reading the sentinel value.
 
 describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", () => {
-  const sentinelNoRecipe = (): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const sentinelNoRecipe = () =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -280,8 +277,7 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("refuses with the tagged RehydrateMissingStartMarkerError", () => {
     let thrown: unknown;
@@ -325,9 +321,8 @@ describe("rehydrate — damaged artifact: sentinel start, no evt:start recipe", 
 // guard already rejects this; the reload guard now matches it.
 
 describe("rehydrate — damaged artifact: evt:start recipe, non-sentinel start", () => {
-  const datedTemplate = (): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const datedTemplate = () =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -337,8 +332,7 @@ describe("rehydrate — damaged artifact: evt:start recipe, non-sentinel start",
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("refuses a REAL startDate + evt:start recipe with RehydrateUnexpectedStartError (bug repro)", () => {
     // The bug: a real 2025-01-15 start beside an `evt:start` recipe. Before the fix
@@ -385,9 +379,8 @@ describe("rehydrate — damaged artifact: evt:start recipe, non-sentinel start",
 // event (the namespace violation). It must refuse through its own channel.
 
 describe("rehydrate — namespace violation: a non-reserved sidecar key", () => {
-  const sentinelTemplate = (): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const sentinelTemplate = () =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -397,8 +390,7 @@ describe("rehydrate — namespace violation: a non-reserved sidecar key", () => 
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("throws the tagged SyntheticNamespaceError naming the offending key", () => {
     const sourceMap: SourceMap = {

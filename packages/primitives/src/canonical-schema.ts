@@ -20,7 +20,10 @@
 
 import * as z from "zod/mini";
 
-import { NUMERIC_PATTERN_SOURCE } from "@vestlang/types";
+import {
+  NUMERIC_PATTERN_SOURCE,
+  VESTING_DAY_OF_MONTH_VALUES,
+} from "@vestlang/types";
 import { isValidCalendarDate, tryNumericToFraction } from "@vestlang/utils";
 
 import { installmentCapMessage, MAX_INSTALLMENTS } from "./limits.js";
@@ -165,11 +168,14 @@ export const EVENT_CONDITION = z.strictObject({
 });
 
 // The time grid (with its optional cliff). Present on a scheduled statement;
-// absent on a pure milestone.
+// absent on a pure milestone. `vesting_day_of_month` is the full OCF segment's
+// optional day-of-month policy: accepted so a payload carrying it isn't rejected by
+// the strict object, but not read here (the engine ignores it for now).
 export const SCHEDULE = z.strictObject({
   occurrences: boundedInt(1, "must be an integer >= 1"),
   period: boundedInt(0, "must be an integer >= 0"),
   period_type: PERIOD_TYPE,
+  vesting_day_of_month: z.optional(z.enum([...VESTING_DAY_OF_MONTH_VALUES])),
   cliff: z.optional(CLIFF),
 });
 
@@ -204,6 +210,11 @@ const occurrencesOf = (s: unknown): number => {
 
 export const TEMPLATE = z
   .strictObject({
+    // The OCF VESTING_TERMS object tag. Required so a stored template is a real,
+    // self-describing OCF object — a vestlang-blind reader keys off it.
+    object_type: z.literal("VESTING_TERMS", {
+      error: 'must be the literal "VESTING_TERMS"',
+    }),
     // The base message covers a non-string `id`; the collection check below
     // covers the empty-string case. (A non-array `statements` falls through to
     // the array element validation; the empty-array case is the check's.)

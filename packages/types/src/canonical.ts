@@ -1,76 +1,49 @@
-// Canonical vesting IR — the Carta-aligned interchange. The single shared home
-// for these types; `@vestlang/core` imports them back (type-only).
+// Canonical vesting IR — the Carta-aligned interchange. The interchange half is
+// no longer hand-authored here: it *is* the OCF v2-alpha vesting shape, re-exposed
+// under the same names `@vestlang/core` and the rest of the repo already import.
+// OCF/Carta data flows straight in with no adaptation, and the snake_case wire
+// fields (`period_type`, `event_id`) are the OCF declarations themselves rather
+// than a parallel copy that could drift.
 //
-// The template shape is the *interchange*: OCF/Carta data flows straight in,
-// with no adaptation. So the field names stay snake_case (`period_type`,
-// `event_id`) to match the canonical wire form exactly —
-// any divergence would force the OCF↔core bridge `@vestlang/core` exists to
-// delete.
+// The runtime layer below (`RuntimeBase` and friends) stays vestlang-local: it is
+// the firing-bearing per-grant state the engine substitutes into a template, which
+// the interchange deliberately doesn't carry.
 
-import type { Numeric, OCTDate } from "./helpers.js";
+import type { OCTDate } from "./helpers.js";
 import type { VestingDayOfMonth } from "./oct_types.js";
+import type {
+  OCFScheduledVestingStatement,
+  OCFMilestoneVestingStatement,
+} from "@opencaptablecoalition/ocf-types";
 
-// From enums/PeriodType.schema.json
-// The OCF/Carta interchange period unit, which includes YEARS. Distinct from the
-// DSL's own `PeriodTag` (./enums.ts), which omits YEARS: vestlang source writes a
-// year as 12 months. The difference is intentional, not an oversight.
-export type PeriodType = "DAYS" | "MONTHS" | "YEARS";
+// The interchange types are re-exported straight from the vendored OCF v2
+// declarations, so they *are* the OCF shape rather than a parallel copy that could
+// drift:
+//   - OCFPeriodType             the DAYS/MONTHS/YEARS unit (includes YEARS, unlike
+//                               the DSL's own PeriodTag, which writes a year as 12
+//                               months);
+//   - OCFVestingScheduleSegment a statement's time grid (occurrences/period/
+//                               period_type, an optional cliff, and the optional
+//                               vesting_day_of_month policy);
+//   - OCFVestingScheduleCliff   a duration cliff carved out of that grid;
+//   - OCFVestingTermsV2         the template: an id, the `VESTING_TERMS` object_type
+//                               tag, and an ordered statement list.
+export type {
+  OCFPeriodType,
+  OCFVestingScheduleSegment,
+  OCFVestingScheduleCliff,
+  OCFVestingTermsV2,
+} from "@opencaptablecoalition/ocf-types";
 
-export interface VestingScheduleTemplate {
-  id: string;
-  statements: VestingStatement[]; // chained implicitly by order (DATE statements only)
-}
-
-// The time grid of a vesting statement — the periodic installments and an
-// optional cliff carved out of them. Optional on the statement: a *pure
-// milestone* (a slice that vests purely on an `event_condition`, with no time
-// schedule) omits this block entirely, so "no schedule" reads as absence rather
-// than as a degenerate one-installment grid. A `cliff` lives *inside* the
-// schedule because a cliff carves a grid — with no grid there is nothing to
-// carve — so a cliff never floats free of a schedule.
-export interface VestingSchedule {
-  occurrences: number; // integer >= 1; number of vesting events in segment
-  period: number; // integer >= 0; length of one installment, in period_type units
-  period_type: PeriodType;
-  cliff?: Cliff;
-}
-
-// A canonical vesting statement: `order` and `percentage` always; then exactly one
-// of two shapes. A *scheduled* statement carries a `schedule` (DATE or HYBRID) and
-// may also carry an `event_condition`; a *pure milestone* carries an
-// `event_condition` and no `schedule`. The union makes the neither-corner — neither
-// a schedule nor an event_condition — unrepresentable rather than merely
-// validator-caught.
-export type VestingStatement = {
-  order: number; // 1-based sequence position
-  // Share of the total grant this vesting statement covers, stored as an OCF
-  // `Numeric` decimal string (the interchange holds a fixed-point decimal, not a
-  // rational). The engine parses it back to an exact Fraction at every read.
-  percentage: Numeric;
-} & (
-  | {
-      // The time grid (with its optional cliff). Present on DATE and HYBRID
-      // statements; a scheduled statement may also carry an `event_condition`.
-      schedule: VestingSchedule;
-      // An event that must fire before this statement's grid releases. This is how
-      // an event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT
-      // ipo)`) stores: the time baseline, if any, lands in `schedule.cliff`, and the
-      // event hold lands here. It tracks Carta's HYBRID tranche — a dated schedule
-      // carrying an EVENT_NON_MARKET performanceCondition. The `event_id` names the
-      // gating event: a real user event for a bare `CLIFF EVENT e`, or a reserved
-      // synthetic `evt:<n>` whose recipe lives in the sidecar when the event side is
-      // richer than a single bare id (multiple events, an offset, a gate). Until the
-      // event fires the whole grid is held; once it does, the projection folds at
-      // max(schedule.cliff date, firing).
-      event_condition?: { event_id: string };
-    }
-  | {
-      // A pure milestone: no time schedule, so the slice vests entirely on the
-      // event hold. `schedule?: never` forbids a stray schedule on this arm.
-      schedule?: never;
-      event_condition: { event_id: string };
-    }
-);
+// OCF inlines the statement union inside OCFVestingTermsV2 and exports no standalone
+// name for it, so vestlang names it locally. A scheduled statement carries a
+// `schedule` (and may also carry an `event_condition`); a pure milestone carries an
+// `event_condition` and omits `schedule` entirely. The milestone arm having no
+// `schedule` key — rather than `schedule?: never` — is why reads of `.schedule` must
+// narrow on its presence first.
+export type OCFVestingStatement =
+  | OCFScheduledVestingStatement
+  | OCFMilestoneVestingStatement;
 
 // Anchoring is implicit: every statement takes its start from the one per-grant
 // date hoisted to VestingRuntime.startDate, chained by `order`. The canonical
@@ -85,21 +58,6 @@ export type VestingStatement = {
 export interface Fraction {
   numerator: number; // integer
   denominator: number; // integer >= 1
-}
-
-export interface Cliff {
-  // Time-based, matching Carta's VestingPeriod cliff (cliffLength/cliffLengthUnit/
-  // cliffPercentage). The cliff date is `length` `period_type`s after the
-  // statement's anchor; `percentage` of the statement vests there as a lump.
-  // A duration (not an occurrence index), so it handles cliffs that don't land
-  // on an installment boundary.
-  length: number; // duration until the cliff, in period_type units (integer >= 0)
-  period_type: PeriodType; // unit of `length`
-  // Share of the statement that vests at the cliff, stored as an OCF `Numeric`
-  // decimal string (parsed to a Fraction at every read). A repeating share like
-  // a 1/3 cliff can only be written truncated here — the precision guard flags
-  // when that truncation misallocates at the grant size in play.
-  percentage: Numeric;
 }
 
 // The firing-free part of the per-grant runtime the engine substitutes into a

@@ -22,6 +22,11 @@ import {
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
+import type {
+  OCFVestingScheduleSegment,
+  OCFVestingStatement,
+  OCFVestingTermsV2,
+} from "@vestlang/types";
 
 // `overrides` is pinned to the events-bearing arm of the `ResolutionContext` DU
 // (#320): the base fixture builds a `resolution`-mode context, and no current test
@@ -173,3 +178,18 @@ export const makeSingletonSchedule = (
   vesting_start,
   periodicity,
 });
+
+// A canonical interchange template carrying the required OCF `VESTING_TERMS` tag,
+// so a typed literal doesn't have to repeat it at every call site.
+export const mkTemplate = (
+  id: string,
+  statements: OCFVestingStatement[],
+): OCFVestingTermsV2 => ({ object_type: "VESTING_TERMS", id, statements });
+
+// Read a statement's schedule across the structural union: only the scheduled arm
+// carries `schedule`, so narrow on the key first. A pure milestone yields
+// `undefined`.
+export const scheduleOf = (
+  statement: OCFVestingStatement,
+): OCFVestingScheduleSegment | undefined =>
+  "schedule" in statement ? statement.schedule : undefined;

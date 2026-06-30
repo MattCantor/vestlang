@@ -9,7 +9,7 @@ import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 
 export type PeriodUnit = "days" | "weeks" | "months" | "years";
 
-// The tool surface offers `weeks`, which core's PeriodType doesn't carry; map it
+// The tool surface offers `weeks`, which core's OCFPeriodType doesn't carry; map it
 // to its day count and hand everything else straight to core's stepper. core
 // takes the day-of-month policy directly, so there's no dummy context to build.
 export function addPeriod(

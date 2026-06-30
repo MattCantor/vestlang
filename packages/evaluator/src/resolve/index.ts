@@ -7,13 +7,13 @@
 
 import type {
   ResolutionContextInput,
-  Cliff,
+  OCFVestingScheduleCliff,
   Finding,
   Fraction,
   OCTDate,
   Program,
   UnresolvedInstallment,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "@vestlang/types";
 import {
   allocateWithProvenance,
@@ -48,7 +48,7 @@ import type {
 // non-terminating schedules. `buildTemplate` pushes exactly one statement per
 // resolution in loop order (`order = i+1`), so a plain map lines up with the
 // resolutions without any realignment.
-const storedStmtFractions = (template: VestingScheduleTemplate): Fraction[] =>
+const storedStmtFractions = (template: OCFVestingTermsV2): Fraction[] =>
   template.statements.map((s) => numericToFraction(s.percentage));
 
 /** Bound the installments a program will materialize, before any resolution or
@@ -324,7 +324,7 @@ const inferredToFraction = (f: {
 //     not-representable one.
 const pushCliffFinding = (
   findings: Finding[],
-  cliff: Cliff,
+  cliff: OCFVestingScheduleCliff,
   stmtFraction: Fraction,
   grant: number,
   leading: boolean,

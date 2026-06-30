@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
+import type { SourceMap } from "@vestlang/types";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
+import { mkTemplate } from "./helpers";
 import {
   assertSavePartition,
   classifyStartPartition,
@@ -94,16 +95,14 @@ describe("classifyStartPartition", () => {
 // AND on reload, mapping the same classification to its own error type (a plain
 // Error on save, a tagged refusal on reload).
 describe("save + reload both delegate to classifyStartPartition", () => {
-  const template = (): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const template = () =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: { occurrences: 4, period: 1, period_type: "MONTHS" },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("sentinel-without-recipe: save throws a plain Error, reload throws the missing-marker refusal", () => {
     const sourceMap: SourceMap = {};

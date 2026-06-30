@@ -1,7 +1,7 @@
 import type {
   StoredTerms,
   VestingRuntime,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "./canonical.js";
 import { VestingNode } from "./ast.js";
 import { PeriodTag } from "./enums.js";
@@ -346,7 +346,7 @@ export interface InstallmentSet {
 export type EvaluatedScheduleVerdict =
   | {
       status: "template";
-      template: VestingScheduleTemplate;
+      template: OCFVestingTermsV2;
       runtime: VestingRuntime;
       sourceMap: SourceMap;
       // Mostly dated (compiled) tranches, but a contingent start whose event
@@ -478,7 +478,7 @@ export type NonTemplateReason =
 export type InterchangeVerdict =
   | {
       status: "template";
-      template: VestingScheduleTemplate;
+      template: OCFVestingTermsV2;
       // Firing-invariant by construction: the interchange path is firing-blind, so
       // its runtime can carry no firings at all. `StoredTerms` makes that
       // unrepresentable rather than merely empty — eventFirings is `?: never`.

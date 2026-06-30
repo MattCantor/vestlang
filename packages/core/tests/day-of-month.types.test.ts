@@ -19,7 +19,10 @@ import {
   VESTING_DAY_OF_MONTH_VALUES,
   DEFAULT_VESTING_DAY_OF_MONTH,
 } from "@vestlang/types";
-import type { VestingDayOfMonth } from "@vestlang/types";
+import type {
+  VestingDayOfMonth,
+  OCFVestingScheduleSegment,
+} from "@vestlang/types";
 import { assertNever } from "@vestlang/utils";
 
 // The four OCF v2 policies, in declaration order.
@@ -51,6 +54,17 @@ describe("VestingDayOfMonth is the OCF policy union", () => {
     >();
     // A bare numeric day is no longer assignable.
     expectTypeOf<"15">().not.toMatchTypeOf<VestingDayOfMonth>();
+  });
+});
+
+describe("the OCF segment carries an optional day-of-month policy", () => {
+  it("vesting_day_of_month is the policy union (the v2 shape delta)", () => {
+    // The migrated segment is OCF v2's `VestingScheduleSegment`, which grew an
+    // optional `vesting_day_of_month`. The pre-migration hand shape had no such
+    // key, so this assertion fails typecheck against a regression to it.
+    expectTypeOf<
+      OCFVestingScheduleSegment["vesting_day_of_month"]
+    >().toEqualTypeOf<VestingDayOfMonth | undefined>();
   });
 });
 

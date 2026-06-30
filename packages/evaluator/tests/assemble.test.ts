@@ -29,6 +29,7 @@ import {
   makeDuration,
   makeVestingBaseGrantDate,
   makeVestingBaseVestingStart,
+  scheduleOf,
 } from "./helpers";
 
 // Every assertion in this file is about the closed-world resolution verdict
@@ -411,9 +412,9 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     if (out.status !== "template")
       throw new Error(`expected template, got ${out.status}`);
     const s = out.template.statements[0];
-    expect(s.schedule!.occurrences).toBe(48);
-    expect(s.schedule!.period).toBe(1);
-    expect(s.schedule!.period_type).toBe("MONTHS");
+    expect(scheduleOf(s)!.occurrences).toBe(48);
+    expect(scheduleOf(s)!.period).toBe(1);
+    expect(scheduleOf(s)!.period_type).toBe("MONTHS");
     expect(out.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(out.sourceMap)).toEqual(["evt:start"]);
     expect(findsEventNotOccurred(out.pending, "ipo")).toBe(true);

@@ -23,12 +23,13 @@ import {
   isRehydrateMissingStartMarkerError,
   type PersistedArtifact,
 } from "../src/resolve/index";
-import type { SourceMap, VestingScheduleTemplate } from "@vestlang/types";
+import type { SourceMap } from "@vestlang/types";
 import {
   makeSingletonNode,
   makeVestingBaseEvent,
   makeDuration,
   makeVestingBaseGrantDate,
+  mkTemplate,
 } from "./helpers";
 
 const ctxInput = (
@@ -203,9 +204,8 @@ describe("sidecar — a plain dated template emits no sidecar", () => {
 // persist orchestrator doesn't catch. These build the violating artifacts by hand.
 describe("toPersisted — save-path partition tripwire", () => {
   // A one-statement DATE template on the contingent-start sentinel.
-  const sentinelTemplate = (): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const sentinelTemplate = () =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -215,8 +215,7 @@ describe("toPersisted — save-path partition tripwire", () => {
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("throws a plain Error naming a source-map key outside the reserved namespace (AC1)", () => {
     // A key `evt_1` is a legal user Ident, NOT in the `evt:` namespace.
@@ -298,9 +297,8 @@ describe("toPersisted — save-path partition tripwire", () => {
   });
 
   // A dated template carrying one statement with the given event_condition.
-  const conditionTemplate = (eventId: string): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const conditionTemplate = (eventId: string) =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -311,8 +309,7 @@ describe("toPersisted — save-path partition tripwire", () => {
         percentage: "1",
         event_condition: { event_id: eventId },
       },
-    ],
-  });
+    ]);
 
   // AC 13: the dangling-pointer half, retargeted to event_condition. A statement
   // whose event_condition.event_id is a reserved evt:<n> id with no matching

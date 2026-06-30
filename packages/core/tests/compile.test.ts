@@ -4,9 +4,10 @@ import { addPeriod } from "@vestlang/primitives";
 import { CONTINGENT_START_SENTINEL, fractionToNumeric } from "@vestlang/utils";
 import type {
   VestingRuntime,
-  VestingScheduleTemplate,
-  VestingSchedule,
+  OCFVestingScheduleSegment,
+  OCFVestingStatement,
 } from "@vestlang/types";
+import { mkTemplate } from "./helpers";
 
 // Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).
 
@@ -16,25 +17,22 @@ const sumAmounts = (events: { amount: string }[]): number =>
 const startJan2025: VestingRuntime = { startDate: "2025-01-01" };
 
 describe("compile — standard 4yr/1mo with 25% cliff", () => {
-  const template: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
+  const template = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 12,
           period_type: "MONTHS",
-          cliff: {
-            length: 12,
-            period_type: "MONTHS",
-            percentage: "0.25",
-          },
+          percentage: "0.25",
         },
-        percentage: "1",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   it("emits 37 events: 1 cliff + 36 post-cliff", () => {
     expect(compile(template, 100_000, startJan2025)).toHaveLength(37);
@@ -68,25 +66,22 @@ describe("compile — standard 4yr/1mo with 25% cliff", () => {
 });
 
 describe("compile — non-standard 30% cliff", () => {
-  const template: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
+  const template = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 12,
           period_type: "MONTHS",
-          cliff: {
-            length: 12,
-            period_type: "MONTHS",
-            percentage: "0.3",
-          },
+          percentage: "0.3",
         },
-        percentage: "1",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   it("cliff event vests 30000 (30% of 100000)", () => {
     expect(compile(template, 100_000, startJan2025)[0]).toEqual({
@@ -103,10 +98,7 @@ describe("compile — non-standard 30% cliff", () => {
 });
 
 describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
-  const mkYear = (
-    order: number,
-    num: number,
-  ): VestingScheduleTemplate["statements"][number] => ({
+  const mkYear = (order: number, num: number): OCFVestingStatement => ({
     order,
     schedule: {
       occurrences: 1,
@@ -115,10 +107,12 @@ describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
     },
     percentage: fractionToNumeric({ numerator: num, denominator: 20 }),
   });
-  const template: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [mkYear(1, 1), mkYear(2, 3), mkYear(3, 8), mkYear(4, 8)],
-  };
+  const template = mkTemplate("t1", [
+    mkYear(1, 1),
+    mkYear(2, 3),
+    mkYear(3, 8),
+    mkYear(4, 8),
+  ]);
 
   it("emits 4 yearly events with chained dates and 5/15/40/40 split", () => {
     expect(compile(template, 100_000, startJan2025)).toEqual([
@@ -132,20 +126,17 @@ describe("compile — bespoke 5/15/40/40 chained over 4 years", () => {
 
 describe("compile — additional DATE-anchored cases", () => {
   it("plain 4-year monthly with no cliff emits 48 events summing to totalShares", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 48,
-            period: 1,
-            period_type: "MONTHS",
-          },
-          percentage: "1",
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 48,
+          period: 1,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const events = compile(template, 100_000, startJan2025);
     expect(events).toHaveLength(48);
     expect(sumAmounts(events)).toBe(100_000);
@@ -154,25 +145,22 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 
   it("cliff at last occurrence (K == N) emits a single event", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 12,
-            period: 1,
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 12,
             period_type: "MONTHS",
-            cliff: {
-              length: 12,
-              period_type: "MONTHS",
-              percentage: "1",
-            },
+            percentage: "1",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(compile(template, 100_000, startJan2025)).toEqual([
       { date: "2026-01-01", amount: "100000" },
     ]);
@@ -182,25 +170,22 @@ describe("compile — additional DATE-anchored cases", () => {
     // Monthly-4 from 2025-01-01; cliff 75 DAYS in = 2025-03-17 (between the
     // Mar 1 and Apr 1 grid points). Feb 1 + Mar 1 occurrences subsume into a
     // half-grant lump on the off-grid date; Apr 1 + May 1 split the rest.
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 1,
-            period_type: "MONTHS",
-            cliff: {
-              length: 75,
-              period_type: "DAYS",
-              percentage: "0.5",
-            },
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 75,
+            period_type: "DAYS",
+            percentage: "0.5",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const events = compile(template, 400, startJan2025);
     expect(events).toEqual([
       { date: "2025-03-17", amount: "200" },
@@ -211,20 +196,17 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 
   it("DAYS schedule produces correct ISO dates", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 7,
-            period_type: "DAYS",
-          },
-          percentage: "1",
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 7,
+          period_type: "DAYS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const events = compile(template, 400, startJan2025);
     expect(events.map((e) => e.date)).toEqual([
       "2025-01-08",
@@ -236,20 +218,17 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 
   it("preserves seed day across short months for an end-of-month start", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 6,
-            period: 1,
-            period_type: "MONTHS",
-          },
-          percentage: "1",
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 6,
+          period: 1,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const events = compile(template, 600, { startDate: "2025-01-31" });
     expect(events.map((e) => e.date)).toEqual([
       "2025-02-28",
@@ -262,82 +241,73 @@ describe("compile — additional DATE-anchored cases", () => {
   });
 
   it("sorts statements by order before processing", () => {
-    const ordered: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
-          },
-          percentage: "0.5",
+    const ordered = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-        {
-          order: 2,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
-          },
-          percentage: "0.5",
+        percentage: "0.5",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-      ],
-    };
-    const reversed: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [ordered.statements[1], ordered.statements[0]],
-    };
+        percentage: "0.5",
+      },
+    ]);
+    const reversed = mkTemplate("t1", [
+      ordered.statements[1],
+      ordered.statements[0],
+    ]);
     expect(compile(ordered, 100, startJan2025)).toEqual(
       compile(reversed, 100, startJan2025),
     );
   });
 
   it("zero-percent statement emits no events but advances the cursor", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
-          },
-          percentage: "0",
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-        {
-          order: 2,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
-          },
-          percentage: "1",
+        percentage: "0",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(compile(template, 100, startJan2025)).toEqual([
       { date: "2027-01-01", amount: "100" },
     ]);
   });
 
   it("throws when totalShares is not a non-negative safe integer", () => {
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS",
-          },
-          percentage: "1",
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(() => compile(template, -1, startJan2025)).toThrow(
       /non-negative safe integer/,
     );
@@ -359,10 +329,9 @@ describe("compile — additional DATE-anchored cases", () => {
 describe("compile — fixed cliff honors its percentage at the left edge", () => {
   const monthly = (
     occurrences: number,
-    cliff: VestingSchedule["cliff"],
-  ): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+    cliff: OCFVestingScheduleSegment["cliff"],
+  ) =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -373,8 +342,7 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
 
   it("a length-0 cliff vests its percentage upfront on the start date", () => {
     // 25% on 2025-01-01 (the start), then 75% spread over the 12 monthly grid
@@ -445,25 +413,22 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
   it("a zero-spacing grid with a sub-100% cliff throws (nothing after the cliff)", () => {
     // period 0 stacks every occurrence on the start; a length-0 cliff lands there
     // too, so no installment is strictly after it. 25% leaves 75% homeless.
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 0,
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 0,
+          period_type: "MONTHS",
+          cliff: {
+            length: 0,
             period_type: "MONTHS",
-            cliff: {
-              length: 0,
-              period_type: "MONTHS",
-              percentage: "0.25",
-            },
+            percentage: "0.25",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(() => compile(template, 400, startJan2025)).toThrow(
       /percentage < 1 leaves no occurrence after the cliff date/,
     );
@@ -472,25 +437,22 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
   it("a vesting-day policy pulling the cliff before the anchor throws", () => {
     // Anchor 2025-01-15, a length-0 MONTHS cliff under FIRST_DAY_OF_MONTH snaps to
     // 2025-01-01 — before the grant began. The two throws read distinctly.
-    const template: VestingScheduleTemplate = {
-      id: "t1",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 1,
+    const template = mkTemplate("t1", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 0,
             period_type: "MONTHS",
-            cliff: {
-              length: 0,
-              period_type: "MONTHS",
-              percentage: "0.25",
-            },
+            percentage: "0.25",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(() =>
       compile(template, 400, {
         startDate: "2025-01-15",
@@ -505,20 +467,17 @@ describe("compile — fixed cliff honors its percentage at the left edge", () =>
 // uncapped at sane sizes; where the quotient would no longer cast exactly, the
 // kernel refuses loudly instead of rounding per-installment amounts.
 describe("compile — over-allocated template hits the kernel's cast bound (R2-B23)", () => {
-  const template: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
-        },
-        percentage: "1.5",
+  const template = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 1,
+        period: 12,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "1.5",
+    },
+  ]);
 
   it("still compiles uncapped at a sane grant size", () => {
     expect(compile(template, 100, startJan2025)).toEqual([
@@ -541,45 +500,39 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
   // tranches back onto the month-end the way a single un-split schedule does.
 
   // Head: one tranche (Feb 28). Tail: two more (Mar, Apr), chaining off the head.
-  const chain: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 1,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "0.3333333333",
+  const chain = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 1,
+        period: 1,
+        period_type: "MONTHS",
       },
-      {
-        order: 2,
-        schedule: {
-          occurrences: 2,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "0.6666666666",
+      percentage: "0.3333333333",
+    },
+    {
+      order: 2,
+      schedule: {
+        occurrences: 2,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "0.6666666666",
+    },
+  ]);
 
   // The same schedule written as one statement of three tranches.
-  const unsplit: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 3,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "1",
+  const unsplit = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 3,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   const janEnd: VestingRuntime = { startDate: "2025-01-31" };
 
@@ -620,40 +573,34 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
 });
 
 describe("compile — grant_date handling (DATE-anchored)", () => {
-  const monthlyNoCliff: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "1",
+  const monthlyNoCliff = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
-  const monthlyWithCliff: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
+  const monthlyWithCliff = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 12,
           period_type: "MONTHS",
-          cliff: {
-            length: 12,
-            period_type: "MONTHS",
-            percentage: "0.25",
-          },
+          percentage: "0.25",
         },
-        percentage: "1",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   it("grant_date before vesting_start has no effect", () => {
     const events = compile(monthlyNoCliff, 4800, {
@@ -735,25 +682,22 @@ describe("compile — grant_date handling (DATE-anchored)", () => {
 // reaches the compiler with a real startDate substituted in (the projection-only
 // runtime rehydrate builds), so the grid is ordinary then.
 describe("compile — contingent-start sentinel skip (AC 10)", () => {
-  const monthly48: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
+  const monthly48 = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: {
+          length: 12,
           period_type: "MONTHS",
-          cliff: {
-            length: 12,
-            period_type: "MONTHS",
-            percentage: "0.25",
-          },
+          percentage: "0.25",
         },
-        percentage: "1",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   it("an unresolved placeholder (startDate = sentinel) projects to nothing, no throw", () => {
     expect(() =>
@@ -803,20 +747,17 @@ describe("compile — contingent-start sentinel skip (AC 10)", () => {
 
 // Core-specific additions beyond the ported reference suite.
 describe("compile — dual emit + runtime conventions (core additions)", () => {
-  const monthly12: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 12,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "1",
+  const monthly12 = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 12,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "1",
+    },
+  ]);
 
   it("compileToInstallments returns numeric amounts; compile returns strings", () => {
     const nums = compileToInstallments(monthly12, 1200, startJan2025);
@@ -847,25 +788,22 @@ describe("compile — boundary hardening", () => {
     // 12×1-month, cliff {24mo, 1/4}, 1200 shares: every occurrence is at or
     // behind the cliff, so 900 shares used to vanish. The kernel now refuses at
     // expansion time, where the statement's true anchor and origin are known.
-    const template: VestingScheduleTemplate = {
-      id: "swallow",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 12,
-            period: 1,
+    const template = mkTemplate("swallow", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 24,
             period_type: "MONTHS",
-            cliff: {
-              length: 24,
-              period_type: "MONTHS",
-              percentage: "0.25",
-            },
+            percentage: "0.25",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(() => compile(template, 1200, startJan2025)).toThrow(
       /leaves no occurrence after the cliff date/,
     );
@@ -874,49 +812,43 @@ describe("compile — boundary hardening", () => {
   it("accepts a swallowing cliff at percentage exactly 1 and conserves the grant", () => {
     // With the whole statement in the lump there is no remainder to lose: one
     // installment on the cliff date, summing to the full grant.
-    const template: VestingScheduleTemplate = {
-      id: "swallow-whole",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 12,
-            period: 1,
+    const template = mkTemplate("swallow-whole", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 24,
             period_type: "MONTHS",
-            cliff: {
-              length: 24,
-              period_type: "MONTHS",
-              percentage: "1",
-            },
+            percentage: "1",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const out = compile(template, 1200, startJan2025);
     expect(out).toEqual([{ date: "2027-01-01", amount: "1200" }]);
   });
 
   it("accepts a sub-1 cliff that leaves occurrences after it", () => {
-    const template: VestingScheduleTemplate = {
-      id: "normal-cliff",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 48,
-            period: 1,
+    const template = mkTemplate("normal-cliff", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 48,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 12,
             period_type: "MONTHS",
-            cliff: {
-              length: 12,
-              period_type: "MONTHS",
-              percentage: "0.25",
-            },
+            percentage: "0.25",
           },
-          percentage: "1",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     const out = compile(template, 1200, startJan2025);
     expect(sumAmounts(out)).toBe(1200);
   });
@@ -924,34 +856,31 @@ describe("compile — boundary hardening", () => {
   it("checks a chained statement's cliff and names the statement", () => {
     // Statement 2 chains off statement 1 (anchor 2026-01-01); its 12×1-month
     // grid ends at 2027-01-01, inside the 13-month cliff at 2027-02-01.
-    const template: VestingScheduleTemplate = {
-      id: "chained-swallow",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 12,
-            period: 1,
-            period_type: "MONTHS",
-          },
-          percentage: "0.5",
+    const template = mkTemplate("chained-swallow", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
         },
-        {
-          order: 2,
-          schedule: {
-            occurrences: 12,
-            period: 1,
+        percentage: "0.5",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 12,
+          period: 1,
+          period_type: "MONTHS",
+          cliff: {
+            length: 13,
             period_type: "MONTHS",
-            cliff: {
-              length: 13,
-              period_type: "MONTHS",
-              percentage: "0.25",
-            },
+            percentage: "0.25",
           },
-          percentage: "0.5",
         },
-      ],
-    };
+        percentage: "0.5",
+      },
+    ]);
     expect(() => compile(template, 1200, startJan2025)).toThrow(
       /statement 2: fixed cliff/,
     );
@@ -963,73 +892,64 @@ describe("compile — boundary hardening", () => {
     // out, so the 30-day occurrence (2026-03-03) clears it — legal. Measured
     // from startDate (2026-01-01) the same cliff spans 31 days and the
     // occurrence would look swallowed; the check must not reject from there.
-    const template: VestingScheduleTemplate = {
-      id: "chained-mixed-units",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 1,
-            period: 1,
+    const template = mkTemplate("chained-mixed-units", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 1,
+          period_type: "MONTHS",
+        },
+        percentage: "0.5",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 1,
+          period: 30,
+          period_type: "DAYS",
+          cliff: {
+            length: 1,
             period_type: "MONTHS",
+            percentage: "0.5",
           },
-          percentage: "0.5",
         },
-        {
-          order: 2,
-          schedule: {
-            occurrences: 1,
-            period: 30,
-            period_type: "DAYS",
-            cliff: {
-              length: 1,
-              period_type: "MONTHS",
-              percentage: "0.5",
-            },
-          },
-          percentage: "0.5",
-        },
-      ],
-    };
+        percentage: "0.5",
+      },
+    ]);
     const out = compile(template, 1200, { startDate: "2026-01-01" });
     expect(sumAmounts(out)).toBe(1200);
   });
 
   it("rejects a negative statement percentage rather than emitting negatives", () => {
-    const template: VestingScheduleTemplate = {
-      id: "neg",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 1,
-            period_type: "MONTHS",
-          },
-          percentage: "-0.5",
+    const template = mkTemplate("neg", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "-0.5",
+      },
+    ]);
     expect(() => compile(template, 100, startJan2025)).toThrow(
       /Invalid VestingScheduleTemplate/,
     );
   });
 
   it("rejects an impossible calendar startDate rather than rolling it forward", () => {
-    const template: VestingScheduleTemplate = {
-      id: "rollover",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 4,
-            period: 1,
-            period_type: "MONTHS",
-          },
-          percentage: "1",
+    const template = mkTemplate("rollover", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 4,
+          period: 1,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "1",
+      },
+    ]);
     expect(() => compile(template, 100, { startDate: "2025-02-31" })).toThrow(
       /Invalid VestingRuntime/,
     );
@@ -1040,22 +960,19 @@ describe("compile — event-conditioned statement (event hold)", () => {
   // A scheduled statement that also waits on a named event: the whole grid stays
   // held until the event fires, then folds at max(time-cliff baseline, firing) as
   // one proportional cliff.
-  const template: VestingScheduleTemplate = {
-    id: "evt",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 48,
-          period: 1,
-          period_type: "MONTHS",
-          cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
-        },
-        event_condition: { event_id: "ipo" },
-        percentage: "1",
+  const template = mkTemplate("evt", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 48,
+        period: 1,
+        period_type: "MONTHS",
+        cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
       },
-    ],
-  };
+      event_condition: { event_id: "ipo" },
+      percentage: "1",
+    },
+  ]);
 
   it("emits nothing while the event is unfired", () => {
     // No matching firing in the runtime, so the grid never releases.
@@ -1088,12 +1005,9 @@ describe("compile — event-conditioned statement (event hold)", () => {
 describe("compile — pure milestone (no schedule)", () => {
   // A statement carrying an event_condition and no schedule: it projects nothing
   // until the event fires, then vests its whole share as one lump on that date.
-  const template: VestingScheduleTemplate = {
-    id: "ms",
-    statements: [
-      { order: 1, event_condition: { event_id: "ipo" }, percentage: "1" },
-    ],
-  };
+  const template = mkTemplate("ms", [
+    { order: 1, event_condition: { event_id: "ipo" }, percentage: "1" },
+  ]);
 
   it("projects nothing while unfired", () => {
     expect(compile(template, 100_000, startJan2025)).toEqual([]);
@@ -1118,13 +1032,10 @@ describe("compile — statement ordering and the zero-share boundary", () => {
       period: 1,
       period_type: "MONTHS" as const,
     };
-    const template: VestingScheduleTemplate = {
-      id: "ord",
-      statements: [
-        { order: 2, schedule: monthly, percentage: "0.75" },
-        { order: 1, schedule: monthly, percentage: "0.25" },
-      ],
-    };
+    const template = mkTemplate("ord", [
+      { order: 2, schedule: monthly, percentage: "0.75" },
+      { order: 1, schedule: monthly, percentage: "0.25" },
+    ]);
     const events = compile(template, 100_000, startJan2025);
     expect(events).toHaveLength(24);
     // Output is date-sorted: the first year is statement 1 (25%), the second
@@ -1134,16 +1045,13 @@ describe("compile — statement ordering and the zero-share boundary", () => {
   });
 
   it("allows a zero-share grant (the non-negative boundary includes 0)", () => {
-    const template: VestingScheduleTemplate = {
-      id: "zero",
-      statements: [
-        {
-          order: 1,
-          schedule: { occurrences: 4, period: 1, period_type: "MONTHS" },
-          percentage: "1",
-        },
-      ],
-    };
+    const template = mkTemplate("zero", [
+      {
+        order: 1,
+        schedule: { occurrences: 4, period: 1, period_type: "MONTHS" },
+        percentage: "1",
+      },
+    ]);
     expect(sumAmounts(compile(template, 0, startJan2025))).toBe(0);
   });
 });
@@ -1166,10 +1074,11 @@ describe("compile — byte-identical output and no over-allocation clamp (#431)"
     },
     percentage,
   });
-  const template = (...percentages: string[]): VestingScheduleTemplate => ({
-    id: "alloc",
-    statements: percentages.map((p, i) => statement(i + 1, p)),
-  });
+  const template = (...percentages: string[]) =>
+    mkTemplate(
+      "alloc",
+      percentages.map((p, i) => statement(i + 1, p)),
+    );
   const runtime: VestingRuntime = { startDate: "2024-01-01" };
   const totalShares = 4800;
 

@@ -34,7 +34,7 @@ import type {
 import type {
   StoredTerms,
   VestingRuntime,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "@vestlang/types";
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
@@ -234,7 +234,7 @@ const blockersOf = (res: PickReturn<unknown>): Blocker[] => {
  *                  no observation time enters here.
  */
 export const rehydrate = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   sourceMap: SourceMap,
   runtime: StoredTerms,
   ctxInput: ResolutionContextInput,

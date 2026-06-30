@@ -14,7 +14,7 @@
 import type {
   Finding,
   VestingRuntime,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "@vestlang/types";
 import {
   isContingentStartSentinel,
@@ -67,7 +67,7 @@ export interface AllocatableValidationResult {
 }
 
 /**
- * Structural validation for a canonical VestingScheduleTemplate. Returns a
+ * Structural validation for a canonical OCFVestingTermsV2. Returns a
  * { structurallyValid, errors[], allocation } result that consumers (the
  * compiler, the OCF validator) can use to either bail or map into their own
  * report shape. Schema-only: checks the spec's well-formedness, not runtime
@@ -84,7 +84,7 @@ export interface AllocatableValidationResult {
  * mean "fits the grant."
  */
 export const validateVestingScheduleTemplate = (
-  t: VestingScheduleTemplate,
+  t: OCFVestingTermsV2,
 ): StructuralValidationResult => {
   const result = TEMPLATE.safeParse(t);
   if (result.success) {
@@ -130,7 +130,7 @@ export const validateVestingScheduleTemplate = (
  * input that could throw.
  */
 export const validateTemplateAllocatable = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
 ): AllocatableValidationResult => {
   const structural = validateVestingScheduleTemplate(template);
@@ -164,7 +164,7 @@ export const validateTemplateAllocatable = (
  */
 export const validateVestingRuntime = (
   runtime: VestingRuntime,
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
 ): RuntimeValidationResult => {
   const errors: ValidationError[] = [];
 
@@ -283,7 +283,7 @@ const formatErrors = (errors: ValidationError[]): string =>
  * / `validateTemplateAllocatable`, not the structural assert.
  */
 export const assertValidVestingScheduleTemplate = (
-  t: VestingScheduleTemplate,
+  t: OCFVestingTermsV2,
 ): void => {
   const result = validateVestingScheduleTemplate(t);
   if (!result.structurallyValid) {
@@ -296,7 +296,7 @@ export const assertValidVestingScheduleTemplate = (
 /** Throws a single Error with all validation messages on invalid input. */
 export const assertValidVestingRuntime = (
   runtime: VestingRuntime,
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
 ): void => {
   const result = validateVestingRuntime(runtime, template);
   if (!result.valid) {

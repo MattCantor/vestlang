@@ -8,6 +8,7 @@ import { PERSISTED_ARTIFACT } from "../src/artifact-schema.js";
 
 const artifactWith = (percentage: unknown) => ({
   template: {
+    object_type: "VESTING_TERMS",
     id: "t",
     statements: [
       {
@@ -59,7 +60,11 @@ describe("PERSISTED_ARTIFACT — Numeric percentage on the wire (#359 AC8)", () 
 // safeParse cases are the load-bearing guard, not the typecheck.
 describe("PERSISTED_ARTIFACT — optional-schedule invariant (#390 AC8)", () => {
   const artifact = (statement: unknown) => ({
-    template: { id: "t", statements: [statement] },
+    template: {
+      object_type: "VESTING_TERMS",
+      id: "t",
+      statements: [statement],
+    },
     runtime: { startDate: "2025-01-01" },
   });
 
@@ -114,10 +119,14 @@ describe("PERSISTED_ARTIFACT — optional-schedule invariant (#390 AC8)", () => 
 
 // `order` is a 1-based sequence position, so the wire schema rejects order < 1 —
 // mirroring core validate.ts (`>= 1`) and the canonical interchange (OCF
-// VestingStatement.order, minimum: 1). Enforced on both union arms.
+// OCFVestingStatement.order, minimum: 1). Enforced on both union arms.
 describe("PERSISTED_ARTIFACT — order is 1-based (>= 1)", () => {
   const artifact = (statement: unknown) => ({
-    template: { id: "t", statements: [statement] },
+    template: {
+      object_type: "VESTING_TERMS",
+      id: "t",
+      statements: [statement],
+    },
     runtime: { startDate: "2025-01-01" },
   });
   const milestone = (order: number) => ({

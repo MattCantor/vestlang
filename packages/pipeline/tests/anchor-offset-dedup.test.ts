@@ -94,7 +94,7 @@ describe("the vestingStart-offset shape predicate is consolidated (#187/#421)", 
     }
   });
 
-  // AC6: the PeriodTag → PeriodType widening at the cliff's period_type assignment
+  // AC6: the PeriodTag → OCFPeriodType widening at the cliff's period_type assignment
   // is safe only because YEARS can't occur (vestlang source never emits a YEARS
   // duration). Pin the clarifying note the deleted local carried — match the
   // specific phrasing, not a bare YEARS token, so an unrelated YEARS occurrence

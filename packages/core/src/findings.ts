@@ -1,6 +1,6 @@
 // Template-space allocation diagnostics for the canonical interchange.
 
-import type { Finding, VestingScheduleTemplate } from "@vestlang/types";
+import type { Finding, OCFVestingTermsV2 } from "@vestlang/types";
 import {
   allocationFindingsFromFractions,
   numericToFraction,
@@ -22,7 +22,7 @@ import {
 // evaluator's resolution-space `allocationFindings` does, so the two paths can't
 // drift on where the over/under boundary sits or what the finding looks like.
 export const templateAllocationFindings = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
 ): Finding[] =>
   allocationFindingsFromFractions(

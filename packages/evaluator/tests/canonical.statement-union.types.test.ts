@@ -1,4 +1,4 @@
-// Issue #390 AC1 — `VestingStatement` is a union that makes the neither-corner
+// Issue #390 AC1 — `OCFVestingStatement` is a union that makes the neither-corner
 // (a statement with neither `schedule` nor `event_condition`) unrepresentable, and
 // keeps `cliff` reachable only at `statement.schedule.cliff`, never top-level.
 //
@@ -9,14 +9,14 @@
 // test pass vacuously. The body never executes — these are type-level checks.
 
 import { describe, it, expect } from "vitest";
-import type { VestingStatement } from "@vestlang/types";
+import type { OCFVestingStatement } from "@vestlang/types";
 
-describe("VestingStatement union (AC1)", () => {
+describe("OCFVestingStatement union (AC1)", () => {
   it("rejects a statement with neither schedule nor event_condition", () => {
     // @ts-expect-error — the neither-corner is unrepresentable: a statement must
     // carry a `schedule`, an `event_condition`, or both. The error lands on the
     // whole literal (it matches neither union arm), so the directive sits here.
-    const bad: VestingStatement = {
+    const bad: OCFVestingStatement = {
       order: 1,
       percentage: "1",
     };
@@ -24,7 +24,7 @@ describe("VestingStatement union (AC1)", () => {
   });
 
   it("rejects a top-level cliff (cliff lives inside schedule)", () => {
-    const bad: VestingStatement = {
+    const bad: OCFVestingStatement = {
       order: 1,
       percentage: "1",
       schedule: { occurrences: 1, period: 0, period_type: "DAYS" },
@@ -36,7 +36,7 @@ describe("VestingStatement union (AC1)", () => {
   });
 
   it("admits a pure milestone (event_condition, no schedule)", () => {
-    const milestone: VestingStatement = {
+    const milestone: OCFVestingStatement = {
       order: 1,
       percentage: "1",
       event_condition: { event_id: "ipo" },
@@ -45,7 +45,7 @@ describe("VestingStatement union (AC1)", () => {
   });
 
   it("admits a scheduled statement, with and without an event_condition", () => {
-    const dated: VestingStatement = {
+    const dated: OCFVestingStatement = {
       order: 1,
       percentage: "1",
       schedule: {
@@ -55,7 +55,7 @@ describe("VestingStatement union (AC1)", () => {
         cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
       },
     };
-    const hybrid: VestingStatement = {
+    const hybrid: OCFVestingStatement = {
       order: 1,
       percentage: "1",
       schedule: { occurrences: 48, period: 1, period_type: "MONTHS" },
@@ -65,7 +65,7 @@ describe("VestingStatement union (AC1)", () => {
   });
 
   it("reads cliff through schedule once narrowed on schedule presence", () => {
-    const s: VestingStatement = {
+    const s: OCFVestingStatement = {
       order: 1,
       percentage: "1",
       schedule: {
@@ -75,8 +75,9 @@ describe("VestingStatement union (AC1)", () => {
         cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
       },
     };
-    // `schedule.cliff` is the only path to the cliff; this compiles, the top-level
-    // read above does not.
-    expect(s.schedule?.cliff?.length).toBe(12);
+    // `schedule.cliff` is the only path to the cliff, and only after narrowing on
+    // `schedule` presence (the milestone arm has no such key); this compiles, the
+    // top-level read above does not.
+    expect("schedule" in s ? s.schedule.cliff?.length : undefined).toBe(12);
   });
 });

@@ -24,12 +24,12 @@ import type {
 import { stringifyVestingNodeExpr } from "@vestlang/render";
 import { CONTINGENT_START_SENTINEL, apportionStored } from "@vestlang/utils";
 import type {
-  Cliff,
+  OCFVestingScheduleCliff,
   Fraction,
   PeriodTag,
   VestingRuntime,
-  VestingScheduleTemplate,
-  VestingStatement,
+  OCFVestingTermsV2,
+  OCFVestingStatement,
 } from "@vestlang/types";
 import {
   DEFAULT_VESTING_DAY_OF_MONTH,
@@ -609,7 +609,7 @@ export const resolveStatements = (
 export type TemplateBuild =
   | {
       ok: true;
-      template: VestingScheduleTemplate;
+      template: OCFVestingTermsV2;
       runtime: VestingRuntime;
       totalShares: number;
       // The externalized recipes: at most the one reserved `evt:start` entry for a
@@ -722,7 +722,7 @@ export const buildTemplate = (
   // (a cross-unit deferred cliff, a contradiction).
 
   const dom = ctx.vesting_day_of_month;
-  const statements: VestingStatement[] = [];
+  const statements: OCFVestingStatement[] = [];
   const blockers: Blocker[] = [];
   // The recipes externalized out-of-band: the one reserved `evt:start` key for a
   // contingent start (set on the contingent-start path below) and a numbered
@@ -850,7 +850,7 @@ export const buildTemplate = (
 
     // The time `cliff` field — present on a plain time cliff (RESOLVED) and on the
     // time baseline of an event-held cliff (EVENT_HELD with a baseline arm).
-    const cliff: Cliff | undefined =
+    const cliff: OCFVestingScheduleCliff | undefined =
       r.cliff.state === "RESOLVED"
         ? r.cliff.cliff
         : r.cliff.state === "EVENT_HELD"
@@ -966,7 +966,7 @@ export const buildTemplate = (
 
   return {
     ok: true,
-    template: { id: "resolved", statements },
+    template: { object_type: "VESTING_TERMS", id: "resolved", statements },
     runtime,
     totalShares: ctx.grantQuantity,
     sourceMap,
