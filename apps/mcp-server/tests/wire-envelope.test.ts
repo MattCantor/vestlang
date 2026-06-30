@@ -62,6 +62,7 @@ const GRANT = { grant_date: "2025-01-01", grant_quantity: 1000 };
 // `evt:start` recipe is always present so a stray key is what trips the guard.
 const corruptArtifact = (eventId: string, definition: string) => ({
   template: {
+    object_type: "VESTING_TERMS",
     id: "t1",
     statements: [
       {
@@ -277,6 +278,7 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
       const res = await call(client, "vestlang_rehydrate", {
         artifact: {
           template: {
+            object_type: "VESTING_TERMS",
             id: "t1",
             statements: [
               {
@@ -301,6 +303,7 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
       const res = await call(client, "vestlang_rehydrate", {
         artifact: {
           template: {
+            object_type: "VESTING_TERMS",
             id: "t1",
             statements: [
               {
@@ -527,6 +530,7 @@ describe("#345 AC#6 — refusal message bytes are unchanged", () => {
     const rehydrate = await call(client, "vestlang_rehydrate", {
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },

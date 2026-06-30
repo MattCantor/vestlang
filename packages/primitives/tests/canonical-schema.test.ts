@@ -21,7 +21,11 @@ const scheduledStatement = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const tmpl = (statements: unknown[]) => ({ id: "t", statements });
+const tmpl = (statements: unknown[]) => ({
+  object_type: "VESTING_TERMS",
+  id: "t",
+  statements,
+});
 
 describe("zodIssuesToValidationErrors — the union adapter", () => {
   it("recovers a deep path in the scheduled arm (cliff.length)", () => {
@@ -229,10 +233,29 @@ describe("shared schema — wire-input corners", () => {
   });
 
   it("keeps the id message when id is wrong-typed", () => {
-    const { errors } = validate({ id: 7, statements: [scheduledStatement()] });
+    const { errors } = validate({
+      object_type: "VESTING_TERMS",
+      id: 7,
+      statements: [scheduledStatement()],
+    });
     expect(errors).toContainEqual({
       path: "id",
       message: "must be a non-empty string",
+    });
+  });
+
+  // The OCF VESTING_TERMS tag is required: a template lacking object_type is
+  // rejected, with the custom message at the object_type path. This is the case
+  // that proves the requirement bites — every other fixture carries the tag.
+  it("rejects a template missing object_type", () => {
+    const { valid, errors } = validate({
+      id: "t",
+      statements: [scheduledStatement()],
+    });
+    expect(valid).toBe(false);
+    expect(errors).toContainEqual({
+      path: "object_type",
+      message: 'must be the literal "VESTING_TERMS"',
     });
   });
 

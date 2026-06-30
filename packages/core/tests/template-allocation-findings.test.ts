@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { templateAllocationFindings } from "../src/findings";
 import { fractionToNumeric } from "@vestlang/utils";
+import { mkTemplate } from "./helpers";
 
 // templateAllocationFindings re-runs the over/under-allocation check against a
 // stored template, so a persisted artifact can be re-validated without
@@ -9,20 +10,18 @@ import { fractionToNumeric } from "@vestlang/utils";
 // where the resolver it's compared against lives.)
 
 // A bare DATE-anchored template statement with a given share-of-grant.
-const oneStatementTemplate = (numerator: number, denominator: number) => ({
-  id: "t",
-  statements: [
+const oneStatementTemplate = (numerator: number, denominator: number) =>
+  mkTemplate("t", [
     {
       order: 1,
       schedule: {
         occurrences: 1,
         period: 12,
-        period_type: "MONTHS" as const,
+        period_type: "MONTHS",
       },
       percentage: fractionToNumeric({ numerator, denominator }),
     },
-  ],
-});
+  ]);
 
 describe("templateAllocationFindings (AC#5)", () => {
   it("flags an over-allocating template as an error finding", () => {
@@ -65,29 +64,26 @@ describe("templateAllocationFindings (AC#5)", () => {
 
   it("sums across statements, not per-statement", () => {
     // 3/4 + 3/4 = 3/2 over the grant — each statement is fine alone.
-    const template = {
-      id: "t",
-      statements: [
-        {
-          order: 1,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS" as const,
-          },
-          percentage: "0.75",
+    const template = mkTemplate("t", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-        {
-          order: 2,
-          schedule: {
-            occurrences: 1,
-            period: 12,
-            period_type: "MONTHS" as const,
-          },
-          percentage: "0.75",
+        percentage: "0.75",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 1,
+          period: 12,
+          period_type: "MONTHS",
         },
-      ],
-    };
+        percentage: "0.75",
+      },
+    ]);
     const findings = templateAllocationFindings(template, 4800);
     expect(findings).toEqual([
       {

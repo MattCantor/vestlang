@@ -13,8 +13,8 @@
 import type {
   OCTDate,
   VestingRuntime,
-  VestingScheduleTemplate,
-  VestingStatement,
+  OCFVestingTermsV2,
+  OCFVestingStatement,
 } from "@vestlang/types";
 import {
   addPeriod,
@@ -53,6 +53,12 @@ const MILESTONE_GRID = {
   period_type: "DAYS",
 } as const;
 
+// The statement union is structural: only the scheduled arm carries `schedule`, so
+// reading it means narrowing on the key's presence first. A pure milestone has no
+// schedule, so this yields `undefined` for it.
+const scheduleOf = (statement: OCFVestingStatement) =>
+  "schedule" in statement ? statement.schedule : undefined;
+
 /**
  * Lower one statement onto the shared grid kernel. The cliff is a duration from
  * the anchor (so the lump lands on its true date, off-grid or not). `origin`
@@ -67,7 +73,7 @@ const MILESTONE_GRID = {
  * applied as its own lump; only its date contributes (the floor in the max).
  */
 const expandAnchored = (
-  statement: VestingStatement,
+  statement: OCFVestingStatement,
   anchor: OCTDate,
   dom: VestingRuntime["vestingDayOfMonth"],
   firingFor: (eventId: string) => OCTDate | undefined,
@@ -76,7 +82,7 @@ const expandAnchored = (
   // Narrow once on `schedule` presence. A pure milestone carries no time grid in
   // storage, so it folds on the degenerate one-lump grid (see MILESTONE_GRID). A
   // scheduled statement reads its grid and cliff straight off `statement.schedule`.
-  const schedule = statement.schedule;
+  const schedule = scheduleOf(statement);
   const grid = schedule ?? MILESTONE_GRID;
   const cliffSpec = schedule?.cliff;
 
@@ -140,7 +146,7 @@ const expandAnchored = (
  * projection-only runtime, so the sentinel is gone by then.
  */
 const expandStatement = (
-  statement: VestingStatement,
+  statement: OCFVestingStatement,
   runtime: VestingRuntime,
   dateCursor: OCTDate | undefined,
   firingFor: (eventId: string) => OCTDate | undefined,
@@ -164,7 +170,7 @@ const expandStatement = (
   const events = expandAnchored(statement, anchor, dom, firingFor, origin);
   // A pure milestone carries no schedule, so it advances the chain cursor by the
   // same degenerate one-lump params the kernel folds it on (see MILESTONE_GRID).
-  const grid = statement.schedule ?? MILESTONE_GRID;
+  const grid = scheduleOf(statement) ?? MILESTONE_GRID;
   const nextCursor = advanceCursor(
     anchor,
     grid.occurrences,
@@ -187,7 +193,7 @@ const expandStatement = (
  * an installment and not attribution.
  */
 export const expandTemplateToRawEvents = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
   runtime: VestingRuntime,
 ): RawEvent[] => {
@@ -230,7 +236,7 @@ export const expandTemplateToRawEvents = (
  * fractions into exact integer shares (with the grant-date fold applied).
  */
 const compileRaw = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
   runtime: VestingRuntime,
 ): CompiledInstallment[] =>
@@ -253,7 +259,7 @@ const compileRaw = (
  * to know whether the template fits the grant.
  */
 export const compileToInstallments = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
   runtime: VestingRuntime,
 ): CompiledInstallment[] => compileRaw(template, totalShares, runtime);
@@ -270,7 +276,7 @@ export const compileToInstallments = (
  * `validateTemplateAllocatable` / `templateAllocationFindings` before compiling.
  */
 export const compile = (
-  template: VestingScheduleTemplate,
+  template: OCFVestingTermsV2,
   totalShares: number,
   runtime: VestingRuntime,
 ): CompiledEvent[] =>

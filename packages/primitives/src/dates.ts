@@ -15,7 +15,7 @@
 import type {
   ConstraintTag,
   OCTDate,
-  PeriodType,
+  OCFPeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
@@ -207,7 +207,7 @@ export const addDays = (iso: OCTDate, n: number): OCTDate => {
 export const addPeriod = (
   start: OCTDate,
   units: number,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   dayOfMonth: VestingDayOfMonth = DEFAULT_VESTING_DAY_OF_MONTH,
   origin: OCTDate = start,
 ): OCTDate => {
@@ -235,7 +235,7 @@ export const advanceCursor = (
   anchor: OCTDate,
   occurrences: number,
   period: number,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   dayOfMonth: VestingDayOfMonth = DEFAULT_VESTING_DAY_OF_MONTH,
   origin: OCTDate = anchor,
 ): OCTDate =>

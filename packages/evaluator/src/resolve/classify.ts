@@ -93,8 +93,8 @@ const expandResolution = (
         r.cliff.cliff.period_type,
         dom,
       ),
-      // The embedded canonical Cliff stores a Numeric decimal; the kernel works
-      // in exact rational.
+      // The embedded canonical OCFVestingScheduleCliff stores a Numeric decimal;
+      // the kernel works in exact rational.
       percentage: numericToFraction(r.cliff.cliff.percentage),
     };
   } else if (r.cliff.state === "EVENT_HELD") {

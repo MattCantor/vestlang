@@ -25,6 +25,7 @@ import {
   makeVestingBaseVestingStart,
   makeGatedNode,
   makeDuration,
+  scheduleOf,
 } from "./helpers";
 
 const ctxInput = (
@@ -726,7 +727,7 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
     expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
     // The tail's grid-unit duration cliff survives onto the second statement.
     expect(
-      out.interchange.template.statements[1].schedule!.cliff,
+      scheduleOf(out.interchange.template.statements[1])!.cliff,
     ).toBeDefined();
   });
 

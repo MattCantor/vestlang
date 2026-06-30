@@ -227,7 +227,7 @@ describe("runRehydrate (AC#5)", () => {
   it("refuses an artifact with no stored grant date", () => {
     const r = runRehydrate({
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: { object_type: "VESTING_TERMS", id: "t1", statements: [] },
         // grantDate deliberately absent
         runtime: { startDate: "2025-01-01" },
       },
@@ -246,6 +246,7 @@ describe("runRehydrate (AC#5)", () => {
     const r = runRehydrate({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {
@@ -422,6 +423,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
   // 4800-share grant, would project [1500,1500,1500,1500] = 6000 shares.
   const overAllocatingDateArtifact = (): PersistedArtifact => ({
     template: {
+      object_type: "VESTING_TERMS",
       id: "t1",
       statements: [
         {
@@ -470,6 +472,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     const r = runRehydrate({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {
@@ -508,6 +511,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     const out = rehydrateOk({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {
@@ -545,6 +549,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     const out = rehydrateOk({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {
@@ -578,6 +583,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     const r = runRehydrate({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {
@@ -625,6 +631,7 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     // gate must catch that and refuse structurally, not surface a protocol error.
     const oversized: PersistedArtifact = {
       template: {
+        object_type: "VESTING_TERMS",
         id: "t1",
         statements: [
           {
@@ -658,6 +665,7 @@ describe("runRehydrate guards the reserved namespace + the contingency marker", 
     sidecar?: PersistedArtifact["sidecar"],
   ): PersistedArtifact => ({
     template: {
+      object_type: "VESTING_TERMS",
       id: "t1",
       statements: [
         {
@@ -928,7 +936,9 @@ describe("runPersist/runRehydrate — event_condition round-trip (#255)", () => 
     });
     const stmt = persisted.artifact.template.statements[0];
     expect(stmt.event_condition).toEqual({ event_id: "ipo" });
-    expect(stmt.schedule?.cliff).toBeUndefined();
+    expect(
+      ("schedule" in stmt ? stmt.schedule : undefined)?.cliff,
+    ).toBeUndefined();
     // No sidecar: a bare real event needs no recipe.
     expect(persisted.artifact.sidecar).toBeUndefined();
 

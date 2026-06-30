@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fractionToNumeric } from "@vestlang/utils";
 import { compile } from "../src/compile";
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import type { VestingRuntime } from "@vestlang/types";
+import { mkTemplate } from "./helpers";
 
 // Frozen oracle for the share-allocation kernel (issue #85), core-side cases.
 //
@@ -26,12 +27,8 @@ const sum = (events: { amount: string }[]): number =>
 // cliff (which keeps the whole grant) is placeable. (Originally #90 dropped the
 // (1 − pct) silently — neither the old silent drop nor the later silent even-grid.)
 describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
-  const zeroSpacing = (
-    numerator: number,
-    denominator: number,
-  ): VestingScheduleTemplate => ({
-    id: "period-0-cliff",
-    statements: [
+  const zeroSpacing = (numerator: number, denominator: number) =>
+    mkTemplate("period-0-cliff", [
       {
         order: 1,
         schedule: {
@@ -46,8 +43,7 @@ describe("kernel oracle — zero-spacing cliff on the start (#90)", () => {
         },
         percentage: "1",
       },
-    ],
-  });
+    ]);
   const runtime: VestingRuntime = { startDate: "2025-01-01" };
 
   it("a sub-100% cliff has no remainder to vest → throws, not a silent drop", () => {

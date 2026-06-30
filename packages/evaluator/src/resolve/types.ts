@@ -9,7 +9,7 @@
 //                The lossless rollup of leaf-level IMPOSSIBLE: emitted only when
 //                nothing is merely pending and nothing is already resolving.
 
-import type { VestingRuntime, VestingScheduleTemplate } from "@vestlang/types";
+import type { VestingRuntime, OCFVestingTermsV2 } from "@vestlang/types";
 import type {
   Blocker,
   BreakdownInstallment,
@@ -42,7 +42,7 @@ export interface StatementContribution {
 export type ResolveVerdict =
   | {
       kind: "template";
-      template: VestingScheduleTemplate;
+      template: OCFVestingTermsV2;
       runtime: VestingRuntime;
       totalShares: number;
       // Externalized combinator gates: `event_id → { definition }`. Empty unless

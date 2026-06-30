@@ -4,12 +4,12 @@ export {
   DEFAULT_VESTING_DAY_OF_MONTH,
 } from "./oct_types.js";
 export type {
-  PeriodType,
-  VestingScheduleTemplate,
-  VestingStatement,
-  VestingSchedule,
+  OCFPeriodType,
+  OCFVestingTermsV2,
+  OCFVestingStatement,
+  OCFVestingScheduleSegment,
   Fraction,
-  Cliff,
+  OCFVestingScheduleCliff,
   RuntimeBase,
   StoredTerms,
   VestingRuntime,

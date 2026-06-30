@@ -11,7 +11,7 @@
 import type {
   Fraction,
   OCTDate,
-  PeriodType,
+  OCFPeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import {
@@ -62,7 +62,7 @@ export interface ExpandGridArgs {
   // Equal to `anchor` for a self-anchored statement.
   origin: OCTDate;
   period: number;
-  periodType: PeriodType;
+  periodType: OCFPeriodType;
   occurrences: number;
   // Fraction of the whole grant this statement covers, already scaled by any
   // partial-payout multiplier. Every emitted fraction derives from it.

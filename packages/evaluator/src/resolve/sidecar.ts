@@ -25,7 +25,7 @@ import type {
   SourceMap,
   SourceMapEntry,
 } from "@vestlang/types";
-import type { StoredTerms, VestingScheduleTemplate } from "@vestlang/types";
+import type { StoredTerms, OCFVestingTermsV2 } from "@vestlang/types";
 import { rehydrate, type RehydrateResult } from "./rehydrate.js";
 import { assertSavePartition } from "./synthetic.js";
 
@@ -58,7 +58,7 @@ export interface Sidecar {
  * reload via `rehydrate`, never baked into the stored artifact.
  */
 export interface PersistedArtifact {
-  template: VestingScheduleTemplate;
+  template: OCFVestingTermsV2;
   runtime: StoredTerms;
   sidecar?: Sidecar;
 }
@@ -92,7 +92,7 @@ export const fromSidecar = (sidecar?: Sidecar): SourceMap =>
  * witness-updated runtime. Ids are carried verbatim, never recomputed.
  */
 export const toPersisted = (artifact: {
-  template: VestingScheduleTemplate;
+  template: OCFVestingTermsV2;
   runtime: StoredTerms;
   sourceMap: SourceMap;
 }): PersistedArtifact => {

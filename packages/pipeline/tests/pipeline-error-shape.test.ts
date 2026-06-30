@@ -112,6 +112,7 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
 describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)", () => {
   const overAllocatingArtifact = (): PersistedArtifact => ({
     template: {
+      object_type: "VESTING_TERMS",
       id: "t1",
       statements: [
         {
@@ -132,7 +133,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
   it("#6 missing grant date → rehydrate-missing-grant-date, verbatim", () => {
     const r = runRehydrate({
       artifact: {
-        template: { id: "t1", statements: [] },
+        template: { object_type: "VESTING_TERMS", id: "t1", statements: [] },
         runtime: { startDate: "2025-01-01" },
       },
       grant_quantity: 400,
@@ -172,6 +173,7 @@ describe("rehydrate refusals — structured, with verbatim messages (AC#2, #3)",
     const r = runRehydrate({
       artifact: {
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             {

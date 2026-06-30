@@ -13,6 +13,7 @@ import { normalizeProgram } from "@vestlang/normalizer";
 import { compile } from "@vestlang/core";
 import type { ResolutionContextInput } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
+import { scheduleOf } from "./helpers";
 
 const ctx = (
   events: Record<string, string> = {},
@@ -37,7 +38,7 @@ describe("milestone lowering — pure milestone omits the schedule (AC2)", () =>
     expect(r.template.statements).toHaveLength(1);
     const s = r.template.statements[0];
     expect(s.event_condition).toEqual({ event_id: "ipo" });
-    expect(s.schedule).toBeUndefined();
+    expect(scheduleOf(s)).toBeUndefined();
     // `schedule` is not merely undefined-valued — the key is absent on the wire.
     expect(Object.prototype.hasOwnProperty.call(s, "schedule")).toBe(false);
   });
@@ -48,7 +49,7 @@ describe("milestone lowering — dated event one-off lowers as a milestone (AC3)
     const r = lower("VEST FROM DATE 2025-06-01 CLIFF EVENT ipo");
     const s = r.template.statements[0];
     expect(s.event_condition).toEqual({ event_id: "ipo" });
-    expect(s.schedule).toBeUndefined();
+    expect(scheduleOf(s)).toBeUndefined();
     // The runtime still carries the FROM date even though the milestone has no grid
     // to anchor on it — it is retained but inert.
     expect(r.runtime.startDate).toBe("2025-06-01");
@@ -61,8 +62,8 @@ describe("milestone lowering — a cliff keeps its schedule (AC4)", () => {
     const s = r.template.statements[0];
     // A floored milestone is NOT a schedule-less milestone: the time floor lives in
     // schedule.cliff, and the event hold rides alongside.
-    expect(s.schedule).toBeDefined();
-    expect(s.schedule?.cliff).toBeDefined();
+    expect(scheduleOf(s)).toBeDefined();
+    expect(scheduleOf(s)?.cliff).toBeDefined();
     expect(s.event_condition).toEqual({ event_id: "ipo" });
   });
 });
@@ -71,16 +72,16 @@ describe("milestone lowering — hybrid and DATE keep full schedules (AC5)", () 
   it("AC5a — `VEST OVER 48 EVERY 1 CLIFF 12 months` keeps a full schedule with cliff, no event_condition", () => {
     const r = lower("VEST OVER 48 months EVERY 1 month CLIFF 12 months");
     const s = r.template.statements[0];
-    expect(s.schedule?.occurrences).toBe(48);
-    expect(s.schedule?.cliff).toBeDefined();
+    expect(scheduleOf(s)?.occurrences).toBe(48);
+    expect(scheduleOf(s)?.cliff).toBeDefined();
     expect(s.event_condition).toBeUndefined();
   });
 
   it("AC5a — `1000 VEST FROM DATE x` keeps a one-lump schedule, no event_condition", () => {
     const r = lower("1000 VEST FROM DATE 2025-06-01");
     const s = r.template.statements[0];
-    expect(s.schedule).toBeDefined();
-    expect(s.schedule?.occurrences).toBe(1);
+    expect(scheduleOf(s)).toBeDefined();
+    expect(scheduleOf(s)?.occurrences).toBe(1);
     expect(s.event_condition).toBeUndefined();
   });
 
@@ -91,9 +92,9 @@ describe("milestone lowering — hybrid and DATE keep full schedules (AC5)", () 
     // change the projection. This pins the grid-shape clause of the predicate.
     const r = lower("VEST OVER 48 months EVERY 1 month CLIFF EVENT ipo");
     const s = r.template.statements[0];
-    expect(s.schedule).toBeDefined();
-    expect(s.schedule?.occurrences).toBe(48);
-    expect(s.schedule?.cliff).toBeUndefined();
+    expect(scheduleOf(s)).toBeDefined();
+    expect(scheduleOf(s)?.occurrences).toBe(48);
+    expect(scheduleOf(s)?.cliff).toBeUndefined();
     expect(s.event_condition).toEqual({ event_id: "ipo" });
   });
 });

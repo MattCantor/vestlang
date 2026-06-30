@@ -18,6 +18,7 @@ import {
   makeVestingBaseDate,
   makeVestingBaseEvent,
   makeVestingBaseVestingStart,
+  scheduleOf,
 } from "./helpers";
 
 // Frozen oracle for the share-allocation kernel (issue #85), evaluator-side cases.
@@ -302,7 +303,7 @@ describe("kernel oracle — the cliff lowering and the grid agree on the count",
     );
     if (result.kind !== "template") throw new Error("expected template");
     // 2 of 4 occurrences precede the cliff → 1/2, stored as the exact Numeric "0.5".
-    expect(result.template.statements[0].schedule?.cliff?.percentage).toBe(
+    expect(scheduleOf(result.template.statements[0])?.cliff?.percentage).toBe(
       "0.5",
     );
     const events = compile(result.template, result.totalShares, result.runtime);

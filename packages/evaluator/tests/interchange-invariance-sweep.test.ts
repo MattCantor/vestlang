@@ -34,6 +34,7 @@ import {
   makeVestingBaseVestingStart,
   makeGatedNode,
   makeDuration,
+  scheduleOf,
 } from "./helpers";
 
 const portion = (numerator: number, denominator: number): Amount => ({
@@ -518,7 +519,7 @@ describe("interchange — firing-free programs tie the two verdicts together", (
 // Issue #390 AC9 — the firing-blind interchange build of a pure milestone is ALSO
 // schedule-less. The milestone-omit predicate lives in the shared `buildTemplate`,
 // so it fires on the storable floor too, not only on the resolution verdict. The
-// schedule-less template must still be a valid VestingScheduleTemplate.
+// schedule-less template must still be a valid OCFVestingTermsV2.
 describe("interchange — a pure milestone is schedule-less on the storable floor (#390 AC9)", () => {
   // `VEST CLIFF EVENT ipo` — a one-lump grid whose cliff is a bare event, which
   // lowers to a pure milestone (event_condition, no schedule).
@@ -538,7 +539,7 @@ describe("interchange — a pure milestone is schedule-less on the storable floo
         `expected interchange template, got ${out.interchange.status}`,
       );
     const s = out.interchange.template.statements[0];
-    expect(s.schedule).toBeUndefined();
+    expect(scheduleOf(s)).toBeUndefined();
     expect(s.event_condition).toEqual({ event_id: "ipo" });
   });
 

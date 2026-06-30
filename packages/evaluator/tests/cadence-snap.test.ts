@@ -16,6 +16,7 @@ import type {
 import { parse } from "@vestlang/dsl";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { evaluateProgram } from "../src/evaluate";
+import { scheduleOf } from "./helpers";
 
 const evaluate = (
   dsl: string,
@@ -111,7 +112,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     const stmt = s.interchange.template.statements[0];
     // The bare 12-month cliff over a 48-month grid is 12/48 = 1/4; the typed
     // Fraction is stored in reduced form.
-    expect(stmt.schedule!.cliff).toEqual({
+    expect(scheduleOf(stmt)!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -142,7 +143,7 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     });
     expect(s.interchange.status).toBe("template");
     if (s.interchange.status !== "template") return; // narrow
-    expect(s.interchange.template.statements[0].schedule!.cliff).toEqual({
+    expect(scheduleOf(s.interchange.template.statements[0])!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -221,7 +222,7 @@ describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end 
     });
     expect(s.interchange.status).toBe("template");
     if (s.interchange.status !== "template") return; // narrow
-    expect(s.interchange.template.statements[0].schedule!.cliff).toEqual({
+    expect(scheduleOf(s.interchange.template.statements[0])!.cliff).toEqual({
       length: 3,
       period_type: "MONTHS",
       percentage: "0.5",

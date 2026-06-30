@@ -5,6 +5,7 @@ import { compile } from "@vestlang/core";
 import type { ResolvedInstallment } from "@vestlang/types";
 import { resolveToCore } from "../src/resolve/index";
 import { evaluateProgram } from "../src/evaluate";
+import { scheduleOf } from "./helpers";
 
 // Issue #359 — the over-precise cliff. A 100% statement vesting OVER 36 months
 // EVERY 12 months with a 12-month cliff puts a third of the grant on the cliff
@@ -32,7 +33,7 @@ describe("over-precise cliff — the stored template (#359 AC5)", () => {
     if (result.kind !== "template") return;
     const stmt = result.template.statements[0];
     expect(stmt.percentage).toBe("1");
-    expect(stmt.schedule!.cliff?.percentage).toBe("0.3333333333");
+    expect(scheduleOf(stmt)!.cliff?.percentage).toBe("0.3333333333");
   });
 
   it("compiles to [11999, 12000, 12001] — the cliff lump floors low, the total holds", () => {
@@ -232,7 +233,7 @@ describe("over-precise event-held cliff baseline is excluded (#386)", () => {
     expect(result.kind).toBe("template");
     // The stored template DOES carry the over-precise baseline decimal...
     if (result.kind === "template") {
-      expect(result.template.statements[0].schedule?.cliff?.percentage).toBe(
+      expect(scheduleOf(result.template.statements[0])?.cliff?.percentage).toBe(
         "0.3333333333",
       );
     }

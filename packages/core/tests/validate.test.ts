@@ -8,44 +8,41 @@ import {
 } from "../src/validate";
 import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
-import type { VestingScheduleTemplate, VestingRuntime } from "@vestlang/types";
+import type { VestingRuntime } from "@vestlang/types";
+import { mkTemplate } from "./helpers";
 
 // A well-formed graded template: two chained DATE statements, with an on-grid
 // cliff on the first.
-const validTemplate: VestingScheduleTemplate = {
-  id: "tmpl-1",
-  statements: [
-    {
-      order: 1,
-      schedule: {
-        occurrences: 48,
-        period: 1,
+const validTemplate = mkTemplate("tmpl-1", [
+  {
+    order: 1,
+    schedule: {
+      occurrences: 48,
+      period: 1,
+      period_type: "MONTHS",
+      cliff: {
+        length: 12,
         period_type: "MONTHS",
-        cliff: {
-          length: 12,
-          period_type: "MONTHS",
-          percentage: "0.25",
-        },
+        percentage: "0.25",
       },
-      percentage: "0.75",
     },
-    {
-      order: 2,
-      schedule: {
-        occurrences: 1,
-        period: 0,
-        period_type: "MONTHS",
-      },
-      percentage: "0.25",
+    percentage: "0.75",
+  },
+  {
+    order: 2,
+    schedule: {
+      occurrences: 1,
+      period: 0,
+      period_type: "MONTHS",
     },
-  ],
-};
+    percentage: "0.25",
+  },
+]);
 
 const pathsOf = (errors: { path: string }[]) => errors.map((e) => e.path);
 
-const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
-  id: "tmpl-cap",
-  statements: [
+const oneStatement = (occurrences: number) =>
+  mkTemplate("tmpl-cap", [
     {
       order: 1,
       schedule: {
@@ -55,8 +52,7 @@ const oneStatement = (occurrences: number): VestingScheduleTemplate => ({
       },
       percentage: "1",
     },
-  ],
-});
+  ]);
 
 describe("validateVestingScheduleTemplate", () => {
   it("accepts a well-formed template", () => {
@@ -93,13 +89,12 @@ describe("validateVestingScheduleTemplate", () => {
 
   it("bounds the total across statements, not just one", () => {
     const half = Math.ceil(MAX_INSTALLMENTS / 2) + 1;
-    const result = validateVestingScheduleTemplate({
-      id: "tmpl-sum",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("tmpl-sum", [
         { ...oneStatement(half).statements[0], order: 1 },
         { ...oneStatement(half).statements[0], order: 2 },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
       true,
@@ -107,18 +102,14 @@ describe("validateVestingScheduleTemplate", () => {
   });
 
   it("rejects an empty statements array", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [],
-    });
+    const result = validateVestingScheduleTemplate(mkTemplate("x", []));
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements");
   });
 
   it("rejects a malformed percentage string (not an OCF Numeric)", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("x", [
         {
           order: 1,
           schedule: {
@@ -129,16 +120,15 @@ describe("validateVestingScheduleTemplate", () => {
           // Scientific notation isn't OCF Numeric — the boundary rejects it.
           percentage: "1.5e-3",
         },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0].percentage");
   });
 
   it("rejects duplicate order", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("x", [
         {
           order: 1,
           schedule: {
@@ -157,8 +147,8 @@ describe("validateVestingScheduleTemplate", () => {
           },
           percentage: "0.5",
         },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(
       result.errors.some((e) => e.message.includes("duplicate order")),
@@ -166,9 +156,8 @@ describe("validateVestingScheduleTemplate", () => {
   });
 
   it("rejects a cliff with a negative length or a bad period_type", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("x", [
         {
           order: 1,
           schedule: {
@@ -184,8 +173,8 @@ describe("validateVestingScheduleTemplate", () => {
           },
           percentage: "1",
         },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toEqual(
       expect.arrayContaining([
@@ -196,9 +185,8 @@ describe("validateVestingScheduleTemplate", () => {
   });
 
   it("rejects a cliff percentage outside [0, 1]", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("x", [
         {
           order: 1,
           schedule: {
@@ -213,8 +201,8 @@ describe("validateVestingScheduleTemplate", () => {
           },
           percentage: "1",
         },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].schedule.cliff.percentage",
@@ -222,9 +210,8 @@ describe("validateVestingScheduleTemplate", () => {
   });
 
   it("rejects an unknown period_type", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "x",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("x", [
         {
           order: 1,
           schedule: {
@@ -235,8 +222,8 @@ describe("validateVestingScheduleTemplate", () => {
           },
           percentage: "1",
         },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain(
       "statements[0].schedule.period_type",
@@ -245,7 +232,7 @@ describe("validateVestingScheduleTemplate", () => {
 
   it("assertValidVestingScheduleTemplate throws on invalid input", () => {
     expect(() =>
-      assertValidVestingScheduleTemplate({ id: "", statements: [] }),
+      assertValidVestingScheduleTemplate(mkTemplate("", [])),
     ).toThrow(/Invalid VestingScheduleTemplate/);
   });
 });
@@ -387,9 +374,8 @@ describe("validateVestingRuntime", () => {
 });
 
 describe("validateStatement — percentage bounds", () => {
-  const withStatementPercentage = (p: string): VestingScheduleTemplate => ({
-    id: "tmpl-pct",
-    statements: [
+  const withStatementPercentage = (p: string) =>
+    mkTemplate("tmpl-pct", [
       {
         order: 1,
         schedule: {
@@ -399,8 +385,7 @@ describe("validateStatement — percentage bounds", () => {
         },
         percentage: p,
       },
-    ],
-  });
+    ]);
 
   it("rejects a negative statement percentage", () => {
     // A well-formed Numeric, but the parsed value is negative — rejected.
@@ -432,11 +417,8 @@ describe("validateStatement — percentage bounds", () => {
 // unfired event_condition (no matching firing) is the VALID held state, never
 // rejected. No firing↔condition cross-check in either direction (AC 16).
 describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
-  const withCondition = (
-    event_condition: unknown,
-  ): VestingScheduleTemplate => ({
-    id: "t1",
-    statements: [
+  const withCondition = (event_condition: unknown) =>
+    mkTemplate("t1", [
       {
         order: 1,
         schedule: {
@@ -448,8 +430,7 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
         // Untrusted input may carry a shape the static type forbids.
         event_condition: event_condition as { event_id: string },
       },
-    ],
-  });
+    ]);
 
   it("accepts a well-formed event_condition (bare real id)", () => {
     expect(
@@ -488,21 +469,18 @@ describe("validateVestingScheduleTemplate — event_condition (#255)", () => {
 // as VALID (the held state). Neither an unreferenced firing nor an orphan condition
 // is rejected — the validator never cross-checks the two.
 describe("validateVestingRuntime — held event_condition is valid (#255 AC16)", () => {
-  const conditionTemplate: VestingScheduleTemplate = {
-    id: "t1",
-    statements: [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 4,
-          period: 1,
-          period_type: "MONTHS",
-        },
-        percentage: "1",
-        event_condition: { event_id: "ipo" },
+  const conditionTemplate = mkTemplate("t1", [
+    {
+      order: 1,
+      schedule: {
+        occurrences: 4,
+        period: 1,
+        period_type: "MONTHS",
       },
-    ],
-  };
+      percentage: "1",
+      event_condition: { event_id: "ipo" },
+    },
+  ]);
 
   it("a runtime with NO firing for the condition validates (held)", () => {
     const runtime: VestingRuntime = { startDate: "2025-01-01" };
@@ -524,25 +502,23 @@ describe("validateVestingRuntime — held event_condition is valid (#255 AC16)",
 // counts as one installment toward the cap.
 describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)", () => {
   it("accepts a schedule-less statement that has an event_condition (pure milestone)", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "milestone",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("milestone", [
         { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(true);
     expect(result.errors).toEqual([]);
   });
 
   it("rejects a statement with neither a schedule nor an event_condition", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "neither",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("neither", [
         // The static type forbids this corner; the validator guards it on untrusted
         // wire input where the type guarantee doesn't hold.
         { order: 1, percentage: "1" } as never,
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(pathsOf(result.errors)).toContain("statements[0]");
     expect(
@@ -555,13 +531,12 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
   it("counts a schedule-less statement as one installment toward the cap", () => {
     // MAX_INSTALLMENTS scheduled occurrences PLUS one schedule-less milestone is
     // MAX + 1 — over the cap by exactly the milestone's single installment.
-    const result = validateVestingScheduleTemplate({
-      id: "cap-with-milestone",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("cap-with-milestone", [
         { ...oneStatement(MAX_INSTALLMENTS).statements[0], order: 1 },
         { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(false);
     expect(result.errors.some((e) => /exceeds the limit/.test(e.message))).toBe(
       true,
@@ -569,22 +544,18 @@ describe("validateVestingScheduleTemplate — optional-schedule invariant (#390)
   });
 
   it("a milestone just under the cap (MAX − 1 scheduled + 1 milestone = MAX) is accepted", () => {
-    const result = validateVestingScheduleTemplate({
-      id: "cap-edge",
-      statements: [
+    const result = validateVestingScheduleTemplate(
+      mkTemplate("cap-edge", [
         { ...oneStatement(MAX_INSTALLMENTS - 1).statements[0], order: 1 },
         { order: 2, percentage: "0", event_condition: { event_id: "ipo" } },
-      ],
-    });
+      ]),
+    );
     expect(result.structurallyValid).toBe(true);
   });
 });
 
 describe("validateVestingRuntime — edge branches", () => {
-  const emptyTemplate: VestingScheduleTemplate = {
-    id: "empty",
-    statements: [],
-  };
+  const emptyTemplate = mkTemplate("empty", []);
 
   it("an empty template needs no startDate", () => {
     // hasStatements is false, so the startDate-required check is skipped entirely.
@@ -671,10 +642,11 @@ describe("validateTemplateAllocatable (#418)", () => {
     percentage,
   });
 
-  const template = (...percentages: string[]): VestingScheduleTemplate => ({
-    id: "alloc",
-    statements: percentages.map((p, i) => statement(i + 1, p)),
-  });
+  const template = (...percentages: string[]) =>
+    mkTemplate(
+      "alloc",
+      percentages.map((p, i) => statement(i + 1, p)),
+    );
 
   it("flags an over-allocating template as invalid (the seam: structural validator still passes it)", () => {
     // Two statements each at 0.75 sum to 150% over the grant.
@@ -723,10 +695,7 @@ describe("validateTemplateAllocatable (#418)", () => {
 
   it("is invalid with structural errors on a structurally-invalid template", () => {
     // Empty id and empty statements array — both structural failures.
-    const result = validateTemplateAllocatable(
-      { id: "", statements: [] },
-      4800,
-    );
+    const result = validateTemplateAllocatable(mkTemplate("", []), 4800);
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
   });

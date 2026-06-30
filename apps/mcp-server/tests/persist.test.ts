@@ -758,6 +758,7 @@ describe("mcp-server / persistence tool pair", () => {
     // re-resolve everything against undefined.
     const artifact = {
       template: {
+        object_type: "VESTING_TERMS",
         id: "t1",
         statements: [
           {
@@ -805,6 +806,7 @@ describe("mcp-server / persistence tool pair", () => {
         // The template is schema-valid (a non-empty statements array); the
         // refusal is about the runtime's missing stored grant date.
         template: {
+          object_type: "VESTING_TERMS",
           id: "t1",
           statements: [
             { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },
@@ -1004,6 +1006,7 @@ describe("mcp-server / persistence tool pair", () => {
   // surfaces at reparse.
   const corruptArtifact = (eventId: string, definition: string) => ({
     template: {
+      object_type: "VESTING_TERMS",
       id: "t1",
       statements: [
         {
@@ -1051,6 +1054,7 @@ describe("mcp-server / persistence tool pair", () => {
   // A schema-valid template (non-empty statements) so the only thing the schema
   // can object to is the runtime date — the check this test is pinning.
   const datedMilestoneTemplate = {
+    object_type: "VESTING_TERMS",
     id: "t1",
     statements: [
       { order: 1, percentage: "1", event_condition: { event_id: "ipo" } },

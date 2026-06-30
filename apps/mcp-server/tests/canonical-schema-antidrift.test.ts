@@ -29,7 +29,11 @@ interface Case {
 const cases: Case[] = [
   {
     name: "valid control",
-    template: { id: "t", statements: [scheduled()] },
+    template: {
+      object_type: "VESTING_TERMS",
+      id: "t",
+      statements: [scheduled()],
+    },
     valid: true,
   },
   {

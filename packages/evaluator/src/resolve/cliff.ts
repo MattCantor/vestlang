@@ -1,5 +1,5 @@
 // Lower a DSL cliff (`VestingNodeExpr`) onto core's storable forms: a time-based
-// `Cliff` (the Carta time baseline) and/or an `event_condition` (the event hold).
+// `OCFVestingScheduleCliff` (the Carta time baseline) and/or an `event_condition` (the event hold).
 //
 // An event-held cliff (`CLIFF EVENT ipo`, `CLIFF LATER OF(12 months, EVENT ipo)`)
 // stores at a different joint than vestlang writes it: the time baseline lands in
@@ -29,7 +29,11 @@ import type {
   VestingNode,
   VestingNodeExpr,
 } from "@vestlang/types";
-import type { Cliff, PeriodType, VestingDayOfMonth } from "@vestlang/types";
+import type {
+  OCFVestingScheduleCliff,
+  OCFPeriodType,
+  VestingDayOfMonth,
+} from "@vestlang/types";
 import { addPeriod, daysBetween, gridDate, gt } from "@vestlang/primitives";
 import { fractionToNumeric } from "@vestlang/utils";
 import {
@@ -62,7 +66,7 @@ export type LoweredCliff =
   // A resolved time cliff. `cliffDate` is the absolute date lowering already
   // computed for the anchored path (the date the lump folds on) — carried so the
   // precision guard can read it instead of re-deriving it via addPeriod. It is
-  // an internal eval-time field only; the stored canonical `Cliff` stays
+  // an internal eval-time field only; the stored canonical `OCFVestingScheduleCliff` stays
   // { length, period_type, percentage } and never sees it. Absent on the
   // deferred (anchor-free) path, which has no concrete date.
   //
@@ -73,7 +77,7 @@ export type LoweredCliff =
   // harvests them so a committed floor doesn't read as certain (mirrors the start).
   | {
       state: "RESOLVED";
-      cliff: Cliff;
+      cliff: OCFVestingScheduleCliff;
       cliffDate?: OCTDate;
       blockers?: Blocker[];
     }
@@ -87,7 +91,7 @@ export type LoweredCliff =
       state: "EVENT_HELD";
       // The time baseline arm, lowered as an ordinary duration cliff. Absent for a
       // bare `CLIFF EVENT e` (no time side at all).
-      cliff?: Cliff;
+      cliff?: OCFVestingScheduleCliff;
       // The resolved date of the time baseline (the floor in the max). Present
       // whenever `cliff` is — they come from the same arm.
       cliffDate?: OCTDate;
@@ -186,7 +190,7 @@ const preCliffCount = (
   anchor: OCTDate,
   origin: OCTDate,
   period: number,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   dom: VestingDayOfMonth,
   occurrences: number,
 ): number => {
@@ -207,9 +211,9 @@ const preCliffCount = (
 const measureDuration = (
   anchor: OCTDate,
   cliffDate: OCTDate,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   dom: VestingDayOfMonth,
-): { length: number; period_type: PeriodType } => {
+): { length: number; period_type: OCFPeriodType } => {
   // Bounded probe in the statement's unit (cap well above any real schedule).
   for (let k = 1; k <= 1200; k++) {
     const d = addPeriod(anchor, k, periodType, dom);
@@ -227,11 +231,11 @@ const timeCliffAt = (
   cliffDate: OCTDate,
   anchor: OCTDate,
   origin: OCTDate,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   period: number,
   occurrences: number,
   dom: VestingDayOfMonth,
-): Cliff | undefined => {
+): OCFVestingScheduleCliff | undefined => {
   if (!gt(cliffDate, anchor)) return undefined;
   const m = preCliffCount(
     cliffDate,
@@ -328,7 +332,7 @@ const classifyEventSide = (
 export const lowerCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
   anchor: OCTDate,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   period: number,
   occurrences: number,
   ctx: ResolutionContext,
@@ -394,7 +398,7 @@ export const lowerCliff = (
   const disclosures = isPickedCommitted(res) ? res.meta.disclosures : [];
 
   // Carry the absolute cliff date the precision guard's leading test reads (so it
-  // never re-derives it). Internal only — it never reaches the stored Cliff.
+  // never re-derives it). Internal only — it never reaches the stored OCFVestingScheduleCliff.
   return cliff
     ? {
         state: "RESOLVED",
@@ -412,7 +416,7 @@ const lowerEventCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START">,
   anchor: OCTDate,
   origin: OCTDate,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   period: number,
   occurrences: number,
   ctx: ResolutionContext,
@@ -429,7 +433,7 @@ const lowerEventCliff = (
 
   // The time baseline: lower the time arms as their own cliff (max of them). Its
   // resolved date is the floor in the eventual max(cliffDate, firing).
-  let cliff: Cliff | undefined;
+  let cliff: OCFVestingScheduleCliff | undefined;
   let cliffDate: OCTDate | undefined;
   if (timeArms.length > 0) {
     const timeRes = evaluateVestingNodeExpr(joinLaterOf(timeArms), overlayCtx);
@@ -513,7 +517,7 @@ const lowerEventCliff = (
  */
 export const lowerDeferredCliff = (
   cliffExpr: VestingNodeExpr<"VESTING_START"> | undefined,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   period: number,
   occurrences: number,
   ctx: ResolutionContext,
@@ -536,7 +540,7 @@ export const lowerDeferredCliff = (
     // the grid's own unit is derivable. A cross-unit or richer time arm can't be
     // placed without the start, so it simply contributes no stored baseline (the
     // condition still holds the whole grid).
-    let cliff: Cliff | undefined;
+    let cliff: OCFVestingScheduleCliff | undefined;
     if (timeArms.length === 1) {
       const rel = relativeDurationCliff(
         timeArms[0],
@@ -594,16 +598,16 @@ export const lowerDeferredCliff = (
 };
 
 // A bare `vestingStart + duration` cliff in the grid's own unit, lowered
-// anchor-free. Returns the Cliff, `null` when the duration has no effect (zero
+// anchor-free. Returns the OCFVestingScheduleCliff, `null` when the duration has no effect (zero
 // length, or fewer than one step), or `undefined` when the shape isn't derivable
 // without the firing (a cross-unit duration, an offset/gate the shape-match
 // excludes). The shared shape-match already excludes MINUS and richer shapes.
 const relativeDurationCliff = (
   expr: VestingNodeExpr<"VESTING_START">,
-  periodType: PeriodType,
+  periodType: OCFPeriodType,
   period: number,
   occurrences: number,
-): Cliff | null | undefined => {
+): OCFVestingScheduleCliff | null | undefined => {
   const off = systemAnchorOffset(expr, "VESTING_START");
   if (!off || off.unit !== periodType) return undefined;
   if (off.value <= 0) return null;
@@ -611,7 +615,7 @@ const relativeDurationCliff = (
   if (m === 0) return null;
   return {
     length: off.value,
-    // `off.unit` is a PeriodTag (DAYS/MONTHS); period_type is a PeriodType
+    // `off.unit` is a PeriodTag (DAYS/MONTHS); period_type is an OCFPeriodType
     // (DAYS/MONTHS/YEARS). The assignment widens without a cast because YEARS
     // can't occur here — vestlang source never emits a YEARS duration.
     period_type: off.unit,
