@@ -159,8 +159,14 @@ describe("anti-drift battery — core and mcp agree per template", () => {
 // schema closes that gap. These fixtures prove the gap is closed, positively —
 // each is something the old wire schema accepted and the new one must reject.
 describe("PERSISTED_ARTIFACT — now rejects what it used to accept", () => {
-  const reject = (template: unknown) =>
-    PERSISTED_ARTIFACT.safeParse({ template, runtime: VALID_RUNTIME }).success;
+  // Inject the required VESTING_TERMS tag so each fixture is rejected for its own
+  // reason — the cliff bound, the percentage range, the duplicate order, the
+  // installment cap — not for the missing object_type the shared schema now demands.
+  const reject = (template: Record<string, unknown>) =>
+    PERSISTED_ARTIFACT.safeParse({
+      template: { object_type: "VESTING_TERMS", ...template },
+      runtime: VALID_RUNTIME,
+    }).success;
 
   it("rejects a cliff percentage outside [0, 1]", () => {
     expect(

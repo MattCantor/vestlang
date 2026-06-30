@@ -245,8 +245,8 @@ describe("shared schema — wire-input corners", () => {
   });
 
   // The OCF VESTING_TERMS tag is required: a template lacking object_type is
-  // rejected, with the custom message at the object_type path. This is the case
-  // that proves the requirement bites — every other fixture carries the tag.
+  // rejected, with the custom message at the object_type path. Every other fixture
+  // carries the tag, so this is the only case exercising that rejection.
   it("rejects a template missing object_type", () => {
     const { valid, errors } = validate({
       id: "t",
@@ -257,6 +257,26 @@ describe("shared schema — wire-input corners", () => {
       path: "object_type",
       message: 'must be the literal "VESTING_TERMS"',
     });
+  });
+
+  // The OCF v2 segment carries an optional vesting_day_of_month policy. The schema
+  // accepts it — a strictObject would otherwise reject the unknown key — while
+  // reading it stays a later concern. This pins the accept side, so dropping the
+  // schema key fails here rather than silently rejecting such a segment.
+  it("accepts a schedule segment carrying vesting_day_of_month", () => {
+    const { valid } = validate(
+      tmpl([
+        scheduledStatement({
+          schedule: {
+            occurrences: 48,
+            period: 1,
+            period_type: "MONTHS",
+            vesting_day_of_month: "FIRST_DAY_OF_MONTH",
+          },
+        }),
+      ]),
+    );
+    expect(valid).toBe(true);
   });
 
   // A stray key reports against the statement itself (empty sub-path) — the path
