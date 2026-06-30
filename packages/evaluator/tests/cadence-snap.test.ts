@@ -189,12 +189,10 @@ describe("#253 AC7 — recurring grid unchanged (still snaps to the month-end)",
   });
 });
 
-// VESTING_START_DAY_MINUS_ONE reaches the cliff baseline and the grid end to end:
-// the single picker fix in primitives threads through the cadence stepper and the
-// cliff lowering with no day-of-month logic of its own. The proof is the dates —
-// a Jan-31 monthly grid under MINUS_ONE lands on the clamp-minus-one days (Feb 27,
-// Mar 30, Apr 29, …), distinct from the plain VESTING_START_DAY run, which would
-// sit on Feb 28 / Mar 31 / Apr 30.
+// Under VESTING_START_DAY_MINUS_ONE the cliff baseline and the monthly grid both
+// land on clamp-minus-one days. A Jan-31 monthly grid sits on Feb 27, Mar 30,
+// Apr 29, … — one day before the plain VESTING_START_DAY run (Feb 28 / Mar 31 /
+// Apr 30), and the cliff folds onto that same grid.
 describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end to end", () => {
   const DSL =
     "1000 VEST FROM DATE 2025-01-31 OVER 6 months EVERY 1 month CLIFF 3 months";

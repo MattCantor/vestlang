@@ -6,8 +6,8 @@ import { POLICY_CANDIDATES } from "../src/policy.js";
 // not because it can't be projected (it can, and a caller-supplied hint is
 // threaded through), but because for start days ≤ 28 it is indistinguishable
 // from VESTING_START_DAY seeded a day earlier, so auto-searching it would
-// mislabel ordinary schedules; recovering it from end-of-month streams is filed
-// separately (#503). A drifted candidate set — gaining MINUS_ONE, or dropping a
+// mislabel ordinary schedules; recovering it from end-of-month streams is
+// separate, deferred work. A drifted candidate set — gaining MINUS_ONE, or dropping a
 // computable policy — would silently change what conventions inference can detect.
 describe("POLICY_CANDIDATES", () => {
   it("is exactly the three computable policies, DEFAULT first", () => {
