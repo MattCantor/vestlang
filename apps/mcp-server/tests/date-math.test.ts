@@ -119,4 +119,25 @@ describe("resolveVestingDay", () => {
       "2025-03-20",
     );
   });
+
+  // VESTING_START_DAY_MINUS_ONE subtracts a calendar day after clamping, so a
+  // 1st-of-month input crosses the month (and a January 1st input the year) —
+  // the one rule that doesn't stay in the input's month.
+  it("crosses to the prior month under MINUS_ONE for a 1st-of-month input", () => {
+    expect(resolveVestingDay("2026-02-01", "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2026-01-31",
+    );
+  });
+
+  it("crosses to the prior year under MINUS_ONE for a January 1st input", () => {
+    expect(resolveVestingDay("2026-01-01", "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2025-12-31",
+    );
+  });
+
+  it("stays in month under MINUS_ONE for a mid-month input", () => {
+    expect(resolveVestingDay("2026-02-15", "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2026-02-14",
+    );
+  });
 });

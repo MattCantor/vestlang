@@ -188,3 +188,43 @@ describe("#253 AC7 — recurring grid unchanged (still snaps to the month-end)",
     ]);
   });
 });
+
+// Under VESTING_START_DAY_MINUS_ONE the cliff baseline and the monthly grid both
+// land on clamp-minus-one days. A Jan-31 monthly grid sits on Feb 27, Mar 30,
+// Apr 29, … — one day before the plain VESTING_START_DAY run (Feb 28 / Mar 31 /
+// Apr 30), and the cliff folds onto that same grid.
+describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end to end", () => {
+  const DSL =
+    "1000 VEST FROM DATE 2025-01-31 OVER 6 months EVERY 1 month CLIFF 3 months";
+
+  it("folds the cliff onto the clamp-minus-one day and steps the tail there too", () => {
+    const s = evaluate(DSL, {
+      vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
+    });
+    expect(s.resolution.status).toBe("template");
+    expect(allResolved(s.resolution.installments)).toBe(true);
+    // Grid days under MINUS_ONE: Feb 27, Mar 30, Apr 29, May 30, Jun 29, Jul 30.
+    // CLIFF 3 months lands on the 3rd grid day (2025-04-29), folding 3/6 of the
+    // grant into a 500 lump; the remaining 500 spreads over the last three on
+    // cumulative round-down (166 / 167 / 167).
+    expect(s.resolution.installments).toEqual([
+      { state: "RESOLVED", amount: 500, date: "2025-04-29" },
+      { state: "RESOLVED", amount: 166, date: "2025-05-30" },
+      { state: "RESOLVED", amount: 167, date: "2025-06-29" },
+      { state: "RESOLVED", amount: 167, date: "2025-07-30" },
+    ]);
+  });
+
+  it("stores the cliff as a 3/6 fraction on the interchange template", () => {
+    const s = evaluate(DSL, {
+      vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
+    });
+    expect(s.interchange.status).toBe("template");
+    if (s.interchange.status !== "template") return; // narrow
+    expect(s.interchange.template.statements[0].schedule!.cliff).toEqual({
+      length: 3,
+      period_type: "MONTHS",
+      percentage: "0.5",
+    });
+  });
+});

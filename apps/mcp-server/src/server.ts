@@ -669,7 +669,7 @@ export function createServer(): McpServer {
     {
       title: "Normalize a date under a VestingDayOfMonth rule",
       description:
-        "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. Does not cross months.",
+        "Apply a VestingDayOfMonth rule to the given date's year+month and return the rule's picked day. Useful for questions like 'what does LAST_DAY_OF_MONTH mean for Feb 2026?' — answer: 2026-02-28. The result stays in the input month for three of the four policies; VESTING_START_DAY_MINUS_ONE can land on the prior month's last day (or the prior year's Dec 31 for a January 1st input), since it subtracts a calendar day after clamping.",
       inputSchema: z.strictObject({
         date: ISO_DATE,
         rule: VESTING_DAY_OF_MONTH,

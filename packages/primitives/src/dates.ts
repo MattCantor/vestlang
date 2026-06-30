@@ -111,9 +111,12 @@ export function addMonthsRule(
       case "LAST_DAY_OF_MONTH":
         return lastDay;
       case "VESTING_START_DAY_MINUS_ONE":
-        // The day-before-start math lands in #493; until then it can't be
-        // projected, so fail loudly rather than guess.
-        throw new Error("not yet implemented (#493)");
+        // The same clamped anniversary as VESTING_START_DAY, a calendar day
+        // earlier. The −1 is applied as a date, not an integer: utcMidnight
+        // normalizes a day of 0 to the prior month's last day (and a January
+        // target to the prior year's Dec 31), so a clamped 1st underflows
+        // correctly instead of becoming a bogus day-0.
+        return Math.min(toDate(origin).getUTCDate(), lastDay) - 1;
       default:
         return assertNever(dayOfMonth);
     }
