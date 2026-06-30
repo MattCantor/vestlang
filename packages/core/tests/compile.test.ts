@@ -1115,3 +1115,123 @@ describe("compile — byte-identical output and no over-allocation clamp (#431)"
     expect(sumAmounts(compile(t150, totalShares, runtime))).toBe(7200);
   });
 });
+
+// The day-of-month policy lives on each OCF segment, and the compiler reads it
+// there. These fixtures are *ingested* templates whose segment policy differs from
+// the runtime value, so each test fails if the reader fell back to the runtime
+// value or the canonical default instead of honoring the segment.
+describe("compile — per-segment day-of-month policy", () => {
+  it("the segment's policy drives its grid over both the runtime value and the default", () => {
+    // A mid-month start (the 15th) under a FIRST_DAY_OF_MONTH segment: every
+    // installment snaps to the 1st. A segment-blind reader would land on the 15th
+    // (the default / runtime value), so the 1st is the discriminating answer.
+    const template = mkTemplate("first-of-month", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 3,
+          period: 1,
+          period_type: "MONTHS",
+          vesting_day_of_month: "FIRST_DAY_OF_MONTH",
+        },
+        percentage: "1",
+      },
+    ]);
+
+    // Runtime carries no day-of-month at all (would default to the start day, the 15th).
+    const noRuntimeDom = compile(template, 300, { startDate: "2025-01-15" });
+    expect(noRuntimeDom.map((e) => e.date)).toEqual([
+      "2025-02-01",
+      "2025-03-01",
+      "2025-04-01",
+    ]);
+
+    // Runtime carries a *different* non-default policy (month-end) — the segment
+    // still wins, so the dates don't move.
+    const conflictingRuntimeDom = compile(template, 300, {
+      startDate: "2025-01-15",
+      vestingDayOfMonth: "LAST_DAY_OF_MONTH",
+    });
+    expect(conflictingRuntimeDom.map((e) => e.date)).toEqual([
+      "2025-02-01",
+      "2025-03-01",
+      "2025-04-01",
+    ]);
+  });
+
+  it("two segments with different policies each honor their own", () => {
+    // Segment 1 snaps to the 1st, segment 2 to the month-end, chained off a
+    // mid-month start. The runtime carries a *third* policy (start-day-minus-one),
+    // so neither segment's landing day can have come from the runtime. If one
+    // policy drove both, the two segments would share a landing day.
+    const template = mkTemplate("two-policies", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 2,
+          period: 1,
+          period_type: "MONTHS",
+          vesting_day_of_month: "FIRST_DAY_OF_MONTH",
+        },
+        percentage: "0.5",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 2,
+          period: 1,
+          period_type: "MONTHS",
+          vesting_day_of_month: "LAST_DAY_OF_MONTH",
+        },
+        percentage: "0.5",
+      },
+    ]);
+
+    const events = compile(template, 1000, {
+      startDate: "2025-01-15",
+      vestingDayOfMonth: "VESTING_START_DAY_MINUS_ONE",
+    });
+    // Segment 1 (the 1st) then segment 2 (the month-end), chaining off the handoff
+    // anchor segment 1's policy produced (2025-03-01).
+    expect(events.map((e) => e.date)).toEqual([
+      "2025-02-01",
+      "2025-03-01",
+      "2025-04-30",
+      "2025-05-31",
+    ]);
+  });
+
+  it("a chain handoff uses the producing segment's policy, not the default", () => {
+    // A DAYS segment 2 chains off a MONTHS segment 1, so the handoff date itself is
+    // observable: addDays preserves the anchor's exact day. Segment 1 is
+    // LAST_DAY_OF_MONTH, so off a 2025-01-15 start it ends on 2025-02-28, and the
+    // DAYS segment's +30 lands on 2025-03-30. Under the default policy segment 1
+    // would end on 2025-02-15 and the DAYS installment on 2025-03-17 — so 2025-03-30
+    // proves the handoff used segment 1's own policy. The runtime carries no
+    // day-of-month, so a segment-blind handoff would take the default and miss.
+    const template = mkTemplate("days-off-months", [
+      {
+        order: 1,
+        schedule: {
+          occurrences: 1,
+          period: 1,
+          period_type: "MONTHS",
+          vesting_day_of_month: "LAST_DAY_OF_MONTH",
+        },
+        percentage: "0.5",
+      },
+      {
+        order: 2,
+        schedule: {
+          occurrences: 1,
+          period: 30,
+          period_type: "DAYS",
+        },
+        percentage: "0.5",
+      },
+    ]);
+
+    const events = compile(template, 1000, { startDate: "2025-01-15" });
+    expect(events.map((e) => e.date)).toEqual(["2025-02-28", "2025-03-30"]);
+  });
+});
