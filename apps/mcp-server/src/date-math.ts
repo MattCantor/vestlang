@@ -47,9 +47,13 @@ export function dateDiff(
 }
 
 /**
- * Resolve a date under a VestingDayOfMonth rule, without crossing months.
- * Equivalent to `addMonthsRule(date, 0, rule)`: keeps year+month fixed and
- * applies the rule's day-picker for that month.
+ * Resolve a date under a VestingDayOfMonth rule — equivalent to
+ * `addMonthsRule(date, 0, rule)`, applying the rule's day-picker to the input's
+ * year+month. For three of the four policies the result stays in that month.
+ * VESTING_START_DAY_MINUS_ONE is the exception: it clamps the start-day
+ * anniversary and then subtracts a calendar day, so a 1st-of-month input lands
+ * on the prior month's last day (and a January 1st input on the prior year's
+ * Dec 31).
  */
 export function resolveVestingDay(
   date: OCTDate,

@@ -1,11 +1,14 @@
 import type { VestingDayOfMonth } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 
-// Inference preference order, DEFAULT (VESTING_START_DAY) first. Only the three
-// policies the stepper can actually project are searched — VESTING_START_DAY_MINUS_ONE
-// is excluded because its day math isn't implemented yet (#493), so the auto-search
-// must never originate it. A caller-supplied MINUS_ONE hint is still threaded
-// through; it just throws at projection time rather than being inferred here.
+// Inference preference order, DEFAULT (VESTING_START_DAY) first. The auto-search
+// covers three policies and deliberately excludes VESTING_START_DAY_MINUS_ONE:
+// for start days ≤ 28 it produces the identical stream to VESTING_START_DAY
+// seeded a day earlier, so originating it from an ordinary schedule would just
+// mislabel it. MINUS_ONE is distinct only for 29–31 starts, and recovering it
+// from end-of-month streams is a separate enhancement (#503). A caller-supplied
+// MINUS_ONE hint IS threaded through and now projects correctly — the auto-search
+// simply never originates it on its own.
 export const POLICY_CANDIDATES: readonly VestingDayOfMonth[] = [
   DEFAULT_VESTING_DAY_OF_MONTH,
   "FIRST_DAY_OF_MONTH",

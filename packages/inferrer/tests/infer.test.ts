@@ -450,6 +450,35 @@ describe("inferSchedule — policy detection", () => {
       length: 1,
     });
   });
+
+  it("explicit MINUS_ONE hint projects an end-of-month stream into a clean fit", () => {
+    // The MINUS_ONE grid off a Jan-31 (non-leap) start: each month clamps the
+    // 31st anniversary down, then steps back a day. Before the picker was built
+    // out, projecting under this hint threw "not yet implemented"; now it lowers
+    // cleanly and the result reproduces the input with no residual. (Folding such
+    // an end-of-month stream back into a single uniform is the separate recovery
+    // work in #503 — this only proves the hint projects, bypassing the
+    // POLICY_CANDIDATES auto-search.)
+    const tranches: TrancheInput[] = [
+      { date: d("2025-02-27"), amount: 1000 },
+      { date: d("2025-03-30"), amount: 1000 },
+      { date: d("2025-04-29"), amount: 1000 },
+      { date: d("2025-05-30"), amount: 1000 },
+      { date: d("2025-06-29"), amount: 1000 },
+      { date: d("2025-07-30"), amount: 1000 },
+    ];
+
+    const result = inferSchedule({
+      tranches,
+      policy: "VESTING_START_DAY_MINUS_ONE",
+    });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.diagnostics.vestingDayOfMonth).toBe(
+      "VESTING_START_DAY_MINUS_ONE",
+    );
+    expect(result.diagnostics.totalQuantity).toBe(6000);
+  });
 });
 
 /* ------------------------

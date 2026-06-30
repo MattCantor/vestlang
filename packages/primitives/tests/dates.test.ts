@@ -146,17 +146,40 @@ describe("addMonthsRule — pickDay per day-of-month policy", () => {
     );
   });
 
-  it("VESTING_START_DAY_MINUS_ONE throws — its day math lands in #493", () => {
-    expect(() =>
-      addMonthsRule("2024-01-31", 1, "VESTING_START_DAY_MINUS_ONE"),
-    ).toThrow("not yet implemented (#493)");
-    // The same throw surfaces through addPeriod's MONTHS and YEARS paths.
-    expect(() =>
+  it("VESTING_START_DAY_MINUS_ONE clamps the anniversary, then steps back a day", () => {
+    // Jan-31 monthly: the clamp happens first (Feb has no 31st), then −1 day.
+    expect(addMonthsRule("2024-01-31", 1, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2024-02-28", // leap Feb: clamp 31→29, −1 = 28
+    );
+    expect(addMonthsRule("2023-01-31", 1, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2023-02-27", // non-leap Feb: clamp 31→28, −1 = 27
+    );
+    expect(addMonthsRule("2024-01-31", 2, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2024-03-30", // Mar: no clamp, 31−1 = 30
+    );
+    expect(addMonthsRule("2024-01-31", 3, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2024-04-29", // Apr: clamp 31→30, −1 = 29
+    );
+  });
+
+  it("VESTING_START_DAY_MINUS_ONE underflows a clamped 1st to the prior month/year", () => {
+    // A 1st-of-month anniversary picks day 0, which utcMidnight rolls back: into
+    // the prior month within the year, and across the year boundary for January.
+    expect(addMonthsRule("2025-01-01", 1, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2025-01-31", // Feb anniversary on the 1st, −1 = day 0 → Jan 31
+    );
+    expect(addMonthsRule("2024-12-01", 1, "VESTING_START_DAY_MINUS_ONE")).toBe(
+      "2024-12-31", // Jan-2025 anniversary on the 1st, −1 = day 0 → Dec 31 2024
+    );
+  });
+
+  it("VESTING_START_DAY_MINUS_ONE threads through addPeriod's MONTHS and YEARS paths", () => {
+    expect(
       addPeriod("2024-01-15", 1, "MONTHS", "VESTING_START_DAY_MINUS_ONE"),
-    ).toThrow("not yet implemented (#493)");
-    expect(() =>
+    ).toBe("2024-02-14"); // day 15 doesn't clamp: 15−1 = 14
+    expect(
       addPeriod("2024-01-15", 1, "YEARS", "VESTING_START_DAY_MINUS_ONE"),
-    ).toThrow("not yet implemented (#493)");
+    ).toBe("2025-01-14"); // +12mo → Jan 2025, 15−1 = 14
   });
 });
 

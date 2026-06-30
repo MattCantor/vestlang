@@ -78,6 +78,35 @@ describe("VESTING_START_DAY — anniversary, clamped to month end", () => {
   });
 });
 
+describe("VESTING_START_DAY_MINUS_ONE — clamp the anniversary, then back a day", () => {
+  it("leap Feb: clamp 31→29, −1 = 28", () => {
+    applyTest({
+      src: "2024-01-31",
+      months: 1,
+      rule: "VESTING_START_DAY_MINUS_ONE",
+      expected: "2024-02-28",
+    });
+  });
+
+  it("non-leap Feb: clamp 31→28, −1 = 27", () => {
+    applyTest({
+      src: "2023-01-31",
+      months: 1,
+      rule: "VESTING_START_DAY_MINUS_ONE",
+      expected: "2023-02-27",
+    });
+  });
+
+  it("Apr: clamp 31→30, −1 = 29", () => {
+    applyTest({
+      src: "2024-01-31",
+      months: 3,
+      rule: "VESTING_START_DAY_MINUS_ONE",
+      expected: "2024-04-29",
+    });
+  });
+});
+
 describe("Multiple months forward", () => {
   it("Skip Feb by +2 and land on Mar 31", () => {
     applyTest({
