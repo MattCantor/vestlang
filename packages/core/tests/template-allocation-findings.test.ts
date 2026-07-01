@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { templateAllocationFindings } from "../src/findings";
 import { fractionToNumeric } from "@vestlang/utils";
-import { mkTemplate } from "./helpers";
+import { mkTemplate, template as buildTemplate } from "./helpers";
 
 // templateAllocationFindings re-runs the over/under-allocation check against a
 // stored template, so a persisted artifact can be re-validated without
@@ -64,26 +64,7 @@ describe("templateAllocationFindings (AC#5)", () => {
 
   it("sums across statements, not per-statement", () => {
     // 3/4 + 3/4 = 3/2 over the grant — each statement is fine alone.
-    const template = mkTemplate("t", [
-      {
-        order: 1,
-        schedule: {
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
-        },
-        percentage: "0.75",
-      },
-      {
-        order: 2,
-        schedule: {
-          occurrences: 1,
-          period: 12,
-          period_type: "MONTHS",
-        },
-        percentage: "0.75",
-      },
-    ]);
+    const template = buildTemplate("0.75", "0.75");
     const findings = templateAllocationFindings(template, 4800);
     expect(findings).toEqual([
       {

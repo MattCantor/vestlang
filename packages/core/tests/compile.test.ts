@@ -7,7 +7,7 @@ import type {
   OCFVestingScheduleSegment,
   OCFVestingStatement,
 } from "@vestlang/types";
-import { mkTemplate } from "./helpers";
+import { mkTemplate, template } from "./helpers";
 
 // Conformance suite for the canonical-IR compile (`compile` / `compileToInstallments`).
 
@@ -1064,23 +1064,6 @@ describe("compile — statement ordering and the zero-share boundary", () => {
 // hand-written literals, not snapshots: a snapshot's first run would write-and-pass
 // and certify nothing, so the output is committed inline and a shift fails loudly.
 describe("compile — byte-identical output and no over-allocation clamp (#431)", () => {
-  // The same two-statement shape the #418 / validate.test.ts allocatability block
-  // uses: each statement a single 12-month lump, distinct order. Reused here so the
-  // 100% and 150% cases line up with the checker's fixtures.
-  const statement = (order: number, percentage: string) => ({
-    order,
-    schedule: {
-      occurrences: 1,
-      period: 12,
-      period_type: "MONTHS" as const,
-    },
-    percentage,
-  });
-  const template = (...percentages: string[]) =>
-    mkTemplate(
-      "alloc",
-      percentages.map((p, i) => statement(i + 1, p)),
-    );
   const runtime: VestingRuntime = { startDate: "2024-01-01" };
   const totalShares = 4800;
 
