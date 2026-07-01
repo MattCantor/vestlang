@@ -715,7 +715,7 @@ describe("rehydrate — dated template arm reloads to the direct projection, per
           template,
           grant,
           reloaded.runtime,
-        ).map((i) => ({ date: i.date, amount: i.amount }));
+        );
 
         expect(projected).toEqual(direct);
       });
@@ -748,11 +748,7 @@ describe("rehydrate — THEN-on-event-head chain re-anchors to the fired head wi
       events: { ipo: "2025-06-01" },
     });
     const reloaded = rehydrate(template, sourceMap, runtime, firedCtx);
-    const projected = compileToInstallments(
-      template,
-      GRANT,
-      reloaded.runtime,
-    ).map((i) => ({ date: i.date, amount: i.amount }));
+    const projected = compileToInstallments(template, GRANT, reloaded.runtime);
 
     const program = normalizeProgram(parse(DSL));
     const live = datedProjection(
