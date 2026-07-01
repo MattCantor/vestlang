@@ -16,7 +16,13 @@ import { normalizeProgram } from "@vestlang/normalizer";
 import { floorSharesAt } from "@vestlang/primitives";
 import type { Fraction, OCTDate } from "@vestlang/types";
 import type { EvaluatedSchedule, Installment } from "@vestlang/types";
-import { fracSum, fracCmp, ONE, ZERO } from "@vestlang/utils";
+import {
+  CONTINGENT_START_SENTINEL,
+  fracSum,
+  fracCmp,
+  ONE,
+  ZERO,
+} from "@vestlang/utils";
 import { evaluateProgram } from "../src/evaluate";
 import { evaluateProgramAsOf } from "../src/asof";
 import type { VestedResult } from "../src/asof";
@@ -362,6 +368,21 @@ function checkStream(
   }
 }
 
+// No RESOLVED projection date ever carries the contingent-start sentinel: that
+// value lives only on `runtime.startDate` for a still-pending contingent start,
+// never on the grid a projection materializes. A dateless IMPOSSIBLE tranche has
+// no projection date to check, so it's out of scope here.
+function assertNoSentinelDate(
+  installments: readonly Installment[],
+  label: string,
+): void {
+  for (const i of installments) {
+    if (i.state === "RESOLVED") {
+      expect(i.date, label).not.toBe(CONTINGENT_START_SENTINEL);
+    }
+  }
+}
+
 function checkCell(
   shape: Shape,
   grant: number,
@@ -392,7 +413,18 @@ function checkCell(
       T,
       `${label}\n  surface: interchange.installments`,
     );
+    // Same stream, the negative check: no interchange tranche dates on the sentinel.
+    assertNoSentinelDate(
+      schedule.interchange.installments,
+      `${label}\n  surface: interchange.installments`,
+    );
   }
+
+  // The resolution stream always carries installments; none dates on the sentinel.
+  assertNoSentinelDate(
+    schedule.resolution.installments,
+    `${label}\n  surface: resolution.installments`,
+  );
 
   // Findings track the validity class exactly (a zero-share grant raises neither).
   if (grant > 0) {
@@ -414,6 +446,12 @@ function checkCell(
   for (const asOf of AS_OFS) {
     const r = evaluateProgramAsOf(program, { ...base, asOf });
     const asOfLabel = `${label}\n  asOf:   ${asOf}${partitionLabel(r)}`;
+
+    // The sentinel never surfaces as a real vest date in either dated partition.
+    // `r.impossible` is dateless and deliberately not checked.
+    assertNoSentinelDate(r.vested, `${asOfLabel}\n  surface: vested`);
+    assertNoSentinelDate(r.unvested, `${asOfLabel}\n  surface: unvested`);
+
     const total =
       sumAmounts(r.vested) +
       sumAmounts(r.unvested) +

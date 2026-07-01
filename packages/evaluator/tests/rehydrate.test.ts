@@ -10,7 +10,9 @@ import type {
   Amount,
   AsOfContextInput,
   Blocker,
+  Installment,
   ResolutionContextInput,
+  ResolvedInstallment,
   Statement,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
@@ -70,6 +72,16 @@ const portion = (numerator: number, denominator: number): Amount => ({
 });
 
 const sum = (xs: { amount: number }[]) => xs.reduce((a, x) => a + x.amount, 0);
+
+// The RESOLVED tranches of an installment stream, reduced to the bare
+// {date, amount} pair a compiled projection carries — the common shape for
+// comparing a persist→rehydrate projection against a direct evaluate.
+const datedProjection = (
+  installments: readonly Installment[],
+): { date: string; amount: number }[] =>
+  installments
+    .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+    .map((i) => ({ date: i.date, amount: i.amount }));
 
 // Recursively search a blocker tree for the unfired-event leaf.
 const findsEventNotOccurred = (bs: Blocker[], event: string): boolean =>
@@ -662,5 +674,87 @@ describe("rehydrate — event_condition firings (#255)", () => {
       event_id: "ipo",
       date: "2027-07-01",
     });
+  });
+});
+
+// A fully-dated template arm (no events, no contingent start) reloads to exactly
+// the projection a direct evaluate produces — per installment, not just in total.
+// The stored template already carries the schedule-whole apportioned percentages,
+// so the compile∘rehydrate path and the direct resolution compile the SAME
+// template and must agree share-for-share — terminating and repeating fractions
+// alike, since both truncate a stored decimal identically. Grants match the
+// conservation sweep's spread so the odd-share placement is exercised too.
+describe("rehydrate — dated template arm reloads to the direct projection, per installment", () => {
+  const GRANTS = [0, 1, 7, 100, 4800] as const;
+  const CASES: { name: string; dsl: string }[] = [
+    {
+      name: "terminating THEN chain (1/4, 3/4)",
+      dsl: "1/4 VEST OVER 12 months EVERY 1 month THEN 3/4 VEST OVER 36 months EVERY 1 month",
+    },
+    {
+      // Thirds at a non-divisible grant split [33, 33, 34]; the stored template
+      // carries the truncated decimals, and both projection paths read them.
+      name: "repeating THEN chain (thirds)",
+      dsl: "1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month",
+    },
+  ];
+
+  for (const { name, dsl } of CASES) {
+    for (const grant of GRANTS) {
+      it(`${name} at grant ${grant}`, () => {
+        const ctx = ctxInput({ grantQuantity: grant });
+
+        const program = normalizeProgram(parse(dsl));
+        const direct = datedProjection(
+          evaluateProgram(program, ctx).resolution.installments,
+        );
+
+        const { template, sourceMap, runtime } = storedFromDsl(dsl, ctx);
+        const reloaded = rehydrate(template, sourceMap, runtime, ctx);
+        const projected = compileToInstallments(
+          template,
+          grant,
+          reloaded.runtime,
+        );
+
+        expect(projected).toEqual(direct);
+      });
+    }
+  }
+});
+
+// A THEN chain whose head is an event-contingent start persists with the sentinel
+// held; once the head fires, reloading re-anchors the whole chain to the fired
+// date and the projection matches a live evaluate share-for-share. Terminating
+// shares (1/4, 3/4) isolate the re-anchor's amount fidelity from any percentage
+// truncation — this pins the amount that flows through a fired re-anchor, not the
+// tail-before-head ordering already pinned elsewhere.
+describe("rehydrate — THEN-on-event-head chain re-anchors to the fired head with amount fidelity", () => {
+  const DSL =
+    "1/4 VEST FROM EVENT ipo OVER 1 month EVERY 1 month THEN 3/4 VEST OVER 1 month EVERY 1 month";
+  const GRANT = 4800;
+
+  it("projects the live schedule after the head fires at the persist boundary", () => {
+    // Persist with the head unfired: the contingent start stores as the sentinel.
+    const { template, sourceMap, runtime } = storedFromDsl(
+      DSL,
+      ctxInput({ grantQuantity: GRANT }),
+    );
+    expect(runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+
+    // Fire the head, reload, and project the frozen template under the re-derived start.
+    const firedCtx = ctxInput({
+      grantQuantity: GRANT,
+      events: { ipo: "2025-06-01" },
+    });
+    const reloaded = rehydrate(template, sourceMap, runtime, firedCtx);
+    const projected = compileToInstallments(template, GRANT, reloaded.runtime);
+
+    const program = normalizeProgram(parse(DSL));
+    const live = datedProjection(
+      evaluateProgram(program, firedCtx).resolution.installments,
+    );
+
+    expect(projected).toEqual(live);
   });
 });
