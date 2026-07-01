@@ -523,6 +523,21 @@ export type InterchangeVerdict =
  * `AFTER`/LATER OF watch the on/after side). `consequence` then says how much is at
  * stake if that firing lands: `flips-to-impossible` (a gate the grant can't satisfy →
  * dead grant) vs `grid-shift` (a selector re-anchoring → the schedule just moves).
+ *
+ * Materiality invariant. Disclose an assumed-absent event exactly when a firing of it
+ * could actually change the resolved result, and stamp `through` as the date up to
+ * which the firing could still move it. What "could change the result" means depends
+ * on the selector that committed the floor:
+ *   - LATER OF (the result is the max of its arms): a committed arm's assumption is
+ *     material only if that arm is the unique strict max of its fold. A tied or
+ *     dominated committed floor cannot move the max, so it is immaterial and stays
+ *     silent.
+ *   - EARLIER OF (the result is the min of its arms): every pending sibling of a
+ *     committed floor is material — a firing before the floor pulls the min earlier —
+ *     so the harvest is winner-blind, with no dominated/tied silencing.
+ *   - Undecidable arm (a deferred, vesting-start-relative time arm, whose date can't be
+ *     known until the start resolves): there is no coherent `through` to stamp, so stay
+ *     silent until the start resolves (see #509).
  */
 export interface AbsenceAssumption extends AbsenceDescriptor {
   eventId: string;

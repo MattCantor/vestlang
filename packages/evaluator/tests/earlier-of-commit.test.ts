@@ -3,6 +3,8 @@
 // no longer freezes the grid. The interchange verdict stays firing-blind and never
 // commits. These crystallize the issue's numbered acceptance criteria.
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type { AsOfContextInput, Blocker } from "@vestlang/types";
@@ -600,6 +602,120 @@ describe("#473 — deferred cliff harvests the gated disclosure", () => {
       schedule.absenceAssumptions.find((a) => a.eventId === "e"),
     ).toBeUndefined();
     expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
+});
+
+// A top-level EARLIER OF cliff on a deferred (anchor-free) start. A pending start —
+// a bare event (`FROM EVENT g`) or a combinator — routes the cliff through
+// `lowerDeferredCliff`'s final fall-through: an EARLIER OF is acceleration, so it
+// never decomposes to an event_condition, and a combinator has no derivable relative
+// duration. Even without the start date, an absolute DATE arm folds to a committed
+// floor with the unfired EVENT arm as a pending sibling; that floor leans on the event
+// staying absent, so it discloses exactly as the anchored (dated-start) twin does. These pin
+// the disclosure, its discharge, the two cells that stay silent, and the self-limit.
+describe("deferred top-level EARLIER OF cliff discloses its committed floor", () => {
+  const deferred = (overrides: Partial<AsOfContextInput> = {}) =>
+    ctx({
+      grantDate: "2025-01-01",
+      grantQuantity: 4800,
+      events: {},
+      ...overrides,
+    });
+
+  it("discloses the committed floor's unfired event through the floor date", () => {
+    const dsl =
+      "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF EARLIER OF (DATE 2026-01-01, EVENT e)";
+    const schedule = evaluateProgram(prog(dsl), deferred());
+    expect(schedule.resolution.status).toBe("unresolved");
+    // The 2026-01-01 floor leans on `e` staying absent — an earlier firing re-grids
+    // the cliff — so `e` is disclosed through it. The start's own `g` wait is a bare,
+    // boundary-less blocker, so it is not an absence assumption.
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "e",
+      through: "2026-01-01",
+      direction: "before",
+      inclusive: false,
+      consequence: "grid-shift",
+    });
+    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+      through: "2026-01-01",
+    });
+    expect(
+      schedule.absenceAssumptions.find((a) => a.eventId === "g"),
+    ).toBeUndefined();
+  });
+
+  it("discloses the same floor under a combinator (synthetic-event) start", () => {
+    // The harvest sits at a fall-through every deferred-start shape reaches, so a
+    // combinator start discloses the same committed-floor event as a bare-event start:
+    // the cliff floor is the same absolute date regardless of start shape.
+    const dsl =
+      "VEST FROM EARLIER OF (EVENT a, EVENT b) OVER 48 months EVERY 1 month CLIFF EARLIER OF (DATE 2026-01-01, EVENT e)";
+    const schedule = evaluateProgram(prog(dsl), deferred());
+    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.absenceAssumptions).toContainEqual({
+      eventId: "e",
+      through: "2026-01-01",
+      direction: "before",
+      inclusive: false,
+      consequence: "grid-shift",
+    });
+  });
+
+  it("does not disclose a floor event that has already fired", () => {
+    // `e` fired before the DATE floor, so the EARLIER OF fold reads the real firing
+    // (RESOLVED, not COMMITTED): the harvest is empty and nothing is disclosed for `e`.
+    // The start `g` is still pending, so the schedule stays unresolved.
+    const dsl =
+      "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF EARLIER OF (DATE 2026-01-01, EVENT e)";
+    const schedule = evaluateProgram(
+      prog(dsl),
+      deferred({ events: { e: "2025-07-01" } }),
+    );
+    expect(schedule.resolution.status).toBe("unresolved");
+    expect(
+      schedule.absenceAssumptions.find((a) => a.eventId === "e"),
+    ).toBeUndefined();
+    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
+
+  it("stays fully silent when the floor arm is measured from the vesting start", () => {
+    // With the time arm relative to the (still-pending) vesting start, the arm can't
+    // resolve under the start-blind ctx, so the fold never commits to a floor and there
+    // is no coherent `through` to stamp. `e` is emitted nowhere — neither an absence
+    // assumption nor a bare pending blocker. This full silence is intended; surfacing a
+    // date-less blocker during the pending window is deferred to #509.
+    const dsl =
+      "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT e)";
+    const schedule = evaluateProgram(prog(dsl), deferred());
+    expect(schedule.resolution.status).toBe("unresolved");
+    expect(
+      schedule.absenceAssumptions.find((a) => a.eventId === "e"),
+    ).toBeUndefined();
+    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+  });
+
+  it("discloses nothing when the deferred cliff has no committed floor", () => {
+    // A DAYS cliff on a MONTHS grid is cross-unit, so it can't derive a relative
+    // duration and reaches the same fall-through — but it has no EARLIER OF / event
+    // floor, so the harvest is empty. The fix must not over-fire: only `g`'s bare wait
+    // remains, and it is not disclosed.
+    const dsl = "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF +90 days";
+    const schedule = evaluateProgram(prog(dsl), deferred());
+    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.absenceAssumptions).toEqual([]);
+  });
+});
+
+// The materiality invariant is written down in the types, not just in reviewers'
+// heads. Anchor on the stable heading only, so minor wording edits don't break it.
+describe("the materiality invariant is recorded in the types", () => {
+  it("evaluation.ts carries the invariant comment block", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("../../types/src/evaluation.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(source).toContain("Materiality invariant");
   });
 });
 
