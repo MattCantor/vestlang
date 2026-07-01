@@ -17,21 +17,10 @@ import {
   validateTemplateAllocatable,
 } from "../src/validate";
 import type { VestingRuntime } from "@vestlang/types";
-import { mkTemplate } from "./helpers";
+import { template as buildTemplate } from "./helpers";
 
 // Two 0.75 statements sum to 150% — structurally well-formed, over-allocating.
-const template = mkTemplate("alloc", [
-  {
-    order: 1,
-    schedule: { occurrences: 1, period: 12, period_type: "MONTHS" },
-    percentage: "0.75",
-  },
-  {
-    order: 2,
-    schedule: { occurrences: 1, period: 12, period_type: "MONTHS" },
-    percentage: "0.75",
-  },
-]);
+const template = buildTemplate("0.75", "0.75");
 
 const runtime: VestingRuntime = { startDate: "2024-01-01" };
 

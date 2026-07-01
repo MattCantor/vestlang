@@ -9,7 +9,7 @@ import {
 import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import type { VestingRuntime } from "@vestlang/types";
-import { mkTemplate } from "./helpers";
+import { mkTemplate, template } from "./helpers";
 
 // A well-formed graded template: two chained DATE statements, with an on-grid
 // cliff on the first.
@@ -630,24 +630,6 @@ describe("validateVestingRuntime — edge branches", () => {
 // bounds the share-of-grant, so a 150% template reads structurally valid; this
 // combined function is the one whose `valid` means "safe to allocate."
 describe("validateTemplateAllocatable (#418)", () => {
-  // A scheduled statement carrying a given share-of-grant percentage, with a
-  // distinct order so the template stays structurally valid (no duplicate order).
-  const statement = (order: number, percentage: string) => ({
-    order,
-    schedule: {
-      occurrences: 1,
-      period: 12,
-      period_type: "MONTHS" as const,
-    },
-    percentage,
-  });
-
-  const template = (...percentages: string[]) =>
-    mkTemplate(
-      "alloc",
-      percentages.map((p, i) => statement(i + 1, p)),
-    );
-
   it("flags an over-allocating template as invalid (the seam: structural validator still passes it)", () => {
     // Two statements each at 0.75 sum to 150% over the grant.
     const t = template("0.75", "0.75");
