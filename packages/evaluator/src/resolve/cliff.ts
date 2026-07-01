@@ -586,15 +586,28 @@ export const lowerDeferredCliff = (
   // pending), dropping the vestingStart placeholder — that pending-ness is the
   // start's, reported on the start, not doubled onto the cliff. An ungated one (a
   // cross-unit duration) simply stays unresolved until the firing date arrives.
+  //
+  // Whether gated-and-satisfied or ungated, a top-level `EARLIER OF (DATE d, EVENT e)`
+  // reaches here — it's acceleration, so it never decomposes to an event_condition,
+  // and a combinator has no derivable relative duration. Its DATE arm still folds to a
+  // committed floor with `e` as a pending sibling, so harvest that floor (mirroring the
+  // anchored path) so it doesn't read as certain, dropping any vestingStart placeholder
+  // (the start's pending-ness, not the cliff's). A cliff with no committed floor yields
+  // an empty harvest and stays silent. The gated branch already folded the expression
+  // to check its gate, so read the floor off that fold rather than repeating it.
+  let disclosures: Blocker[];
   if (isGatedNode(cliffExpr)) {
     const res = evaluateVestingNodeExpr(cliffExpr, ctx);
     const gate = gateVerdict(res, (bs) =>
       bs.filter((b) => !isVestingStartPlaceholder(b)),
     );
     if (gate) return gate;
+    disclosures = isPickedCommitted(res) ? res.meta.disclosures : [];
+  } else {
+    disclosures = committedCliffDisclosures(cliffExpr, ctx);
   }
-
-  return { state: "UNRESOLVED", blockers: [], shape: { kind: "symbolic" } };
+  const blockers = disclosures.filter((b) => !isVestingStartPlaceholder(b));
+  return { state: "UNRESOLVED", blockers, shape: { kind: "symbolic" } };
 };
 
 // A bare `vestingStart + duration` cliff in the grid's own unit, lowered
