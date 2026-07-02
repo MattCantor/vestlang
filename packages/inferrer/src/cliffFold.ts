@@ -65,6 +65,11 @@ export function foldCliffs(
         cliffSteps: k,
         tailOccurrences: u.occurrences,
         perTrancheAmount: u.perTrancheAmount,
+        // Populate the widened vocabulary with exactly today's derived values.
+        // Reading the fold's "true total" (`s.amount + u.total`) instead would
+        // diverge on jittery folded tails and break the byte-unchanged gate.
+        total: u.perTrancheAmount * (k + u.occurrences),
+        cliffLength: k * u.cadence.length,
       });
       usedSingles.add(s);
       usedUniforms.add(u);

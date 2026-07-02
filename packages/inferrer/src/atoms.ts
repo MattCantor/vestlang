@@ -68,9 +68,11 @@ function buildSingle(c: SingleTrancheComponent): Statement {
 }
 
 function buildCliffUniform(c: CliffUniformComponent): Statement {
+  // Read the component's own total and cliff duration rather than re-deriving
+  // from rate × steps. Identity for every on-cadence shape the pipeline emits
+  // today; the point is that an off-cadence cliff length or a non-whole-multiple
+  // total renders faithfully the moment a constructor supplies one.
   const totalSteps = c.cliffSteps + c.tailOccurrences;
-  const total = c.perTrancheAmount * totalSteps;
-  const cliffDurationValue = c.cliffSteps * c.cadence.length;
   const periodicity: VestingPeriod = {
     type: c.cadence.unit,
     length: c.cadence.length,
@@ -81,7 +83,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
       offsets: [
         {
           type: "DURATION",
-          value: cliffDurationValue,
+          value: c.cliffLength,
           unit: c.cadence.unit,
           sign: "PLUS",
         },
@@ -90,7 +92,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
   };
   return {
     type: "STATEMENT",
-    amount: { type: "QUANTITY", value: total },
+    amount: { type: "QUANTITY", value: c.total },
     expr: {
       type: "SCHEDULE",
       vesting_start: bareDate(c.grantDate),

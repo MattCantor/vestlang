@@ -41,7 +41,11 @@ function sortInput(tranches: TrancheInput[]): TrancheInput[] {
 }
 
 /** The date of a component's earliest installment — for a folded cliff, that's
- * the cliff date (cliffSteps periods after the walked-back vesting start). */
+ * the cliff date (cliffSteps periods after the walked-back vesting start). This
+ * stays cliffSteps-derived rather than reading the component's `cliffLength`: it's
+ * correct for everything stage 2a emits, since the folds only ever produce
+ * on-cadence cliffs (where `cliffLength === cliffSteps × cadence.length`). Stage 2b
+ * revisits this once off-cadence folds exist. */
 function firstInstallmentDate(
   c: Component,
   policy: VestingDayOfMonth,

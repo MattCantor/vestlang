@@ -143,6 +143,9 @@ function tryHeadCliff(
         cliffSteps: k,
         tailOccurrences: run.occurrences,
         perTrancheAmount: run.perTrancheAmount,
+        // Widened vocabulary, populated with exactly today's derived values.
+        total: run.perTrancheAmount * (k + run.occurrences),
+        cliffLength: k * cadence.length,
       },
       dates: [lumpDate, ...run.dates],
     };

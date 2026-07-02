@@ -52,7 +52,19 @@ export interface CliffUniformComponent {
   cadence: { unit: PeriodTag; length: number };
   cliffSteps: number;
   tailOccurrences: number;
+  /** Write-only as of stage 2a: the constructors still populate it, but
+   * `buildCliffUniform` now reads `total` instead of deriving from this rate.
+   * Stage 2b reshapes the component wholesale, so it stays put for now. */
   perTrancheAmount: number;
+  /** Exact total shares for cliff + tail — the authoritative quantity, mirroring
+   * `UniformComponent.total`. Once rounding makes per-tranche amounts unequal the
+   * total is no longer a clean multiple of any single rate, so it's carried
+   * explicitly rather than reconstructed. */
+  total: number;
+  /** Cliff duration in the cadence's own unit — generalizing today's implicit
+   * `cliffSteps × cadence.length` so a cliff off the installment grid can be
+   * expressed (e.g. a 5-month cliff on an every-3-months cadence). */
+  cliffLength: number;
 }
 
 export type Component =
