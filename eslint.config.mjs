@@ -29,6 +29,9 @@ export default tseslint.config(
       "vendor/**",
       "apps/docs/**",
       "docs/**",
+      // Inferrer characterization scaffolding: excluded from tsconfig.lint.json's
+      // program, so the type-aware parser would throw "file not in project" here.
+      "packages/inferrer/experiments/**",
       "**/*.peggy",
     ],
   },

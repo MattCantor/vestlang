@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreWorkspaces": ["apps/docs"],
-  "ignore": ["docs/**"],
+  "ignore": ["docs/**", "packages/inferrer/experiments/**"],
   "ignoreDependencies": ["prettier-plugin-pegjs"],
   "workspaces": {
     "packages/vestlang": {

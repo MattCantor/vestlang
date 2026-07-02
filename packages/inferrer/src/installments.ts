@@ -21,7 +21,17 @@ export function resolvedInstallmentMap(
   stmt: Statement,
   ctx: ResolutionContextInput,
 ): Map<OCTDate, number> | null {
-  const { installments } = evaluateStatement(stmt, ctx).resolution;
+  let installments;
+  try {
+    ({ installments } = evaluateStatement(stmt, ctx).resolution);
+  } catch {
+    // A candidate whose grid overflows the exact-integer allocator throws here.
+    // This is the one uncontained evaluator round-trip the pre-grant fold reaches,
+    // so guard it centrally: a throwing round-trip reads like an unresolved one and
+    // rejects the fold candidate (null). coincidentCliff's caller is already
+    // contained one level up via installmentDates' try/catch.
+    return null;
+  }
   const map = new Map<OCTDate, number>();
   for (const inst of installments) {
     if (inst.state !== "RESOLVED") return null;

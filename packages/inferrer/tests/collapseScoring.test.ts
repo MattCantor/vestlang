@@ -6,9 +6,11 @@ import type { ResolutionContextInput } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import {
   collapseAgainstInput,
+  programStatus,
   residualAgainstInput,
   type VerifyContext,
 } from "../src/verify.js";
+import { resolvedInstallmentMap } from "../src/installments.js";
 import type { TrancheInput } from "../src/types.js";
 
 const DOM = "VESTING_START_DAY" as const;
@@ -80,7 +82,8 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
 
   // The per-statement pass and the collapse don't merely round differently — a
   // THEN chain the per-statement pass can't score at all (its tail has no anchor
-  // of its own and throws) is exactly the kind of program a consumer collapses
+  // of its own, so the inner evaluate throws, which the pass contains as a
+  // +Infinity residual) is exactly the kind of program a consumer collapses
   // without trouble. The reported residual has to come from the collapse, or a
   // chained candidate could never be scored honestly.
   it("collapse scoring handles a chain the per-statement pass cannot", () => {
@@ -104,7 +107,12 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
       vestingDayOfMonth: DOM,
     };
 
-    expect(() => residualAgainstInput(program, input, ctx)).toThrow();
+    // The per-statement pass has no anchor for the chained tail, so its inner
+    // evaluate throws and the pass scores it as a rejecting +Infinity residual
+    // rather than letting the throw escape.
+    expect(residualAgainstInput(program, input, ctx).residual).toBe(
+      Number.POSITIVE_INFINITY,
+    );
 
     const { residual, status } = collapseAgainstInput(program, input, ctx);
     expect(residual).toBeCloseTo(0, 6);
@@ -141,5 +149,43 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
       ctx,
     );
     expect(inferred.diagnostics.residualError).toBeCloseTo(collapseResidual, 6);
+  });
+});
+
+describe("the containment guards score an un-evaluable candidate out of contention", () => {
+  // Each guard wraps an evaluator round-trip in try/catch so a candidate that
+  // throws mid-scoring loses instead of escaping inferSchedule (the crash-
+  // containment suite drives the MAX_SAFE_INTEGER allocator overflow that motivated
+  // it). A schedule that expands past the installment cap is another evaluator
+  // throw the same catch has to swallow — a direct, minimal one — so use it to pin
+  // each catch site's reject value on the throwing path the corpus doesn't force.
+  const throwing = normalizeProgram(
+    parse("100 VEST OVER 100000 months EVERY 1 month"),
+  );
+  const ctx: VerifyContext = {
+    grantDate: "2024-01-01",
+    totalQuantity: 100,
+    vestingDayOfMonth: DOM,
+  };
+  const input: TrancheInput[] = [{ date: "2024-02-01", amount: 100 }];
+
+  it("collapseAgainstInput returns a +Infinity residual with status impossible", () => {
+    const { residual, status } = collapseAgainstInput(throwing, input, ctx);
+    expect(residual).toBe(Number.POSITIVE_INFINITY);
+    expect(status).toBe("impossible");
+  });
+
+  it("programStatus returns impossible", () => {
+    expect(programStatus(throwing, ctx)).toBe("impossible");
+  });
+
+  it("resolvedInstallmentMap returns null", () => {
+    const resCtx: ResolutionContextInput = {
+      grantDate: "2024-01-01",
+      events: {},
+      grantQuantity: 100,
+      vesting_day_of_month: DOM,
+    };
+    expect(resolvedInstallmentMap(throwing[0], resCtx)).toBeNull();
   });
 });
