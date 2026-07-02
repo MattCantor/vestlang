@@ -9,8 +9,8 @@
 // run; if nothing verifies, the literal per-date fallback keeps the projection
 // invariant.
 //
-// This is the stage-2b core, measured behind the pluggable sweep runner. It does
-// not touch `inferSchedule`; 2c wires it in and retires the search machinery.
+// `inferSchedule` delegates here, and the experiments sweep runner drives the
+// same entry points behind the pluggable `InferrerFn`.
 
 import { parse } from "@vestlang/dsl";
 import { evaluateProgram } from "@vestlang/evaluator";
@@ -33,13 +33,15 @@ import { bareLumpStmt } from "./emit.js";
 import { candidates } from "./families.js";
 import {
   aggregateProjection,
+  bucketByDate,
   DEFAULT_DOM,
   type Projection,
   type Row,
 } from "./solvers.js";
 
 /** Assignable to the sweep runner's `InferrerFn` (a wider 2-arg call site); the
- *  optional third arg is the trusted policy hint the 2c wiring passes. */
+ *  optional third arg is the trusted day-of-month policy hint the caller may
+ *  supply. */
 export type AnalyticInferrer = (
   tranches: TrancheInput[],
   grantDate: OCTDate,
@@ -179,16 +181,10 @@ function fallback(rows: Row[], grantDate: OCTDate): AnalysisResult {
 }
 
 function aggregateRows(tranches: TrancheInput[]): Row[] {
-  const byDate = new Map<OCTDate, number>();
-  for (const t of tranches)
-    byDate.set(t.date, (byDate.get(t.date) ?? 0) + t.amount);
   // Deviation: aggregate same-date rows, then DROP zero-total dates before
   // decomposition (matching the pipeline's `occupied()`). The evaluator never
   // emits a zero-amount installment, so on real streams this drops nothing.
-  return [...byDate.entries()]
-    .map(([date, amount]) => ({ date, amount }))
-    .filter((r) => r.amount !== 0)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return bucketByDate(tranches, true);
 }
 
 /** The wired entry point: decompose → hypothesize → verify, returning the full
@@ -207,7 +203,12 @@ export function analyze(
     // keeps owning it); fall back rather than decompose an empty date set.
     if (rows.length === 0 || T === 0) return fallback(rows, grantDate);
 
-    const target = aggregateProjection(rows);
+    // `rows` are already bucketed and code-unit sorted, so the verify target is a
+    // straight field rename (amount → total), not a second bucket-by-date pass.
+    const target: Projection = rows.map((r) => ({
+      date: r.date,
+      total: r.amount,
+    }));
     const seen = new Set<string>();
     let evals = 0;
     for (const cand of candidates(rows, T, grantDate, policyHint)) {

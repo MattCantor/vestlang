@@ -104,6 +104,10 @@ describe("inferSchedule — cliff", () => {
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months/i);
     expect(result.dsl).toContain("FROM DATE 2024-01-01");
+    // The recovered cliff holds 12 months (the one-year hold before the tail).
+    expect(
+      result.decomposition.find((c) => c.tag === "cliff")?.cliffLength,
+    ).toBe(12);
   });
 
   it("cliff amount that is not an integer multiple → no cliff (recovers as a THEN chain)", () => {
@@ -190,6 +194,10 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months EVERY 1 month/i);
     expect(result.dsl).toContain("FROM DATE 2023-10-01");
+    // The 3 pre-grant months read as a 3-month cliff onto the grant date.
+    expect(
+      result.decomposition.find((c) => c.tag === "cliff")?.cliffLength,
+    ).toBe(3);
   });
 
   it("off-grid lump (hire date) on the grant date → a pre-grant fold, no cliff", () => {
@@ -491,10 +499,10 @@ describe("inferSchedule — policy detection", () => {
   });
 
   it("day-31-start MINUS_ONE stream recovers under MINUS_ONE with no hint", () => {
-    // The #503 mechanism through the real public surface: a month-end (day-31 seed)
-    // train projected under VESTING_START_DAY_MINUS_ONE is recovered — dom and all —
-    // with NO policy hint supplied, because the month-end pattern's derived
-    // candidate set includes MINUS_ONE.
+    // A month-end (day-31 seed) train projected under VESTING_START_DAY_MINUS_ONE is
+    // recovered — dom and all — with NO policy hint supplied, because the month-end
+    // day pattern's derived candidate set includes MINUS_ONE. Exercised through the
+    // real public surface.
     const stmt = normalizeProgram(
       parse("6000 VEST FROM DATE 2024-01-31 OVER 6 months EVERY 1 month"),
     )[0];
@@ -600,11 +608,11 @@ describe("inferSchedule — THEN chain recovery", () => {
   });
 });
 
-describe("inferSchedule — collapse residual honesty (#147)", () => {
+describe("inferSchedule — a lump plus a fast train does not re-allocate the train's mass onto the grant date", () => {
   it("a lump plus a fast train reproduces without re-allocating onto the grant date", () => {
-    // The #147 repro: a 360-share lump on the grant date, then 105 every three
-    // days. The emitted DSL, re-evaluated the way a consumer does (one collapsed
-    // program walk), must not re-allocate the train's mass back onto the grant date.
+    // A 360-share lump on the grant date, then 105 every three days. The emitted
+    // DSL, re-evaluated the way a consumer does (one collapsed program walk), must
+    // not re-allocate the train's mass back onto the grant date.
     const tranches: TrancheInput[] = [{ date: "2025-02-01", amount: 360 }];
     for (
       let day = new Date("2025-02-04T00:00:00Z");
@@ -710,9 +718,15 @@ function runRoundTrip(c: RoundTripCase) {
   };
   const reTranches = evalProgramResolved(inferredProgram, inferredCtx);
   const reByDate = new Map(reTranches.map((t) => [t.date, t.amount]));
+  const origByDate = new Map(originalTranches.map((t) => [t.date, t.amount]));
+  // Symmetric both ways: every original date reproduces its total, AND the
+  // recovery introduces no date outside the original set (a one-directional check
+  // would miss an extra dated tranche the recovered program happened to add).
   for (const t of originalTranches) {
-    const got = reByDate.get(t.date) ?? 0;
-    expect(got).toBeCloseTo(t.amount, 6);
+    expect(reByDate.get(t.date) ?? 0).toBeCloseTo(t.amount, 6);
+  }
+  for (const t of reTranches) {
+    expect(origByDate.get(t.date) ?? 0).toBeCloseTo(t.amount, 6);
   }
   return inferred;
 }
@@ -935,7 +949,7 @@ describe("inferSchedule — data-adaptive cadence", () => {
     expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
   });
 
-  it("flat biweekly → one plain uniform at 14-day cadence (issue #3)", () => {
+  it("flat biweekly → one plain uniform at 14-day cadence", () => {
     const result = inferSchedule({
       tranches: everyDays("2024-01-01", 14, 26, 500),
     });
@@ -947,7 +961,7 @@ describe("inferSchedule — data-adaptive cadence", () => {
     });
   });
 
-  it("arbitrary 45-day cadence → one plain uniform (issue #3)", () => {
+  it("arbitrary 45-day cadence → one plain uniform", () => {
     const result = inferSchedule({
       tranches: everyDays("2024-01-01", 45, 8, 750),
     });

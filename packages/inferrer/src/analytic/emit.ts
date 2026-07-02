@@ -1,18 +1,16 @@
 // Typed emission for the analytic core. Every candidate is built as a normalized
 // Statement (or a chain of them) — never string templating — so the DSL a
 // consumer receives is the flat print of the exact AST the inferrer scored. The
-// 2a-widened `CliffUniformComponent` (carrying `total` and an off-grid
-// `cliffLength`) exists precisely so this layer can emit any month cliff length
-// and a statement's true total.
+// `CliffUniformComponent` carries an explicit `total` and an any-month
+// `cliffLength`, so this layer can emit any month cliff length and a statement's
+// true total.
 //
-// Anchors are placed DIRECTLY — the candidate carries the vesting start it
-// derived, and the emitted `FROM DATE <start>` names exactly that date. (The 2a
-// `buildUniform` instead takes a first-installment date and walks one period
-// back to the anchor, which is lossy for a month-end start: no calendar date
-// walks back onto a day-31 anchor under VESTING_START_DAY(_MINUS_ONE). The cliff
-// builder already places its anchor directly, via the `grantDate` field.) The
-// emitted DSL carries no day-of-month — that's a runtime input the verifier
-// passes as the evaluation context — so emission needs no policy.
+// Anchors are placed DIRECTLY as `FROM DATE <start>`: the candidate carries the
+// vesting start it derived and the emitted anchor names exactly that date. This
+// is the only lossless choice for a month-end start — no calendar date walks back
+// onto a day-31 anchor under VESTING_START_DAY(_MINUS_ONE). The emitted DSL
+// carries no day-of-month — that's a runtime input the verifier passes as the
+// evaluation context — so emission needs no policy.
 
 import type {
   OCTDate,
@@ -20,8 +18,6 @@ import type {
   Program,
   Statement,
   VestingDayOfMonth,
-  VestingNodeExpr,
-  VestingPeriod,
 } from "@vestlang/types";
 import { asChainedTail, buildStatement } from "../atoms.js";
 import type { HypothesisFamily } from "../types.js";
@@ -49,11 +45,6 @@ export interface Candidate {
   tag: HypothesisFamily;
 }
 
-/** A bare DATE anchor node — positionally neutral, fits the vesting-start slot. */
-function bareDate(date: OCTDate): VestingNodeExpr {
-  return { type: "NODE", base: { type: "DATE", value: date }, offsets: [] };
-}
-
 /** A plain uniform train of `occurrences` at `cadence`, anchored directly at
  *  `anchor`, totalling `total`. */
 export function plainUniformStmt(
@@ -62,16 +53,13 @@ export function plainUniformStmt(
   cadence: Cadence,
   occurrences: number,
 ): Statement {
-  const periodicity: VestingPeriod = {
-    type: cadence.unit,
-    length: cadence.length,
+  return buildStatement({
+    kind: "PLAIN_UNIFORM",
+    anchor,
+    cadence,
     occurrences,
-  };
-  return {
-    type: "STATEMENT",
-    amount: { type: "QUANTITY", value: total },
-    expr: { type: "SCHEDULE", vesting_start: bareDate(anchor), periodicity },
-  };
+    total,
+  });
 }
 
 /** A cliff train: a hold of `cliffLength` (any month count, off-grid allowed)
@@ -90,7 +78,8 @@ export function cliffStmt(
     kind: "CLIFF_UNIFORM",
     // The anchor rides in `grantDate` — buildCliffUniform places it directly as
     // the vesting start, so a pre-grant (erased-cliff) anchor is expressible
-    // here too. The field name is overloaded until 2c generalizes the anchor.
+    // here too. The `grantDate` field name is overloaded: it holds the
+    // vesting-start anchor emitted as FROM DATE, pre-grant anchor included.
     grantDate: anchor,
     cadence,
     cliffSteps: 1,

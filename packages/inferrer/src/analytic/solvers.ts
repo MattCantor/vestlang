@@ -70,7 +70,7 @@ export function monthDeltas(mis: number[]): number[] | null {
   return out;
 }
 
-// ---- dom-candidate derivation (the #503 mechanism) -----------------------------
+// ---- day-of-month candidate derivation (pattern-derived from the day pattern) --
 
 export interface DomCand {
   dom: VestingDayOfMonth;
@@ -175,7 +175,6 @@ export function datesOnGrid(
   N: number,
   dom: VestingDayOfMonth,
   observed: OCTDate[],
-  observedFrom = 0,
 ): boolean {
   const grid = new Set<OCTDate>();
   let last: OCTDate = start;
@@ -184,8 +183,7 @@ export function datesOnGrid(
     grid.add(last);
   }
   if (last !== observed[observed.length - 1]) return false;
-  for (let i = observedFrom; i < observed.length; i++)
-    if (!grid.has(observed[i])) return false;
+  for (const o of observed) if (!grid.has(o)) return false;
   return true;
 }
 
@@ -296,13 +294,27 @@ export type Projection = { date: OCTDate; total: number }[];
 const byCodeUnit = (a: string, b: string): number =>
   a < b ? -1 : a > b ? 1 : 0;
 
-/** Sum same-date amounts, then order by date (code-unit, ICU-independent). The
- *  per-date totals are the projection invariant the verifier compares on. */
-export function aggregateProjection(stream: Row[]): Projection {
+/** Sum same-date amounts and order by date (code-unit, ICU-independent). The
+ *  decomposition path drops zero-total dates (matching the pipeline's
+ *  `occupied()`); the projection path keeps them, since the evaluator never emits
+ *  a zero installment anyway. This is the one bucket-by-date core both share. */
+export function bucketByDate(stream: Row[], dropZero: boolean): Row[] {
   const byDate = new Map<OCTDate, number>();
   for (const { date, amount } of stream)
     byDate.set(date, (byDate.get(date) ?? 0) + amount);
-  return [...byDate.entries()]
-    .sort(([a], [b]) => byCodeUnit(a, b))
-    .map(([date, total]) => ({ date, total }));
+  const rows = [...byDate.entries()].map(([date, amount]) => ({
+    date,
+    amount,
+  }));
+  return (dropZero ? rows.filter((r) => r.amount !== 0) : rows).sort((a, b) =>
+    byCodeUnit(a.date, b.date),
+  );
+}
+
+/** Per-date totals are the projection invariant the verifier compares on. */
+export function aggregateProjection(stream: Row[]): Projection {
+  return bucketByDate(stream, false).map(({ date, amount }) => ({
+    date,
+    total: amount,
+  }));
 }

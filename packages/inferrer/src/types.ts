@@ -85,7 +85,21 @@ export interface CliffUniformComponent {
   cliffLength: number;
 }
 
-export type Component = SingleTrancheComponent | CliffUniformComponent;
+export interface PlainUniformComponent {
+  kind: "PLAIN_UNIFORM";
+  /** The vesting-start anchor placed directly as the emitted `FROM DATE`. */
+  anchor: OCTDate;
+  cadence: { unit: PeriodTag; length: number };
+  occurrences: number;
+  /** Exact total shares — carried directly rather than re-derived from a rate,
+   * since cumulative round-down makes the per-tranche amounts unequal. */
+  total: number;
+}
+
+export type Component =
+  | SingleTrancheComponent
+  | CliffUniformComponent
+  | PlainUniformComponent;
 
 export interface InferResult {
   dsl: string;

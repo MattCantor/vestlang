@@ -8,6 +8,7 @@ import type {
 import type {
   CliffUniformComponent,
   Component,
+  PlainUniformComponent,
   SingleTrancheComponent,
 } from "./types.js";
 
@@ -35,6 +36,23 @@ function buildSingle(c: SingleTrancheComponent): Statement {
     expr: {
       type: "SCHEDULE",
       vesting_start: bareDate(c.date),
+      periodicity,
+    },
+  };
+}
+
+function buildPlainUniform(c: PlainUniformComponent): Statement {
+  const periodicity: VestingPeriod = {
+    type: c.cadence.unit,
+    length: c.cadence.length,
+    occurrences: c.occurrences,
+  };
+  return {
+    type: "STATEMENT",
+    amount: { type: "QUANTITY", value: c.total },
+    expr: {
+      type: "SCHEDULE",
+      vesting_start: bareDate(c.anchor),
       periodicity,
     },
   };
@@ -75,8 +93,14 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
 }
 
 export function buildStatement(c: Component): Statement {
-  if (c.kind === "SINGLE_TRANCHE") return buildSingle(c);
-  return buildCliffUniform(c);
+  switch (c.kind) {
+    case "SINGLE_TRANCHE":
+      return buildSingle(c);
+    case "CLIFF_UNIFORM":
+      return buildCliffUniform(c);
+    case "PLAIN_UNIFORM":
+      return buildPlainUniform(c);
+  }
 }
 
 /**
