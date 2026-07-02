@@ -7,10 +7,10 @@ import {
   CLEAN_TRIPWIRE_CASES,
   gridCases,
   SEED_CASES,
-} from "/home/avitham/code/vestlang/.claude/worktrees/inferrer-spike-analytic/packages/inferrer/tests/roundtripOracle.gen.ts";
-import { v2Cases } from "/home/avitham/code/vestlang/.claude/worktrees/inferrer-spike-analytic/packages/inferrer/experiments/oracleV2.gen.ts";
-import { runSweep, type SweepCase, type SweepEntry } from "/home/avitham/code/vestlang/.claude/worktrees/inferrer-spike-analytic/packages/inferrer/experiments/sweepRunner.ts";
-import { analyticInferrer } from "/home/avitham/code/vestlang/.claude/worktrees/inferrer-spike-analytic/packages/inferrer/experiments/analyticSpike.ts";
+} from "../tests/roundtripOracle.gen.ts";
+import { v2Cases } from "./oracleV2.gen.ts";
+import { runSweep, type SweepCase, type SweepEntry } from "./sweepRunner.ts";
+import { analyticInferrer } from "./analyticSpike.ts";
 
 function analyze(name: string, cases: SweepCase[], split?: (e: SweepEntry) => boolean) {
   const result = runSweep(cases, analyticInferrer);
