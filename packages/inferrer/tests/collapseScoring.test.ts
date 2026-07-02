@@ -80,7 +80,8 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
 
   // The per-statement pass and the collapse don't merely round differently — a
   // THEN chain the per-statement pass can't score at all (its tail has no anchor
-  // of its own and throws) is exactly the kind of program a consumer collapses
+  // of its own, so the inner evaluate throws, which the pass now contains as a
+  // +Infinity residual) is exactly the kind of program a consumer collapses
   // without trouble. The reported residual has to come from the collapse, or a
   // chained candidate could never be scored honestly.
   it("collapse scoring handles a chain the per-statement pass cannot", () => {
@@ -104,7 +105,11 @@ describe("inferrer reports the residual the consumer path produces (#147)", () =
       vestingDayOfMonth: DOM,
     };
 
-    expect(() => residualAgainstInput(program, input, ctx)).toThrow();
+    // The chained tail makes the per-statement evaluate throw; containment turns
+    // that into a rejecting +Infinity residual rather than letting it escape.
+    expect(residualAgainstInput(program, input, ctx).residual).toBe(
+      Number.POSITIVE_INFINITY,
+    );
 
     const { residual, status } = collapseAgainstInput(program, input, ctx);
     expect(residual).toBeCloseTo(0, 6);

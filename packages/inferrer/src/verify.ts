@@ -45,12 +45,22 @@ export function residualAgainstInput(
   const produced = new Map<string, number>();
 
   for (const stmt of program) {
-    const result = evaluateStatement(stmt, {
-      grantDate: ctx.grantDate,
-      events: {},
-      grantQuantity: ctx.totalQuantity,
-      vesting_day_of_month: ctx.vestingDayOfMonth,
-    });
+    let result: ReturnType<typeof evaluateStatement>;
+    try {
+      result = evaluateStatement(stmt, {
+        grantDate: ctx.grantDate,
+        events: {},
+        grantQuantity: ctx.totalQuantity,
+        vesting_day_of_month: ctx.vestingDayOfMonth,
+      });
+    } catch {
+      // A candidate whose grid drives the exact-integer allocator past
+      // Number.MAX_SAFE_INTEGER throws here rather than resolving. Score it out
+      // of contention the same way an unresolved installment does — an
+      // un-evaluable candidate must never win, and an uncontained throw would
+      // escape inferSchedule entirely.
+      return { residual: Number.POSITIVE_INFINITY, installments: [] };
+    }
     for (const inst of result.resolution.installments) {
       if (inst.state !== "RESOLVED") {
         return { residual: Number.POSITIVE_INFINITY, installments: [] };
@@ -89,12 +99,22 @@ export function collapseAgainstInput(
   input: TrancheInput[],
   ctx: VerifyContext,
 ): { residual: number; status: ResolutionStatus } {
-  const schedule = evaluateProgram(program, {
-    grantDate: ctx.grantDate,
-    events: {},
-    grantQuantity: ctx.totalQuantity,
-    vesting_day_of_month: ctx.vestingDayOfMonth,
-  });
+  let schedule;
+  try {
+    schedule = evaluateProgram(program, {
+      grantDate: ctx.grantDate,
+      events: {},
+      grantQuantity: ctx.totalQuantity,
+      vesting_day_of_month: ctx.vestingDayOfMonth,
+    });
+  } catch {
+    // A candidate that overflows the exact-integer allocator throws instead of
+    // collapsing. Its verdict is what this call feeds into selectBest, so hand
+    // back a rank-0 status (ranked below events-only) — plus the same +Infinity
+    // residual the unresolved arm below returns, so the residual gate rejects it
+    // too.
+    return { residual: Number.POSITIVE_INFINITY, status: "impossible" };
+  }
 
   const produced = new Map<string, number>();
   // We care about the closed-world result here — what the program actually
@@ -128,11 +148,18 @@ export function programStatus(
   program: Program,
   ctx: VerifyContext,
 ): ResolutionStatus {
-  const schedule = evaluateProgram(program, {
-    grantDate: ctx.grantDate,
-    events: {},
-    grantQuantity: ctx.totalQuantity,
-    vesting_day_of_month: ctx.vestingDayOfMonth,
-  });
+  let schedule;
+  try {
+    schedule = evaluateProgram(program, {
+      grantDate: ctx.grantDate,
+      events: {},
+      grantQuantity: ctx.totalQuantity,
+      vesting_day_of_month: ctx.vestingDayOfMonth,
+    });
+  } catch {
+    // Same containment as collapseAgainstInput: an un-collapsible candidate gets
+    // a rank-0 verdict so selectBest ranks it below every events-only fit.
+    return "impossible";
+  }
   return schedule.resolution.status;
 }
