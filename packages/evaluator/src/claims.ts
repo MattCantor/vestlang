@@ -4,7 +4,14 @@
 
 import type { Amount, Fraction } from "@vestlang/types";
 import { floorSharesAt } from "@vestlang/primitives";
-import { fracAdd, fracCmp, fracReduce, ONE, ZERO } from "@vestlang/utils";
+import {
+  fracAdd,
+  fracCmp,
+  fracReduce,
+  ONE,
+  toBigRational,
+  ZERO,
+} from "@vestlang/utils";
 
 /** DSL amount → canonical portion. QUANTITY `v` → `v / totalShares`.
  *  A zero-share grant has nothing for a QUANTITY to claim, so it lowers to 0
@@ -28,7 +35,7 @@ export const amountToFraction = (a: Amount, totalShares: number): Fraction =>
 const sharesThrough = (grantQuantity: number, cumulative: Fraction): number =>
   fracCmp(cumulative, ONE) > 0
     ? grantQuantity
-    : floorSharesAt(grantQuantity, cumulative);
+    : floorSharesAt(grantQuantity, toBigRational(cumulative));
 
 // The symbolic twin of allocateEvents' running cumulative: each draw adds one
 // statement's fraction and returns the whole shares that step uncovers. Draws

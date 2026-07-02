@@ -40,21 +40,21 @@ describe("allocateVector — cumulative round-down", () => {
 
 describe("allocateExact + floorSharesAt", () => {
   it("floorSharesAt floors totalShares × fraction exactly", () => {
-    expect(floorSharesAt(100, { numerator: 1, denominator: 3 })).toBe(33);
-    expect(floorSharesAt(100, { numerator: 1, denominator: 1 })).toBe(100);
+    expect(floorSharesAt(100, { numerator: 1n, denominator: 3n })).toBe(33);
+    expect(floorSharesAt(100, { numerator: 1n, denominator: 1n })).toBe(100);
   });
 
   it("allocateExact round-down telescopes via vestedSoFar", () => {
     // first step of 100/3: floor(100/3) - 0 = 33
-    expect(allocateExact(100, { numerator: 1, denominator: 3 }, 0)).toBe(33);
+    expect(allocateExact(100, { numerator: 1n, denominator: 3n }, 0)).toBe(33);
     // second cumulative 2/3: floor(66.67) - 33 = 66 - 33 = 33
-    expect(allocateExact(100, { numerator: 2, denominator: 3 }, 33)).toBe(33);
+    expect(allocateExact(100, { numerator: 2n, denominator: 3n }, 33)).toBe(33);
   });
 
   it("rejects a degenerate (denominator < 1) fraction with a clear error", () => {
     // A 1/0 fraction would otherwise throw an opaque BigInt "Division by zero";
     // the precondition names what's wrong instead (issue #61).
-    expect(() => floorSharesAt(5, { numerator: 1, denominator: 0 })).toThrow(
+    expect(() => floorSharesAt(5, { numerator: 1n, denominator: 0n })).toThrow(
       /denominator must be >= 1/,
     );
   });
@@ -66,32 +66,35 @@ describe("allocateExact + floorSharesAt", () => {
 // and only a quotient Number() would round gets refused.
 describe("floorSharesAt — enforced cast bounds (R2-B23)", () => {
   it("accepts an over-1 cumulative while the quotient fits", () => {
-    expect(floorSharesAt(100, { numerator: 3, denominator: 2 })).toBe(150);
+    expect(floorSharesAt(100, { numerator: 3n, denominator: 2n })).toBe(150);
   });
 
   it("rejects an unsafe-integer totalShares (2^53 passes Number.isInteger)", () => {
     expect(() =>
-      floorSharesAt(2 ** 53, { numerator: 1, denominator: 1 }),
+      floorSharesAt(2 ** 53, { numerator: 1n, denominator: 1n }),
     ).toThrow(/totalShares must be a safe integer/);
   });
 
   it("rejects a fractional totalShares with a named error, not a BigInt RangeError", () => {
-    expect(() => floorSharesAt(1.5, { numerator: 1, denominator: 1 })).toThrow(
-      /totalShares must be a safe integer/,
-    );
+    expect(() =>
+      floorSharesAt(1.5, { numerator: 1n, denominator: 1n }),
+    ).toThrow(/totalShares must be a safe integer/);
   });
 
   it("refuses a quotient past MAX_SAFE_INTEGER instead of letting Number() round", () => {
     // The finding's example: floor(9007199254740990 × 3/2) = 13510798882111485,
     // odd and above 2^53 — Number() would round it to an even neighbor.
     expect(() =>
-      floorSharesAt(9_007_199_254_740_990, { numerator: 3, denominator: 2 }),
+      floorSharesAt(9_007_199_254_740_990, { numerator: 3n, denominator: 2n }),
     ).toThrow(/exceeds Number.MAX_SAFE_INTEGER/);
   });
 
   it("passes the largest legal quotient through exactly", () => {
     expect(
-      floorSharesAt(Number.MAX_SAFE_INTEGER, { numerator: 1, denominator: 1 }),
+      floorSharesAt(Number.MAX_SAFE_INTEGER, {
+        numerator: 1n,
+        denominator: 1n,
+      }),
     ).toBe(Number.MAX_SAFE_INTEGER);
   });
 });

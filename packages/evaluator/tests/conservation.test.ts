@@ -21,6 +21,7 @@ import {
   fracSum,
   fracCmp,
   ONE,
+  toBigRational,
   ZERO,
 } from "@vestlang/utils";
 import { evaluateProgram } from "../src/evaluate";
@@ -362,7 +363,9 @@ function checkStream(
     installments.filter((i) => i.state !== "RESOLVED"),
   );
   if (fracCmp(T, ONE) <= 0) {
-    expect(resolved + symbolic, label).toBe(floorSharesAt(grant, T));
+    expect(resolved + symbolic, label).toBe(
+      floorSharesAt(grant, toBigRational(T)),
+    );
   } else {
     expect(symbolic, label).toBe(Math.max(grant - resolved, 0));
   }
@@ -459,7 +462,7 @@ function checkCell(
       r.unresolved;
 
     if (fracCmp(T, ONE) <= 0) {
-      expect(total, asOfLabel).toBe(floorSharesAt(grant, T));
+      expect(total, asOfLabel).toBe(floorSharesAt(grant, toBigRational(T)));
     } else {
       // Over-allocation: the symbolic-and-impossible side claims exactly the gap
       // the dated tranches left to the grant.

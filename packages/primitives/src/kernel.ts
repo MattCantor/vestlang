@@ -14,13 +14,15 @@ import type {
   OCFPeriodType,
   VestingDayOfMonth,
 } from "@vestlang/types";
+import type { BigRational } from "@vestlang/utils";
 import {
-  fracAdd,
-  fracMul,
-  fracReduce,
-  fracSub,
-  ONE,
-  ZERO,
+  bigAdd,
+  bigMul,
+  bigReduce,
+  bigSub,
+  BIG_ONE,
+  BIG_ZERO,
+  toBigRational,
 } from "@vestlang/utils";
 import { addPeriod, gt } from "./dates.js";
 import { allocateExact } from "./allocate.js";
@@ -32,12 +34,16 @@ import {
 
 /**
  * One vesting date with the fraction of the whole grant it carries, before that
- * fraction becomes an integer share count. `occurrence` is the grid index (1..N);
- * a cliff lump uses 0 so it sorts ahead of any same-day grid point.
+ * fraction becomes an integer share count. The fraction is a BigInt-exact
+ * `BigRational`: a statement-share × cliff-percentage product of two
+ * non-terminating 10-place decimals overflows the Number-backed `Fraction`, so
+ * the kernel keeps it (and the cumulative it folds into) BigInt end to end and
+ * narrows only at the integer floor. `occurrence` is the grid index (1..N); a
+ * cliff lump uses 0 so it sorts ahead of any same-day grid point.
  */
 export interface RawEvent {
   date: OCTDate;
-  fractionOfGrant: Fraction;
+  fractionOfGrant: BigRational;
   statementOrder: number;
   occurrence: number;
 }
@@ -116,10 +122,15 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
     cliff,
   } = args;
 
+  // Widen the two stored operands to BigInt once at entry. Everything downstream
+  // (products, the lump, the cumulative) stays BigRational; the only narrowing is
+  // the integer floor in the allocator.
+  const stmtBig = toBigRational(stmtFraction);
+
   const at = gridDate({ anchor, origin, period, periodType, dom });
   const event = (
     date: OCTDate,
-    fraction: Fraction,
+    fraction: BigRational,
     occurrence: number,
   ): RawEvent => ({
     date,
@@ -128,7 +139,7 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
     occurrence,
   });
   const evenGrid = (): RawEvent[] => {
-    const per = fracMul(stmtFraction, { numerator: 1, denominator: N });
+    const per = bigMul(stmtBig, { numerator: 1n, denominator: BigInt(N) });
     return Array.from({ length: N }, (_, idx) =>
       event(at(idx + 1), per, idx + 1),
     );
@@ -145,8 +156,8 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
     if (!gt(cliff.date, anchor)) return evenGrid();
     const { pre, post } = splitAround(at, N, cliff.date);
     if (pre === 0) return evenGrid();
-    const pct = fracReduce({ numerator: pre, denominator: N });
-    return cliffLump(event, at, stmtFraction, cliff.date, pct, post);
+    const pct = bigReduce(BigInt(pre), BigInt(N));
+    return cliffLump(event, at, stmtBig, cliff.date, pct, post);
   }
 
   // A fixed (duration) cliff carries its own stated percentage and must honor it
@@ -159,7 +170,7 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
   }
 
   const { post } = splitAround(at, N, cliff.date);
-  const pct = cliff.percentage;
+  const pct = toBigRational(cliff.percentage);
   const swallowsGrid = post.length === 0;
   const isFullGrant = pct.numerator === pct.denominator;
 
@@ -180,7 +191,7 @@ export const expandGrid = (args: ExpandGridArgs): RawEvent[] => {
   // The stated percentage lands as the lump on the cliff date — any installment at
   // or before it folds in (nothing vests pre-cliff) — and (1 − percentage) spreads
   // over the installments strictly after.
-  return cliffLump(event, at, stmtFraction, cliff.date, pct, post);
+  return cliffLump(event, at, stmtBig, cliff.date, pct, post);
 };
 
 /** The occurrences strictly after `cliffDate`, and how many fell at or before it. */
@@ -204,18 +215,21 @@ const splitAround = (
  * No post-cliff occurrence means the lump is the whole statement.
  */
 const cliffLump = (
-  event: (date: OCTDate, fraction: Fraction, occurrence: number) => RawEvent,
+  event: (date: OCTDate, fraction: BigRational, occurrence: number) => RawEvent,
   at: (i: number) => OCTDate,
-  stmtFraction: Fraction,
+  stmtFraction: BigRational,
   cliffDate: OCTDate,
-  pct: Fraction,
+  pct: BigRational,
   post: number[],
 ): RawEvent[] => {
-  const events: RawEvent[] = [event(cliffDate, fracMul(stmtFraction, pct), 0)];
+  const events: RawEvent[] = [event(cliffDate, bigMul(stmtFraction, pct), 0)];
   if (post.length > 0) {
-    const per = fracMul(
+    const per = bigMul(
       stmtFraction,
-      fracMul(fracSub(ONE, pct), { numerator: 1, denominator: post.length }),
+      bigMul(bigSub(BIG_ONE, pct), {
+        numerator: 1n,
+        denominator: BigInt(post.length),
+      }),
     );
     for (const i of post) events.push(event(at(i), per, i));
   }
@@ -272,13 +286,20 @@ export const allocateWithProvenance = (
 ): ProvenancedAllocation => {
   const sorted = [...events].sort(byDateOrderOccurrence);
 
-  let cumulative: Fraction = ZERO;
+  let cumulative: BigRational = BIG_ZERO;
   let vestedSoFar = 0;
   const dates: OCTDate[] = [];
   const amounts: number[] = [];
   const contributions: AllocationContribution[] = [];
   for (const e of sorted) {
-    cumulative = fracAdd(cumulative, e.fractionOfGrant);
+    // Fold this event's fraction into the running cumulative and reduce (bigAdd
+    // reduces), so operands stay bounded across a 48+-event chain rather than
+    // growing with every term. There was never a sum-only overflow to guard
+    // against even in the old Number world: every fractionOfGrant is a product of
+    // at most two stored 10-place operands, and a same-class chain of them shares
+    // an lcm ≤ 10^10 — a component only reached ~10^20 inside the fracMul product,
+    // which tripped the Number guard before any sum saw it.
+    cumulative = bigAdd(cumulative, e.fractionOfGrant);
     const amount = allocateExact(totalShares, cumulative, vestedSoFar);
     if (amount === 0) continue;
     vestedSoFar += amount;
