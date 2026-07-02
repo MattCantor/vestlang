@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Fraction, OCTDate } from "@vestlang/types";
+import type { BigRational } from "@vestlang/utils";
 import {
   allocateEvents,
   allocateWithProvenance,
@@ -12,9 +13,16 @@ import {
 // Unit tests for the extracted share-allocation kernel. These exercise the
 // primitives directly, before either engine is rewired onto them.
 
+// `frac` builds the Number-backed Fraction the statement share and cliff
+// percentage arrive as (they widen to BigInt inside expandGrid). `bfrac` builds
+// the BigInt-exact BigRational a RawEvent's fractionOfGrant now carries.
 const frac = (numerator: number, denominator: number): Fraction => ({
   numerator,
   denominator,
+});
+const bfrac = (numerator: number, denominator: number): BigRational => ({
+  numerator: BigInt(numerator),
+  denominator: BigInt(denominator),
 });
 const ONE = frac(1, 1);
 
@@ -43,25 +51,25 @@ describe("expandGrid", () => {
     expect(grid(4, { kind: "none" })).toEqual([
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 2,
       },
       {
         date: "2025-04-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 3,
       },
       {
         date: "2025-05-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 4,
       },
@@ -78,14 +86,14 @@ describe("expandGrid", () => {
     // The lump leads, marked occurrence 0.
     expect(events[0]).toEqual({
       date: "2026-01-01",
-      fractionOfGrant: frac(1, 4),
+      fractionOfGrant: bfrac(1, 4),
       statementOrder: 1,
       occurrence: 0,
     });
     // Each post-cliff month carries an equal share of the remaining three quarters.
     expect(events[1]).toEqual({
       date: "2026-02-01",
-      fractionOfGrant: frac(1, 48),
+      fractionOfGrant: bfrac(1, 48),
       statementOrder: 1,
       occurrence: 13,
     });
@@ -102,19 +110,19 @@ describe("expandGrid", () => {
     expect(events).toEqual([
       {
         date: "2025-03-17",
-        fractionOfGrant: frac(1, 2),
+        fractionOfGrant: bfrac(1, 2),
         statementOrder: 1,
         occurrence: 0,
       },
       {
         date: "2025-04-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 3,
       },
       {
         date: "2025-05-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 4,
       },
@@ -127,13 +135,13 @@ describe("expandGrid", () => {
     const events = grid(4, { kind: "proportional", date: "2025-03-17" });
     expect(events[0]).toEqual({
       date: "2025-03-17",
-      fractionOfGrant: frac(1, 2),
+      fractionOfGrant: bfrac(1, 2),
       statementOrder: 1,
       occurrence: 0,
     });
     expect(events.slice(1).map((e) => e.fractionOfGrant)).toEqual([
-      frac(1, 4),
-      frac(1, 4),
+      bfrac(1, 4),
+      bfrac(1, 4),
     ]);
   });
 
@@ -143,7 +151,7 @@ describe("expandGrid", () => {
     ).toEqual([
       {
         date: "2026-01-01",
-        fractionOfGrant: ONE,
+        fractionOfGrant: bfrac(1, 1),
         statementOrder: 1,
         occurrence: 0,
       },
@@ -161,31 +169,31 @@ describe("expandGrid", () => {
     expect(events).toEqual([
       {
         date: "2025-01-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 0,
       },
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(3, 16),
+        fractionOfGrant: bfrac(3, 16),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(3, 16),
+        fractionOfGrant: bfrac(3, 16),
         statementOrder: 1,
         occurrence: 2,
       },
       {
         date: "2025-04-01",
-        fractionOfGrant: frac(3, 16),
+        fractionOfGrant: bfrac(3, 16),
         statementOrder: 1,
         occurrence: 3,
       },
       {
         date: "2025-05-01",
-        fractionOfGrant: frac(3, 16),
+        fractionOfGrant: bfrac(3, 16),
         statementOrder: 1,
         occurrence: 4,
       },
@@ -209,15 +217,15 @@ describe("expandGrid", () => {
     });
     expect(events[0]).toEqual({
       date: "2025-01-11",
-      fractionOfGrant: frac(1, 4),
+      fractionOfGrant: bfrac(1, 4),
       statementOrder: 1,
       occurrence: 0,
     });
     expect(events.slice(1).map((e) => e.fractionOfGrant)).toEqual([
-      frac(3, 16),
-      frac(3, 16),
-      frac(3, 16),
-      frac(3, 16),
+      bfrac(3, 16),
+      bfrac(3, 16),
+      bfrac(3, 16),
+      bfrac(3, 16),
     ]);
   });
 
@@ -249,7 +257,7 @@ describe("expandGrid", () => {
     expect(events).toEqual([
       {
         date: "2025-01-01",
-        fractionOfGrant: ONE,
+        fractionOfGrant: bfrac(1, 1),
         statementOrder: 1,
         occurrence: 0,
       },
@@ -334,19 +342,19 @@ describe("allocateEvents", () => {
     const events: RawEvent[] = [
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 3),
+        fractionOfGrant: bfrac(1, 3),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(1, 3),
+        fractionOfGrant: bfrac(1, 3),
         statementOrder: 1,
         occurrence: 2,
       },
       {
         date: "2025-04-01",
-        fractionOfGrant: frac(1, 3),
+        fractionOfGrant: bfrac(1, 3),
         statementOrder: 1,
         occurrence: 3,
       },
@@ -365,13 +373,13 @@ describe("allocateEvents", () => {
     const events: RawEvent[] = [
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 2),
+        fractionOfGrant: bfrac(1, 2),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 2),
+        fractionOfGrant: bfrac(1, 2),
         statementOrder: 2,
         occurrence: 1,
       },
@@ -391,25 +399,25 @@ describe("allocateEvents", () => {
     const events: RawEvent[] = [
       {
         date: "2025-01-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 2,
       },
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 2,
         occurrence: 1,
       },
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 3,
       },
@@ -446,19 +454,19 @@ describe("allocateEvents", () => {
     const events: RawEvent[] = [
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(1, 6),
+        fractionOfGrant: bfrac(1, 6),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-02-01", // same day as the next, higher statement order
-        fractionOfGrant: frac(1, 3),
+        fractionOfGrant: bfrac(1, 3),
         statementOrder: 2,
         occurrence: 1,
       },
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 2),
+        fractionOfGrant: bfrac(1, 2),
         statementOrder: 1,
         occurrence: 1,
       },
@@ -476,13 +484,13 @@ describe("allocateEvents", () => {
     const events: RawEvent[] = [
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 3),
+        fractionOfGrant: bfrac(1, 3),
         statementOrder: 1,
         occurrence: 5,
       },
       {
         date: "2025-02-01", // a cliff lump (occurrence 0) must lead its day
-        fractionOfGrant: frac(2, 3),
+        fractionOfGrant: bfrac(2, 3),
         statementOrder: 1,
         occurrence: 0,
       },
@@ -517,19 +525,19 @@ describe("allocateWithProvenance", () => {
       events: [
         {
           date: "2025-02-01",
-          fractionOfGrant: frac(1, 3),
+          fractionOfGrant: bfrac(1, 3),
           statementOrder: 1,
           occurrence: 1,
         },
         {
           date: "2025-02-01",
-          fractionOfGrant: frac(1, 3),
+          fractionOfGrant: bfrac(1, 3),
           statementOrder: 2,
           occurrence: 1,
         },
         {
           date: "2025-02-01",
-          fractionOfGrant: frac(1, 3),
+          fractionOfGrant: bfrac(1, 3),
           statementOrder: 3,
           occurrence: 1,
         },

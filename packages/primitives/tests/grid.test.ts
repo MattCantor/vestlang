@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Fraction, OCTDate } from "@vestlang/types";
+import type { BigRational } from "@vestlang/utils";
 import {
   expandStatementGrid,
   type CliffInput,
@@ -13,9 +14,15 @@ import { expandGrid, type GridCliff, type RawEvent } from "../src/kernel";
 // across all four arms — the place the `skip` arm is reachable without contriving
 // the rare end-to-end resolver state that produces it (issue #419).
 
+// `frac` is the Number-backed input fraction (stmtFraction, cliff percentage);
+// `bfrac` is the BigInt-exact BigRational a RawEvent's fractionOfGrant carries.
 const frac = (numerator: number, denominator: number): Fraction => ({
   numerator,
   denominator,
+});
+const bfrac = (numerator: number, denominator: number): BigRational => ({
+  numerator: BigInt(numerator),
+  denominator: BigInt(denominator),
 });
 const ONE = frac(1, 1);
 
@@ -48,25 +55,25 @@ describe("expandStatementGrid", () => {
     expect(expandStatementGrid(params, input)).toEqual([
       {
         date: "2025-02-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 1,
       },
       {
         date: "2025-03-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 2,
       },
       {
         date: "2025-04-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 3,
       },
       {
         date: "2025-05-01",
-        fractionOfGrant: frac(1, 4),
+        fractionOfGrant: bfrac(1, 4),
         statementOrder: 1,
         occurrence: 4,
       },
@@ -87,7 +94,7 @@ describe("expandStatementGrid", () => {
     // The lump leads on the baseline date carrying the authored half.
     expect(expandStatementGrid(params, input)[0]).toEqual({
       date: "2025-03-17",
-      fractionOfGrant: frac(1, 2),
+      fractionOfGrant: bfrac(1, 2),
       statementOrder: 1,
       occurrence: 0,
     });
@@ -106,7 +113,7 @@ describe("expandStatementGrid", () => {
     );
     expect(expandStatementGrid(params, input)[0]).toEqual({
       date: "2025-03-17",
-      fractionOfGrant: frac(1, 2),
+      fractionOfGrant: bfrac(1, 2),
       statementOrder: 1,
       occurrence: 0,
     });

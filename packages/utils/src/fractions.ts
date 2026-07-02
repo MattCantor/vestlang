@@ -69,6 +69,52 @@ export const fracSub = (a: Fraction, b: Fraction): Fraction =>
 export const ZERO: Fraction = { numerator: 0, denominator: 1 };
 export const ONE: Fraction = { numerator: 1, denominator: 1 };
 
+// A BigInt-backed exact rational. The kernel's internal share math multiplies a
+// statement's share of the grant by its cliff percentage, and when both are
+// non-terminating 10-place truncations the product's components run past 2^53 —
+// exactly where the Number-backed `Fraction` (its guard `toFraction`) has to
+// refuse them. So the kernel carries its fractionOfGrant and its running
+// cumulative as `BigRational` end to end and only narrows to a share count at the
+// integer floor, never back to a Number `Fraction`. Kept reduced after every
+// operation so operands can't grow unbounded across a long cumulative chain.
+// Denominators here are always positive (every operand widens from a validated
+// positive-denominator Fraction, and product/sum of positives stays positive).
+export interface BigRational {
+  numerator: bigint;
+  denominator: bigint;
+}
+
+export const bigReduce = (
+  numerator: bigint,
+  denominator: bigint,
+): BigRational => {
+  const g = bigGcd(numerator, denominator);
+  return { numerator: numerator / g, denominator: denominator / g };
+};
+
+export const toBigRational = (f: Fraction): BigRational => ({
+  numerator: BigInt(f.numerator),
+  denominator: BigInt(f.denominator),
+});
+
+export const BIG_ZERO: BigRational = { numerator: 0n, denominator: 1n };
+export const BIG_ONE: BigRational = { numerator: 1n, denominator: 1n };
+
+export const bigMul = (a: BigRational, b: BigRational): BigRational =>
+  bigReduce(a.numerator * b.numerator, a.denominator * b.denominator);
+
+export const bigAdd = (a: BigRational, b: BigRational): BigRational =>
+  bigReduce(
+    a.numerator * b.denominator + b.numerator * a.denominator,
+    a.denominator * b.denominator,
+  );
+
+export const bigSub = (a: BigRational, b: BigRational): BigRational =>
+  bigReduce(
+    a.numerator * b.denominator - b.numerator * a.denominator,
+    a.denominator * b.denominator,
+  );
+
 /** Sum a list of fractions (empty list → 0). */
 export const fracSum = (fs: Fraction[]): Fraction => fs.reduce(fracAdd, ZERO);
 

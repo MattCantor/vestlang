@@ -244,27 +244,18 @@ describe("over-precise event-held cliff baseline is excluded (#386)", () => {
   });
 });
 
-// #386 / #442 — the stored "0.3333333334" × cliff "0.3333333333" product of a
-// multi-statement apportioned cliff overflows the exact-integer allocator's
-// MAX_SAFE_INTEGER guard, so this template is intrinsically uncompilable. Since #442
-// moved the allocation into `resolveToCore` (SD1 — it now allocates eagerly to carry
-// the breakdown's provenance, where before it deferred compilation to `assemble`),
-// `resolveToCore` now surfaces that overflow directly, the same error the public
-// `compile`/`evaluateProgram` path always produced for this template. (The template
-// itself still BUILDS with the apportionment-bumped 0.3333333334; the throw is in the
-// allocation, not the build.)
-//
-// This test no longer asserts what this template once did: the stored-basis guard
-// staying SILENT — no false-positive `precision-insufficient` when it sizes the cliff
-// lump against the apportioned 0.3333333334 rather than the exact 1/3. That
-// observation point is gone now that `resolveToCore` allocates eagerly and this
-// template overflows before any findings are produced, and it can't simply be moved to
-// a smaller grant: the silence needs BOTH a non-terminating apportioned statement basis
-// AND a non-terminating cliff, and their 10^10 × 10^10 product is exactly what trips
-// the MAX_SAFE guard regardless of grant size. The guard logic itself
-// (`@vestlang/utils`) is untouched; `DSL_LOSSY` above covers the guard FIRING, which is
-// the opposite direction from this lost silence assertion.
-describe("template-arm allocation surfaces the MAX_SAFE overflow (#386 / #442)", () => {
+// #386 / #442 / #512 — a multi-statement apportioned cliff whose stored statement
+// basis ("0.3333333334", apportionment-bumped) and cliff percentage ("0.3333333333")
+// are BOTH non-terminating. Their 10^10 × 10^10 product once overflowed the
+// exact-integer allocator's Number-backed Fraction guard, so this template used to
+// throw `exceeds Number.MAX_SAFE_INTEGER` — and since #442 moved allocation into
+// `resolveToCore` (it allocates eagerly to carry the breakdown's provenance), that
+// throw surfaced straight from `resolveToCore`, the same error the public
+// `compile`/`evaluateProgram` path produced. #512 moved the kernel's share math to
+// BigInt-exact rationals, so the product no longer overflows and the template
+// compiles: 1/3 + 1/3 + 1/3 of 72,000 over nine months lands as nine clean
+// 8,000-share installments.
+describe("multi-statement apportioned cliff compiles under BigInt share math (#512)", () => {
   const THEN_THIRDS =
     "1/3 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month CLIFF 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month";
   const ctx2 = {
@@ -272,14 +263,43 @@ describe("template-arm allocation surfaces the MAX_SAFE overflow (#386 / #442)",
     events: {},
     grantQuantity: 72000,
   };
+  const EXPECTED = [
+    "2020-02-01",
+    "2020-03-01",
+    "2020-04-01",
+    "2020-05-01",
+    "2020-06-01",
+    "2020-07-01",
+    "2020-08-01",
+    "2020-09-01",
+    "2020-10-01",
+  ].map((date) => ({ date, amount: 8000 }));
 
-  it("resolveToCore throws the allocator overflow now that it allocates eagerly", () => {
-    expect(() =>
-      resolveToCore(normalizeProgram(parse(THEN_THIRDS)), ctx2),
-    ).toThrow(/MAX_SAFE_INTEGER/);
-    // The public compile path produces the same overflow — unchanged.
-    expect(() =>
-      evaluateProgram(normalizeProgram(parse(THEN_THIRDS)), ctx2),
-    ).toThrow(/MAX_SAFE_INTEGER/);
+  it("resolveToCore builds a template and compiles to nine 8,000-share months", () => {
+    const result = resolveToCore(normalizeProgram(parse(THEN_THIRDS)), ctx2);
+    expect(result.kind).toBe("template");
+    if (result.kind !== "template") throw new Error("expected template");
+    const events = compile(result.template, result.totalShares, result.runtime);
+    expect(
+      events.map((e) => ({ date: e.date, amount: Number(e.amount) })),
+    ).toEqual(EXPECTED);
+    expect(events.reduce((a, e) => a + Number(e.amount), 0)).toBe(72000);
+  });
+
+  it("the public evaluate path agrees — no MAX_SAFE throw", () => {
+    const schedule = evaluateProgram(
+      normalizeProgram(parse(THEN_THIRDS)),
+      ctx2,
+    );
+    expect(schedule.resolution.status).toBe("template");
+    if (schedule.resolution.status !== "template")
+      throw new Error("expected template");
+    const resolved = schedule.resolution.installments.filter(
+      (i): i is ResolvedInstallment => i.state === "RESOLVED",
+    );
+    expect(resolved.map((i) => ({ date: i.date, amount: i.amount }))).toEqual(
+      EXPECTED,
+    );
+    expect(resolved.reduce((a, i) => a + i.amount, 0)).toBe(72000);
   });
 });
