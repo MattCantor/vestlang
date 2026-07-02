@@ -62,8 +62,15 @@ export const AXES = {
   cliff: [null, 6, 12] as (number | null)[],
   // a cleanly-dividing total (96) beside two that ripple (100, 1000).
   total: [96, 100, 1000],
-  // day 1, mid-month, and the month-end policy.
-  dom: ["01", "15", "31_OR_LAST_DAY_OF_MONTH"] satisfies VestingDayOfMonth[],
+  // The three policies the inferrer's auto-search covers. MINUS_ONE and
+  // off-day-1 vesting starts are widening axes, not baseline ones — with the
+  // fixed day-1 START_DATE below, VESTING_START_DAY and FIRST_DAY_OF_MONTH
+  // coincide by construction.
+  dom: [
+    "VESTING_START_DAY",
+    "FIRST_DAY_OF_MONTH",
+    "LAST_DAY_OF_MONTH",
+  ] satisfies VestingDayOfMonth[],
 };
 
 // The schedule's vesting start in the DSL, fixed across the grid. For
@@ -153,7 +160,7 @@ export const SEED_CASES: OracleCase[] = [
     dsl: "100 VEST OVER 48 months EVERY 3 months CLIFF 12 months",
     grantDate: "2023-01-01",
     total: 100,
-    dom: "01",
+    dom: "VESTING_START_DAY",
     params: {
       kind: "seed",
       seed: "cliff-ripple",
@@ -172,7 +179,7 @@ export const SEED_CASES: OracleCase[] = [
     dsl: "137 VEST OVER 1 months EVERY 1 month THEN 891 VEST OVER 1 months EVERY 1 month THEN 42 VEST OVER 1 months EVERY 1 month",
     grantDate: "2024-01-01",
     total: 1070,
-    dom: "01",
+    dom: "VESTING_START_DAY",
     params: {
       kind: "seed",
       seed: "isolated-singles",
@@ -192,7 +199,7 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
     dsl: "100 VEST OVER 4 months EVERY 1 month",
     grantDate: "2024-01-01",
     total: 100,
-    dom: "01",
+    dom: "VESTING_START_DAY",
     params: {
       kind: "seed",
       seed: "clean-uniform-4mo",
@@ -206,7 +213,7 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
     dsl: "96 VEST OVER 12 months EVERY 3 months",
     grantDate: "2024-01-01",
     total: 96,
-    dom: "01",
+    dom: "VESTING_START_DAY",
     params: {
       kind: "seed",
       seed: "clean-uniform-quarterly",

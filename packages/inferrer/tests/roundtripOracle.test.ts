@@ -11,7 +11,7 @@ import type {
   ResolutionContextInput,
   ResolvedInstallment,
   VestingDayOfMonth,
-  VestingScheduleTemplate,
+  OCFVestingTermsV2,
 } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
 import {
@@ -124,8 +124,8 @@ function projectionsEqual(a: Projection, b: Projection): boolean {
   return isDeepStrictEqual(a, b);
 }
 function templatesEqual(
-  a: VestingScheduleTemplate,
-  b: VestingScheduleTemplate,
+  a: OCFVestingTermsV2,
+  b: OCFVestingTermsV2,
 ): boolean {
   return isDeepStrictEqual(a, b);
 }
@@ -142,7 +142,7 @@ function attemptTemplate(
   total: number,
   dom: VestingDayOfMonth,
 ): {
-  template: VestingScheduleTemplate;
+  template: OCFVestingTermsV2;
   stream: { date: OCTDate; amount: number }[];
 } | null {
   let sched: EvaluatedSchedule;
@@ -193,8 +193,8 @@ interface OracleEntry {
   recoveredStatus: string;
   originalDsl: string;
   recoveredDsl: string;
-  originalTemplate: VestingScheduleTemplate;
-  recoveredTemplate: VestingScheduleTemplate | null;
+  originalTemplate: OCFVestingTermsV2;
+  recoveredTemplate: OCFVestingTermsV2 | null;
   projectionDivergence: { original: Projection; recovered: Projection } | null;
   // Internal, not serialized into the snapshot.
   ripple: boolean;
@@ -219,7 +219,7 @@ function runCase(c: OracleCase): OracleEntry | null {
   });
 
   let recoveredStatus: string;
-  let recoveredTemplate: VestingScheduleTemplate | null = null;
+  let recoveredTemplate: OCFVestingTermsV2 | null = null;
   let recoveredAggregated: Projection;
   try {
     const recSched = evalUnder(
@@ -465,7 +465,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
   });
 
   it("AC7: 'clean' requires EXACT template and projection equality, never close-enough", () => {
-    const base: VestingScheduleTemplate = {
+    const base: OCFVestingTermsV2 = {
       id: "resolved",
       statements: [
         {
@@ -475,7 +475,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
         },
       ],
     };
-    const offByADigit: VestingScheduleTemplate = {
+    const offByADigit: OCFVestingTermsV2 = {
       id: "resolved",
       statements: [
         {
