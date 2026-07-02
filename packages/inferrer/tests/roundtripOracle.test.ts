@@ -61,6 +61,14 @@ import {
 type Projection = { date: OCTDate; total: number }[];
 type Bucket = "clean" | "structural-failure" | "ambiguous-recovery";
 
+// A finer split of ambiguous-recovery. `dom-convention-only` means the recovered
+// template equals the original once `vesting_day_of_month` is stripped from every
+// segment on both sides — the difference is only the #506 explicitness artifact
+// (the original eval stamps the policy; the recovered eval's searched default
+// omits it), not a genuinely different schedule. `shape-diff` is a real structural
+// divergence (the cliff-vs-pulse taste call, an OVER/EVERY reshape, and the like).
+type AmbiguousSubBucket = "dom-convention-only" | "shape-diff";
+
 const PARTITION_PATH = fileURLToPath(
   new URL("./__snapshots__/roundtrip-oracle.partition.snap", import.meta.url),
 );
@@ -127,6 +135,27 @@ function templatesEqual(a: OCFVestingTermsV2, b: OCFVestingTermsV2): boolean {
   return isDeepStrictEqual(a, b);
 }
 
+// Deep copy with `vesting_day_of_month` removed from every scheduled segment, so a
+// template that differs ONLY in whether it carries the day-of-month policy
+// compares equal. structuredClone keeps the originals (serialized in full, dom and
+// all) untouched.
+function stripDom(t: OCFVestingTermsV2): OCFVestingTermsV2 {
+  const clone = structuredClone(t);
+  for (const st of clone.statements) {
+    if ("schedule" in st && st.schedule)
+      delete st.schedule.vesting_day_of_month;
+  }
+  return clone;
+}
+
+// The dom-agnostic template comparator used to sub-bucket ambiguous-recovery.
+function templatesEqualModuloDom(
+  a: OCFVestingTermsV2,
+  b: OCFVestingTermsV2,
+): boolean {
+  return isDeepStrictEqual(stripDom(a), stripDom(b));
+}
+
 // ---- generation / pruning ---------------------------------------------------
 
 // The generator prune rule (AC3): wrap the whole parse → normalize → evaluate in
@@ -186,6 +215,8 @@ interface OracleEntry {
   params: CaseParams;
   grantDate: OCTDate;
   bucket: Bucket;
+  // Only set for ambiguous-recovery; null otherwise.
+  subBucket: AmbiguousSubBucket | null;
   originalStatus: string;
   recoveredStatus: string;
   originalDsl: string;
@@ -250,11 +281,22 @@ function runCase(c: OracleCase): OracleEntry | null {
   else if (recoveredStatus !== "template") bucket = "structural-failure";
   else bucket = "ambiguous-recovery";
 
+  // Split ambiguous-recovery: a recovery that differs from the original only by
+  // the day-of-month explicitness artifact vs a genuine structural reshape.
+  const subBucket: AmbiguousSubBucket | null =
+    bucket === "ambiguous-recovery" && recoveredTemplate !== null
+      ? templatesEqualModuloDom(recoveredTemplate, admitted.template) &&
+        projMatch
+        ? "dom-convention-only"
+        : "shape-diff"
+      : null;
+
   return {
     id: c.id,
     params: c.params,
     grantDate: c.grantDate,
     bucket,
+    subBucket,
     originalStatus: "template",
     recoveredStatus,
     originalDsl: c.dsl,
@@ -290,12 +332,15 @@ function runOracle(): OracleRun {
 
 // ---- snapshot serialization -------------------------------------------------
 
-function serializeEntry(e: OracleEntry) {
+// `includeSubBucket` is set only for the ambiguous-recovery array — the
+// structural-failure entries have no sub-bucket, so it stays off the wire there.
+function serializeEntry(e: OracleEntry, includeSubBucket = false) {
   return {
     id: e.id,
     params: e.params,
     grantDate: e.grantDate,
     bucket: e.bucket,
+    ...(includeSubBucket ? { subBucket: e.subBucket } : {}),
     originalStatus: e.originalStatus,
     recoveredStatus: e.recoveredStatus,
     originalDsl: e.originalDsl,
@@ -315,6 +360,9 @@ function buildPartition(run: OracleRun): string {
   const ambiguousRecovery = run.entries
     .filter((e) => e.bucket === "ambiguous-recovery")
     .sort(byId);
+  const ambiguousDomOnly = ambiguousRecovery.filter(
+    (e) => e.subBucket === "dom-convention-only",
+  ).length;
 
   const partition = {
     _comment:
@@ -330,11 +378,13 @@ function buildPartition(run: OracleRun): string {
       clean: clean.length,
       structuralFailure: structuralFailure.length,
       ambiguousRecovery: ambiguousRecovery.length,
+      ambiguousDomOnly,
+      ambiguousShapeDiff: ambiguousRecovery.length - ambiguousDomOnly,
       cleanIds: clean.map((e) => e.id).sort(),
     },
     excludedSeeds: EXCLUDED_SEEDS,
-    structuralFailure: structuralFailure.map(serializeEntry),
-    ambiguousRecovery: ambiguousRecovery.map(serializeEntry),
+    structuralFailure: structuralFailure.map((e) => serializeEntry(e)),
+    ambiguousRecovery: ambiguousRecovery.map((e) => serializeEntry(e, true)),
   };
   return JSON.stringify(partition, null, 2) + "\n";
 }
