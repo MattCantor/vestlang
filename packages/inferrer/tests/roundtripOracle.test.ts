@@ -123,10 +123,7 @@ const byCodeUnit = (a: string, b: string): number =>
 function projectionsEqual(a: Projection, b: Projection): boolean {
   return isDeepStrictEqual(a, b);
 }
-function templatesEqual(
-  a: OCFVestingTermsV2,
-  b: OCFVestingTermsV2,
-): boolean {
+function templatesEqual(a: OCFVestingTermsV2, b: OCFVestingTermsV2): boolean {
   return isDeepStrictEqual(a, b);
 }
 
@@ -404,7 +401,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
         "100 VEST OVER 12 months EVERY 5 months",
         "2024-01-01",
         100,
-        "01",
+        "VESTING_START_DAY",
       ),
     ).toBeNull();
   });
@@ -467,6 +464,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
   it("AC7: 'clean' requires EXACT template and projection equality, never close-enough", () => {
     const base: OCFVestingTermsV2 = {
       id: "resolved",
+      object_type: "VESTING_TERMS",
       statements: [
         {
           order: 1,
@@ -477,6 +475,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
     };
     const offByADigit: OCFVestingTermsV2 = {
       id: "resolved",
+      object_type: "VESTING_TERMS",
       statements: [
         {
           order: 1,
