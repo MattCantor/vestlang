@@ -30,9 +30,11 @@ import type {
   VestingDayOfMonth,
   OCFVestingTermsV2,
 } from "@vestlang/types";
-// The current committed inferrer, via its built dist (experiments never import
-// package src — dist is what the workspace build produced and what a consumer
-// gets). A spike swaps `defaultInferrer` out, it does not edit this file.
+// The committed inferrer, via its built dist (experiments never import package
+// src — dist is what the workspace build produced and what a consumer gets). Since
+// the analytic core was wired in, `inferSchedule` IS that core; the runCore* runners
+// drive its `analyticInferrer` view directly, and this default is the same engine
+// through the public surface.
 import { inferSchedule } from "../dist/index.js";
 
 export type Projection = { date: OCTDate; total: number }[];
