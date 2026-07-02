@@ -1,5 +1,5 @@
 {
-  "_comment": "Round-trip oracle partition (issue #489): evaluate∘infer over single-schedule, fully-resolved DSL templates. The two non-clean buckets, every case, sorted by id. This is the characterized gap over THIS grid, not the true failure set. Re-bless with `vitest -u` when a deliberate cross-package change shifts it (AC8).",
+  "_comment": "Round-trip oracle partition: evaluate∘infer over single-schedule, fully-resolved DSL templates. The two non-clean buckets, every case, sorted by id. This is the characterized gap over THIS grid, not the true failure set. Re-bless with `vitest -u` when a deliberate cross-package change shifts it.",
   "grid": {
     "axes": {
       "offset": [
@@ -133,7 +133,7 @@
         2,
         2
       ],
-      "why": "stacked PLUS-superposed cover; un-mixing is non-unique, out of scope (Non-goals)"
+      "why": "un-mixing a stacked PLUS cover is non-unique by construction; deliberately out of scope"
     }
   ],
   "structuralFailure": [

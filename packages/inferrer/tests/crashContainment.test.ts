@@ -1,19 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parse } from "@vestlang/dsl";
-import { evaluateProgram } from "@vestlang/evaluator";
-import { normalizeProgram } from "@vestlang/normalizer";
-import type {
-  EvaluatedSchedule,
-  Installment,
-  OCTDate,
-  ResolutionContextInput,
-  ResolvedInstallment,
-  VestingDayOfMonth,
-} from "@vestlang/types";
+import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
+import { aggregateByDate, evalUnder, resolvedStream } from "./helpers.js";
 
 /*
- * Crash containment for inferSchedule (issue #489).
+ * Crash containment for inferSchedule.
  *
  * The inferrer scores candidates by round-tripping each one back through the
  * evaluator, and a candidate whose grid drives the exact-integer allocator past
@@ -27,42 +18,6 @@ import { inferSchedule } from "../src/index.js";
  * not throw, and the cover it returns reproduces the input per-date totals when
  * re-evaluated under its own reported day-of-month.
  */
-
-function evalUnder(
-  dsl: string,
-  grantDate: OCTDate,
-  total: number,
-  dom: VestingDayOfMonth,
-): EvaluatedSchedule {
-  const program = normalizeProgram(parse(dsl));
-  const ctx: ResolutionContextInput = {
-    grantDate,
-    events: {},
-    grantQuantity: total,
-    vesting_day_of_month: dom,
-  };
-  return evaluateProgram(program, ctx);
-}
-
-function resolvedStream(
-  sched: EvaluatedSchedule,
-): { date: OCTDate; amount: number }[] {
-  const items: Installment[] = sched.resolution.installments;
-  return items
-    .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
-    .map((i) => ({ date: i.date, amount: i.amount }));
-}
-
-function aggregate(
-  stream: { date: OCTDate; amount: number }[],
-): { date: OCTDate; total: number }[] {
-  const byDate = new Map<OCTDate, number>();
-  for (const { date, amount } of stream)
-    byDate.set(date, (byDate.get(date) ?? 0) + amount);
-  return [...byDate.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([date, total]) => ({ date, total }));
-}
 
 interface Case {
   name: string;
@@ -104,7 +59,7 @@ describe("inferSchedule crash containment", () => {
   it.each(CASES)(
     "$name: does not throw and reproduces the per-date totals",
     ({ dsl, grantDate, total, dom }) => {
-      const original = aggregate(
+      const original = aggregateByDate(
         resolvedStream(evalUnder(dsl, grantDate, total, dom)),
       );
 
@@ -121,7 +76,7 @@ describe("inferSchedule crash containment", () => {
 
       // Re-evaluate the returned cover through the independent public pipeline
       // under the day-of-month it reported, and the per-date totals must match.
-      const recovered = aggregate(
+      const recovered = aggregateByDate(
         resolvedStream(
           evalUnder(
             result!.dsl,

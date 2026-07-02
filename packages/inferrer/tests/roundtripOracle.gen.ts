@@ -1,4 +1,4 @@
-// Deterministic generator for the round-trip oracle (issue #489).
+// Deterministic generator for the round-trip oracle.
 //
 // Enumerates single-schedule DSL templates over an explicit parameter grid — no
 // fast-check, no randomness — plus a handful of hand-pinned seeds. Every case is
@@ -39,7 +39,7 @@ export interface OracleCase {
   id: string;
   dsl: string;
   /** The grant date the template is evaluated under — handed to `inferSchedule`
-   *  so a cliff is recoverable as a cliff (Decision 3). */
+   *  so a cliff is recoverable as a cliff. */
   grantDate: OCTDate;
   /** Grant quantity for the evaluation; also the `<total>` in the DSL. */
   total: number;
@@ -145,11 +145,11 @@ export function gridCases(): OracleCase[] {
   return cases;
 }
 
-// Hand-pinned seeds the issue calls out by name. These are NOT parametric grid
-// points — a THEN chain and an off-grid grant date don't fit the six axes — so
-// they're spelled out and flow through the same oracle. Their expected bucket is
+// Hand-pinned seeds for known-interesting shapes a grid point can't express — a
+// THEN chain and an off-grid grant date don't fit the six axes — so they're
+// spelled out and flow through the same oracle. Their expected bucket is
 // snapshot-recorded, never hard-asserted, so a future fix that rescues one is a
-// benign snapshot diff (AC4).
+// benign snapshot diff.
 export const SEED_CASES: OracleCase[] = [
   {
     // Cliff round-down ripple. The grant sits 12 months before the lump, so the
@@ -189,7 +189,7 @@ export const SEED_CASES: OracleCase[] = [
 ];
 
 // Named clean cases the test hard-asserts land in the clean bucket, INDEPENDENT
-// of the snapshot (AC6) — so a case sliding clean → broken fails even under
+// of the snapshot — so a case sliding clean → broken fails even under
 // `vitest -u`. Kept non-empty by the test so the tripwire can't be neutered.
 export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
   {
@@ -222,15 +222,14 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
   },
 ];
 
-// The `[5,2,1,2,2]` stacked-cover stream from the issue: a 2-statement PLUS
-// superposition that infer emits as a 3-statement cover. Un-mixing a stacked
-// cover is non-unique by construction (Non-goals), so this is recorded as a
-// deliberately-excluded breadcrumb for a future fix-issue and never run through
-// the asserted oracle.
+// The `[5,2,1,2,2]` stacked-cover stream: a 2-statement PLUS superposition that
+// infer emits as a 3-statement cover. Un-mixing a stacked cover is non-unique by
+// construction, so this is recorded as a deliberately-excluded breadcrumb for a
+// future fix-issue and never run through the asserted oracle.
 export const EXCLUDED_SEEDS = [
   {
     id: "excluded-0-stacked-cover",
     tranches: [5, 2, 1, 2, 2],
-    why: "stacked PLUS-superposed cover; un-mixing is non-unique, out of scope (Non-goals)",
+    why: "un-mixing a stacked PLUS cover is non-unique by construction; deliberately out of scope",
   },
 ];
