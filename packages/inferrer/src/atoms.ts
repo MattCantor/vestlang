@@ -2,16 +2,13 @@ import type {
   OCTDate,
   Statement,
   SystemAnchorTag,
-  VestingDayOfMonth,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { walk } from "./cadence.js";
 import type {
   CliffUniformComponent,
   Component,
   SingleTrancheComponent,
-  UniformComponent,
 } from "./types.js";
 
 // A bare DATE anchor is positionally neutral — it fits a start or a cliff slot —
@@ -23,30 +20,6 @@ function bareDate<A extends SystemAnchorTag = SystemAnchorTag>(
     type: "NODE",
     base: { type: "DATE", value: date },
     offsets: [],
-  };
-}
-
-function buildUniform(
-  c: UniformComponent,
-  policy: VestingDayOfMonth,
-): Statement {
-  const total = c.total;
-  // The vesting start sits one period before the first installment: a FROM-anchored
-  // train's first tranche lands at start + 1 period, so back the start out by one.
-  const vestingStart = walk(c.startDate, c.cadence, -1, policy);
-  const periodicity: VestingPeriod = {
-    type: c.cadence.unit,
-    length: c.cadence.length,
-    occurrences: c.occurrences,
-  };
-  return {
-    type: "STATEMENT",
-    amount: { type: "QUANTITY", value: total },
-    expr: {
-      type: "SCHEDULE",
-      vesting_start: bareDate(vestingStart),
-      periodicity,
-    },
   };
 }
 
@@ -101,11 +74,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
   };
 }
 
-export function buildStatement(
-  c: Component,
-  policy: VestingDayOfMonth,
-): Statement {
-  if (c.kind === "UNIFORM") return buildUniform(c, policy);
+export function buildStatement(c: Component): Statement {
   if (c.kind === "SINGLE_TRANCHE") return buildSingle(c);
   return buildCliffUniform(c);
 }

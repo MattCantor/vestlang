@@ -8,7 +8,7 @@ import type {
   OCTDate,
 } from "@vestlang/types";
 import { inferSchedule } from "../src/index.js";
-import type { TrancheInput } from "../src/types.js";
+import type { HypothesisFamily, TrancheInput } from "../src/types.js";
 
 // Render an events-only reason to the legible sentence the snapshot pins. The
 // production prose renderer (`reasonToString`) lives in the pipeline's
@@ -86,12 +86,9 @@ interface CaseSnapshot {
   status: string;
   reason?: string;
   residual: number;
-  decomposition: {
-    uniforms: number;
-    singles: number;
-    cliffFolds: number;
-    preGrantFolds: number;
-  };
+  // One hypothesis-family tag per emitted statement, in program order — the shape
+  // recovery took (plain / cliff / fold / then-segment / literal).
+  decomposition: HypothesisFamily[];
 }
 
 function characterize(c: CorpusCase): CaseSnapshot {
@@ -126,12 +123,7 @@ function characterize(c: CorpusCase): CaseSnapshot {
       ? { reason: renderReason(schedule.resolution.reason) }
       : {}),
     residual: inferred.diagnostics.residualError,
-    decomposition: {
-      uniforms: inferred.decomposition.uniforms.length,
-      singles: inferred.decomposition.singles.length,
-      cliffFolds: inferred.decomposition.cliffFolds,
-      preGrantFolds: inferred.decomposition.preGrantFolds,
-    },
+    decomposition: inferred.decomposition.map((c) => c.tag),
   };
 }
 

@@ -55,10 +55,12 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
     }
   });
 
-  // Family 2: a cliff head that hands off to a slower tail. The inferrer folds
-  // the lead lump into a CLIFF on the head statement, then chains the tail.
-  it("recovers a cliff-head THEN tail that runEvaluate accepts", () => {
-    const cliffThenTail: TrancheInput[] = [
+  // Family 2: a lead lump (300 = 3 × 100) that hands off to a slower tail. The
+  // cliff family needs a uniform-amount tail (this one steps 100 → 50), so recovery
+  // falls to the per-segment THEN family: a short first segment plus continuations —
+  // one schedule (THEN), with the lead reading as a plain segment, not a CLIFF.
+  it("recovers a lead-lump THEN tail that runEvaluate accepts", () => {
+    const leadLumpThenTail: TrancheInput[] = [
       { date: "2024-02-01", amount: 300 },
       { date: "2024-03-01", amount: 100 },
       { date: "2024-04-01", amount: 100 },
@@ -67,9 +69,9 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
       { date: "2024-07-01", amount: 50 },
       { date: "2024-08-01", amount: 50 },
     ];
-    const { dsl, result } = inferThenEvaluate(cliffThenTail, "2023-11-01");
-    expect(dsl).toContain("CLIFF");
+    const { dsl, result } = inferThenEvaluate(leadLumpThenTail, "2023-11-01");
     expect(dsl).toContain("THEN");
+    expect(dsl).not.toContain("CLIFF");
 
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -77,7 +79,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
       const produced = result.view.installments
         .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);
-      expect(produced).toBe(grantQuantity(cliffThenTail));
+      expect(produced).toBe(grantQuantity(leadLumpThenTail));
       expect(result.breakdown).toHaveLength(1);
     }
   });

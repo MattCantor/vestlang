@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
-import { evaluateStatement } from "@vestlang/evaluator";
+import { evaluateProgram, evaluateStatement } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import type {
   ResolutionContextInput,
@@ -11,10 +11,21 @@ import type {
   VestingDayOfMonth,
 } from "@vestlang/types";
 import { inferSchedule, InferInputError } from "../src/index.js";
-import type { TrancheInput } from "../src/types.js";
+import type {
+  HypothesisFamily,
+  InferResult,
+  TrancheInput,
+} from "../src/types.js";
 
 function d(s: string): OCTDate {
   return s;
+}
+
+/** Count decomposition components carrying a given hypothesis-family tag. The new
+ * result shape is one tagged component per emitted statement, so these replace the
+ * old `uniforms/singles/cliffFolds/preGrantFolds` counts. */
+function nTag(r: InferResult, tag: HypothesisFamily): number {
+  return r.decomposition.filter((c) => c.tag === tag).length;
 }
 
 function monthly(startISO: string, n: number, amount: number): TrancheInput[] {
@@ -34,26 +45,25 @@ function monthly(startISO: string, n: number, amount: number): TrancheInput[] {
 }
 
 describe("inferSchedule — pure uniform", () => {
-  it("48 equal monthly tranches → one UNIFORM", () => {
+  it("48 equal monthly tranches → one plain uniform", () => {
     const tranches = monthly("2024-02-01", 48, 1000);
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.singles.length).toBe(0);
-    expect(result.decomposition.cliffFolds).toBe(0);
+    expect(result.decomposition).toHaveLength(1);
+    expect(nTag(result, "plain")).toBe(1);
 
-    const uniform = result.decomposition.uniforms[0];
-    expect(uniform.occurrences).toBe(48);
-    expect(uniform.total).toBe(48000);
-    expect(uniform.cadence).toEqual({ unit: "MONTHS", length: 1 });
+    const c = result.decomposition[0];
+    expect(c.occurrences).toBe(48);
+    expect(c.total).toBe(48000);
+    expect(c.period).toEqual({ unit: "MONTHS", length: 1 });
 
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months EVERY 1 month/i);
     expect(result.dsl).toContain("FROM DATE 2024-01-01");
   });
 
-  it("12 quarterly tranches → one UNIFORM at 3-month cadence", () => {
+  it("12 quarterly tranches → one plain uniform at 3-month cadence", () => {
     const tranches: TrancheInput[] = [];
     for (let i = 0; i < 12; i++) {
       const month = 4 + i * 3;
@@ -67,19 +77,19 @@ describe("inferSchedule — pure uniform", () => {
 
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "MONTHS",
       length: 3,
     });
-    expect(result.decomposition.uniforms[0].occurrences).toBe(12);
+    expect(result.decomposition[0].occurrences).toBe(12);
   });
 });
 
 describe("inferSchedule — cliff", () => {
-  it("1-year cliff (lump after the grant date) folds to one cliff statement", () => {
+  it("1-year cliff (lump after the grant date) recovers as one CLIFF statement", () => {
     // Lump at 2025-01-01 is one year AFTER the grant date 2024-01-01, so it is a
-    // genuine cliff, not pre-grant accrual.
+    // genuine cliff (12 × 1000 released together).
     const tranches: TrancheInput[] = [
       { date: d("2025-01-01"), amount: 12000 },
       ...monthly("2025-02-01", 36, 1000),
@@ -88,15 +98,19 @@ describe("inferSchedule — cliff", () => {
     const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.cliffFolds).toBe(1);
-    expect(result.decomposition.preGrantFolds).toBe(0);
+    expect(nTag(result, "cliff")).toBe(1);
+    expect(nTag(result, "fold")).toBe(0);
     expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months/i);
     expect(result.dsl).toContain("FROM DATE 2024-01-01");
   });
 
-  it("cliff amount that is not an integer multiple → does not fold", () => {
+  it("cliff amount that is not an integer multiple → no cliff (recovers as a THEN chain)", () => {
+    // No folded count's cumulative-round-down floor lands within ±1 of 11500, so
+    // the cliff family declines. The head-plus-tail still reproduces exactly, as a
+    // two-segment THEN chain — so the honest emission carries no CLIFF token, not a
+    // failed fit.
     const tranches: TrancheInput[] = [
       { date: d("2025-01-01"), amount: 11500 },
       ...monthly("2025-02-01", 36, 1000),
@@ -105,17 +119,16 @@ describe("inferSchedule — cliff", () => {
     const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.cliffFolds).toBe(0);
-    expect(result.decomposition.preGrantFolds).toBe(0);
+    expect(nTag(result, "cliff")).toBe(0);
+    expect(nTag(result, "fold")).toBe(0);
     expect(result.dsl).not.toContain("CLIFF");
   });
 
   it("no grant date supplied → still recovers the cliff structurally", () => {
-    // Same tranche stream as a cliff (lump = 12×1000 on the first tranche date,
-    // then 36 monthly), but NO grant date is supplied. With no grant date,
-    // foldPreGrant must not run — it cannot ask "did vesting start before the
-    // grant?" — and foldCliffs must fold on shape alone, deducing the vesting
-    // start by walking back k periods. The cliff must still be recovered.
+    // Same stream as a cliff, but NO grant date is supplied, so it defaults to the
+    // lump date (the first tranche). The cliff family walks the vesting start back
+    // from the tail and emits a CLIFF whose 12-month hold lands the lump exactly on
+    // that defaulted grant.
     const tranches: TrancheInput[] = [
       { date: d("2025-01-01"), amount: 12000 },
       ...monthly("2025-02-01", 36, 1000),
@@ -124,16 +137,18 @@ describe("inferSchedule — cliff", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.cliffFolds).toBe(1);
-    expect(result.decomposition.preGrantFolds).toBe(0);
+    expect(nTag(result, "cliff")).toBe(1);
+    expect(nTag(result, "fold")).toBe(0);
     expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toMatch(/OVER 48 months/i);
   });
 
-  it("cliff head that drops to a slower rate → cliff statement THEN a tail", () => {
-    // A three-month cliff (300 = 3×100), then a monthly tail, then the tail slows
-    // down. The cliff abuts the tail on the grid, so it's one schedule whose rate
-    // changes: a cliff statement followed by a THEN continuation, not two grants.
+  it("cliff head that drops to a slower rate → a THEN chain, no CLIFF token", () => {
+    // A three-month cliff head (300 = 3 × 100), a monthly tail, then a slower
+    // monthly tail. The cliff family needs a uniform-amount tail (this one steps
+    // 100 → 50), so recovery falls to the per-segment THEN family: a short first
+    // segment plus two continuations. One schedule (THEN, not PLUS), but the head
+    // reads as a plain segment rather than a CLIFF.
     const tranches: TrancheInput[] = [
       { date: d("2024-02-01"), amount: 300 },
       { date: d("2024-03-01"), amount: 100 },
@@ -147,18 +162,21 @@ describe("inferSchedule — cliff", () => {
     const result = inferSchedule({ tranches, grantDate: d("2023-11-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.cliffFolds).toBe(1);
-    expect(result.dsl).toContain("CLIFF");
+    expect(nTag(result, "then-segment")).toBe(3);
+    expect(nTag(result, "cliff")).toBe(0);
     expect(result.dsl).toContain("THEN");
     expect(result.dsl).not.toContain("PLUS");
+    expect(result.dsl).not.toContain("CLIFF");
   });
 });
 
 describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
-  it("on-grid lump on the grant date → back-dated vesting start, no cliff", () => {
-    // Vesting started 2023-10-01, granted 2024-01-01; the 3 pre-grant months
-    // lump onto the grant date. Same tranche stream as a cliff, but the lump is
-    // ON the grant date, so it is read as a back-dated vesting start.
+  it("on-grid lump on the grant date, tail a month later → recovered as a CLIFF", () => {
+    // Vesting started 2023-10-01, granted 2024-01-01; the 3 pre-grant months lump
+    // onto the grant date. Numerically this is identical to a 3-month cliff, and
+    // the cliff family (which precedes the pre-grant fold by design) verifies first
+    // because the tail sits a month past the lump — so the honest recovery is a
+    // CLIFF anchored at the true vesting start, not a bare back-dated train.
     const tranches: TrancheInput[] = [
       { date: d("2024-01-01"), amount: 3000 },
       ...monthly("2024-02-01", 45, 1000),
@@ -167,19 +185,18 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
     const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.preGrantFolds).toBe(1);
-    expect(result.decomposition.cliffFolds).toBe(0);
-    expect(result.dsl).not.toContain("CLIFF");
+    expect(nTag(result, "cliff")).toBe(1);
+    expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toContain("48000 VEST");
     expect(result.dsl).toMatch(/OVER 48 months EVERY 1 month/i);
     expect(result.dsl).toContain("FROM DATE 2023-10-01");
   });
 
-  it("off-grid lump (hire date) on the grant date → vesting start on the train's day-of-month", () => {
-    // Hire/vesting-start 2023-09-29 (~3 months + 2 days before a 2024-01-01
-    // grant): under VESTING_START_DAY the train tracks the start's own day (the
-    // 29th, clamped where a month is short) and the lump lands on the arbitrary
-    // grant date.
+  it("off-grid lump (hire date) on the grant date → a pre-grant fold, no cliff", () => {
+    // Hire/vesting-start 2023-09-29 (~3 months + 2 days before a 2024-01-01 grant).
+    // The tail's first installment (2024-01-29) sits in the SAME month as the lump,
+    // so the cliff family declines; the pre-grant fold recovers a plain back-dated
+    // train whose pre-grant months lump onto the grant date.
     const tranches: TrancheInput[] = [
       { date: d("2024-01-01"), amount: 3000 },
       { date: d("2024-01-29"), amount: 1000 },
@@ -197,15 +214,16 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
     });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.preGrantFolds).toBe(1);
-    expect(result.decomposition.cliffFolds).toBe(0);
+    expect(nTag(result, "fold")).toBe(1);
+    expect(nTag(result, "cliff")).toBe(0);
     expect(result.dsl).not.toContain("CLIFF");
     expect(result.dsl).toContain("FROM DATE 2023-09-29");
   });
 
-  it("rounded train (100000 over 48) with a pre-grant lump still folds", () => {
-    // 100000/48 does not divide evenly, so installments jitter; the fold is
-    // validated by evaluation, not by lump = k * perTranche arithmetic.
+  it("rounded train (100000 over 48) with a pre-grant lump → recovered as a CLIFF", () => {
+    // 100000/48 does not divide evenly, so installments jitter; recovery is
+    // validated by evaluation, not lump = k × perTranche arithmetic. As with the
+    // on-grid case, the tail sits a month past the lump, so the cliff reading wins.
     const program = normalizeProgram(
       parse("100000 VEST FROM DATE 2023-10-01 OVER 48 months EVERY 1 month"),
     );
@@ -216,9 +234,6 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
       vesting_day_of_month: "VESTING_START_DAY",
     });
 
-    // Hint the policy: this case exercises rounded-train folding, not convention
-    // detection, and the full policy search over jittery 48-tranche input is slow
-    // (a property of the B&B decompose, not the fold).
     const result = inferSchedule({
       tranches: full,
       grantDate: d("2024-01-01"),
@@ -226,14 +241,17 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
     });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.preGrantFolds).toBe(1);
-    expect(result.dsl).not.toContain("CLIFF");
+    expect(nTag(result, "cliff")).toBe(1);
+    expect(result.dsl).toContain("CLIFF");
     expect(result.dsl).toContain("FROM DATE 2023-10-01");
   });
 });
 
-describe("inferSchedule — superposition", () => {
-  it("uniform + one-off bonus → UNIFORM + SINGLE_TRANCHE", () => {
+describe("inferSchedule — superposition (additive shapes)", () => {
+  it("uniform + one-off bonus → the literal per-date fallback", () => {
+    // The analytic core has no additive/peel-and-recurse family, so a monthly train
+    // plus an off-grid bonus has no recognized template shape and degrades to the
+    // projection-lossless literal fallback (a PLUS list of dated lumps).
     const tranches: TrancheInput[] = [
       ...monthly("2024-02-01", 48, 1000),
       { date: d("2025-06-15"), amount: 10000 },
@@ -242,26 +260,17 @@ describe("inferSchedule — superposition", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.singles.length).toBe(1);
-    expect(result.decomposition.singles[0]).toEqual({
-      date: "2025-06-15",
-      amount: 10000,
-    });
-    // Two components (the uniform plus the one-off bonus) compose with PLUS.
+    expect(result.diagnostics.fallback).toBe(true);
+    expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
     expect(result.dsl).toMatch(/PLUS/);
   });
 
-  it("two cadences (quarterly yr 1 + monthly yr 2+) → two UNIFORMs", () => {
-    // The quarterly year does NOT hand off cleanly to the monthly tail: stepping
-    // one quarter past the last quarterly tranche lands in April, but the monthly
-    // run starts in February. The segments overlap rather than abut, so this isn't
-    // one forward chain — it stays two stacked grids (PLUS), not a THEN chain.
-    //
-    // Amounts give each grid a terminating share of the total: quarterly
-    // 8000/20000 = 2/5, monthly 12000/20000 = 3/5. Percentages store as truncated
-    // Numeric decimals, so the original 5/11 + 6/11 split (repeating) would not
-    // round-trip; 2/5 + 3/5 stores exactly.
+  it("two cadences (quarterly yr 1 + monthly yr 2+) → one THEN chain", () => {
+    // The quarterly year hands off cleanly to the monthly tail on the running
+    // cursor: the tail continues one MONTH (its own cadence) past the last
+    // quarterly tranche, which lands exactly on the observed monthly grid. The
+    // per-segment-cadence THEN family recovers this as one storable template, not
+    // two stacked grids.
     const tranches: TrancheInput[] = [
       { date: d("2024-04-01"), amount: 2000 },
       { date: d("2024-07-01"), amount: 2000 },
@@ -272,23 +281,25 @@ describe("inferSchedule — superposition", () => {
 
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(2);
+    expect(nTag(result, "then-segment")).toBe(2);
+    expect(result.dsl).toContain("THEN");
+    expect(result.dsl).not.toContain("PLUS");
   });
 });
 
 describe("inferSchedule — degenerate", () => {
-  it("single tranche → one SINGLE_TRANCHE", () => {
+  it("single tranche → one dated lump (literal)", () => {
     const tranches: TrancheInput[] = [{ date: d("2025-06-15"), amount: 5000 }];
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(0);
-    expect(result.decomposition.singles.length).toBe(1);
+    expect(result.decomposition).toHaveLength(1);
+    expect(nTag(result, "literal")).toBe(1);
     expect(result.dsl).toContain("5000 VEST");
     expect(result.dsl).toContain("FROM DATE 2025-06-15");
   });
 
-  it("three bespoke tranches with irregular dates → three SINGLE_TRANCHEs", () => {
+  it("three bespoke tranches with irregular dates → three literal lumps", () => {
     const tranches: TrancheInput[] = [
       { date: d("2024-03-12"), amount: 10000 },
       { date: d("2024-08-07"), amount: 25000 },
@@ -297,15 +308,15 @@ describe("inferSchedule — degenerate", () => {
 
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(0);
-    expect(result.decomposition.singles.length).toBe(3);
+    expect(result.diagnostics.fallback).toBe(true);
+    expect(nTag(result, "literal")).toBe(3);
   });
 });
 
 describe("inferSchedule — zero-total tranche set", () => {
-  // A non-empty input whose surviving mass is all zero would otherwise decompose
-  // an empty date set into the empty program and trip core's non-empty assertion.
-  // The guard returns a single `0 VEST FROM DATE <earliest>` statement instead.
+  // A non-empty input whose surviving mass is all zero short-circuits to a single
+  // `0 VEST FROM DATE <earliest>` statement (a valid degenerate template) rather
+  // than decomposing an empty date set.
 
   it("(a) single all-zero tranche → degenerate template, no throw", () => {
     const result = inferSchedule({
@@ -315,13 +326,15 @@ describe("inferSchedule — zero-total tranche set", () => {
     expect(result.dsl).toBe("0 VEST FROM DATE 2025-02-01");
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.diagnostics.totalQuantity).toBe(0);
-    expect(result.decomposition.singles).toHaveLength(1);
-    expect(result.decomposition.singles[0]).toEqual({
-      date: "2025-02-01",
-      amount: 0,
-    });
-    expect(result.decomposition.uniforms).toHaveLength(0);
-    expect(result.decomposition.cliffFolds).toBe(0);
+    expect(result.decomposition).toEqual([
+      {
+        tag: "literal",
+        start: "2025-02-01",
+        occurrences: 1,
+        period: { unit: "DAYS", length: 0 },
+        total: 0,
+      },
+    ]);
   });
 
   it("(b) multiple zero tranches on different dates → single statement at earliest", () => {
@@ -340,10 +353,6 @@ describe("inferSchedule — zero-total tranche set", () => {
   });
 
   it("(c) the degenerate DSL round-trips to an empty installment stream at residual 0", () => {
-    // Bespoke forward-only check — NOT runRoundTrip, which would re-infer the
-    // (empty) evaluated stream and throw InferInputError. Re-parse + normalize the
-    // emitted DSL, evaluate against the same anchor with grantQuantity 0, and
-    // assert it produces no RESOLVED tranches (no installment with amount > 0).
     const result = inferSchedule({
       tranches: [{ date: d("2025-02-01"), amount: 0 }],
     });
@@ -366,7 +375,11 @@ describe("inferSchedule — zero-total tranche set", () => {
     ).not.toThrow();
   });
 
-  it("(e) mixed input still drops zeros (regression, behavior unchanged)", () => {
+  it("(e) mixed input still drops interior zeros", () => {
+    // Only the 100-share row survives; the two zero rows are dropped. The single
+    // survivor recovers as a grant-anchored one-occurrence train (the grant date
+    // defaults to the earliest date, 2025-01-01, two months before it), projecting
+    // exactly one tranche of 100 on 2025-03-01.
     const result = inferSchedule({
       tranches: [
         { date: d("2025-01-01"), amount: 0 },
@@ -375,12 +388,19 @@ describe("inferSchedule — zero-total tranche set", () => {
       ],
     });
 
-    expect(result.dsl).toBe("100 VEST FROM DATE 2025-03-01");
     expect(result.diagnostics.totalQuantity).toBe(100);
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.singles).toEqual([
-      { date: "2025-03-01", amount: 100 },
-    ]);
+    expect(result.decomposition).toHaveLength(1);
+    expect(result.decomposition[0].total).toBe(100);
+
+    // The dropped zeros leave a single tranche of 100 on the surviving date.
+    const reTranches = evalAllResolved(normalizeProgram(parse(result.dsl)), {
+      grantDate: d("2025-01-01"),
+      events: {},
+      grantQuantity: 100,
+      vesting_day_of_month: result.diagnostics.vestingDayOfMonth,
+    });
+    expect(reTranches).toEqual([{ date: "2025-03-01", amount: 100 }]);
   });
 
   it("(i) a caller-supplied policy is echoed, not overridden", () => {
@@ -400,7 +420,7 @@ describe("inferSchedule — zero-total tranche set", () => {
 });
 
 describe("inferSchedule — policy detection", () => {
-  it("month-end schedule (seeded on day 31) → detects VESTING_START_DAY policy", () => {
+  it("month-end schedule (seeded on day 31) → a month-end day-of-month policy", () => {
     const ctx = {
       grantDate: d("2024-01-31"),
       events: {},
@@ -419,18 +439,15 @@ describe("inferSchedule — policy detection", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    // Either VESTING_START_DAY (with seed day 31) or LAST_DAY_OF_MONTH produces
-    // identical tranches for this month-end input — both are valid
-    // reconstructions. The inferrer picks whichever gives the simplest
-    // decomposition; LAST_DAY_OF_MONTH wins because it allows a single 48-run
-    // starting from the first tranche (2024-02-29).
+    // Either VESTING_START_DAY (seeded day 31) or LAST_DAY_OF_MONTH reproduces this
+    // month-end stream; the month-end pattern prefers LAST_DAY_OF_MONTH.
     expect(result.diagnostics.vestingDayOfMonth).toMatch(
       /VESTING_START_DAY|LAST_DAY_OF_MONTH/,
     );
-    expect(result.decomposition.uniforms.length).toBe(1);
+    expect(nTag(result, "plain")).toBe(1);
   });
 
-  it("mid-month schedule (the 15th) → folds into a single VESTING_START_DAY train", () => {
+  it("mid-month schedule (the 15th) → one plain monthly train", () => {
     const tranches: TrancheInput[] = [];
     for (let i = 0; i < 12; i++) {
       const month = 2 + i;
@@ -444,20 +461,14 @@ describe("inferSchedule — policy detection", () => {
 
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "MONTHS",
       length: 1,
     });
   });
 
   it("explicit MINUS_ONE hint projects an end-of-month stream into a clean fit", () => {
-    // The MINUS_ONE grid off a Jan-31 (non-leap) start: each month clamps the
-    // 31st anniversary down, then steps back a day. Projecting under an explicit
-    // MINUS_ONE hint reproduces this stream with no residual — the hint bypasses
-    // the POLICY_CANDIDATES auto-search, which never originates MINUS_ONE. Folding
-    // such an end-of-month stream back into a single uniform is separate, deferred
-    // work, so this asserts the clean projection, not the uniform recovery.
     const tranches: TrancheInput[] = [
       { date: d("2025-02-27"), amount: 1000 },
       { date: d("2025-03-30"), amount: 1000 },
@@ -477,6 +488,149 @@ describe("inferSchedule — policy detection", () => {
       "VESTING_START_DAY_MINUS_ONE",
     );
     expect(result.diagnostics.totalQuantity).toBe(6000);
+  });
+
+  it("day-31-start MINUS_ONE stream recovers under MINUS_ONE with no hint", () => {
+    // The #503 mechanism through the real public surface: a month-end (day-31 seed)
+    // train projected under VESTING_START_DAY_MINUS_ONE is recovered — dom and all —
+    // with NO policy hint supplied, because the month-end pattern's derived
+    // candidate set includes MINUS_ONE.
+    const stmt = normalizeProgram(
+      parse("6000 VEST FROM DATE 2024-01-31 OVER 6 months EVERY 1 month"),
+    )[0];
+    const installments: Installment[] = evaluateStatement(stmt, {
+      grantDate: d("2024-01-31"),
+      events: {},
+      grantQuantity: 6000,
+      vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
+    }).resolution.installments;
+    const tranches: TrancheInput[] = installments
+      .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+      .map((i) => ({ date: i.date, amount: i.amount }));
+
+    const result = inferSchedule({ tranches });
+
+    expect(result.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(result.diagnostics.vestingDayOfMonth).toBe(
+      "VESTING_START_DAY_MINUS_ONE",
+    );
+    expect(result.diagnostics.totalQuantity).toBe(6000);
+  });
+});
+
+describe("inferSchedule — THEN chain recovery", () => {
+  // A grant whose monthly rate doubles for two months and then drops back — one
+  // schedule with a rate change, recovered as a three-segment THEN chain.
+  const RATE_CHANGE: TrancheInput[] = [
+    { date: "2023-12-01", amount: 100 },
+    { date: "2024-01-01", amount: 100 },
+    { date: "2024-02-01", amount: 200 },
+    { date: "2024-03-01", amount: 200 },
+    { date: "2024-04-01", amount: 100 },
+    { date: "2024-05-01", amount: 100 },
+  ];
+
+  function collapseStatus(inferred: InferResult, grantDate: OCTDate): string {
+    const program = normalizeProgram(parse(inferred.dsl));
+    return evaluateProgram(program, {
+      grantDate,
+      events: {},
+      grantQuantity: inferred.diagnostics.totalQuantity,
+      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+    }).resolution.status;
+  }
+
+  it("turns a rate-change stream into a single THEN template", () => {
+    const inferred = inferSchedule({ tranches: RATE_CHANGE });
+    expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(nTag(inferred, "then-segment")).toBe(3);
+    expect(inferred.dsl).toContain("THEN");
+    expect(inferred.dsl).not.toContain("PLUS");
+    expect(collapseStatus(inferred, RATE_CHANGE[0].date)).toBe("template");
+  });
+
+  it("emits a head followed by chained tails, never the other way round", () => {
+    const program = normalizeProgram(
+      parse(inferSchedule({ tranches: RATE_CHANGE }).dsl),
+    );
+    expect(program.map((s) => s.chained ?? false)).toEqual([false, true, true]);
+  });
+
+  it("a cliff head handing off to a quarterly tail → a THEN chain, no CLIFF token", () => {
+    // A monthly cliff head then a quarterly tail — a cadence change. The
+    // per-segment-cadence THEN family recovers it as one template, but (like the
+    // slower-rate case) the head reads as a plain segment, not a CLIFF.
+    const cliffThenQuarterly: TrancheInput[] = [
+      { date: "2024-02-01", amount: 300 },
+      { date: "2024-03-01", amount: 100 },
+      { date: "2024-04-01", amount: 100 },
+      { date: "2024-05-01", amount: 100 },
+      { date: "2024-08-01", amount: 100 },
+      { date: "2024-11-01", amount: 100 },
+    ];
+    const inferred = inferSchedule({
+      tranches: cliffThenQuarterly,
+      grantDate: "2023-11-01",
+    });
+    expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(nTag(inferred, "then-segment")).toBe(3);
+    expect(inferred.dsl).toContain("THEN");
+    expect(inferred.dsl).not.toContain("PLUS");
+    expect(inferred.dsl).not.toContain("CLIFF");
+    expect(collapseStatus(inferred, "2023-11-01")).toBe("template");
+  });
+
+  it("a month-end rate change stays one template through the clamping", () => {
+    // The head ends on a 31st-of-month grid; its next slot springs back to Feb 29,
+    // and the rate then triples. Written as THEN the tail has no date of its own
+    // and just continues the grid, so it stays one template.
+    const monthEnd: TrancheInput[] = [
+      { date: "2023-12-31", amount: 75 },
+      { date: "2024-01-31", amount: 75 },
+      { date: "2024-02-29", amount: 225 },
+      { date: "2024-03-31", amount: 225 },
+    ];
+    const inferred = inferSchedule({
+      tranches: monthEnd,
+      grantDate: "2023-11-30",
+    });
+    expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
+    expect(inferred.dsl).toContain("THEN");
+    expect(collapseStatus(inferred, "2023-11-30")).toBe("template");
+  });
+});
+
+describe("inferSchedule — collapse residual honesty (#147)", () => {
+  it("a lump plus a fast train reproduces without re-allocating onto the grant date", () => {
+    // The #147 repro: a 360-share lump on the grant date, then 105 every three
+    // days. The emitted DSL, re-evaluated the way a consumer does (one collapsed
+    // program walk), must not re-allocate the train's mass back onto the grant date.
+    const tranches: TrancheInput[] = [{ date: "2025-02-01", amount: 360 }];
+    for (
+      let day = new Date("2025-02-04T00:00:00Z");
+      day <= new Date("2025-02-25T00:00:00Z");
+      day.setUTCDate(day.getUTCDate() + 3)
+    ) {
+      tranches.push({ date: day.toISOString().slice(0, 10), amount: 105 });
+    }
+
+    const inferred = inferSchedule({ tranches, grantDate: "2025-02-01" });
+    expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
+
+    const total = tranches.reduce((a, t) => a + t.amount, 0);
+    const reTranches = evalAllResolved(normalizeProgram(parse(inferred.dsl)), {
+      grantDate: "2025-02-01",
+      events: {},
+      grantQuantity: total,
+      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+    });
+    const byDate = new Map(reTranches.map((t) => [t.date, t.amount]));
+
+    // No re-allocation onto the grant date — 360, not 360 + 105.
+    expect(byDate.get("2025-02-01")).toBe(360);
+    for (const t of tranches) {
+      expect(byDate.get(t.date) ?? 0).toBe(t.amount);
+    }
   });
 });
 
@@ -505,6 +659,25 @@ function evalAllResolved(
     }));
 }
 
+/** Collapse a whole program (the way a consumer re-evaluates emitted DSL) and sum
+ * RESOLVED installments by date. Needed for an inferred program that may be a THEN
+ * chain: a chained tail can't be evaluated on its own — only the whole-program
+ * collapse threads the handoffs. */
+function evalProgramResolved(
+  program: Program,
+  ctx: ResolutionContextInput,
+): TrancheInput[] {
+  const map = new Map<string, number>();
+  for (const inst of evaluateProgram(program, ctx).resolution.installments) {
+    if (inst.state === "RESOLVED") {
+      map.set(inst.date, (map.get(inst.date) ?? 0) + inst.amount);
+    }
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, amount]) => ({ date, amount }));
+}
+
 interface RoundTripCase {
   name: string;
   dsl: string;
@@ -524,10 +697,6 @@ function runRoundTrip(c: RoundTripCase) {
   const program = normalizeProgram(parse(c.dsl));
   const originalTranches = evalAllResolved(program, ctx);
 
-  // Feed back the known grant date: a lump on the grant date is read as
-  // pre-grant accrual, a lump after it as a cliff. Omitting it would default to
-  // the first tranche date and reinterpret cliffs (lump on the default grant) as
-  // pre-grant — see the dedicated pre-grant cases below.
   const inferred = inferSchedule({ tranches: originalTranches, grantDate });
   expect(inferred.diagnostics.residualError).toBeLessThan(1e-6);
 
@@ -539,7 +708,7 @@ function runRoundTrip(c: RoundTripCase) {
     grantQuantity: totalFromInferred,
     vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
   };
-  const reTranches = evalAllResolved(inferredProgram, inferredCtx);
+  const reTranches = evalProgramResolved(inferredProgram, inferredCtx);
   const reByDate = new Map(reTranches.map((t) => [t.date, t.amount]));
   for (const t of originalTranches) {
     const got = reByDate.get(t.date) ?? 0;
@@ -623,11 +792,9 @@ describe("inferSchedule — round-trip", () => {
 });
 
 describe("inferSchedule — rounded trains", () => {
-  // A total that does not divide evenly across its occurrences yields
-  // per-tranche amounts that differ by 1 under cumulative round-down. The
-  // fingerprint-aware decomposer must recognize such a jittery run as a single
-  // UNIFORM — preserving the exact total — rather than fragmenting it into
-  // pulses.
+  // A total that does not divide evenly across its occurrences yields per-tranche
+  // amounts that differ by 1 under cumulative round-down. Recovery must recognize
+  // such a jittery run as a single plain uniform preserving the exact total.
   const cases: Array<{ total: number; over: number }> = [
     { total: 10000, over: 48 },
     { total: 100, over: 3 },
@@ -637,7 +804,7 @@ describe("inferSchedule — rounded trains", () => {
   ];
 
   for (const c of cases) {
-    it(`folds ${c.total} over ${c.over} months into one UNIFORM`, () => {
+    it(`folds ${c.total} over ${c.over} months into one plain uniform`, () => {
       const ctx: ResolutionContextInput = {
         grantDate: d("2024-01-01"),
         events: {},
@@ -661,20 +828,19 @@ describe("inferSchedule — rounded trains", () => {
       const result = inferSchedule({ tranches });
 
       expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-      expect(result.decomposition.uniforms.length).toBe(1);
-      expect(result.decomposition.singles.length).toBe(0);
-      expect(result.decomposition.cliffFolds).toBe(0);
+      expect(result.decomposition).toHaveLength(1);
+      expect(nTag(result, "plain")).toBe(1);
 
-      const u = result.decomposition.uniforms[0];
+      const u = result.decomposition[0];
       expect(u.occurrences).toBe(c.over);
       expect(u.total).toBe(c.total);
-      expect(u.cadence).toEqual({ unit: "MONTHS", length: 1 });
+      expect(u.period).toEqual({ unit: "MONTHS", length: 1 });
     });
   }
 });
 
 /* ------------------------
- * Data-adaptive cadence (estimateCadences + per-residual re-estimation)
+ * Data-adaptive cadence
  * ------------------------ */
 
 /** `n` tranches starting at (startY, startM) stepping `step` calendar months. */
@@ -727,81 +893,67 @@ function everyDays(
 }
 
 describe("inferSchedule — data-adaptive cadence", () => {
-  it("every-2-month (out of vocabulary) → one UNIFORM at 2-month cadence", () => {
+  it("every-2-month (out of vocabulary) → one plain uniform at 2-month cadence", () => {
     const result = inferSchedule({
       tranches: everyMonths(2024, 1, 2, 12, 2000),
     });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.singles.length).toBe(0);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "MONTHS",
       length: 2,
     });
-    expect(result.decomposition.uniforms[0].occurrences).toBe(12);
+    expect(result.decomposition[0].occurrences).toBe(12);
     expect(result.dsl).toMatch(/EVERY 2 months/i);
   });
 
-  it("every-5-month (out of vocabulary) → one UNIFORM at 5-month cadence", () => {
+  it("every-5-month (out of vocabulary) → one plain uniform at 5-month cadence", () => {
     const result = inferSchedule({
       tranches: everyMonths(2024, 1, 5, 10, 3000),
     });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "MONTHS",
       length: 5,
     });
-    expect(result.decomposition.uniforms[0].occurrences).toBe(10);
+    expect(result.decomposition[0].occurrences).toBe(10);
     expect(result.dsl).toMatch(/EVERY 5 months/i);
   });
 
-  it("monthly train + every-5-month bonus → two UNIFORMs (per-residual re-estimation)", () => {
-    // The bonus train sits off the monthly grid (day 15). At the root the
-    // 5-month period is invisible — monthly fills every month — so it only
-    // surfaces in the residual after the monthly train is peeled off. A single
-    // up-front estimate plus the priors would leave the bonus as four singles.
+  it("monthly train + every-5-month bonus → the literal per-date fallback", () => {
+    // The bonus train sits off the monthly grid (day 15). With no additive family
+    // the superposition has no recognized template shape and degrades to the
+    // literal fallback.
     const tranches: TrancheInput[] = [
       ...monthly("2024-01-01", 24, 1000),
       ...everyMonths(2024, 5, 5, 4, 2000, 15),
     ];
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(2);
-    expect(result.decomposition.singles.length).toBe(0);
-    const cadences = result.decomposition.uniforms.map((u) => u.cadence);
-    expect(cadences).toContainEqual({ unit: "MONTHS", length: 1 });
-    expect(cadences).toContainEqual({ unit: "MONTHS", length: 5 });
+    expect(result.diagnostics.fallback).toBe(true);
+    expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
   });
 
-  it("flat biweekly → one UNIFORM at 14-day cadence (issue #3)", () => {
-    // A flat biweekly train spans the March DST transition. The fix to make the
-    // evaluator's DAYS stepper UTC-pure (rather than local-time, which dropped a
-    // day across DST) lets the 14-day uniform round-trip to equal amounts, so it
-    // folds to a single statement instead of fragmenting into 26 singles.
+  it("flat biweekly → one plain uniform at 14-day cadence (issue #3)", () => {
     const result = inferSchedule({
       tranches: everyDays("2024-01-01", 14, 26, 500),
     });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.singles.length).toBe(0);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "DAYS",
       length: 14,
     });
   });
 
-  it("arbitrary 45-day cadence → one UNIFORM (issue #3)", () => {
-    // An out-of-vocabulary day cadence that also crosses the DST boundary; the
-    // data-adaptive estimator derives 45 days and the UTC stepper reproduces the
-    // dates exactly, so it round-trips to a single uniform.
+  it("arbitrary 45-day cadence → one plain uniform (issue #3)", () => {
     const result = inferSchedule({
       tranches: everyDays("2024-01-01", 45, 8, 750),
     });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.decomposition.uniforms.length).toBe(1);
-    expect(result.decomposition.singles.length).toBe(0);
-    expect(result.decomposition.uniforms[0].cadence).toEqual({
+    expect(nTag(result, "plain")).toBe(1);
+    expect(result.decomposition[0].period).toEqual({
       unit: "DAYS",
       length: 45,
     });
@@ -809,9 +961,6 @@ describe("inferSchedule — data-adaptive cadence", () => {
 });
 
 describe("inferSchedule — input contract", () => {
-  // The entry guard rejects out-of-domain input at the inferrer boundary with a
-  // typed InferInputError, rather than letting a bad amount descend into the
-  // evaluator and surface a deeper engine assertion (#74 item 1).
   it("throws InferInputError on empty tranches", () => {
     expect(() => inferSchedule({ tranches: [] })).toThrow(InferInputError);
   });

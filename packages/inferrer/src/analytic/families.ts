@@ -89,6 +89,7 @@ function* plainMonthFamily(
         ],
         dom: dc.dom,
         start,
+        tag: "plain",
       });
     }
     yield* byGrantAlignment(cands, grantDate);
@@ -115,6 +116,7 @@ function* plainDaysFamily(
     program: [plainUniformStmt(T, start, { unit: "DAYS", length: p }, N)],
     dom,
     start,
+    tag: "plain",
   };
 }
 
@@ -160,6 +162,7 @@ function* cliffFamily(
           program: [cliffStmt(T, start, { unit: "MONTHS", length: p }, N, L)],
           dom: dc.dom,
           start,
+          tag: "cliff",
         });
       }
       yield* byGrantAlignment(cands, grantDate);
@@ -184,6 +187,7 @@ function* cliffFamily(
             program: [cliffStmt(T, start, { unit: "MONTHS", length: p }, N, L)],
             dom: dc.dom,
             start,
+            tag: "cliff",
           };
         }
       }
@@ -265,6 +269,7 @@ function* foldFamily(
       ],
       dom: h.dc.dom,
       start: h.start,
+      tag: "fold" as const,
     })),
     grantDate,
   );
@@ -275,6 +280,7 @@ function* foldFamily(
       ],
       dom: h.dc.dom,
       start: h.start,
+      tag: "fold",
     };
 
   // Then the erased-cliff scan: a cliff whose date fell on/before the grant is
@@ -315,6 +321,7 @@ function* foldFamily(
         ],
         dom: h.dc.dom,
         start: h.start,
+        tag: "fold",
       };
     }
   }
@@ -342,6 +349,7 @@ function* singleFamily(
         ],
         dom: dc.dom,
         start: grantDate,
+        tag: "plain",
       });
     }
   }
@@ -355,8 +363,16 @@ function* singleFamily(
       ],
       dom: daysDom,
       start: grantDate,
+      tag: "plain",
     };
-  yield { program: [bareLumpStmt(T, d)], dom: daysDom, start: d };
+  // The bare dated lump is the same shape the literal fallback emits, so it tags
+  // `literal` — a one-off dated amount, not a recovered train.
+  yield {
+    program: [bareLumpStmt(T, d)],
+    dom: daysDom,
+    start: d,
+    tag: "literal",
+  };
 }
 
 // (e) THEN chain for rate-change streams (≤ 3 segments, per-segment cadence) ----------
@@ -417,7 +433,7 @@ function* thenFamily(
       })),
       start,
     );
-    cands.push({ program, dom: dc.dom, start });
+    cands.push({ program, dom: dc.dom, start, tag: "then-segment" });
   }
   yield* byGrantAlignment(cands, grantDate);
 }

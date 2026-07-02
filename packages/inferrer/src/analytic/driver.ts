@@ -21,9 +21,14 @@ import type {
   OCTDate,
   Program,
   ResolutionContextInput,
+  Statement,
   VestingDayOfMonth,
 } from "@vestlang/types";
-import type { TrancheInput } from "../types.js";
+import type {
+  DecompositionComponent,
+  HypothesisFamily,
+  TrancheInput,
+} from "../types.js";
 import { bareLumpStmt } from "./emit.js";
 import { candidates } from "./families.js";
 import {
@@ -34,12 +39,24 @@ import {
 } from "./solvers.js";
 
 /** Assignable to the sweep runner's `InferrerFn` (a wider 2-arg call site); the
- *  optional third arg is the trusted policy hint the 2c wiring will pass. */
+ *  optional third arg is the trusted policy hint the 2c wiring passes. */
 export type AnalyticInferrer = (
   tranches: TrancheInput[],
   grantDate: OCTDate,
   policyHint?: VestingDayOfMonth,
 ) => { dsl: string; vestingDayOfMonth: VestingDayOfMonth };
+
+/** The full analytic result the wired `inferSchedule` builds its `InferResult`
+ *  from — the rendered DSL, the day-of-month it verified under, the typed winning
+ *  program (evaluated directly by `@vestlang/recover`), the tagged decomposition,
+ *  and whether the literal fallback fired. */
+export interface AnalysisResult {
+  dsl: string;
+  dom: VestingDayOfMonth;
+  program: Program;
+  components: DecompositionComponent[];
+  fallback: boolean;
+}
 
 export interface AnalyticStats {
   cases: number;
@@ -100,18 +117,65 @@ function verify(
   }
 }
 
+/** Read a built statement's parameters back for the tagged decomposition. The
+ *  emitter only ever produces plain `SCHEDULE` statements (no selectors), so the
+ *  non-SCHEDULE arm is defensive. A chained THEN tail carries a null start. */
+function describeStatement(
+  stmt: Statement,
+  tag: HypothesisFamily,
+): DecompositionComponent {
+  const total = stmt.amount.type === "QUANTITY" ? stmt.amount.value : 0;
+  const expr = stmt.expr;
+  if (expr.type !== "SCHEDULE") {
+    return {
+      tag,
+      start: null,
+      occurrences: 0,
+      period: { unit: "MONTHS", length: 0 },
+      total,
+    };
+  }
+  const p = expr.periodicity;
+  const vs = expr.vesting_start;
+  const start =
+    vs !== null && vs.type === "NODE" && vs.base.type === "DATE"
+      ? vs.base.value
+      : null;
+  const cliff = p.cliff;
+  const cliffOffset =
+    cliff && cliff.type === "NODE" ? cliff.offsets[0] : undefined;
+  return {
+    tag,
+    start,
+    occurrences: p.occurrences,
+    period: { unit: p.type, length: p.length },
+    total,
+    ...(cliffOffset ? { cliffLength: cliffOffset.value } : {}),
+  };
+}
+
+function componentsOf(
+  program: Program,
+  tag: HypothesisFamily,
+): DecompositionComponent[] {
+  return program.map((stmt) => describeStatement(stmt, tag));
+}
+
 /** Literal per-date decomposition — projection-lossless by construction. Each row
  *  becomes its own dated lump (a PLUS list); an empty stream becomes a single
- *  zero-quantity statement anchored at the grant. */
-function fallback(
-  rows: Row[],
-  grantDate: OCTDate,
-): { dsl: string; vestingDayOfMonth: VestingDayOfMonth } {
+ *  zero-quantity statement anchored at the grant. Every component is `literal`. */
+function fallback(rows: Row[], grantDate: OCTDate): AnalysisResult {
   const program: Program =
     rows.length === 0
       ? [bareLumpStmt(0, grantDate)]
       : rows.map((r) => bareLumpStmt(r.amount, r.date));
-  return { dsl: stringify(program), vestingDayOfMonth: DEFAULT_DOM };
+  return {
+    dsl: stringify(program),
+    dom: DEFAULT_DOM,
+    program,
+    components: componentsOf(program, "literal"),
+    fallback: true,
+  };
 }
 
 function aggregateRows(tranches: TrancheInput[]): Row[] {
@@ -127,24 +191,27 @@ function aggregateRows(tranches: TrancheInput[]): Row[] {
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 }
 
-export const analyticInferrer: AnalyticInferrer = (
-  tranches,
-  grantDate,
-  policyHint,
-) => {
+/** The wired entry point: decompose → hypothesize → verify, returning the full
+ *  analytic result. `inferSchedule` assembles its `InferResult` from this; the
+ *  experiments runners take the thinner `analyticInferrer` view below. */
+export function analyze(
+  tranches: TrancheInput[],
+  grantDate: OCTDate,
+  policyHint?: VestingDayOfMonth,
+): AnalysisResult {
   analyticStats.cases++;
   try {
     const rows = aggregateRows(tranches);
     const T = rows.reduce((s, r) => s + r.amount, 0);
     // An all-zero stream is out of scope here (inferSchedule's own short-circuit
-    // keeps owning it in 2c); fall back rather than decompose an empty date set.
+    // keeps owning it); fall back rather than decompose an empty date set.
     if (rows.length === 0 || T === 0) return fallback(rows, grantDate);
 
     const target = aggregateProjection(rows);
     const seen = new Set<string>();
     let evals = 0;
     for (const cand of candidates(rows, T, grantDate, policyHint)) {
-      // Render ONCE through the same stringify path infer.ts uses.
+      // Render ONCE through the same stringify path the emitter's DSL takes.
       let dsl: string;
       try {
         dsl = stringify(cand.program);
@@ -159,7 +226,13 @@ export const analyticInferrer: AnalyticInferrer = (
       analyticStats.evals++;
       // First verifying candidate in preference order wins.
       if (verify(dsl, cand.dom, grantDate, T, target))
-        return { dsl, vestingDayOfMonth: cand.dom };
+        return {
+          dsl,
+          dom: cand.dom,
+          program: cand.program,
+          components: componentsOf(cand.program, cand.tag),
+          fallback: false,
+        };
     }
     analyticStats.fallbacks++;
     return fallback(rows, grantDate);
@@ -169,4 +242,13 @@ export const analyticInferrer: AnalyticInferrer = (
     analyticStats.fallbacks++;
     return fallback(aggregateRows(tranches), grantDate);
   }
+}
+
+export const analyticInferrer: AnalyticInferrer = (
+  tranches,
+  grantDate,
+  policyHint,
+) => {
+  const r = analyze(tranches, grantDate, policyHint);
+  return { dsl: r.dsl, vestingDayOfMonth: r.dom };
 };

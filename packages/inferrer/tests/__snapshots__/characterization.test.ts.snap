@@ -2,12 +2,11 @@
 
 exports[`inferrer characterization — sequential/THEN baseline > C1: monthly grant whose rate doubles mid-stream, then returns 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 0,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 3,
-  },
+  "decomposition": [
+    "then-segment",
+    "then-segment",
+    "then-segment",
+  ],
   "dsl": "200 VEST FROM DATE 2023-11-01 OVER 2 months EVERY 1 month THEN 400 VEST OVER 2 months EVERY 1 month THEN 200 VEST OVER 2 months EVERY 1 month",
   "residual": 0,
   "status": "template",
@@ -16,12 +15,9 @@ exports[`inferrer characterization — sequential/THEN baseline > C1: monthly gr
 
 exports[`inferrer characterization — sequential/THEN baseline > C2: three-month cliff, then a monthly tail 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 1,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 0,
-  },
+  "decomposition": [
+    "cliff",
+  ],
   "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months",
   "residual": 0,
   "status": "template",
@@ -30,13 +26,12 @@ exports[`inferrer characterization — sequential/THEN baseline > C2: three-mont
 
 exports[`inferrer characterization — sequential/THEN baseline > C3: cliff, then monthly, then a slower monthly tail 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 1,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 1,
-  },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 150 VEST OVER 3 months EVERY 1 month",
+  "decomposition": [
+    "then-segment",
+    "then-segment",
+    "then-segment",
+  ],
+  "dsl": "300 VEST FROM DATE 2024-01-01 OVER 1 month EVERY 1 month THEN 300 VEST OVER 3 months EVERY 1 month THEN 150 VEST OVER 3 months EVERY 1 month",
   "residual": 0,
   "status": "template",
 }
@@ -44,13 +39,12 @@ exports[`inferrer characterization — sequential/THEN baseline > C3: cliff, the
 
 exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + monthly head, then a quarterly tail 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 1,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 1,
-  },
-  "dsl": "600 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month CLIFF 3 months THEN 200 VEST OVER 6 months EVERY 3 months",
+  "decomposition": [
+    "then-segment",
+    "then-segment",
+    "then-segment",
+  ],
+  "dsl": "300 VEST FROM DATE 2024-01-01 OVER 1 month EVERY 1 month THEN 300 VEST OVER 3 months EVERY 1 month THEN 200 VEST OVER 6 months EVERY 3 months",
   "residual": 0,
   "status": "template",
 }
@@ -58,13 +52,17 @@ exports[`inferrer characterization — sequential/THEN baseline > C4: cliff + mo
 
 exports[`inferrer characterization — sequential/THEN baseline > C5: two monthly grants on different days (1st and 15th) — two schedules 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 0,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 2,
-  },
-  "dsl": "400 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 200 VEST FROM DATE 2024-01-15 OVER 4 months EVERY 1 month",
+  "decomposition": [
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+  ],
+  "dsl": "100 VEST FROM DATE 2024-02-01 PLUS 50 VEST FROM DATE 2024-02-15 PLUS 100 VEST FROM DATE 2024-03-01 PLUS 50 VEST FROM DATE 2024-03-15 PLUS 100 VEST FROM DATE 2024-04-01 PLUS 50 VEST FROM DATE 2024-04-15 PLUS 100 VEST FROM DATE 2024-05-01 PLUS 50 VEST FROM DATE 2024-05-15",
   "reason": "Two independent absolute-date vesting grids on one grant.",
   "residual": 0,
   "status": "events-only",
@@ -73,13 +71,18 @@ exports[`inferrer characterization — sequential/THEN baseline > C5: two monthl
 
 exports[`inferrer characterization — sequential/THEN baseline > C6: three monthly grants on different days (1st, 10th, 20th) 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 0,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 3,
-  },
-  "dsl": "300 VEST FROM DATE 2024-01-01 OVER 3 months EVERY 1 month PLUS 180 VEST FROM DATE 2024-01-10 OVER 3 months EVERY 1 month PLUS 90 VEST FROM DATE 2024-01-20 OVER 3 months EVERY 1 month",
+  "decomposition": [
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+  ],
+  "dsl": "100 VEST FROM DATE 2024-02-01 PLUS 60 VEST FROM DATE 2024-02-10 PLUS 30 VEST FROM DATE 2024-02-20 PLUS 100 VEST FROM DATE 2024-03-01 PLUS 60 VEST FROM DATE 2024-03-10 PLUS 30 VEST FROM DATE 2024-03-20 PLUS 100 VEST FROM DATE 2024-04-01 PLUS 60 VEST FROM DATE 2024-04-10 PLUS 30 VEST FROM DATE 2024-04-20",
   "reason": "Two independent absolute-date vesting grids on one grant.",
   "residual": 0,
   "status": "events-only",
@@ -88,13 +91,15 @@ exports[`inferrer characterization — sequential/THEN baseline > C6: three mont
 
 exports[`inferrer characterization — sequential/THEN baseline > C7: almost a clean chain, but the last tranche is off by 5 — no exact fit 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 0,
-    "preGrantFolds": 0,
-    "singles": 1,
-    "uniforms": 2,
-  },
-  "dsl": "602 VEST FROM DATE 2023-11-01 OVER 6 months EVERY 1 month PLUS 199 VEST FROM DATE 2024-01-01 OVER 2 months EVERY 1 month PLUS 4 VEST FROM DATE 2024-05-01",
+  "decomposition": [
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+    "literal",
+  ],
+  "dsl": "100 VEST FROM DATE 2023-12-01 PLUS 100 VEST FROM DATE 2024-01-01 PLUS 200 VEST FROM DATE 2024-02-01 PLUS 200 VEST FROM DATE 2024-03-01 PLUS 100 VEST FROM DATE 2024-04-01 PLUS 105 VEST FROM DATE 2024-05-01",
   "reason": "Two independent absolute-date vesting grids on one grant.",
   "residual": 0,
   "status": "events-only",
@@ -103,12 +108,9 @@ exports[`inferrer characterization — sequential/THEN baseline > C7: almost a c
 
 exports[`inferrer characterization — sequential/THEN baseline > C8: a plain six-month monthly grant (one template, not a longer chain) 1`] = `
 {
-  "decomposition": {
-    "cliffFolds": 0,
-    "preGrantFolds": 0,
-    "singles": 0,
-    "uniforms": 1,
-  },
+  "decomposition": [
+    "plain",
+  ],
   "dsl": "600 VEST FROM DATE 2024-01-01 OVER 6 months EVERY 1 month",
   "residual": 0,
   "status": "template",

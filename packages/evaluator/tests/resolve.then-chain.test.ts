@@ -1302,3 +1302,25 @@ describe("resolveToCore — THEN tail behind a SYNTHETIC held-cliff head (#412)"
     expect(total(result.installments)).toBe(800);
   });
 });
+
+// Relocated from the inferrer's sequential test suite (the module it lived beside
+// is gone): the motivation for THEN encoding, expressed purely against the
+// evaluator. The dated PLUS list below is what an inferrer would have emitted for
+// a month-end rate change BEFORE THEN existed — the tail carries its own explicit
+// start (Jan 29, one month back from its Feb 29 first installment), which no longer
+// lines up with the head's month-end grid (Jan 31). Two independent absolute-date
+// grids on one grant cannot be a single template, so the program collapses to
+// events-only — exactly the outcome the chained (start-less) tail form avoids.
+describe("evaluateProgram — a dated PLUS list of overlapping month-end grids is events-only", () => {
+  it("classifies as events-only, not a single template", () => {
+    const dsl =
+      "150 VEST FROM DATE 2023-12-31 OVER 2 months EVERY 1 month PLUS 450 VEST FROM DATE 2024-01-29 OVER 2 months EVERY 1 month";
+    const schedule = evaluateProgram(normalizeProgram(parse(dsl)), {
+      grantDate: "2023-11-30",
+      events: {},
+      grantQuantity: 600,
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
+    });
+    expect(schedule.resolution.status).toBe("events-only");
+  });
+});

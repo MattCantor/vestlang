@@ -16,6 +16,7 @@
 
 import type {
   OCTDate,
+  PeriodTag,
   Program,
   Statement,
   VestingDayOfMonth,
@@ -23,8 +24,15 @@ import type {
   VestingPeriod,
 } from "@vestlang/types";
 import { asChainedTail, buildStatement } from "../atoms.js";
-import type { Cadence } from "../cadence.js";
-import { DEFAULT_DOM } from "./solvers.js";
+import type { HypothesisFamily } from "../types.js";
+
+/** A period unit + length. Lives here (the analytic module set) now that the old
+ *  cadence-dictionary module is gone; the emit and family layers are its only
+ *  users. */
+export interface Cadence {
+  unit: PeriodTag;
+  length: number;
+}
 
 export interface Candidate {
   /** The typed, normalized program — rendered once by the verifier. */
@@ -35,6 +43,10 @@ export interface Candidate {
   /** The candidate's vesting start, for the grant-alignment tiebreak. Null for a
    *  bare dated lump that carries no train anchor. */
   start: OCTDate | null;
+  /** The hypothesis family that produced this candidate — threaded through to the
+   *  tagged decomposition, since it is NOT reconstructable from the DSL (a
+   *  pre-grant fold emits plain- or cliff-shaped text). */
+  tag: HypothesisFamily;
 }
 
 /** A bare DATE anchor node — positionally neutral, fits the vesting-start slot. */
@@ -74,29 +86,23 @@ export function cliffStmt(
   occurrences: number,
   cliffLength: number,
 ): Statement {
-  return buildStatement(
-    {
-      kind: "CLIFF_UNIFORM",
-      // The anchor rides in `grantDate` — buildCliffUniform places it directly as
-      // the vesting start, so a pre-grant (erased-cliff) anchor is expressible
-      // here too. The field name is overloaded until 2c generalizes the anchor.
-      grantDate: anchor,
-      cadence,
-      cliffSteps: 1,
-      tailOccurrences: Math.max(occurrences - 1, 0),
-      // Write-only for emission: buildCliffUniform reads `total`, not this rate.
-      perTrancheAmount: Math.floor(total / Math.max(occurrences, 1)),
-      total,
-      cliffLength,
-    },
-    // Ignored by buildCliffUniform (only buildUniform reads the policy).
-    DEFAULT_DOM,
-  );
+  return buildStatement({
+    kind: "CLIFF_UNIFORM",
+    // The anchor rides in `grantDate` — buildCliffUniform places it directly as
+    // the vesting start, so a pre-grant (erased-cliff) anchor is expressible
+    // here too. The field name is overloaded until 2c generalizes the anchor.
+    grantDate: anchor,
+    cadence,
+    cliffSteps: 1,
+    tailOccurrences: Math.max(occurrences - 1, 0),
+    total,
+    cliffLength,
+  });
 }
 
 /** A bare dated lump: `amount VEST FROM DATE date`, no cadence. */
 export function bareLumpStmt(amount: number, date: OCTDate): Statement {
-  return buildStatement({ kind: "SINGLE_TRANCHE", date, amount }, DEFAULT_DOM);
+  return buildStatement({ kind: "SINGLE_TRANCHE", date, amount });
 }
 
 /** A THEN chain: the head keeps its FROM anchor, each continuation is a chained
