@@ -92,10 +92,20 @@ describe("family order", () => {
       row("2024-04-01", 1),
       row("2024-05-01", 1),
     ];
-    const cands = [...candidates(rows, total(rows), "2024-01-01")];
-    expect(isPlainTrain(cands[0].program)).toBe(true);
-    const firstCliff = cands.findIndex((c) => hasCliff(c.program));
-    expect(firstCliff).toBeGreaterThan(0);
+    // Iterate lazily — this stream's full candidate set runs to ~2k entries
+    // (the driver never materializes it either; it stops at the first verifying
+    // candidate), and exhausting it here is pure wasted wall time.
+    const gen = candidates(rows, total(rows), "2024-01-01");
+    const first = gen.next().value;
+    expect(first && isPlainTrain(first.program)).toBe(true);
+    let cliffOfferedLater = false;
+    for (const c of gen) {
+      if (hasCliff(c.program)) {
+        cliffOfferedLater = true;
+        break;
+      }
+    }
+    expect(cliffOfferedLater).toBe(true);
   });
 
   it("the THEN chain is offered only after the plain/cliff/fold readings", () => {
