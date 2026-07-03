@@ -6,9 +6,9 @@ import { createServer } from "../src/server.js";
 
 // Tool descriptions are the behavioral contract LLM clients act on, so a stale one
 // is a real defect. This guards the `vestlang_evaluate` description against the #242
-// regression: it claimed the `unrepresentable` interchange verdict had "today only
-// an event-anchored cliff" when the code (types/evaluation.ts InterchangeVerdict,
-// evaluator/resolve/interchange.ts) has three causes.
+// regression: it claimed the `unrepresentable` storable verdict had "today only
+// an event-anchored cliff" when the code (types/evaluation.ts StorableVerdict,
+// evaluator/resolve/storable.ts) has three causes.
 
 async function connectedClient(): Promise<Client> {
   const server = createServer();
@@ -42,7 +42,7 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
     const description = await descriptionOf("vestlang_evaluate");
     // Under #255 the EVENT_CLIFF cause is gone (an event-held cliff stores as a
     // template via event_condition); the remaining causes are DEFERRED_CLIFF and
-    // EVENT_CHAINED_TAIL, described in prose mirroring the InterchangeVerdict doc.
+    // EVENT_CHAINED_TAIL, described in prose mirroring the StorableVerdict doc.
     expect(description).toContain("until an event fires");
     expect(description).toContain("chained behind a start");
     // It must say an event-held cliff is NOT unrepresentable (it's a template).
@@ -53,6 +53,14 @@ describe("mcp-server / vestlang_evaluate description (#242)", () => {
   it("documents the recovered block surfaced on a rescue", async () => {
     const description = await descriptionOf("vestlang_evaluate");
     expect(description).toContain("`recovered`");
+  });
+
+  it("names the two verdicts by their wire keys", async () => {
+    const description = await descriptionOf("vestlang_evaluate");
+    // The verdict keys the payload actually carries — the description must match
+    // them so a client reads the right fields off the result.
+    expect(description).toContain("`storable`");
+    expect(description).toContain("`resolvesTo`");
   });
 });
 

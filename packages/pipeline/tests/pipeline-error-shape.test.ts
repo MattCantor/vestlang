@@ -82,7 +82,7 @@ describe("persist refusals — structured, with verbatim messages (AC#2, #3, #7)
     expect(r.error.message).toContain("over-allocat");
   });
 
-  // #5 — a non-template *interchange* shape shares the ruleId but is witnessed by
+  // #5 — a non-template *storable* shape shares the ruleId but is witnessed by
   // its distinct verbatim message. Two independent date grids store as events-only,
   // not a single template (the gate persist reads). (An event-anchored cliff is no
   // longer non-template under #255 — it stores as a template via event_condition.)

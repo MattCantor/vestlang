@@ -1,14 +1,14 @@
 import type {
   EvaluatedSchedule,
-  EvaluatedScheduleVerdict,
+  ClosedWorldVerdict,
   NonTemplateReason,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import type { StatementContribution } from "@vestlang/evaluator";
 
-/** An evaluated schedule whose resolution verdict is specifically a template. */
-type TemplateResolution = EvaluatedSchedule & {
-  resolution: Extract<EvaluatedScheduleVerdict, { status: "template" }>;
+/** An evaluated schedule whose resolves-to verdict is specifically a template. */
+type TemplateResolvesTo = EvaluatedSchedule & {
+  resolvesTo: Extract<ClosedWorldVerdict, { status: "template" }>;
 };
 
 // The result of running a program through the recovery pass.
@@ -16,7 +16,7 @@ type TemplateResolution = EvaluatedSchedule & {
 // Discriminated on `rescued`, not on the schedule's verdict: a program that was
 // already a template short-circuits with no rescue, so the verdict alone can't
 // tell you whether recovery actually fired. The `rescued:true` arm narrows the
-// schedule's resolution to the template variant and guarantees the recovery
+// schedule's resolves-to to the template variant and guarantees the recovery
 // payload, so callers don't re-check either.
 //
 // `contributions` is the ORIGINAL author program's per-statement partition of the
@@ -33,7 +33,7 @@ export type RecoveryOutcome =
     }
   | {
       rescued: true;
-      schedule: TemplateResolution;
+      schedule: TemplateResolvesTo;
       recovered: RecoveredTemplate;
       contributions: StatementContribution[];
     };

@@ -33,7 +33,7 @@ const stmt = (amount: Amount, periodicity: VestingPeriod) => ({
   ),
 });
 
-describe("template vs resolution allocation findings agree (AC#5)", () => {
+describe("template vs resolves-to allocation findings agree (AC#5)", () => {
   const ctxInput = (grantQuantity: number): ResolutionContextInput => ({
     grantDate: "2025-01-01",
     events: {},

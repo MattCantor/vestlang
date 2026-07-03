@@ -21,7 +21,7 @@ import type {
   VestingRuntime,
 } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
-import { toStoredTerms, resolveInterchange } from "../src/resolve/interchange";
+import { toStoredTerms, resolveStorable } from "../src/resolve/storable";
 import {
   makeSingletonSchedule,
   makeSingletonNode,
@@ -80,7 +80,7 @@ describe("#417 AC3 — toStoredTerms copies present RuntimeBase fields, omits ab
 // this guards the concrete risk #417 names: a non-default value rides through to
 // the stored runtime; the default value is elided (the canonical default is
 // re-applied on read, so storing it would be redundant).
-describe("#417 AC4 — vestingDayOfMonth survives resolveInterchange when non-default", () => {
+describe("#417 AC4 — vestingDayOfMonth survives resolveStorable when non-default", () => {
   const portion = (numerator: number, denominator: number): Amount => ({
     type: "PORTION",
     numerator,
@@ -113,7 +113,7 @@ describe("#417 AC4 — vestingDayOfMonth survives resolveInterchange when non-de
   });
 
   it("a non-default vestingDayOfMonth lands in the stored runtime", () => {
-    const verdict = resolveInterchange(program, ctxInput("LAST_DAY_OF_MONTH"));
+    const verdict = resolveStorable(program, ctxInput("LAST_DAY_OF_MONTH"));
     expect(verdict.status).toBe("template");
     if (verdict.status !== "template") return;
     expect(verdict.runtime).toHaveProperty(
@@ -123,7 +123,7 @@ describe("#417 AC4 — vestingDayOfMonth survives resolveInterchange when non-de
   });
 
   it("the default vestingDayOfMonth is omitted (re-applied on read)", () => {
-    const verdict = resolveInterchange(
+    const verdict = resolveStorable(
       program,
       ctxInput(DEFAULT_VESTING_DAY_OF_MONTH),
     );

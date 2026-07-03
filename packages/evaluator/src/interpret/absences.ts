@@ -1,6 +1,6 @@
-// The non-occurrences a closed-world resolution is leaning on, derived from the
+// The non-occurrences a closed-world resolves-to reading is leaning on, derived from the
 // blockers it left behind. Shared by two read-sites: `assemble.ts` (the full
-// `evaluate` path, folding the whole resolution's blocker list) and
+// `evaluate` path, folding the whole resolves-to blocker list) and
 // `resolveVestingStart.ts` (the narrow `resolve_offset` path, folding a committed
 // EARLIER_OF's own disclosures). Both want the same derivation, so it lives here
 // once. Module-internal only — not re-exported from the package's public index.
@@ -26,7 +26,7 @@ const groupKey = (a: AbsenceAssumption): string =>
   `${a.eventId}|${a.direction}|${a.inclusive ? "1" : "0"}|${a.consequence}`;
 
 /**
- * Closed-world resolution reads "no firing on record" as "hasn't happened" — so
+ * The resolves-to reading reads "no firing on record" as "hasn't happened" — so
  * reading a schedule as, say, vested can quietly depend on some event still being
  * absent. We surface each such dependency from the given blockers: every "still
  * waiting on event X" blocker that got measured against a known date carries that

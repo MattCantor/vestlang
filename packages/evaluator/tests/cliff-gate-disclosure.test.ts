@@ -40,28 +40,28 @@ const hasUnresolvedCondition = (blockers: UnresolvedBlocker[]): boolean =>
 
 describe("cliff-gate disclosure on an unfired-event start", () => {
   it("unfired start surfaces the cliff gate, not only the pending start", () => {
-    const { resolution } = run();
-    expect(resolution.status).toBe("unresolved");
-    if (resolution.status !== "unresolved") return;
+    const { resolvesTo } = run();
+    expect(resolvesTo.status).toBe("unresolved");
+    if (resolvesTo.status !== "unresolved") return;
 
     // The pending start is reported... (both the start wait and the gate are
     // pending blockers — nothing is dead here)
     expect(
-      resolution.pending.some(
+      resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "hire",
       ),
     ).toBe(true);
     // ...and so is the cliff's `grantDate + 6 months` gate.
-    expect(hasUnresolvedCondition(resolution.pending)).toBe(true);
-    expect(resolution.dead).toHaveLength(0);
+    expect(hasUnresolvedCondition(resolvesTo.pending)).toBe(true);
+    expect(resolvesTo.dead).toHaveLength(0);
   });
 
   it("fired start enforces the gate and lands the cliff lump (unchanged)", () => {
-    const { resolution } = run({ hire: "2025-03-01" });
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    const { resolvesTo } = run({ hire: "2025-03-01" });
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
-    const cliffLump = resolution.installments.find(
+    const cliffLump = resolvesTo.installments.find(
       (i) => i.state === "RESOLVED" && i.amount === 1200,
     );
     expect(cliffLump).toBeDefined();

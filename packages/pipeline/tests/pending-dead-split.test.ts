@@ -40,13 +40,13 @@ describe("present/view — pending vs dead split", () => {
       { a: "2025-06-01" }, // a fires after the BEFORE deadline → that half is dead
     );
 
-    expect(s.resolution.status).toBe("unresolved");
+    expect(s.resolvesTo.status).toBe("unresolved");
     const p = presentSchedule(s);
     expect(p.pending).toBe(false);
     expect(p.dead).toBe(true);
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead).toHaveLength(1);
-    expect(s.resolution.dead[0].type).toBe("IMPOSSIBLE_CONDITION");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead).toHaveLength(1);
+    expect(s.resolvesTo.dead[0].type).toBe("IMPOSSIBLE_CONDITION");
   });
 
   // AC#4 — one dead statement and one statement genuinely waiting on an unfired
@@ -59,15 +59,15 @@ describe("present/view — pending vs dead split", () => {
       { a: "2025-06-01" }, // a dead; ipo unfired (still waiting)
     );
 
-    expect(s.resolution.pending.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.pending.map((b) => b.type)).toEqual([
       "EVENT_NOT_YET_OCCURRED",
     ]);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
     ]);
     // Disjoint: no object is in both lists.
-    const overlap = s.resolution.pending.filter((x) =>
-      s.resolution.dead.some((y) => JSON.stringify(y) === JSON.stringify(x)),
+    const overlap = s.resolvesTo.pending.filter((x) =>
+      s.resolvesTo.dead.some((y) => JSON.stringify(y) === JSON.stringify(x)),
     );
     expect(overlap).toHaveLength(0);
 
@@ -85,8 +85,8 @@ describe("present/view — pending vs dead split", () => {
         { a: "2025-06-01" },
       );
 
-      expect(s.resolution.pending).toHaveLength(0);
-      expect(s.resolution.dead.map((b) => b.type)).toEqual([
+      expect(s.resolvesTo.pending).toHaveLength(0);
+      expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
         "IMPOSSIBLE_SELECTOR",
       ]);
       const p = presentSchedule(s);
@@ -103,8 +103,8 @@ describe("present/view — pending vs dead split", () => {
         { a: "2025-06-01" },
       );
 
-      expect(s.resolution.dead).toHaveLength(0);
-      expect(s.resolution.pending.map((b) => b.type)).toEqual([
+      expect(s.resolvesTo.dead).toHaveLength(0);
+      expect(s.resolvesTo.pending.map((b) => b.type)).toEqual([
         "UNRESOLVED_SELECTOR",
       ]);
       const p = presentSchedule(s);
@@ -125,9 +125,9 @@ describe("present/view — pending vs dead split", () => {
       `VEST FROM DATE 2025-06-01 AFTER DATE 2026-01-01 AND BEFORE EVENT ipo ${yearly2}`,
     );
 
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
     ]);
 
@@ -140,9 +140,9 @@ describe("present/view — pending vs dead split", () => {
     // `ipo` stayed absent through the start date).
     expect(s.absenceAssumptions).toEqual([]);
 
-    // And the interchange agrees: the contradiction is a fixed-date one, so no
+    // And the storable agrees: the contradiction is a fixed-date one, so no
     // firing of `ipo` could rescue it — the record keeper can't hold this spec.
-    expect(s.interchange.status).toBe("impossible");
+    expect(s.storable.status).toBe("impossible");
     expect(p.representable).toBe(false);
   });
 
@@ -186,9 +186,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
       `VEST FROM EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS`,
     );
 
-    expect(s.interchange.status).toBe("impossible");
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.storable.status).toBe("impossible");
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
     ]);
 
@@ -199,21 +199,21 @@ describe("moot-operand collapse in AND / OR starts", () => {
 
   // A conjunct that's dead only because of a known firing (an event fired past its
   // BEFORE deadline) still kills the AND in the resolves-to reading. But firing-blind
-  // that event is unknown, so the same conjunct merely waits — the interchange keeps
+  // that event is unknown, so the same conjunct merely waits — the storable keeps
   // the spec as a storable template.
-  it("a firing-dead AND conjunct collapses in resolution but not in interchange", () => {
+  it("a firing-dead AND conjunct collapses in resolvesTo but not in storable", () => {
     const s = evalDsl(
       `VEST FROM EVENT a BEFORE DATE 2025-01-01 AND BEFORE EVENT ipo ${yearly2}`,
       { a: "2025-06-01" }, // a fires after the BEFORE deadline → that conjunct is dead
     );
 
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
     ]);
 
-    expect(s.interchange.status).toBe("template");
+    expect(s.storable.status).toBe("template");
     const p = presentSchedule(s);
     expect(p.representable).toBe(true);
   });
@@ -226,9 +226,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
       `VEST FROM DATE 2025-06-01 AFTER DATE 2026-01-01 OR BEFORE EVENT ipo ${yearly2}`,
     );
 
-    expect(s.resolution.status).toBe("template");
-    expect(s.resolution.dead).toEqual([]);
-    expect(s.resolution.pending.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("template");
+    expect(s.resolvesTo.dead).toEqual([]);
+    expect(s.resolvesTo.pending.map((b) => b.type)).toEqual([
       "EVENT_NOT_YET_OCCURRED",
       "UNRESOLVED_CONDITION",
     ]);
@@ -236,7 +236,7 @@ describe("moot-operand collapse in AND / OR starts", () => {
     const p = presentSchedule(s);
     expect(p.pending).toBe(true);
     expect(p.dead).toBe(false);
-    expect(s.interchange.status).toBe("template");
+    expect(s.storable.status).toBe("template");
     expect(p.representable).toBe(true);
   });
 
@@ -247,9 +247,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
       `VEST FROM DATE 2025-06-01 AFTER DATE 2026-01-01 OR AFTER DATE 2027-01-01 ${yearly2}`,
     );
 
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
       "IMPOSSIBLE_CONDITION",
     ]);
@@ -270,9 +270,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
     );
 
     // The whole schedule is unreachable: dead-only, nothing waiting.
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
     ]);
 
@@ -285,9 +285,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
     // installment is marked unreachable (it's a contradiction, not an event cliff).
     expect(s.absenceAssumptions).toEqual([]);
     expect(
-      s.resolution.installments.every((i) => i.state === "IMPOSSIBLE"),
+      s.resolvesTo.installments.every((i) => i.state === "IMPOSSIBLE"),
     ).toBe(true);
-    expect(s.interchange.status).toBe("impossible");
+    expect(s.storable.status).toBe("impossible");
   });
 
   // Honest disclosure: two dead conjuncts both surface, not just the first.
@@ -296,7 +296,7 @@ describe("moot-operand collapse in AND / OR starts", () => {
       `VEST FROM DATE 2025-06-01 AFTER DATE 2026-01-01 AND AFTER DATE 2027-01-01 ${yearly2}`,
     );
 
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
       "IMPOSSIBLE_CONDITION",
     ]);
@@ -316,9 +316,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
         `AND AFTER DATE 2020-01-01 ${yearly2}`,
     );
 
-    expect(s.resolution.status).toBe("template");
-    expect(s.resolution.dead).toEqual([]);
-    expect(s.resolution.pending.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("template");
+    expect(s.resolvesTo.dead).toEqual([]);
+    expect(s.resolvesTo.pending.map((b) => b.type)).toEqual([
       "EVENT_NOT_YET_OCCURRED",
       "UNRESOLVED_CONDITION",
     ]);
@@ -336,9 +336,9 @@ describe("moot-operand collapse in AND / OR starts", () => {
         `AND AFTER DATE 2020-01-01 ${yearly2}`,
     );
 
-    expect(s.resolution.status).toBe("impossible");
-    expect(s.resolution.pending).toHaveLength(0);
-    expect(s.resolution.dead.map((b) => b.type)).toEqual([
+    expect(s.resolvesTo.status).toBe("impossible");
+    expect(s.resolvesTo.pending).toHaveLength(0);
+    expect(s.resolvesTo.dead.map((b) => b.type)).toEqual([
       "IMPOSSIBLE_CONDITION",
       "IMPOSSIBLE_CONDITION",
     ]);

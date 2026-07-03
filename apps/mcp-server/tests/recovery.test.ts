@@ -52,8 +52,8 @@ describe("mcp-server / vestlang_evaluate recovery", () => {
     expect(JSON.parse(res.content[0].text)).toEqual(res.structuredContent);
 
     const sc = res.structuredContent as {
-      resolution: { status: string; reason?: string };
-      interchange: { status: string };
+      resolvesTo: { status: string; reason?: string };
+      storable: { status: string };
       recovered?: {
         from: string;
         reason: string;
@@ -62,9 +62,9 @@ describe("mcp-server / vestlang_evaluate recovery", () => {
         residualError: number;
       };
     };
-    expect(sc.resolution.status).toBe("template");
+    expect(sc.resolvesTo.status).toBe("template");
     // The events-only reason moves into the recovered block, not onto the verdict.
-    expect("reason" in sc.resolution).toBe(false);
+    expect("reason" in sc.resolvesTo).toBe(false);
     expect(sc.recovered).toBeDefined();
     expect(sc.recovered?.from).toBe("events-only");
     expect(sc.recovered?.reason).toBe(
@@ -86,11 +86,11 @@ describe("mcp-server / vestlang_evaluate recovery", () => {
     });
 
     const sc = res.structuredContent as {
-      resolution: { status: string; reason?: string };
+      resolvesTo: { status: string; reason?: string };
       recovered?: unknown;
     };
-    expect(sc.resolution.status).toBe("events-only");
-    expect(sc.resolution.reason).toBeDefined();
+    expect(sc.resolvesTo.status).toBe("events-only");
+    expect(sc.resolvesTo.reason).toBeDefined();
     expect(sc.recovered).toBeUndefined();
   });
 
@@ -103,10 +103,10 @@ describe("mcp-server / vestlang_evaluate recovery", () => {
     });
 
     const sc = res.structuredContent as {
-      resolution: { status: string };
+      resolvesTo: { status: string };
       recovered?: unknown;
     };
-    expect(sc.resolution.status).toBe("template");
+    expect(sc.resolvesTo.status).toBe("template");
     expect(sc.recovered).toBeUndefined();
   });
 });

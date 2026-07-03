@@ -13,9 +13,9 @@ import type {
   ResolutionContextInput,
   Finding,
   Installment,
-  InterchangeVerdict,
+  StorableVerdict,
   Program,
-  ResolutionStatus,
+  ClosedWorldStatus,
   VestingNode,
   VestingNodeExpr,
   VestingPeriod,
@@ -31,28 +31,26 @@ import {
   makeVestingBaseEvent,
 } from "./helpers";
 
-// presentSchedule reads the interchange status (representable), the resolution
+// presentSchedule reads the storable status (representable), the resolves-to
 // status/pending/dead/installments (pending, dead, projected), and findings
-// (valid), so stub exactly those. The interchange status defaults to the
-// firing-invariant counterpart of the resolution status — the same except that a
-// closed-world "unresolved" has no interchange equivalent and reads as
+// (valid), so stub exactly those. The storable status defaults to the
+// firing-invariant counterpart of the resolves-to status — the same except that a
+// closed-world "unresolved" has no storable equivalent and reads as
 // "unrepresentable" — but a test can pass its own to exercise the two verdicts
 // diverging. Findings default to none (a well-formed schedule).
-const interchangeFor = (
-  status: ResolutionStatus,
-): InterchangeVerdict["status"] =>
+const storableFor = (status: ClosedWorldStatus): StorableVerdict["status"] =>
   status === "unresolved" ? "unrepresentable" : status;
 
 const stub = (
-  status: ResolutionStatus,
+  status: ClosedWorldStatus,
   blockers: { pending?: unknown[]; dead?: unknown[] },
   installments: Installment[],
   findings: Finding[] = [],
-  interchangeStatus: InterchangeVerdict["status"] = interchangeFor(status),
+  storableStatus: StorableVerdict["status"] = storableFor(status),
 ): EvaluatedSchedule =>
   ({
-    interchange: { status: interchangeStatus },
-    resolution: {
+    storable: { status: storableStatus },
+    resolvesTo: {
       status,
       pending: blockers.pending ?? [],
       dead: blockers.dead ?? [],
@@ -90,7 +88,7 @@ const symbolic: Installment[] = [
   },
 ];
 const eventBlocker = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];
-// A contradiction — present.ts reads it as a resolution-space dead blocker. Carried
+// A contradiction — present.ts reads it as a resolves-to-space dead blocker. Carried
 // as a plain shape; the stub coerces the whole schedule through `unknown`.
 const impossibleBlocker = [
   { type: "IMPOSSIBLE_SELECTOR", selector: "EARLIER_OF", blockers: [] },
@@ -122,7 +120,7 @@ describe("presentSchedule — the orthogonal reads", () => {
   it("an error finding makes the schedule read invalid (separate from representable)", () => {
     const p = presentSchedule(stub("template", {}, dated, overAllocated));
     expect(p.valid).toBe(false);
-    expect(p.representable).toBe(true); // the interchange still holds it
+    expect(p.representable).toBe(true); // the storable verdict still holds it
   });
 
   it("a warning finding (under-allocation) leaves the schedule valid", () => {
@@ -215,7 +213,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       }),
     ];
     const out = evaluateProgram(program, ctxInput()); // ipo unfired
-    expect(out.resolution.status).toBe("events-only");
+    expect(out.resolvesTo.status).toBe("events-only");
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true,
@@ -267,10 +265,10 @@ describe("presentSchedule — end-to-end hybrid", () => {
     // contingent origin beside the fixed dated grid — two distinct origins — so the
     // storable verdict is events-only (still representable). A different firing of
     // `a` would resolve it.
-    expect(out.resolution.status).toBe("unresolved");
-    expect(out.interchange.status).toBe("events-only");
-    if (out.interchange.status === "events-only") {
-      expect(out.interchange.reason.kind).toBe("MULTIPLE_START_ORIGINS");
+    expect(out.resolvesTo.status).toBe("unresolved");
+    expect(out.storable.status).toBe("events-only");
+    if (out.storable.status === "events-only") {
+      expect(out.storable.reason.kind).toBe("MULTIPLE_START_ORIGINS");
     }
     // The void half carries an IMPOSSIBLE_CONDITION blocker — dead, not pending.
     // This is the present.ts fix (AC#3): a dead arm beside a live one reads
@@ -311,7 +309,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
       ),
     ];
     const out = evaluateProgram(program, ctxInput()); // ipo unfired
-    expect(out.resolution.status).toBe("events-only");
+    expect(out.resolvesTo.status).toBe("events-only");
     expect(presentSchedule(out)).toEqual({
       representable: true,
       pending: true, // the event portion's blocker survives the events arm
@@ -343,7 +341,7 @@ describe("presentSchedule — end-to-end hybrid", () => {
 
 // #464 — a top-level EARLIER OF cliff that commits to its time floor discloses the
 // assumed-absent event. That disclosure is an EVENT_NOT_YET_OCCURRED blocker, so it
-// lands in resolution.pending too — `present.pending` flips false→true while the
+// lands in resolvesTo.pending too — `present.pending` flips false→true while the
 // event is unfired, exactly as the start case does (#363 AC-1/AC-5). Firing the
 // event before the floor settles the fold (RESOLVED, not COMMITTED), so the
 // disclosure and the pending flip both fall away.
@@ -358,7 +356,7 @@ describe("presentSchedule — #464 committed EARLIER OF cliff flips pending", ()
       events: {},
       grantQuantity: 4800,
     });
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     expect(presentSchedule(out).pending).toBe(true);
   });
 
@@ -368,13 +366,13 @@ describe("presentSchedule — #464 committed EARLIER OF cliff flips pending", ()
       events: { fda: "2025-07-01" },
       grantQuantity: 4800,
     });
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     expect(presentSchedule(out).pending).toBe(false);
   });
 });
 
 // #473 — the materiality rule flips `present.pending` on two nested combinator
-// shapes, in opposite directions, because `pending` reads the resolution blocker
+// shapes, in opposite directions, because `pending` reads the resolves-to blocker
 // list (not the status). A dominated nested START loses its only pending entry (the
 // grid fully dates), while a material nested CLIFF gains one (the cliff now discloses
 // its assumed-absent event). These lock the consumer-visible flip both ways.
@@ -392,14 +390,14 @@ describe("presentSchedule — #473 nested materiality flips pending both ways", 
       ),
       { grantDate: "2024-01-01", events: {}, grantQuantity: 120 },
     );
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     expect(presentSchedule(out).pending).toBe(false);
   });
 
   it("material nested CLIFF (anchored) → present.pending true (the cliff now discloses `e`)", () => {
     // OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 09-01, e), DATE
     // 06-01): the inner floor 2024-09-01 is the unique strict max, so the cliff
-    // discloses `e` into resolution.pending. (Before #473 the nested cliff was silent
+    // discloses `e` into resolvesTo.pending. (Before #473 the nested cliff was silent
     // and read not-pending.)
     const out = evaluateProgram(
       prog(
@@ -407,7 +405,7 @@ describe("presentSchedule — #473 nested materiality flips pending both ways", 
       ),
       { grantDate: "2024-01-01", events: {}, grantQuantity: 4800 },
     );
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     expect(presentSchedule(out).pending).toBe(true);
   });
 
@@ -421,7 +419,7 @@ describe("presentSchedule — #473 nested materiality flips pending both ways", 
       ),
       { grantDate: "2024-01-01", events: {}, grantQuantity: 4800 },
     );
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     expect(presentSchedule(out).pending).toBe(true);
   });
 });

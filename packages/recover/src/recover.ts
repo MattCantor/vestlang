@@ -32,7 +32,7 @@ export function evaluateProgramWithRecovery(
   ctx: ResolutionContextInput,
 ): RecoveryOutcome {
   // The collapse the public surface produces — one schedule carrying both the
-  // closed-world resolution and the storable-floor interchange verdict. It's both
+  // closed-world resolves-to verdict and the firing-invariant storable verdict. It's both
   // the value we return when there's no rescue, and the only place the original
   // events-only reason survives: once we publish a recovered template, that
   // schedule carries no reason of its own. We evaluate WITH contributions on the
@@ -59,9 +59,9 @@ export function evaluateProgramWithRecovery(
   try {
     // Anything that already fits a template (or can't resolve yet) leaves here
     // untouched — no inference cost on the common path. The guard also narrows the
-    // resolution union so the gate and the captured provenance read the structured
+    // resolves-to union so the gate and the captured provenance read the structured
     // reason straight off the type.
-    if (schedule.resolution.status !== "events-only") return noRescue;
+    if (schedule.resolvesTo.status !== "events-only") return noRescue;
 
     // The #239 fix: don't recover an already-invalid program. Over-allocation is
     // an error-severity finding (under-allocation is only a warning), so this
@@ -72,7 +72,7 @@ export function evaluateProgramWithRecovery(
     // let the over-allocation finding stand.
     if (schedule.findings.some((f) => f.severity === "error")) return noRescue;
 
-    const { reason, installments } = schedule.resolution;
+    const { reason, installments } = schedule.resolvesTo;
 
     if (!admitsRecovery(reason, installments, stmts)) return noRescue;
 
@@ -99,13 +99,13 @@ export function evaluateProgramWithRecovery(
     };
     const published = evaluateProgram(inferred.program, reclassifiedCtx);
     // Recovery only runs on firing-invariant inputs, so the inferred template is
-    // itself storable; the guard narrows the published resolution to the template
+    // itself storable; the guard narrows the published resolves-to to the template
     // arm. Anything else and the inferred DSL didn't reclassify as one template.
-    if (published.resolution.status !== "template") return noRescue;
-    // Rebuild with the narrowed resolution so the value matches the rescued-arm
-    // type. Narrowing the nested `resolution` doesn't re-type the whole object, so
+    if (published.resolvesTo.status !== "template") return noRescue;
+    // Rebuild with the narrowed resolves-to so the value matches the rescued-arm
+    // type. Narrowing the nested `resolvesTo` doesn't re-type the whole object, so
     // we spread it back together explicitly.
-    const rescued = { ...published, resolution: published.resolution };
+    const rescued = { ...published, resolvesTo: published.resolvesTo };
 
     // Re-assert exact reproduction independently of the inferrer's own fit check.
     // This is what licenses flipping the verdict events-only → template: not just
@@ -117,7 +117,7 @@ export function evaluateProgramWithRecovery(
     // only admits firing-invariant programs, so no pending portions can appear — but
     // the type no longer guarantees it, so we filter to RESOLVED to keep the call
     // well-typed.
-    const rescuedDated = published.resolution.installments.filter(
+    const rescuedDated = published.resolvesTo.installments.filter(
       (i): i is ResolvedInstallment => i.state === "RESOLVED",
     );
     const residualError = projectionResidual(dated, rescuedDated);

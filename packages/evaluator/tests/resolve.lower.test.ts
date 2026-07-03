@@ -14,7 +14,7 @@ import type {
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
 import {
   rehydrate,
-  resolveInterchange,
+  resolveStorable,
   resolveToCore,
 } from "../src/resolve/index";
 import { disclosuresOf } from "../src/resolve/lower";
@@ -192,10 +192,10 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
   });
 
   it("rehydrating the stored artifact with the true firing derives the offset date", () => {
-    // The stored artifact is the firing-invariant interchange one (sentinel start),
+    // The stored artifact is the firing-invariant storable one (sentinel start),
     // the same thing persist would store. Rehydrate substitutes the re-derived
     // start (firing + offset) into a projection-only runtime.
-    const stored = resolveInterchange(
+    const stored = resolveStorable(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
     );
@@ -238,12 +238,12 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
     expect(sum(events)).toBe(100000);
   });
 
-  it("the stored interchange template + rehydration reproduce the fired projection", () => {
-    // `before` is the stored (firing-invariant) interchange artifact; `after` is
-    // the live resolution once ipo fired. Rehydrating `before` against the firing
+  it("the stored storable template + rehydration reproduce the fired projection", () => {
+    // `before` is the stored (firing-invariant) storable artifact; `after` is
+    // the live resolvesTo once ipo fired. Rehydrating `before` against the firing
     // must reproduce `after`'s projection (the read-only artifact is never mutated;
     // the start substitution is projection-only).
-    const before = resolveInterchange(
+    const before = resolveStorable(
       program,
       ctxInput({ grantDate: "2024-01-01" }),
     );
@@ -264,7 +264,7 @@ describe("resolveToCore — EVENT anchor with offsets (FROM EVENT ipo + 1 month)
       },
     );
     // The frozen template is the same statement shape on both sides; the rehydrated
-    // (projection-only) runtime reproduces the live resolution's dated projection.
+    // (projection-only) runtime reproduces the live resolvesTo's dated projection.
     expect(scheduleOf(after.template.statements[0])!.period_type).toBe(
       scheduleOf(before.template.statements[0])!.period_type,
     );
@@ -386,10 +386,7 @@ describe("lowering stamps the day-of-month onto the produced segments", () => {
   ];
 
   it("a non-default policy over a MONTHS schedule lands on the segment", () => {
-    const verdict = resolveInterchange(
-      monthsProgram,
-      dayCtx("LAST_DAY_OF_MONTH"),
-    );
+    const verdict = resolveStorable(monthsProgram, dayCtx("LAST_DAY_OF_MONTH"));
     expect(verdict.status).toBe("template");
     if (verdict.status !== "template") return;
     expect(
@@ -398,7 +395,7 @@ describe("lowering stamps the day-of-month onto the produced segments", () => {
   });
 
   it("the default policy is omitted from the segment", () => {
-    const verdict = resolveInterchange(
+    const verdict = resolveStorable(
       monthsProgram,
       dayCtx(DEFAULT_VESTING_DAY_OF_MONTH),
     );
@@ -412,10 +409,7 @@ describe("lowering stamps the day-of-month onto the produced segments", () => {
   it("a DAYS schedule never carries the field, even under a non-default policy", () => {
     // OCF gives the field meaning only on MONTHS/YEARS; a DAYS grid steps by raw
     // days and ignores it on read, so stamping it would write an inert field.
-    const verdict = resolveInterchange(
-      daysProgram,
-      dayCtx("LAST_DAY_OF_MONTH"),
-    );
+    const verdict = resolveStorable(daysProgram, dayCtx("LAST_DAY_OF_MONTH"));
     expect(verdict.status).toBe("template");
     if (verdict.status !== "template") return;
     expect(
@@ -443,7 +437,7 @@ describe("a reloaded schedule grids off the stored segment, not the runtime valu
   };
 
   it("compiles to the non-default grid even with the reloaded runtime value cleared", () => {
-    const stored = resolveInterchange(program, ctx);
+    const stored = resolveStorable(program, ctx);
     if (stored.status !== "template") throw new Error("expected template");
 
     // Clear the reloaded runtime's day-of-month: a segment-blind reader would now

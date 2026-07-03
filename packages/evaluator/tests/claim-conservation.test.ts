@@ -43,14 +43,14 @@ describe("claim conservation (R2-B20)", () => {
       grantQuantity: 100,
     };
 
-    const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("events-only");
+    const { resolvesTo } = evaluateProgram(program, ctx);
+    expect(resolvesTo.status).toBe("events-only");
     // Distinct event origins can't share canonical's single hoisted start, so the
     // events-only arm carries the MULTIPLE_START_ORIGINS reason (AC 6).
-    if (resolution.status === "events-only") {
-      expect(resolution.reason.kind).toBe("MULTIPLE_START_ORIGINS");
+    if (resolvesTo.status === "events-only") {
+      expect(resolvesTo.reason.kind).toBe("MULTIPLE_START_ORIGINS");
     }
-    expect(resolution.installments.map((i) => i.amount)).toEqual([33, 33, 34]);
+    expect(resolvesTo.installments.map((i) => i.amount)).toEqual([33, 33, 34]);
   });
 
   // Same program, as-of surface: the cumulative tally is 100 unresolved.
@@ -117,10 +117,10 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("events-only");
+    const { resolvesTo } = evaluateProgram(program, ctx);
+    expect(resolvesTo.status).toBe("events-only");
     // Dated tranches first: 33 @ 2024-02-01, 33 @ 2024-03-01; then pending: 34.
-    expect(resolution.installments).toEqual([
+    expect(resolvesTo.installments).toEqual([
       { state: "RESOLVED", amount: 33, date: "2024-02-01" },
       { state: "RESOLVED", amount: 33, date: "2024-03-01" },
       expect.objectContaining({ state: "UNRESOLVED", amount: 34 }),
@@ -147,11 +147,11 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const { resolution } = evaluateProgram(program, ctx);
+    const { resolvesTo } = evaluateProgram(program, ctx);
     // A THEN chain headed on one event is now a single hoisted template
     // (re-anchored to the resolved date on firing), not unresolved.
-    expect(resolution.status).toBe("template");
-    expect(resolution.installments.map((i) => i.amount)).toEqual([33, 67]);
+    expect(resolvesTo.status).toBe("template");
+    expect(resolvesTo.installments.map((i) => i.amount)).toEqual([33, 67]);
 
     const asof = evaluateProgramAsOf(program, ctx);
     expect(asof.unresolved).toBe(100);
@@ -175,9 +175,9 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const { resolution, findings } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("events-only");
-    expect(resolution.installments.map((i) => i.amount)).toEqual([75, 25]);
+    const { resolvesTo, findings } = evaluateProgram(program, ctx);
+    expect(resolvesTo.status).toBe("events-only");
+    expect(resolvesTo.installments.map((i) => i.amount)).toEqual([75, 25]);
 
     const asof = evaluateProgramAsOf(program, ctx);
     expect(asof.unresolved).toBe(100);
@@ -210,11 +210,11 @@ describe("claim conservation (R2-B20)", () => {
       asOf: "2026-01-01",
     };
 
-    const { resolution } = evaluateProgram(program, ctx);
-    expect(resolution.status).toBe("unresolved");
+    const { resolvesTo } = evaluateProgram(program, ctx);
+    expect(resolvesTo.status).toBe("unresolved");
     // In program order: impossible a (34), unresolved b (66).
     // The live portion's 66 is undeflated by the dead clause ahead of it.
-    expect(resolution.installments).toEqual([
+    expect(resolvesTo.installments).toEqual([
       expect.objectContaining({ state: "IMPOSSIBLE", amount: 34 }),
       expect.objectContaining({ state: "UNRESOLVED", amount: 66 }),
     ]);

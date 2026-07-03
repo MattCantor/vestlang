@@ -31,9 +31,9 @@ const outcome = evaluateProgramWithRecovery(program, {
 });
 const schedule = outcome.schedule;
 
-console.log(schedule.interchange.status);      // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
-console.log(schedule.resolution.status);       // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
-console.log(schedule.resolution.installments); // [{ amount, date, meta: { state } }, ...]
+console.log(schedule.storable.status);      // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
+console.log(schedule.resolvesTo.status);       // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
+console.log(schedule.resolvesTo.installments); // [{ amount, date, meta: { state } }, ...]
 console.log(schedule.absenceAssumptions);      // [{ eventId, through }, ...]
 ```
 
@@ -61,8 +61,8 @@ Every `EvaluatedSchedule` carries two classifications side by side:
 
 | Verdict | Asks | `status` values |
 | :-- | :-- | :-- |
-| `interchange` | what a record keeper could **store** (computed without reading firings) | `template` / `events-only` / `unrepresentable` / `impossible` |
-| `resolution` | what it **resolves to** given the events known | `template` / `events-only` / `unresolved` / `impossible` |
+| `storable` | what a record keeper could **store** (computed without reading firings) | `template` / `events-only` / `unrepresentable` / `impossible` |
+| `resolvesTo` | what it **resolves to** given the events known | `template` / `events-only` / `unresolved` / `impossible` |
 
 They can differ — a gated start is a storable `template` that may resolve to `impossible`
 after an early firing. The schedule also carries `absenceAssumptions` (events the
@@ -117,7 +117,7 @@ The package exports commonly used types:
 **Evaluation**
 
 - `EvaluationContextInput` - Input context for evaluation
-- `EvaluatedSchedule` - Result of evaluating a schedule (carries the two verdicts `interchange` / `resolution`, plus `installments`, `blockers`, `absenceAssumptions`, and `findings`)
+- `EvaluatedSchedule` - Result of evaluating a schedule (carries the two verdicts `storable` / `resolvesTo`, plus `installments`, `blockers`, `absenceAssumptions`, and `findings`)
 - `Installment` - A single vesting installment
 - `ResolvedInstallment` / `UnresolvedInstallment` / `ImpossibleInstallment` - The installment states
 - `VestedResult` - Vested/unvested quantities produced by evaluation

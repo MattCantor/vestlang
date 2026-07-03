@@ -278,10 +278,10 @@ describe("resolveToCore — event-held cliff is now a template (#255)", () => {
       ),
     ];
     const out = evaluateProgram(program, ctxInput());
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     // `blockerToString` recurses the whole blocker tree, so it renders any leaked
     // synthetic id too; asserting on the rendered text is the real guard.
-    const rendered = out.resolution.pending.map(blockerToString).join(" | ");
+    const rendered = out.resolvesTo.pending.map(blockerToString).join(" | ");
     expect(rendered).toContain("EVENT a");
     expect(rendered).toContain("EVENT b");
     expect(rendered).not.toContain("evt:");
@@ -700,7 +700,7 @@ describe("resolveToCore — an event-held cliff stores as a template, held until
       event_id: "ipo",
     });
     expect(scheduleOf(result.template.statements[0])?.cliff).toBeUndefined();
-    // Held: compiling the template against the firing-free interchange runtime
+    // Held: compiling the template against the firing-free storable runtime
     // releases nothing (AC 5/7).
     const compiled = compile(
       result.template,
@@ -825,9 +825,9 @@ describe("resolveToCore — event cliff at the grid edges (proportional)", () =>
     expect(result.kind).toBe("template");
 
     const out = evaluateProgram(program, ctx);
-    expect(out.resolution.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
     // An event-held cliff is storable now — both verdicts read template.
-    expect(out.interchange.status).toBe("template");
+    expect(out.storable.status).toBe("template");
 
     if (result.kind !== "template") return;
     // The lump has no effect because nothing accrued by the firing, so the grid
@@ -840,9 +840,9 @@ describe("resolveToCore — event cliff at the grid edges (proportional)", () =>
 });
 
 // A fired event cliff whose effective date lands before the first installment has
-// nothing to fold into a lump, so it carries no projection effect. The resolution
+// nothing to fold into a lump, so it carries no projection effect. The resolves-to
 // path must say so: a plain template, no cliff date — not an events split reported
-// as if a real cliff sat on the firing. The interchange verdict is firing-blind,
+// as if a real cliff sat on the firing. The storable verdict is firing-blind,
 // so it still can't store the event-anchored cliff: the two verdicts legitimately
 // part ways here.
 describe("resolveToCore — fired event cliff with no projection effect", () => {
@@ -897,9 +897,9 @@ describe("resolveToCore — fired event cliff with no projection effect", () => 
       expect(result.kind).toBe("template");
 
       const out = evaluateProgram(program, ctx);
-      expect(out.resolution.status).toBe("template");
+      expect(out.resolvesTo.status).toBe("template");
       // Both verdicts store the event hold now — they agree.
-      expect(out.interchange.status).toBe("template");
+      expect(out.storable.status).toBe("template");
 
       if (result.kind !== "template") return;
       const compiled = compile(
@@ -988,7 +988,7 @@ describe("resolveToCore — the no-effect guard keys on the effective date", () 
     ]);
 
     const out = evaluateProgram(program, ctx);
-    expect(out.interchange.status).toBe("template");
+    expect(out.storable.status).toBe("template");
   });
 
   it("PLUS offset pushes the effective date onto an installment → a real cliff", () => {

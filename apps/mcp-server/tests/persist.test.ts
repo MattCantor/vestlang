@@ -457,7 +457,7 @@ describe("mcp-server / persistence tool pair", () => {
 
   it("refuses an over-allocating single template, naming the over-allocation", async () => {
     const client = await connectClient();
-    // 6000 shares vest on a 4800-share grant — 125%. The resolution is a clean single
+    // 6000 shares vest on a 4800-share grant — 125%. The resolvesTo is a clean single
     // template, so the old shape gate alone would have let it through; the validity
     // gate is what now catches it. Without the fix this persists ok: true and the
     // rehydrated projection over-vests the grant.

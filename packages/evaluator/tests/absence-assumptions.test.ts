@@ -1,4 +1,4 @@
-// Closed-world resolution reads "no firing recorded" as "hasn't happened," so its
+// The resolves-to reading reads "no firing recorded" as "hasn't happened," so its
 // answer can quietly depend on some event staying absent. `absenceAssumptions`
 // surfaces those dependencies direction-aware: each carries the boundary date
 // (`through`) plus the relation a dangerous firing would have to satisfy to move the
@@ -172,7 +172,7 @@ describe("absenceAssumptions", () => {
     // descriptor).
     expect(out.absenceAssumptions).toEqual([]);
     expect(
-      out.resolution.pending.some(
+      out.resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -352,7 +352,7 @@ describe("#399 — disclosure direction", () => {
       ),
       ctxInput({ grantDate: "2024-01-01", grantQuantity: 1200 }),
     );
-    expect(findUnfired(schedule.resolution.pending, "ipo")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "ipo")).toEqual({
       through: "2025-01-01",
       direction: "after",
       inclusive: false,
@@ -433,7 +433,7 @@ describe("#446 — nested gate keeps its own boundary under a selector", () => {
         grantQuantity: 1200,
         events: ipo ? { ipo } : {},
       }),
-    ).resolution;
+    ).resolvesTo;
     return out.status === "template" ? out.runtime.startDate : undefined;
   };
 

@@ -70,13 +70,13 @@ function printSchedule(view: ScheduleView): void {
     .filter(Boolean)
     .join(", ");
   const storableReason =
-    "reason" in view.interchange ? ` (${view.interchange.reason})` : "";
+    "reason" in view.storable ? ` (${view.storable.reason})` : "";
   const resolvesReason =
-    "reason" in view.resolution ? ` (${view.resolution.reason})` : "";
+    "reason" in view.resolvesTo ? ` (${view.resolvesTo.reason})` : "";
   console.log();
-  console.log(`storable: ${view.interchange.status}${storableReason}`);
+  console.log(`storable: ${view.storable.status}${storableReason}`);
   console.log(
-    `resolves to: ${view.resolution.status}${resolvesReason}${tags ? ` — ${tags}` : ""}`,
+    `resolves to: ${view.resolvesTo.status}${resolvesReason}${tags ? ` — ${tags}` : ""}`,
   );
   console.table(
     view.installments.map((item) => ({

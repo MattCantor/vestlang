@@ -165,7 +165,7 @@ function reduceBest<T>(
  *     committing to it is a guaranteed vesting floor: any real firing (future,
  *     backdated, even earlier than the date) only moves the start earlier, never
  *     later. It discloses the still-pending siblings as absence assumptions. In
- *     `interchange`/`rehydrate` mode it does NOT commit (firing-blind storage must
+ *     `storable`/`rehydrate` mode it does NOT commit (firing-blind storage must
  *     stay invariant; reload must not fabricate a firing).
  *
  * They also differ on a dead (impossible) arm: EARLIER_OF drops it and carries on
@@ -317,7 +317,7 @@ function handleSelector<T extends Schedule | VestingNode>(
   // the start (the latest it could be), so committing to it never over-vests; we
   // disclose every still-pending sibling, stamped `through` the committed date, so
   // a later/backdated firing of one of them is flagged as the thing that could
-  // move the answer (earlier). Firing-blind (interchange) and reload (rehydrate)
+  // move the answer (earlier). Firing-blind (storable) and reload (rehydrate)
   // must not commit — see EvaluationMode — so the branch is gated on mode here.
   if (policy.earlierCommits && hasAnySettled && mode === "resolution") {
     const { picked, date } = reduceBest(settled, policy.selector);

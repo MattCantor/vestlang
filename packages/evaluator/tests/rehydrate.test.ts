@@ -45,13 +45,13 @@ import {
 const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));
   const schedule = evaluateProgram(program, ctx);
-  const { interchange } = schedule;
-  if (interchange.status !== "template")
-    throw new Error(`expected template, got ${interchange.status}`);
+  const { storable } = schedule;
+  if (storable.status !== "template")
+    throw new Error(`expected template, got ${storable.status}`);
   return {
-    template: interchange.template,
-    sourceMap: interchange.sourceMap,
-    runtime: interchange.runtime,
+    template: storable.template,
+    sourceMap: storable.sourceMap,
+    runtime: storable.runtime,
   };
 };
 
@@ -112,16 +112,16 @@ const stageAStmt = (): Statement => ({
 });
 
 const storedArtifact = () => {
-  const { interchange } = evaluateStatement(
+  const { storable } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (interchange.status !== "template")
-    throw new Error(`expected template, got ${interchange.status}`);
+  if (storable.status !== "template")
+    throw new Error(`expected template, got ${storable.status}`);
   return {
-    template: interchange.template,
-    sourceMap: interchange.sourceMap,
-    runtime: interchange.runtime,
+    template: storable.template,
+    sourceMap: storable.sourceMap,
+    runtime: storable.runtime,
   };
 };
 
@@ -524,8 +524,8 @@ describe("rehydrate — #253 round-trip consistency (exact start, re-snapped gri
     });
     const liveProgram = normalizeProgram(parse(DSL));
     const liveSchedule = evaluateProgram(liveProgram, liveCtx);
-    expect(liveSchedule.resolution.status).toBe("template");
-    const liveDates = liveSchedule.resolution.installments.map((i) =>
+    expect(liveSchedule.resolvesTo.status).toBe("template");
+    const liveDates = liveSchedule.resolvesTo.installments.map((i) =>
       i.state === "RESOLVED" ? i.date : i.state,
     );
     expect(liveDates).toEqual([
@@ -637,19 +637,19 @@ describe("rehydrate — event_condition firings (#255)", () => {
   });
 
   // AC 8 mechanical witness: the same statement evaluated fired vs unfired yields
-  // deep-equal interchange verdicts (firing-invariance), while resolution differs.
-  it("AC8: the interchange verdict is deep-equal fired vs unfired", () => {
+  // deep-equal storable verdicts (firing-invariance), while resolvesTo differs.
+  it("AC8: the storable verdict is deep-equal fired vs unfired", () => {
     const dsl =
       "VEST FROM DATE 2025-01-01 OVER 48 months EVERY 1 month CLIFF EVENT ipo";
     const program = normalizeProgram(parse(dsl));
     const unfired = evaluateProgram(
       program,
       ctxInput({ grantQuantity: 4800 }),
-    ).interchange;
+    ).storable;
     const fired = evaluateProgram(
       program,
       ctxInput({ events: { ipo: "2026-06-01" }, grantQuantity: 4800 }),
-    ).interchange;
+    ).storable;
     expect(fired).toEqual(unfired);
   });
 
@@ -706,7 +706,7 @@ describe("rehydrate — dated template arm reloads to the direct projection, per
 
         const program = normalizeProgram(parse(dsl));
         const direct = datedProjection(
-          evaluateProgram(program, ctx).resolution.installments,
+          evaluateProgram(program, ctx).resolvesTo.installments,
         );
 
         const { template, sourceMap, runtime } = storedFromDsl(dsl, ctx);
@@ -752,7 +752,7 @@ describe("rehydrate — THEN-on-event-head chain re-anchors to the fired head wi
 
     const program = normalizeProgram(parse(DSL));
     const live = datedProjection(
-      evaluateProgram(program, firedCtx).resolution.installments,
+      evaluateProgram(program, firedCtx).resolvesTo.installments,
     );
 
     expect(projected).toEqual(live);

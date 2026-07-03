@@ -8,7 +8,7 @@ import type {
 import { InstallmentsTable } from "./installmentsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
-// One labeled block of blockers. The resolution surface splits them into pending
+// One labeled block of blockers. The resolves-to surface splits them into pending
 // (still waiting) and dead (contradicted given the firings), so we render each list
 // under its own heading.
 const blockersBlock = (
@@ -88,9 +88,9 @@ export default function PlaygroundResults({
             {/* The two verdicts, labeled: what a record keeper could store for
                 this grant, and what it resolves to given the events entered. */}
             <p style={{ fontSize: "0.8125rem", marginBottom: "0.5rem" }}>
-              <strong>Storable:</strong> {view.interchange.status}
+              <strong>Storable:</strong> {view.storable.status}
               {"  •  "}
-              <strong>Resolves to:</strong> {view.resolution.status}
+              <strong>Resolves to:</strong> {view.resolvesTo.status}
             </p>
             {/* When an events-only program turned out to have a single-template
                 form, the engine recovers it back to a template; this says where

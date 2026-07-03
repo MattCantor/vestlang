@@ -102,7 +102,7 @@ export interface StmtResolution {
     // same way (DATE hoist/cursor or fired EVENT) — plus the required
     // `disclosures`: the still-pending siblings' blockers, stamped `through` the
     // committed date, which buildTemplate pushes onto `build.blockers` so they
-    // reach `absenceAssumptions` and `resolution.pending`. Kept distinct from
+    // reach `absenceAssumptions` and `resolvesTo.pending`. Kept distinct from
     // RESOLVED so the disclosures can't be silently dropped.
     | {
         state: "COMMITTED";
@@ -393,7 +393,7 @@ const laterOf = (firing: OCTDate, floor: OCTDate | undefined): OCTDate =>
 //   - unfired (no `firing`): the held grid hasn't ended, so there's nothing to hand
 //     off. The tail can't vest until the event arrives → a PENDING anchor carrying
 //     the held cliff's own blockers (the real underlying events, never the minted
-//     `evt:<n>`). Firing-blind, every held cliff reads unfired, so the interchange
+//     `evt:<n>`). Firing-blind, every held cliff reads unfired, so the storable
 //     build always takes this branch.
 //   - fired: the grid folds at `max(cliffDate, firing)`, so a tail behind it can't
 //     start before that fold. The handoff is `max(bareGridEnd, foldPoint)` — the
@@ -729,7 +729,7 @@ export const buildTemplate = (
   // `evt:<n>` per synthetic event-held cliff (minted by `mintSynthetic`).
   const sourceMap: SourceMap = {};
   // Resolution-mode condition firings, keyed by event_id so two statements holding
-  // on the same event share one firing. Empty in the firing-blind interchange
+  // on the same event share one firing. Empty in the firing-blind storable
   // build (its cliffs carry no `firing`), which is what keeps that verdict's
   // runtime firing-free.
   const eventFirings: NonNullable<VestingRuntime["eventFirings"]> = [];
@@ -799,7 +799,7 @@ export const buildTemplate = (
     const { type, length, occurrences } = r.periodicity;
 
     // A committed EARLIER_OF's pending-sibling disclosures (via `disclosuresOf`),
-    // so they reach `resolution.pending` and the absence-assumption disclosure —
+    // so they reach `resolvesTo.pending` and the absence-assumption disclosure —
     // the start itself still lowers as a plain dated anchor below.
     blockers.push(...disclosuresOf(r.start));
 
@@ -859,7 +859,7 @@ export const buildTemplate = (
 
     // A committed top-level EARLIER_OF cliff's pending-sibling disclosures (an
     // unfired EVENT arm, stamped through the floor), mirroring the start push
-    // above — they reach `resolution.pending` and the absence assumption so the
+    // above — they reach `resolvesTo.pending` and the absence assumption so the
     // committed floor doesn't read as certain. Only the RESOLVED arm carries them;
     // the field is absent on a plain resolved cliff.
     if (r.cliff.state === "RESOLVED") {
@@ -880,7 +880,7 @@ export const buildTemplate = (
         recordFiring(eventId, r.cliff.firing);
       }
       // Disclose the hold's blockers on the template verdict's blocker list so
-      // resolution.pending reflects what the cliff is leaning on. Two sources, both
+      // resolvesTo.pending reflects what the cliff is leaning on. Two sources, both
       // carried on `r.cliff.blockers` (see the field's doc on LoweredCliff):
       //   - an unfired hold names its real underlying events (`a`/`b`), never the
       //     minted `evt:<n>` — pushing the synthetic id here would leak an internal
@@ -889,7 +889,7 @@ export const buildTemplate = (
       //   - a committed inner `EARLIER OF` that won the outer `LATER OF` (firing
       //     defined via its floor) discloses its assumed-absent event (#473).
       // The push is unconditional — `r.cliff.blockers` is empty for a real firing and
-      // for a dominated/tied commit, so it adds nothing there. The interchange build
+      // for a dominated/tied commit, so it adds nothing there. The storable build
       // is firing-blind and never reads these, so this stays firing-invariant.
       blockers.push(...(r.cliff.blockers ?? []));
     }
@@ -965,7 +965,7 @@ export const buildTemplate = (
   const runtime: VestingRuntime = {
     ...(startDate !== undefined ? { [START_DATE]: startDate } : {}),
     // The resolution-mode condition firings (empty firing-blind, which keeps the
-    // interchange runtime firing-free). core.compile reads them to place each
+    // storable runtime firing-free). core.compile reads them to place each
     // event hold's fold. Not a RuntimeBase field — it lives only on VestingRuntime,
     // so it carries no computed key.
     ...(eventFirings.length > 0 ? { eventFirings } : {}),

@@ -182,7 +182,7 @@ describe("#335 — runtime DATE-literal validation via the shared collector", ()
       prog(`1000 VEST FROM DATE 2024-02-29 OVER 12 months EVERY 1 month`),
       ctx(),
     );
-    expect(before.resolution.status).toBe("template");
+    expect(before.resolvesTo.status).toBe("template");
     expect(() =>
       evaluateProgram(
         prog(`1000 VEST FROM DATE 2024-02-29 OVER 12 months EVERY 1 month`),

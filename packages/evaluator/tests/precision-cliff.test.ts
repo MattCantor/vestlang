@@ -47,10 +47,10 @@ describe("over-precise cliff — the stored template (#359 AC5)", () => {
 });
 
 describe("over-precise cliff — the live evaluation path (#359 AC6)", () => {
-  it("the resolution stream lumps the same 11,999 on the cliff date", () => {
+  it("the resolves-to stream lumps the same 11,999 on the cliff date", () => {
     const schedule = evaluateProgram(program(), ctx);
-    expect(schedule.resolution.status).toBe("template");
-    const resolved = schedule.resolution.installments.filter(
+    expect(schedule.resolvesTo.status).toBe("template");
+    const resolved = schedule.resolvesTo.installments.filter(
       (i): i is ResolvedInstallment => i.state === "RESOLVED",
     );
     const amounts = resolved.map((i) => i.amount);
@@ -168,9 +168,9 @@ describe("over-precise cliff — the template arm at a lossy basis (#386 AC5)", 
       normalizeProgram(parse(DSL_LOSSY)),
       lossyCtx,
     );
-    if (schedule.resolution.status !== "template")
+    if (schedule.resolvesTo.status !== "template")
       throw new Error("expected template");
-    const lump = schedule.resolution.installments
+    const lump = schedule.resolvesTo.installments
       .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
       .find((i) => i.date === "2020-03-01");
     expect(lump?.amount).toBe(334);
@@ -291,10 +291,10 @@ describe("multi-statement apportioned cliff compiles under BigInt share math (#5
       normalizeProgram(parse(THEN_THIRDS)),
       ctx2,
     );
-    expect(schedule.resolution.status).toBe("template");
-    if (schedule.resolution.status !== "template")
+    expect(schedule.resolvesTo.status).toBe("template");
+    if (schedule.resolvesTo.status !== "template")
       throw new Error("expected template");
-    const resolved = schedule.resolution.installments.filter(
+    const resolved = schedule.resolvesTo.installments.filter(
       (i): i is ResolvedInstallment => i.state === "RESOLVED",
     );
     expect(resolved.map((i) => ({ date: i.date, amount: i.amount }))).toEqual(

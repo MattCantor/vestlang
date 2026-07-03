@@ -71,21 +71,21 @@ const stageAStmt = (): Statement => ({
   },
 });
 
-// The stored artifact (IPO unfired): the firing-invariant `interchange` `template`
+// The stored artifact (IPO unfired): the firing-invariant `storable` `template`
 // arm — a DATE statement on the contingent-start sentinel, a firing-free
 // StoredTerms runtime, and the source map with the one `evt:start` recipe — which
 // is what persist actually stores.
 const storedArtifact = () => {
-  const { interchange } = evaluateStatement(
+  const { storable } = evaluateStatement(
     stageAStmt(),
     ctxInput({ grantQuantity: 4800 }),
   );
-  if (interchange.status !== "template")
-    throw new Error(`expected template, got ${interchange.status}`);
+  if (storable.status !== "template")
+    throw new Error(`expected template, got ${storable.status}`);
   return {
-    template: interchange.template,
-    sourceMap: interchange.sourceMap,
-    runtime: interchange.runtime,
+    template: storable.template,
+    sourceMap: storable.sourceMap,
+    runtime: storable.runtime,
   };
 };
 
@@ -183,16 +183,16 @@ describe("sidecar — dropping a contingent artifact's sidecar is a damaged arti
 
 describe("sidecar — a plain dated template emits no sidecar", () => {
   it("toSidecar({}) is undefined and toPersisted omits the field", () => {
-    const { interchange } = evaluateStatement(
+    const { storable } = evaluateStatement(
       plainStmt(),
       ctxInput({ grantQuantity: 4800 }),
     );
-    if (interchange.status !== "template")
-      throw new Error(`expected template, got ${interchange.status}`);
-    expect(interchange.sourceMap).toEqual({});
+    if (storable.status !== "template")
+      throw new Error(`expected template, got ${storable.status}`);
+    expect(storable.sourceMap).toEqual({});
 
-    expect(toSidecar(interchange.sourceMap)).toBeUndefined();
-    const persisted = toPersisted(interchange);
+    expect(toSidecar(storable.sourceMap)).toBeUndefined();
+    const persisted = toPersisted(storable);
     expect("sidecar" in persisted).toBe(false);
   });
 });

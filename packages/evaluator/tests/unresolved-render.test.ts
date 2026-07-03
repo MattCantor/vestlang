@@ -3,7 +3,7 @@
 // unresolved projection lays the schedule out as per-tranche `start + N` symbolic
 // installments, not one undated lump. That detail tells a record-keeper the shape
 // of the schedule even before the anchor is known, so it must survive the move to
-// rendering from the resolution record.
+// rendering from the resolvesTo record.
 //
 // `LATER OF(grantDate + 12 months, EVENT ipo)` start (the +12mo arm resolves, ipo
 // pending) over a 48-month grid, with an event cliff that keeps the whole program
@@ -28,32 +28,32 @@ describe("partially-resolved combinator start keeps its START_PLUS cadence", () 
     // event_condition). The combinator start's cadence still renders as START_PLUS
     // tranches, now in the template verdict's pending installments.
     const program = normalizeProgram(parse(DSL));
-    const { resolution } = evaluateProgram(program, {
+    const { resolvesTo } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // ipo and board both unfired
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
-    expect(resolution.installments).toHaveLength(48);
+    expect(resolvesTo.installments).toHaveLength(48);
     expect(
-      resolution.installments.every(
+      resolvesTo.installments.every(
         (i) => i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS",
       ),
     ).toBe(true);
     // No grant-date fold runs on this path, so the months count up cleanly: the
     // first tranche reads START + 1 month and the last START + 48 months.
-    const steps = resolution.installments.map((i) =>
+    const steps = resolvesTo.installments.map((i) =>
       i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS"
         ? i.symbolicDate.steps
         : undefined,
     );
     expect(steps).toEqual(Array.from({ length: 48 }, (_, i) => i + 1));
-    expect(resolution.installments.every((i) => i.amount === 100)).toBe(true);
+    expect(resolvesTo.installments.every((i) => i.amount === 100)).toBe(true);
     expect(
-      resolution.pending.some(
+      resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -72,29 +72,29 @@ describe("partial LATER OF cliff holds the whole grid (the floor is the hold)", 
 
   it("template; every share held as an UNRESOLVED_CLIFF tranche, nothing released", () => {
     const program = normalizeProgram(parse(DSL));
-    const { resolution } = evaluateProgram(program, {
+    const { resolvesTo } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // ipo unfired → the event_condition holds
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
     // The whole grid is held (no RESOLVED tranche), rendered as cliff lumps.
     expect(
-      resolution.installments.every(
+      resolvesTo.installments.every(
         (i) =>
           i.state === "UNRESOLVED" &&
           i.symbolicDate.type === "UNRESOLVED_CLIFF",
       ),
     ).toBe(true);
     // Shares are conserved in the held stream.
-    expect(resolution.installments.reduce((sum, i) => sum + i.amount, 0)).toBe(
+    expect(resolvesTo.installments.reduce((sum, i) => sum + i.amount, 0)).toBe(
       4800,
     );
     expect(
-      resolution.pending.some(
+      resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
@@ -106,16 +106,16 @@ describe("partial LATER OF cliff holds the whole grid (the floor is the hold)", 
   // (#447 AC 4) lives in the same test: it must fail if a future change re-folds.
   it("discloses the floor on each held tranche while keeping cadence dates honest", () => {
     const program = normalizeProgram(parse(DSL));
-    const { resolution } = evaluateProgram(program, {
+    const { resolvesTo } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // ipo unfired
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
-    const symbolic = resolution.installments.map((i) =>
+    const symbolic = resolvesTo.installments.map((i) =>
       i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
         ? i.symbolicDate
         : undefined,
@@ -165,16 +165,16 @@ describe("bare event cliff holds the grid with no floor disclosed", () => {
 
   it("renders every held UNRESOLVED_CLIFF tranche with the floor key absent", () => {
     const program = normalizeProgram(parse(DSL));
-    const { resolution } = evaluateProgram(program, {
+    const { resolvesTo } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // board unfired → the event hold stands
       grantQuantity: 4800,
     });
 
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
-    const symbolic = resolution.installments.map((i) =>
+    const symbolic = resolvesTo.installments.map((i) =>
       i.state === "UNRESOLVED" && i.symbolicDate.type === "UNRESOLVED_CLIFF"
         ? i.symbolicDate
         : undefined,
@@ -201,25 +201,25 @@ describe("resolved start with a pending gated-event cliff renders dated, not STA
 
   it("template; renders every held installment as UNRESOLVED_CLIFF and none as START_PLUS", () => {
     const program = normalizeProgram(parse(DSL));
-    const { resolution } = evaluateProgram(program, {
+    const { resolvesTo } = evaluateProgram(program, {
       grantDate: "2025-01-01",
       events: {}, // board unfired → the event_condition holds
       grantQuantity: 400,
     });
 
-    expect(resolution.status).toBe("template");
-    if (resolution.status !== "template") return;
+    expect(resolvesTo.status).toBe("template");
+    if (resolvesTo.status !== "template") return;
 
-    expect(resolution.installments.length).toBeGreaterThan(0);
+    expect(resolvesTo.installments.length).toBeGreaterThan(0);
     expect(
-      resolution.installments.every(
+      resolvesTo.installments.every(
         (i) =>
           i.state === "UNRESOLVED" &&
           i.symbolicDate.type === "UNRESOLVED_CLIFF",
       ),
     ).toBe(true);
     expect(
-      resolution.installments.some(
+      resolvesTo.installments.some(
         (i) => i.state === "UNRESOLVED" && i.symbolicDate.type === "START_PLUS",
       ),
     ).toBe(false);

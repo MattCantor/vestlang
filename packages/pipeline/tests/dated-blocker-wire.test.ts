@@ -6,7 +6,7 @@
 // point of collapsing the four flat fields into a present-together unit.
 //
 // `VEST FROM DATE 2025-01-01 AFTER EVENT ipo` is a storable template whose start is
-// gated AFTER an unfired event: resolution stays pending, and the pending blocker is
+// gated AFTER an unfired event: resolvesTo stays pending, and the pending blocker is
 // dated (the gate's date is the boundary, `flips-to-impossible` because a firing on
 // the wrong side kills the grant). We assert the nested boundary on two published
 // surfaces: `pendingBlockers` in the pipeline view, and a persist → rehydrate

@@ -1,6 +1,6 @@
 // Issue #251 — EARLIER OF with a settled date arm commits to that floor in the
-// closed-world `resolution` verdict (only), discloses the still-pending arm, and
-// no longer freezes the grid. The interchange verdict stays firing-blind and never
+// closed-world `resolvesTo` verdict (only), discloses the still-pending arm, and
+// no longer freezes the grid. The storable verdict stays firing-blind and never
 // commits. These crystallize the issue's numbered acceptance criteria.
 
 import { readFileSync } from "node:fs";
@@ -59,8 +59,8 @@ describe("#251 AC1 — headline repro: commits to the date floor, discloses ipo"
         consequence: "grid-shift",
       },
     ]);
-    // The same disclosure appears in resolution.pending.
-    expect(findUnfired(schedule.resolution.pending, "ipo")).toEqual({
+    // The same disclosure appears in resolvesTo.pending.
+    expect(findUnfired(schedule.resolvesTo.pending, "ipo")).toEqual({
       through: "2024-06-01",
     });
   });
@@ -82,7 +82,7 @@ describe("#251 AC3 — floor property", () => {
   // The committed projection: the 12 monthly dates off 2024-06-01.
   const committedDates = () =>
     evaluateProgram(prog(HEADLINE), ctx())
-      .resolution.installments.filter((i) => i.state === "RESOLVED")
+      .resolvesTo.installments.filter((i) => i.state === "RESOLVED")
       .map((i) => (i.state === "RESOLVED" ? i.date : ""));
 
   it("ipo earlier than the date arm ⇒ start moves strictly earlier (firing honored, not floored)", () => {
@@ -97,7 +97,7 @@ describe("#251 AC3 — floor property", () => {
       prog(HEADLINE),
       ctx({ events: { ipo: "2024-03-01" } }),
     )
-      .resolution.installments.filter((i) => i.state === "RESOLVED")
+      .resolvesTo.installments.filter((i) => i.state === "RESOLVED")
       .map((i) => (i.state === "RESOLVED" ? i.date : ""));
     expect(earlyDates[0] < committedFirst).toBe(true);
 
@@ -119,30 +119,30 @@ describe("#251 AC3 — floor property", () => {
       prog(HEADLINE),
       ctx({ events: { ipo: "2025-01-01" } }),
     )
-      .resolution.installments.filter((i) => i.state === "RESOLVED")
+      .resolvesTo.installments.filter((i) => i.state === "RESOLVED")
       .map((i) => (i.state === "RESOLVED" ? i.date : ""));
     expect(later).toEqual(baseline);
   });
 });
 
 describe("#251 AC4 — all-pending lower edge (no spurious commit)", () => {
-  it("EARLIER OF (EVENT a, EVENT b), both unfired → resolution stays pending", () => {
+  it("EARLIER OF (EVENT a, EVENT b), both unfired → resolvesTo stays pending", () => {
     const dsl =
       "VEST FROM EARLIER OF (EVENT a, EVENT b) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
     // No resolved arm to commit to: it does not commit, so nothing dated vests.
-    const dated = schedule.resolution.installments.filter(
+    const dated = schedule.resolvesTo.installments.filter(
       (i) => i.state === "RESOLVED",
     );
     expect(dated).toHaveLength(0);
-    expect(schedule.resolution.pending.length).toBeGreaterThan(0);
+    expect(schedule.resolvesTo.pending.length).toBeGreaterThan(0);
     // No absence assumption either — there's no committed date to stamp through.
     expect(schedule.absenceAssumptions).toEqual([]);
   });
 });
 
-describe("#251 AC5 — interchange unchanged for the start case", () => {
-  it("the headline's interchange is still a contingent-start template, invariant to ipo", () => {
+describe("#251 AC5 — storable unchanged for the start case", () => {
+  it("the headline's storable is still a contingent-start template, invariant to ipo", () => {
     const blind = evaluateProgram(prog(HEADLINE), ctx());
     const fired = evaluateProgram(
       prog(HEADLINE),
@@ -150,12 +150,12 @@ describe("#251 AC5 — interchange unchanged for the start case", () => {
     );
     // Firing-blind: a contingent-start template (start on the sentinel + the one
     // reserved `evt:start` recipe).
-    if (blind.interchange.status !== "template")
-      throw new Error("expected interchange template");
-    expect(blind.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(Object.keys(blind.interchange.sourceMap)).toEqual(["evt:start"]);
+    if (blind.storable.status !== "template")
+      throw new Error("expected storable template");
+    expect(blind.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(blind.storable.sourceMap)).toEqual(["evt:start"]);
     // Invariant to whether ipo fired.
-    expect(fired.interchange).toEqual(blind.interchange);
+    expect(fired.storable).toEqual(blind.storable);
   });
 });
 
@@ -164,18 +164,18 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
   const dsl =
     "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
 
-  it("resolution is a template with a placeable cliff and a correct projection, and discloses fda (#464)", () => {
+  it("resolvesTo is a template with a placeable cliff and a correct projection, and discloses fda (#464)", () => {
     const schedule = evaluateProgram(
       prog(dsl),
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2026-06-01" }),
     );
-    if (schedule.resolution.status !== "template")
+    if (schedule.resolvesTo.status !== "template")
       throw new Error(
-        `expected resolution template, got ${schedule.resolution.status}`,
+        `expected resolvesTo template, got ${schedule.resolvesTo.status}`,
       );
     // The grid is no longer frozen — it projects the full grant. Narrow to
     // {date, amount} up front so the shape checks below don't re-prove RESOLVED.
-    const resolved = schedule.resolution.installments.flatMap((i) =>
+    const resolved = schedule.resolvesTo.installments.flatMap((i) =>
       i.state === "RESOLVED" ? [{ date: i.date, amount: i.amount }] : [],
     );
     expect(resolved.reduce((n, i) => n + i.amount, 0)).toBe(4800);
@@ -199,8 +199,8 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
         consequence: "grid-shift",
       },
     ]);
-    // The same disclosure rides in resolution.pending (#464 / correction #2).
-    expect(findUnfired(schedule.resolution.pending, "fda")).toEqual({
+    // The same disclosure rides in resolvesTo.pending (#464 / correction #2).
+    expect(findUnfired(schedule.resolvesTo.pending, "fda")).toEqual({
       through: "2026-01-01",
     });
   });
@@ -217,9 +217,9 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
         events: { fda: "2025-07-01" },
       }),
     );
-    expect(schedule.resolution.status).toBe("template");
+    expect(schedule.resolvesTo.status).toBe("template");
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "fda")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "fda")).toBeUndefined();
   });
 
   it("a no-lump EARLIER OF cliff (+0 months) lowers to NONE and stays silent (#464)", () => {
@@ -234,23 +234,23 @@ describe("#251 AC6 — EARLIER OF cliff (the worse form) resolves to a committed
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800, asOf: "2026-06-01" }),
     );
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "fda")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "fda")).toBeUndefined();
   });
 });
 
-describe("#251 AC7 — persist gates on interchange (the cliff stays unrepresentable)", () => {
-  it("the EARLIER OF cliff resolves to template but its interchange is unrepresentable", () => {
+describe("#251 AC7 — persist gates on storable (the cliff stays unrepresentable)", () => {
+  it("the EARLIER OF cliff resolves to template but its storable is unrepresentable", () => {
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)";
     const schedule = evaluateProgram(
       prog(dsl),
       ctx({ grantDate: "2025-01-01", grantQuantity: 4800 }),
     );
-    expect(schedule.resolution.status).toBe("template");
+    expect(schedule.resolvesTo.status).toBe("template");
     // An EARLIER OF cliff has no storable form (the event arm can't be a duration
-    // cliff), so persist (which gates on interchange) refuses it — covered E2E in
+    // cliff), so persist (which gates on storable) refuses it — covered E2E in
     // the pipeline/mcp persist suites; here we pin the verdict divergence.
-    expect(schedule.interchange.status).toBe("unrepresentable");
+    expect(schedule.storable.status).toBe("unrepresentable");
   });
 });
 
@@ -259,11 +259,11 @@ describe("#251 AC14 — nested commit settles (outer fold consumes the committed
     const dsl =
       "VEST FROM EARLIER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     // The inner EARLIER OF commits to 2024-06-01 (its floor); the outer EARLIER OF
     // takes the earlier of {2024-06-01, 2024-09-01} = 2024-06-01.
-    expect(schedule.resolution.runtime.startDate).toBe("2024-06-01");
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-06-01");
   });
 
   it("LATER OF (EARLIER OF (DATE d, EVENT e), DATE d2) resolves on the committed inner floor", () => {
@@ -273,9 +273,9 @@ describe("#251 AC14 — nested commit settles (outer fold consumes the committed
     const dsl =
       "VEST FROM LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-09-01");
   });
 });
 
@@ -284,7 +284,7 @@ describe("#251 AC14 — nested commit settles (outer fold consumes the committed
 // floor and leans on `e` staying absent; the outer LATER OF reads only the inner's
 // floor date and used to drop that assumption. The fix harvests the committed arm's
 // disclosures one level up (re-stamped through the outer fold's date, Decision 2),
-// so the assumption survives to `absenceAssumptions` and `resolution.pending`.
+// so the assumption survives to `absenceAssumptions` and `resolvesTo.pending`.
 describe("#363 — committed-pick disclosures carry up through an outer fold", () => {
   it("AC-1: material outer LATER OF — start moves with the event, `e` disclosed through the outer date", () => {
     // EARLIER OF (DATE 2024-09-01, EVENT e) commits to its 2024-09-01 floor; the
@@ -294,9 +294,9 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     const dsl =
       "VEST FROM LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([
       {
         eventId: "e",
@@ -306,7 +306,7 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
         consequence: "grid-shift",
       },
     ]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-09-01",
     });
   });
@@ -322,11 +322,11 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     const dsl =
       "VEST FROM LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("AC-5: partial LATER OF carries the inner disclosure alongside its own pending arm", () => {
@@ -346,10 +346,10 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       inclusive: false,
       consequence: "grid-shift",
     });
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-06-01",
     });
-    expect(findUnfired(schedule.resolution.pending, "f")).toBeDefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "f")).toBeDefined();
   });
 
   // TIE (both arm orders) — the inner floor equals a sibling DATE arm, so it is not
@@ -368,11 +368,11 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     ],
   ])("tie-guard (%s): equal floors → silent on `e`", (_label, dsl) => {
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("multi-committed — only the winning arm's event discloses; the dominated one is silent", () => {
@@ -383,9 +383,9 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
     const dsl =
       "VEST FROM LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), EARLIER OF (DATE 2024-06-01, EVENT f)) OVER 12 months EVERY 1 month";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-09-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-09-01");
     expect(schedule.absenceAssumptions).toEqual([
       {
         eventId: "e",
@@ -395,10 +395,10 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
         consequence: "grid-shift",
       },
     ]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-09-01",
     });
-    expect(findUnfired(schedule.resolution.pending, "f")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "f")).toBeUndefined();
   });
 
   it("multi-committed in a PARTIAL LATER — winner discloses, dominated committed arm silent, pending arm rides", () => {
@@ -416,11 +416,11 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       inclusive: false,
       consequence: "grid-shift",
     });
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-09-01",
     });
-    expect(findUnfired(schedule.resolution.pending, "g")).toBeUndefined();
-    expect(findUnfired(schedule.resolution.pending, "f")).toBeDefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "g")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "f")).toBeDefined();
   });
 
   it("fired inner event — the nested fold is RESOLVED (not COMMITTED), so nothing discloses", () => {
@@ -436,11 +436,11 @@ describe("#363 — committed-pick disclosures carry up through an outer fold", (
       prog(dsl),
       ctx({ events: { e: "2024-05-01" } }),
     );
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-06-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-06-01");
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 });
 
@@ -499,8 +499,8 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)";
     const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     expect(schedule.absenceAssumptions).toEqual([
       {
         eventId: "e",
@@ -510,7 +510,7 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
         consequence: "grid-shift",
       },
     ]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-09-01",
     });
   });
@@ -522,10 +522,10 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01)";
     const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("tie: CLIFF LATER OF (EARLIER OF (DATE 09-01, EVENT e), DATE 09-01) stays silent", () => {
@@ -535,10 +535,10 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
     const dsl =
       "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-09-01)";
     const schedule = evaluateProgram(prog(dsl), ctx({ grantQuantity: 4800 }));
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("fired inner event: CLIFF LATER OF (EARLIER OF (DATE 09-01, EVENT e), DATE 06-01) with `e` fired stays silent", () => {
@@ -553,10 +553,10 @@ describe("#363 AC-7 — nested combinator in cliff position discloses when mater
       prog(dsl),
       ctx({ grantQuantity: 4800, events: { e: "2024-05-01" } }),
     );
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     expect(schedule.absenceAssumptions).toEqual([]);
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 });
 
@@ -574,8 +574,8 @@ describe("#473 — deferred cliff harvests the gated disclosure", () => {
     const dsl =
       "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-09-01, EVENT e), DATE 2024-06-01)";
     const schedule = evaluateProgram(prog(dsl), deferredCtx);
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     // The inner floor 2024-09-01 is the unique strict max, so `e` is material even
     // though the start firing is unknown.
     expect(schedule.absenceAssumptions).toContainEqual({
@@ -585,7 +585,7 @@ describe("#473 — deferred cliff harvests the gated disclosure", () => {
       inclusive: false,
       consequence: "grid-shift",
     });
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-09-01",
     });
   });
@@ -594,14 +594,14 @@ describe("#473 — deferred cliff harvests the gated disclosure", () => {
     const dsl =
       "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF LATER OF (EARLIER OF (DATE 2024-06-01, EVENT e), DATE 2024-09-01)";
     const schedule = evaluateProgram(prog(dsl), deferredCtx);
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
     // The inner floor is swamped, so `e` is immaterial — no assumption for it. (The
     // start's own `g` wait is still present, unrelated.)
     expect(
       schedule.absenceAssumptions.find((a) => a.eventId === "e"),
     ).toBeUndefined();
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 });
 
@@ -626,7 +626,7 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
     const dsl =
       "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF EARLIER OF (DATE 2026-01-01, EVENT e)";
     const schedule = evaluateProgram(prog(dsl), deferred());
-    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.resolvesTo.status).toBe("unresolved");
     // The 2026-01-01 floor leans on `e` staying absent — an earlier firing re-grids
     // the cliff — so `e` is disclosed through it. The start's own `g` wait is a bare,
     // boundary-less blocker, so it is not an absence assumption.
@@ -637,7 +637,7 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
       inclusive: false,
       consequence: "grid-shift",
     });
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2026-01-01",
     });
     expect(
@@ -652,7 +652,7 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
     const dsl =
       "VEST FROM EARLIER OF (EVENT a, EVENT b) OVER 48 months EVERY 1 month CLIFF EARLIER OF (DATE 2026-01-01, EVENT e)";
     const schedule = evaluateProgram(prog(dsl), deferred());
-    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.resolvesTo.status).toBe("unresolved");
     expect(schedule.absenceAssumptions).toContainEqual({
       eventId: "e",
       through: "2026-01-01",
@@ -672,11 +672,11 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
       prog(dsl),
       deferred({ events: { e: "2025-07-01" } }),
     );
-    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.resolvesTo.status).toBe("unresolved");
     expect(
       schedule.absenceAssumptions.find((a) => a.eventId === "e"),
     ).toBeUndefined();
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("stays fully silent when the floor arm is measured from the vesting start", () => {
@@ -688,11 +688,11 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
     const dsl =
       "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT e)";
     const schedule = evaluateProgram(prog(dsl), deferred());
-    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.resolvesTo.status).toBe("unresolved");
     expect(
       schedule.absenceAssumptions.find((a) => a.eventId === "e"),
     ).toBeUndefined();
-    expect(findUnfired(schedule.resolution.pending, "e")).toBeUndefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toBeUndefined();
   });
 
   it("discloses nothing when the deferred cliff has no committed floor", () => {
@@ -702,7 +702,7 @@ describe("deferred top-level EARLIER OF cliff discloses its committed floor", ()
     // remains, and it is not disclosed.
     const dsl = "VEST FROM EVENT g OVER 48 months EVERY 1 month CLIFF +90 days";
     const schedule = evaluateProgram(prog(dsl), deferred());
-    expect(schedule.resolution.status).toBe("unresolved");
+    expect(schedule.resolvesTo.status).toBe("unresolved");
     expect(schedule.absenceAssumptions).toEqual([]);
   });
 });
@@ -726,13 +726,13 @@ describe("#251 AC16 — LATER OF unregressed", () => {
     const schedule = evaluateProgram(prog(dsl), ctx());
     // LATER OF's resolved arm is an upper bound, so it must NOT commit to a date —
     // it stays a synthetic-event template waiting on ipo (no dated installments).
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    const dated = schedule.resolution.installments.filter(
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    const dated = schedule.resolvesTo.installments.filter(
       (i) => i.state === "RESOLVED",
     );
     expect(dated).toHaveLength(0);
-    expect(findUnfired(schedule.resolution.pending, "ipo")).toBeDefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "ipo")).toBeDefined();
   });
 });
 
@@ -751,7 +751,7 @@ describe("#251 — a committed disclosure survives the unresolved routing arm", 
     const schedule = evaluateProgram(prog(dsl), ctx());
     // Portion 1's EARLIER OF committed to its 2024-06-01 floor, so `e` is assumed
     // absent through that date.
-    expect(findUnfired(schedule.resolution.pending, "e")).toEqual({
+    expect(findUnfired(schedule.resolvesTo.pending, "e")).toEqual({
       through: "2024-06-01",
     });
     expect(schedule.absenceAssumptions).toContainEqual({
@@ -763,7 +763,7 @@ describe("#251 — a committed disclosure survives the unresolved routing arm", 
     });
     // Sanity: portion 2's own pending cliff event is disclosed too — `e` rides
     // alongside it, it doesn't displace it.
-    expect(findUnfired(schedule.resolution.pending, "x")).toBeDefined();
+    expect(findUnfired(schedule.resolvesTo.pending, "x")).toBeDefined();
   });
 });
 
@@ -772,9 +772,9 @@ describe("#251 AC17 — schedule-level EARLIER START OF behaves as the node-leve
     const dsl =
       "VEST EARLIER START OF (FROM DATE 2024-06-01 OVER 12 months EVERY 1 month, FROM EVENT ipo OVER 12 months EVERY 1 month)";
     const schedule = evaluateProgram(prog(dsl), ctx());
-    if (schedule.resolution.status !== "template")
-      throw new Error(`expected template, got ${schedule.resolution.status}`);
-    expect(schedule.resolution.runtime.startDate).toBe("2024-06-01");
+    if (schedule.resolvesTo.status !== "template")
+      throw new Error(`expected template, got ${schedule.resolvesTo.status}`);
+    expect(schedule.resolvesTo.runtime.startDate).toBe("2024-06-01");
     expect(schedule.absenceAssumptions).toEqual([
       {
         eventId: "ipo",

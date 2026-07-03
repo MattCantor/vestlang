@@ -85,7 +85,7 @@ export type LoweredCliff =
   // form is the optional time `cliff` (the Carta baseline) plus the `event`
   // hold. In resolution mode the resolved firing rides on `firing` (and the time
   // baseline's date, if any, on `cliffDate`) so the projection can fold at
-  // max(cliffDate, firing); the interchange (firing-blind) build leaves both unset
+  // max(cliffDate, firing); the storable (firing-blind) build leaves both unset
   // and projects nothing.
   | {
       state: "EVENT_HELD";

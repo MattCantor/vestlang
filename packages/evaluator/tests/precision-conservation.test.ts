@@ -49,9 +49,9 @@ describe("schedule-whole storage conserves the grant (#413)", () => {
     expect(total).toBe(30000);
   });
 
-  it("the live resolution stream also sums to 30000", () => {
+  it("the live resolves-to stream also sums to 30000", () => {
     const schedule = evaluateProgram(program(), ctx);
-    const total = schedule.resolution.installments.reduce(
+    const total = schedule.resolvesTo.installments.reduce(
       (s, i) => s + i.amount,
       0,
     );

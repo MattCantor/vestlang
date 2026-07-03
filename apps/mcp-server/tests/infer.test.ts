@@ -63,7 +63,7 @@ function tranchesFromDsl(
     events: {},
     grantQuantity,
     vesting_day_of_month: "VESTING_START_DAY",
-  }).resolution.installments;
+  }).resolvesTo.installments;
   return installments
     .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
     .map((i) => ({

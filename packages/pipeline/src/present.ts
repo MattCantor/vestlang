@@ -6,14 +6,14 @@ import { errorFindings } from "./findings.js";
  * `EvaluatedSchedule`, and the point of this function is that each comes from a
  * different place — getting them from the right place is what keeps them honest:
  *
- *   representable  from `interchange`   can the record keeper hold this spec? This
+ *   representable  from `storable`      can the record keeper hold this spec? This
  *                                       is the firing-invariant verdict, so the
  *                                       answer doesn't lurch around as events fire.
- *   pending        from `resolution`    are witnesses still missing? (read the
+ *   pending        from `resolvesTo`    are witnesses still missing? (read the
  *                                       `pending` blocker list, not the status)
- *   dead           from `resolution`    is anything contradicted given the firings?
+ *   dead           from `resolvesTo`    is anything contradicted given the firings?
  *                                       (read the `dead` blocker list)
- *   projected      from `resolution`    is there a dated projection yet?
+ *   projected      from `resolvesTo`    is there a dated projection yet?
  *   valid          from `findings`      is the spec legal (≤ 100% of the grant)?
  *
  * The pending template is the case this exists for: a representable schedule that
@@ -23,7 +23,7 @@ import { errorFindings } from "./findings.js";
  * nothing waiting — only something dead — so it must read `pending: false`,
  * `dead: true`, not the other way round.
  *
- * `valid` is deliberately separate from `representable`: "the interchange can hold
+ * `valid` is deliberately separate from `representable`: "the storable verdict can hold
  * this spec" and "this spec is legal" are different questions, and they can
  * disagree. A schedule can be representable, still pending, and yet over-allocate —
  * e.g. "3/4 now PLUS 3/4 once the IPO fires": the 750 shares vested today are
@@ -38,7 +38,7 @@ export interface SchedulePresentation {
   /** The spec is held by a canonical layer: `template` or `events-only`. */
   representable: boolean;
   /**
-   * The projection is waiting on witnesses — read off `resolution.pending`, the
+   * The projection is waiting on witnesses — read off `resolvesTo.pending`, the
    * still-merely-waiting blockers. True for an `unresolved` schedule AND for a
    * `template`/`events-only` that still carries pending blockers. Independent of
    * `dead`: a schedule can be both (one statement waiting, another dead).
@@ -46,7 +46,7 @@ export interface SchedulePresentation {
   pending: boolean;
   /**
    * At least one blocker is dead — contradicted given the firings we know, so it
-   * can never resolve. Read off `resolution.dead`. Distinct from a terminal
+   * can never resolve. Read off `resolvesTo.dead`. Distinct from a terminal
    * `impossible` status: a single dead statement beside a live one leaves the
    * schedule `unresolved` but still surfaces the deadness here.
    */
@@ -59,13 +59,13 @@ export interface SchedulePresentation {
 
 /** Derive the orthogonal reads from an evaluated schedule. */
 export function presentSchedule(s: EvaluatedSchedule): SchedulePresentation {
-  const { interchange, resolution } = s;
+  const { storable, resolvesTo } = s;
   return {
     representable:
-      interchange.status === "template" || interchange.status === "events-only",
-    pending: resolution.pending.length > 0,
-    dead: resolution.dead.length > 0,
-    projected: resolution.installments.some((i) => i.state === "RESOLVED"),
+      storable.status === "template" || storable.status === "events-only",
+    pending: resolvesTo.pending.length > 0,
+    dead: resolvesTo.dead.length > 0,
+    projected: resolvesTo.installments.some((i) => i.state === "RESOLVED"),
     valid: errorFindings(s.findings).length === 0,
   };
 }

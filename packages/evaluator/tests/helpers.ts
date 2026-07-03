@@ -30,9 +30,9 @@ import type {
 
 // `overrides` is pinned to the events-bearing arm of the `ResolutionContext` DU
 // (#320): the base fixture builds a `resolution`-mode context, and no current test
-// overrides it to `interchange` (the firing-blind arm drops `events`, so a
+// overrides it to `storable` (the firing-blind arm drops `events`, so a
 // `Partial<ResolutionContext>` would distribute and widen `mode` to neither arm).
-// A test that needs an interchange-arm context builds one directly.
+// A test that needs a storable-arm context builds one directly.
 export const baseCtx = (
   overrides: Partial<
     Extract<ResolutionContext, { mode: "resolution" | "rehydrate" }>

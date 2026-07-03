@@ -62,7 +62,7 @@ describe("blockerToString", () => {
       ),
       ctx,
     );
-    const blocker = schedule.resolution.dead.find(
+    const blocker = schedule.resolvesTo.dead.find(
       (b) => b.type === "IMPOSSIBLE_CONDITION",
     );
     expect(blocker).toBeDefined();

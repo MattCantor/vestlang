@@ -27,10 +27,10 @@ Real intent doesn't always fit a clean template, and contingent intent can't alw
 
 | Verdict | Asks | Reads firings? |
 | :--- | :--- | :--- |
-| **`interchange`** ("Storable") | what can a record keeper hold for this schedule? | never — so the answer is safe to persist |
-| **`resolution`** ("Resolves to") | what does it work out to, given the events we know? | yes — it moves as events arrive |
+| **`storable`** | what can a record keeper hold for this schedule? | never — so the answer is safe to persist |
+| **`resolvesTo`** | what does it work out to, given the events we know? | yes — it moves as events arrive |
 
-Each is one of a few `status` values — `template`, `events-only`, `impossible`, plus `unrepresentable` (interchange-only) or `unresolved` (resolution-only). They can differ for one schedule: a gated start is a storable `template` that may *resolve to* `impossible` after an early firing. An event-anchored cliff `CLIFF EVENT ipo`, by contrast, stores *and* resolves as a `template` — the event hold rides in the cliff's `event_condition` — but stays pending until `ipo` fires, so its dated projection is empty for now.
+Each is one of a few `status` values — `template`, `events-only`, `impossible`, plus `unrepresentable` (storable-only) or `unresolved` (resolves-to-only). They can differ for one schedule: a gated start is a storable `template` that may *resolve to* `impossible` after an early firing. An event-anchored cliff `CLIFF EVENT ipo`, by contrast, stores *and* resolves as a `template` — the event hold rides in the cliff's `event_condition` — but stays pending until `ipo` fires, so its dated projection is empty for now.
 
 Alongside the verdicts, a schedule discloses its **absence assumptions** — the events the resolves-to reading is assuming haven't happened yet (and through when) — so a later or backdated firing that would change the answer is never silent. See [Evaluation](./evaluation.md) for the full model.
 
