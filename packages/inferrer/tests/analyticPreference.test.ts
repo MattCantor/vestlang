@@ -6,7 +6,7 @@ import { domCandidates, type Row } from "../src/analytic/solvers.js";
 // Property tests pinning the two preference orders the analytic core relies on:
 // the per-pattern day-of-month order, and the family order the driver iterates.
 // (Correctness — that a winning candidate reproduces the stream — is measured by
-// the experiments sweep; these lock the ORDER, since the first verifying
+// the round-trip oracle; these lock the ORDER, since the first verifying
 // candidate wins and a reordering would silently change which reading is chosen.)
 
 function row(date: string, amount: number): Row {
