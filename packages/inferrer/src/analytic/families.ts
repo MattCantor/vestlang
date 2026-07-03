@@ -1,11 +1,34 @@
-// The hypothesis families, in fixed preference order (sparser reading first):
+// The hypothesis families and the PREFERENCE POLICY the inferrer resolves ties
+// with. Each family derives candidate template PARAMETERS in closed form and
+// emits a typed candidate; the driver renders and lets one real evaluation
+// arbitrate, and the FIRST candidate that reproduces the stream wins. So this
+// order is load-bearing: when several readings project to the identical stream —
+// and many do — the order alone decides which one the inferrer reports.
+//
+// These are population-level trades between projection-identical readings: the
+// observed `{date, amount}` stream cannot distinguish them (the data doesn't
+// record which template made it), so the policy picks the sparsest / most
+// canonical reading for the population rather than a per-case ground truth.
+//
+// FAMILY ORDER (sparsest reading first):
 //   plain uniform month grid  <  plain uniform DAYS grid  <  cliff + tail
 //   <  pre-grant fold  <  THEN rate-change chain  <  (single-tranche degenerate,
-//   for a 1-row stream only)  <  literal per-date fallback.
+//   a mutually-exclusive branch for a 1-row stream only)  <  literal per-date
+//   fallback (projection-lossless; fires only when nothing else verifies).
 //
-// Each family derives candidate template PARAMETERS in closed form and emits a
-// typed candidate; the driver renders and lets one real evaluation arbitrate. A
-// family that can't read the stream yields nothing and the next one is tried.
+// DAY-OF-MONTH ORDER, per observed day pattern (see `domCandidates` in
+// ./solvers.ts). The default policy (VESTING_START_DAY) leads except on a
+// month-end pattern, and MINUS_ONE is always last:
+//   - every date on day 1     → VESTING_START_DAY, FIRST_DAY_OF_MONTH, MINUS_ONE
+//   - every date a month-end  → LAST_DAY_OF_MONTH, VESTING_START_DAY(31), MINUS_ONE
+//   - otherwise               → VESTING_START_DAY(max observed day), MINUS_ONE(+1)
+// A supplied policy hint collapses this to the single trusted policy.
+//
+// TIEBREAKS within a family: a vesting start equal to the grant date beats an
+// off-grant start (`byGrantAlignment` — the grant is the DSL's default anchor);
+// among erased-cliff fold candidates, the longer cliff length is tried first.
+//
+// A family that can't read the stream yields nothing and the next one is tried.
 
 import { addMonthsRule, addDays, daysBetween } from "@vestlang/primitives";
 import type { OCTDate, VestingDayOfMonth } from "@vestlang/types";
