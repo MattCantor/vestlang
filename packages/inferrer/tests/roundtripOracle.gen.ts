@@ -61,9 +61,6 @@ export interface OracleCase {
   /** Which probe slices / cross generated this tuple (dedup-merged). Empty for
    *  the hand-pinned seeds and tripwires. */
   slices: string[];
-  /** Inside an earlier flat grid's axis ranges — the apples-to-apples subspace.
-   *  false for seeds/tripwires. */
-  v1Comparable: boolean;
 }
 
 // Defaults every probe slice pins unless it is the axis under sweep.
@@ -148,30 +145,6 @@ function buildDsl(p: GridParams): string {
  *  and are sourced in the harness (census / sub-bucket). */
 export function isCliffGeDuration(p: GridParams): boolean {
   return p.cliff !== null && p.cliff >= p.duration;
-}
-
-// ---- comparability with an earlier flat grid --------------------------------
-
-const V1_DURATIONS = new Set([12, 48]);
-const V1_CADENCES = new Set([1, 3, 6, 12]);
-const V1_CLIFFS = new Set<number | null>([null, 6, 12]);
-const V1_TOTALS = new Set([96, 100, 1000]);
-const V1_DOMS = new Set<VestingDayOfMonth>([
-  "VESTING_START_DAY",
-  "FIRST_DAY_OF_MONTH",
-  "LAST_DAY_OF_MONTH",
-]);
-
-function isV1Comparable(p: GridParams): boolean {
-  return (
-    p.offset !== "offGridBackdated" &&
-    p.startDate === "2024-01-01" &&
-    V1_DURATIONS.has(p.duration) &&
-    V1_CADENCES.has(p.cadence) &&
-    V1_CLIFFS.has(p.cliff) &&
-    V1_TOTALS.has(p.total) &&
-    V1_DOMS.has(p.dom)
-  );
 }
 
 // ---- slice machinery --------------------------------------------------------
@@ -281,7 +254,7 @@ function totalProbe(): Slice {
 }
 
 // S4 — day-of-month edges: start day becomes an axis (mid-month, month-end)
-// crossed with ALL FOUR policies, incl. the earlier-excluded MINUS_ONE (#503).
+// crossed with ALL FOUR policies, incl. the earlier-excluded MINUS_ONE.
 // Month-end starts exercise short-month clamping.
 function domStartProbe(): Slice {
   return cross("dom-start-probe", {
@@ -381,7 +354,6 @@ export function gridCases(): OracleCase[] {
         dom: p.dom,
         params: { kind: "grid", ...p },
         slices: [tag],
-        v1Comparable: isV1Comparable(p),
       });
     }
   }
@@ -408,7 +380,6 @@ export const SEED_CASES: OracleCase[] = [
       note: "48-over-3 with a 12mo cliff; grant 12mo before the lump; ripple tail",
     },
     slices: [],
-    v1Comparable: false,
   },
   {
     // Isolated singles — the 137/891/42 shape. Each `OVER 1 months EVERY 1 month`
@@ -428,7 +399,6 @@ export const SEED_CASES: OracleCase[] = [
       note: "137/891/42 as a THEN chain of one-month singles on distinct dates",
     },
     slices: [],
-    v1Comparable: false,
   },
 ];
 
@@ -450,7 +420,6 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
       note: "plain 4-month uniform grid; identical template both sides",
     },
     slices: [],
-    v1Comparable: false,
   },
   {
     // A second uniform, quarterly over a year, with a dividing total — still one
@@ -466,10 +435,9 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
       note: "quarterly-over-a-year uniform grid; dividing total",
     },
     slices: [],
-    v1Comparable: false,
   },
   {
-    // MINUS_ONE round-trip control (#503): a day-31 start under
+    // MINUS_ONE round-trip control: a day-31 start under
     // VESTING_START_DAY_MINUS_ONE produces a month-end-minus-one pattern
     // (2024-02-28, 2024-03-30, 2024-04-29, …) that no VESTING_START_DAY seed
     // reproduces, so a clean recovery MUST land on MINUS_ONE. Hard-asserted clean
@@ -485,7 +453,6 @@ export const CLEAN_TRIPWIRE_CASES: OracleCase[] = [
       note: "day-31 start under MINUS_ONE; month-end-minus-one pattern only MINUS_ONE reproduces",
     },
     slices: [],
-    v1Comparable: false,
   },
 ];
 

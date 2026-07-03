@@ -1,9 +1,9 @@
 // The hypothesis families and the PREFERENCE POLICY the inferrer resolves ties
 // with. Each family derives candidate template PARAMETERS in closed form and
 // emits a typed candidate; the driver renders and lets one real evaluation
-// arbitrate, and the FIRST candidate that reproduces the stream wins. So this
-// order is load-bearing: when several readings project to the identical stream —
-// and many do — the order alone decides which one the inferrer reports.
+// arbitrate, and the FIRST candidate that reproduces the stream wins. When
+// several readings project to the identical stream — and many do — the order
+// alone decides which one the inferrer reports.
 //
 // These are population-level trades between projection-identical readings: the
 // observed `{date, amount}` stream cannot distinguish them (the data doesn't

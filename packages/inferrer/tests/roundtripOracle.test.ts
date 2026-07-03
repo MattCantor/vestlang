@@ -40,8 +40,8 @@ import {
  *                        deep-equals the original's, projection matches. The
  *                        genuine identity.
  *   - structural-failure recovered status is not "template". The core inversion
- *                        gap — the rebuild drove this to zero and a hard assert
- *                        keeps it there.
+ *                        gap — empty on this grid, held at zero by a hard
+ *                        assert.
  *   - ambiguous-recovery recovered *a* template, but a DIFFERENT one that projects
  *                        the same stream. Recorded, never auto-failed.
  *
@@ -78,14 +78,14 @@ type Bucket = "clean" | "structural-failure" | "ambiguous-recovery";
 // cliff-vs-pulse taste call, an OVER/EVERY reshape, and the like).
 type AmbiguousSubBucket = "dom-convention-only" | "shape-diff";
 
-// The three information-theoretically irreducible families (3.2): cases no
+// The three information-theoretically irreducible families: cases no
 // inferrer could ever recover clean, separated from "recoverable but differently
 // shaped". fam1 is a pure params predicate; fam2 is sourced from the collision
 // census; fam3 is exactly the dom-convention-only sub-bucket.
 type ExpectedAmbiguous =
   | "cliff-ge-duration" // fam1: cliff ≥ duration — single-lump collapse
   | "erased-pre-grant-cliff" // fam2: observable collides with a cliff-less backdated reading
-  | "dom-stamp-pair"; // fam3: the #506 day-of-month explicitness artifact
+  | "dom-stamp-pair"; // fam3: the day-of-month explicitness artifact
 
 const PARTITION_PATH = fileURLToPath(
   new URL("./__snapshots__/roundtrip-oracle.partition.snap", import.meta.url),
@@ -460,8 +460,8 @@ const ALL_FAMILIES: HypothesisFamily[] = [
 
 /** Choose which ambiguous entries stay FULL: every entry in no irreducible family
  *  (the genuinely different-shape recoveries), plus a forced exemplar for any
- *  emitted hypothesis family not already represented among those — so each
- *  emission shape keeps at least one detailed, diffable entry (amendment-1 guard). */
+ *  emitted hypothesis family not already represented among those — so every
+ *  emitted hypothesis family keeps at least one detailed, diffable snapshot entry. */
 function fullExemplarIds(ambiguous: OracleEntry[]): Set<string> {
   const sorted = [...ambiguous].sort((a, b) => byCodeUnit(a.id, b.id));
   const full = new Set(
@@ -574,7 +574,7 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
     }
   });
 
-  it("structural-failure is ZERO — the rebuild's non-regression promise", () => {
+  it("every admitted case recovers a storable template — structural-failure is zero", () => {
     // A future intentional change that breaks this must change the assert loudly,
     // never re-bless past it. Checked on every admitted case, not just the grid.
     const sf = run.entries.filter((e) => e.bucket === "structural-failure");
