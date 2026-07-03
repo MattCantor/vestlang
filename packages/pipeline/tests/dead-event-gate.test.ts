@@ -36,23 +36,23 @@ const DEAD_START =
 describe("#287 — jointly-empty date gate is impossible", () => {
   it("AC#1: start storable verdict flips (no firings)", () => {
     const s = evalDsl(DEAD_START);
-    expect(s.interchange.status).toBe("impossible");
+    expect(s.storable.status).toBe("impossible");
     expect(presentSchedule(s).representable).toBe(false);
   });
 
   it("AC#2: start resolves-to verdict flips coherently, exactly one blocker (no firings)", () => {
     const s = evalDsl(DEAD_START);
-    expect(s.resolution.status).toBe("impossible");
+    expect(s.resolvesTo.status).toBe("impossible");
     expect(
-      s.resolution.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
+      s.resolvesTo.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
     ).toBe(true);
-    expect(s.resolution.pending).toHaveLength(0);
+    expect(s.resolvesTo.pending).toHaveLength(0);
 
     // Exactly one new impossible blocker — the joint check runs once at the
     // gated-node entry, not once per recursion level of the AND combiner.
-    expect(s.resolution.dead).toHaveLength(1);
-    if (s.interchange.status === "impossible") {
-      expect(s.interchange.blockers).toHaveLength(1);
+    expect(s.resolvesTo.dead).toHaveLength(1);
+    if (s.storable.status === "impossible") {
+      expect(s.storable.blockers).toHaveLength(1);
     }
 
     const p = presentSchedule(s);
@@ -63,8 +63,8 @@ describe("#287 — jointly-empty date gate is impossible", () => {
   it("AC#3: firing-invariant — any firing of ipo still reports impossible", () => {
     for (const date of ["2024-06-01", "2025-06-01", "2027-01-01"]) {
       const s = evalDsl(DEAD_START, { ipo: date });
-      expect(s.interchange.status).toBe("impossible");
-      expect(s.resolution.status).toBe("impossible");
+      expect(s.storable.status).toBe("impossible");
+      expect(s.resolvesTo.status).toBe("impossible");
     }
   });
 
@@ -80,8 +80,8 @@ describe("#287 — jointly-empty date gate is impossible", () => {
       "VEST FROM DATE 2025-01-01 OVER 48 MONTHS EVERY 1 MONTH " +
         "CLIFF EVENT ipo AFTER DATE 2026-01-01 AND BEFORE DATE 2025-01-01",
     );
-    expect(s.interchange.status).toBe("impossible");
-    expect(s.resolution.status).toBe("impossible");
+    expect(s.storable.status).toBe("impossible");
+    expect(s.resolvesTo.status).toBe("impossible");
   });
 
   it("AC#5: no false positive — a satisfiable gate is unchanged", () => {
@@ -90,7 +90,7 @@ describe("#287 — jointly-empty date gate is impossible", () => {
     const start = evalDsl(
       "VEST FROM EVENT ipo AFTER DATE 2025-01-01 OVER 1 YEAR EVERY 3 MONTHS",
     );
-    expect(start.interchange.status).toBe("template");
+    expect(start.storable.status).toBe("template");
     expect(presentSchedule(start).pending).toBe(true);
     expect(presentSchedule(start).dead).toBe(false);
 
@@ -101,7 +101,7 @@ describe("#287 — jointly-empty date gate is impossible", () => {
       "VEST FROM DATE 2025-01-01 OVER 48 MONTHS EVERY 1 MONTH " +
         "CLIFF EVENT ipo AFTER DATE 2026-01-01",
     );
-    expect(cliff.interchange.status).toBe("template");
-    expect(cliff.resolution.status).toBe("template");
+    expect(cliff.storable.status).toBe("template");
+    expect(cliff.resolvesTo.status).toBe("template");
   });
 });

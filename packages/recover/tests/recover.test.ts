@@ -31,7 +31,7 @@ describe("evaluateProgramWithRecovery", () => {
 
     expect(outcome.rescued).toBe(true);
     if (!outcome.rescued) return; // narrow for the assertions below
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
     expect(outcome.recovered.from).toBe("events-only");
     // The captured provenance is the structured reason now (recover gates off the
     // published EvaluatedSchedule, not the evaluator's internal verdict).
@@ -58,7 +58,7 @@ describe("evaluateProgramWithRecovery", () => {
 
     expect(outcome.rescued).toBe(true);
     if (!outcome.rescued) return;
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
     expect(outcome.recovered.dsl).toContain("THEN");
     expect(outcome.recovered.residualError).toBe(0);
   });
@@ -75,7 +75,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
   });
 
   // A chain headed on ONE event is a single contingent origin, so once fired it
@@ -91,7 +91,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
   });
 
   // Two grids on different days of the month interleave into a stream with no
@@ -107,7 +107,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(outcome.schedule.resolvesTo.status).toBe("events-only");
   });
 
   it("returns a clean template untouched, with no inference", () => {
@@ -117,7 +117,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
   });
 
   // An unfired event start resolves to a (pending) template, not events-only —
@@ -129,7 +129,7 @@ describe("evaluateProgramWithRecovery", () => {
     );
 
     expect(outcome.rescued).toBe(false);
-    expect(outcome.schedule.resolution.status).toBe("template");
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
   });
 
   // #239: two overlapping 3/4 grids sum to 3/2 of the grant — an over-allocating
@@ -148,7 +148,7 @@ describe("evaluateProgramWithRecovery", () => {
 
     expect(outcome.rescued).toBe(false);
     if (outcome.rescued) return; // narrow: no `recovered` block on the no-rescue arm
-    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(outcome.schedule.resolvesTo.status).toBe("events-only");
     expect(
       outcome.schedule.findings.some(
         (f) => f.kind === "over-allocation" && f.severity === "error",
@@ -167,7 +167,7 @@ describe("evaluateProgramWithRecovery", () => {
 
     expect(outcome.rescued).toBe(false);
     if (outcome.rescued) return;
-    expect(outcome.schedule.resolution.status).toBe("events-only");
+    expect(outcome.schedule.resolvesTo.status).toBe("events-only");
     expect(
       outcome.schedule.findings.some(
         (f) => f.kind === "over-allocation" && f.severity === "error",

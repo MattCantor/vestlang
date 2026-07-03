@@ -4,7 +4,7 @@
 // `ipo` never satisfies a gate that references `IpO` — the schedule just pends,
 // silently. This pass flags the likely typo: a referenced id with no exact firing
 // but a case-only twin among the firings the caller supplied. It rides the
-// resolution arm only (it needs the firing map, which the interchange context
+// resolves-to arm only (it needs the firing map, which the storable context
 // never carries), and it's purely additive — matching and resolution are
 // unchanged, the grant still pends; we only add the warning.
 

@@ -61,10 +61,10 @@ export interface PersistInput {
 }
 
 // The success arm's blockers, split to match the evaluate/rehydrate shape. They
-// come from the closed-world `resolution` (the only verdict with blocker
+// come from the closed-world `resolvesTo` (the only verdict with blocker
 // vocabulary): `pending` are witnesses still floating at store time, `dead` are
 // blockers contradicted given the firings recorded so far. `dead` CAN be non-empty
-// here — a schedule storable firing-blind (the interchange gate passed) may still
+// here — a schedule storable firing-blind (the storable gate passed) may still
 // be dead given a firing the system of record has already seen, a revisable
 // disclosure (events are owned by the system of record, not the artifact).
 export type PersistResult = Result<{
@@ -85,18 +85,18 @@ export type PersistResult = Result<{
 // naming the diagnostic. Then validity: a program the evaluator flags as invalid —
 // one that allocates more than the whole grant — is refused, naming the
 // over-allocation, since storing it would mint a durable artifact that over-vests on
-// rehydrate. Finally storability: only a `template` *interchange* verdict fits a
+// rehydrate. Finally storability: only a `template` *storable* verdict fits a
 // single canonical artifact, so any other shape comes back as a clear error naming
 // the status that blocked it.
 //
-// The storability gate reads the firing-invariant `interchange` verdict, NOT
-// `resolution`. They can diverge: after the EARLIER_OF commit, an EARLIER_OF cliff
-// resolves to `template` while its interchange stays `unrepresentable` — gating on
-// resolution would silently make an unstorable schedule storable (AC 7). The
-// artifact (template + StoredTerms runtime + sourceMap) is built from interchange
+// The storability gate reads the firing-invariant `storable` verdict, NOT
+// `resolvesTo`. They can diverge: after the EARLIER_OF commit, an EARLIER_OF cliff
+// resolves to `template` while its storable stays `unrepresentable` — gating on
+// resolvesTo would silently make an unstorable schedule storable (AC 7). The
+// artifact (template + StoredTerms runtime + sourceMap) is built from storable
 // too, so it's firing-invariant by construction.
 //
-// The returned `pending`/`dead` come from `resolution` (the verdict that speaks
+// The returned `pending`/`dead` come from `resolvesTo` (the verdict that speaks
 // blocker vocabulary): `pending` are witnesses still floating at store time (e.g. a
 // combinator start whose event hasn't fired); `dead` may be non-empty — a schedule
 // storable firing-blind yet dead given the firings recorded so far.
@@ -157,30 +157,30 @@ export function runPersist(input: PersistInput): PersistResult {
     };
   }
 
-  // Gate on the firing-invariant interchange verdict — that's what determines
-  // whether the schedule has a single storable canonical form at all. (Resolution
-  // can read `template` for a schedule whose interchange is unrepresentable, e.g.
+  // Gate on the firing-invariant storable verdict — that's what determines
+  // whether the schedule has a single storable canonical form at all. (resolvesTo
+  // can read `template` for a schedule whose storable is unrepresentable, e.g.
   // an EARLIER_OF cliff that commits its floor; gating on it would store the
   // unstorable.)
-  const interchange = schedule.interchange;
-  if (interchange.status !== "template") {
+  const storable = schedule.storable;
+  if (storable.status !== "template") {
     return {
       ok: false,
       error: {
         ruleId: "persist-not-storable",
-        message: `Only a single-template program is storable as a persisted artifact; this program's storable form is "${interchange.status}". Adjust the schedule so it collapses to a single canonical template.`,
+        message: `Only a single-template program is storable as a persisted artifact; this program's storable form is "${storable.status}". Adjust the schedule so it collapses to a single canonical template.`,
       },
     };
   }
 
-  // The artifact is built from interchange: its runtime is StoredTerms (firing-
-  // free), so the artifact is firing-invariant by construction.
+  // The artifact is built from the storable verdict: its runtime is StoredTerms
+  // (firing-free), so the artifact is firing-invariant by construction.
   const artifact = toPersisted({
-    template: interchange.template,
-    runtime: interchange.runtime,
-    sourceMap: interchange.sourceMap,
+    template: storable.template,
+    runtime: storable.runtime,
+    sourceMap: storable.sourceMap,
   });
-  // pending/dead come from resolution (the verdict with blocker vocabulary). A
+  // pending/dead come from resolvesTo (the verdict with blocker vocabulary). A
   // storable schedule may legitimately carry a non-empty `dead` here — see the
   // PersistResult note above. The warning-severity findings (under-allocation, a
   // residual cliff-precision note) ride along too: the error findings already gated
@@ -188,8 +188,8 @@ export function runPersist(input: PersistInput): PersistResult {
   return {
     ok: true,
     artifact,
-    pending: schedule.resolution.pending,
-    dead: schedule.resolution.dead,
+    pending: schedule.resolvesTo.pending,
+    dead: schedule.resolvesTo.dead,
     warnings: warningFindings(schedule.findings),
   };
 }

@@ -10,36 +10,36 @@ import type {
   EvaluatedSchedule,
   Finding,
   Installment,
-  InterchangeVerdict,
+  StorableVerdict,
   NonTemplateReason,
-  ResolutionStatus,
+  ClosedWorldStatus,
   SourceMap,
 } from "@vestlang/types";
 import { reasonToString, toScheduleView } from "../src/view";
 
-// The view carries both verdicts. We stub the resolution side (status, the two
+// The view carries both verdicts. We stub the resolves-to side (status, the two
 // blocker lists, installments, the events-only reason, the template-arm source map)
-// and let the interchange side default to a plain template; a test that cares about
+// and let the storable side default to a plain template; a test that cares about
 // the storable verdict passes its own. The whole object is cast through `unknown`,
 // so the stub carries plain blocker shapes — no need to brand them here (and the
 // brand cast is confined to the evaluator anyway).
 const stub = (fields: {
-  status: ResolutionStatus;
+  status: ClosedWorldStatus;
   pending?: unknown[];
   dead?: unknown[];
   installments?: Installment[];
   findings?: Finding[];
   reason?: NonTemplateReason;
   sourceMap?: SourceMap;
-  interchange?: InterchangeVerdict;
+  storable?: StorableVerdict;
   absenceAssumptions?: AbsenceAssumption[];
 }): EvaluatedSchedule =>
   ({
-    interchange: fields.interchange ?? {
+    storable: fields.storable ?? {
       status: "template",
       sourceMap: fields.sourceMap ?? {},
     },
-    resolution: {
+    resolvesTo: {
       status: fields.status,
       pending: fields.pending ?? [],
       dead: fields.dead ?? [],
@@ -57,7 +57,7 @@ const dated: Installment[] = [
   { state: "RESOLVED", amount: 100, date: "2025-02-01" },
 ];
 const eventBlocker = [{ type: "EVENT_NOT_YET_OCCURRED", event: "ipo" }];
-// A contradiction — read by the view as a resolution-space dead blocker. Carried as
+// A contradiction — read by the view as a resolves-to-space dead blocker. Carried as
 // a plain shape; the stub coerces the whole schedule through `unknown`.
 const deadBlocker = [{ type: "IMPOSSIBLE_CONDITION", node: {} }];
 const overAllocated: Finding[] = [
@@ -70,8 +70,8 @@ const overAllocated: Finding[] = [
 ];
 
 describe("toScheduleView", () => {
-  it("renders the structured resolution reason to prose on the events-only arm", () => {
-    // The resolution arm carries the reason structured now; the view is where it
+  it("renders the structured resolves-to reason to prose on the events-only arm", () => {
+    // The resolves-to arm carries the reason structured now; the view is where it
     // becomes a sentence, so a consumer upstream can still gate on the kind.
     const view = toScheduleView(
       stub({
@@ -79,23 +79,23 @@ describe("toScheduleView", () => {
         reason: { kind: "OVERLAPPING_ABSOLUTE_STARTS" },
       }),
     );
-    expect(view.resolution.status).toBe("events-only");
+    expect(view.resolvesTo.status).toBe("events-only");
     // narrow before reading reason — it only exists on this arm
-    if (view.resolution.status === "events-only") {
-      expect(view.resolution.reason).toBe(
+    if (view.resolvesTo.status === "events-only") {
+      expect(view.resolvesTo.reason).toBe(
         "Two independent absolute-date vesting grids on one grant.",
       );
     }
   });
 
-  it("omits the resolution reason on the template / unresolved / impossible arms", () => {
+  it("omits the resolves-to reason on the template / unresolved / impossible arms", () => {
     for (const status of ["template", "unresolved", "impossible"] as const) {
       const view = toScheduleView(stub({ status }));
-      expect("reason" in view.resolution).toBe(false);
+      expect("reason" in view.resolvesTo).toBe(false);
     }
   });
 
-  it("surfaces the interchange verdict alongside the resolution one", () => {
+  it("surfaces the storable verdict alongside the resolves-to one", () => {
     // A deferred cliff resolves to dated events against known firings, but has no
     // storable form, so the two verdicts differ — the view shows both, each with
     // its own rendered reason.
@@ -103,16 +103,16 @@ describe("toScheduleView", () => {
       stub({
         status: "events-only",
         reason: { kind: "DEFERRED_CLIFF" },
-        interchange: {
+        storable: {
           status: "unrepresentable",
           reason: { kind: "DEFERRED_CLIFF" },
         },
       }),
     );
-    expect(view.resolution.status).toBe("events-only");
-    expect(view.interchange.status).toBe("unrepresentable");
-    if (view.interchange.status === "unrepresentable") {
-      expect(view.interchange.reason).toContain("once an event fires");
+    expect(view.resolvesTo.status).toBe("events-only");
+    expect(view.storable.status).toBe("unrepresentable");
+    if (view.storable.status === "unrepresentable") {
+      expect(view.storable.reason).toContain("once an event fires");
     }
   });
 
@@ -124,25 +124,25 @@ describe("toScheduleView", () => {
       "evt:1": { definition: "DATE 2025-01-01 BEFORE EVENT ipo" },
     };
     const view = toScheduleView(stub({ status: "template", sourceMap }));
-    if (view.resolution.status === "template") {
-      expect(view.resolution.sourceMap).toEqual(sourceMap);
+    if (view.resolvesTo.status === "template") {
+      expect(view.resolvesTo.sourceMap).toEqual(sourceMap);
     } else {
-      throw new Error("expected template resolution");
+      throw new Error("expected template resolvesTo");
     }
-    if (view.interchange.status === "template") {
-      expect(view.interchange.sourceMap).toEqual(sourceMap);
+    if (view.storable.status === "template") {
+      expect(view.storable.sourceMap).toEqual(sourceMap);
     } else {
-      throw new Error("expected template interchange");
+      throw new Error("expected template storable");
     }
   });
 
   it("carries an empty source map on a plain (non-synthetic) template", () => {
     const view = toScheduleView(stub({ status: "template" }));
-    if (view.resolution.status === "template") {
-      expect(view.resolution.sourceMap).toEqual({});
+    if (view.resolvesTo.status === "template") {
+      expect(view.resolvesTo.sourceMap).toEqual({});
     }
-    if (view.interchange.status === "template") {
-      expect(view.interchange.sourceMap).toEqual({});
+    if (view.storable.status === "template") {
+      expect(view.storable.sourceMap).toEqual({});
     }
   });
 
@@ -192,7 +192,7 @@ describe("toScheduleView", () => {
   });
 
   it("surfaces dead blockers under deadBlockers, flips the dead flag", () => {
-    // A schedule whose resolution carries a contradiction (one statement dead given
+    // A schedule whose resolves-to carries a contradiction (one statement dead given
     // the firings) — the view exposes it under deadBlockers, not pendingBlockers,
     // and the dead read-flag reflects it.
     const view = toScheduleView(

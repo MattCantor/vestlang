@@ -1,10 +1,10 @@
-// The interchange verdict: what a record keeper could store for a schedule,
+// The storable verdict: what a record keeper could store for a schedule,
 // answered WITHOUT looking at which events have actually fired.
 //
 // The trick is that we already have a function that lowers a program to a single
 // canonical template — `buildTemplate`. The only reason its usual output depends
 // on fired events is that the statements are resolved against `ctx.events` first.
-// So to get the firing-invariant answer we resolve in `interchange` mode: the
+// So to get the firing-invariant answer we resolve in `storable` mode: the
 // built context for that mode carries no `events` field at all (#320), so the
 // single EVENT read (in interpret/vestingNode/vestingBase.ts) has nothing to read
 // and returns "not fired" — an event-anchored start rides across as a
@@ -13,14 +13,14 @@
 // mode), so a settled date arm doesn't collapse the gate. Re-run it after any
 // event fires and you get the same verdict — which is what makes it safe to store.
 // Firing-invariance is enforced by the context type now, not just by the mode
-// check: a firing read on an interchange-typed context is a compile error. The
+// check: a firing read on a storable-typed context is a compile error. The
 // write-side narrow below (`toStoredTerms`) iterates the canonical key set rather
 // than re-listing the field names, so a field added to `RuntimeBase` is carried
 // through here automatically — it can't be silently dropped on the way to storage.
 
 import type {
   ResolutionContextInput,
-  InterchangeVerdict,
+  StorableVerdict,
   NonTemplateReason,
   Program,
   RuntimeBase,
@@ -67,7 +67,7 @@ const unresolvedReason = (resolutions: StmtResolution[]): NonTemplateReason => {
   // strictly before its own date — a contradiction with no firing involved) trips
   // the IMPOSSIBLE-start guard in lower.ts, which routes the whole build to
   // `unresolved()` *before* contingent-start promotion. On its own it would roll
-  // the interchange up to `impossible`; but paired with a live pending portion (a
+  // the storable verdict up to `impossible`; but paired with a live pending portion (a
   // still-pending event head isn't void, so it survives isVoid/classify), the
   // program lands `unresolved` here instead, and the soft chained-tail/cliff
   // reasons would mask the hard fact that this grant can never be stored at all. So
@@ -184,7 +184,7 @@ const carryField = <K extends keyof RuntimeBase>(
 // an absent one is left off entirely (no materialized `key: undefined`).
 //
 // Exported at module level (not the package index) so the eventFirings-drop is
-// unit-testable: it's unreachable through the firing-blind entry `resolveInterchange`.
+// unit-testable: it's unreachable through the firing-blind entry `resolveStorable`.
 export const toStoredTerms = (runtime: VestingRuntime): StoredTerms => {
   const stored: RuntimeBase = {};
   for (const k of RUNTIME_BASE_KEY_LIST) carryField(runtime, stored, k);
@@ -200,13 +200,13 @@ export const toStoredTerms = (runtime: VestingRuntime): StoredTerms => {
  * can't pin down its cliff both surface as `why: "unresolved"` here, and only
  * `classify` tells them apart — it rolls a fully-dead program up to `impossible`.
  */
-const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
+const mapTemplateBuild = (build: TemplateBuild): StorableVerdict => {
   if (build.ok) {
     assertValidVestingScheduleTemplate(build.template);
     return {
       status: "template",
       template: build.template,
-      // The interchange path is firing-blind, so its build never populates
+      // The storable path is firing-blind, so its build never populates
       // eventFirings; project the runtime onto StoredTerms (where eventFirings is
       // unrepresentable) by keeping the `RuntimeBase` fields and dropping the
       // firing channel. The structural-field carry is driven by the canonical key
@@ -216,7 +216,7 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
     };
   }
 
-  // The interchange path is firing-blind and never builds a breakdown, so it reads
+  // The storable path is firing-blind and never builds a breakdown, so it reads
   // only the verdict off the classify result and discards the partition.
   const v = classify(build).verdict;
   switch (v.kind) {
@@ -232,7 +232,7 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
       };
     case "impossible":
       // Firing-blind, so these are static contradictions — brand them so the type
-      // can't be confused with a resolution-space `dead` blocker.
+      // can't be confused with a resolves-to-space `dead` blocker.
       return { status: "impossible", blockers: brandStatic(v.blockers) };
     case "unresolved":
       // Nothing storable to hand over — but say *why* off the per-statement
@@ -248,21 +248,21 @@ const mapTemplateBuild = (build: TemplateBuild): InterchangeVerdict => {
 };
 
 /**
- * Compute the interchange verdict for a program. Mirrors `resolveToCore`'s setup
+ * Compute the storable verdict for a program. Mirrors `resolveToCore`'s setup
  * but resolves against an events-blind context. The entry points run this after
  * `resolveToCore`, which already enforces the installment cap, so we don't repeat
  * that check here.
  */
-export const resolveInterchange = (
+export const resolveStorable = (
   program: Program,
   ctxInput: ResolutionContextInput,
-): InterchangeVerdict => {
-  // Building under `interchange` mode yields a context with no `events` field at
+): StorableVerdict => {
+  // Building under `storable` mode yields a context with no `events` field at
   // all (the builder omits it on this branch, #320), so the EVENT read is
   // firing-blind by type — every named event reads "not fired", and a firing read
   // anywhere on this context wouldn't compile. The input still carries `events`
   // (it's validated either way); the build is just where the map stops here.
-  const ctx = createEvaluationContext(ctxInput, "interchange");
+  const ctx = createEvaluationContext(ctxInput, "storable");
   const build = buildTemplate(resolveStatements(program, ctx), ctx);
   return mapTemplateBuild(build);
 };

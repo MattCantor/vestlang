@@ -44,7 +44,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.view.resolution.status).toBe("template");
+      expect(result.view.resolvesTo.status).toBe("template");
       // Every original tranche is reproduced — the round-trip is exact.
       const produced = result.view.installments
         .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
@@ -75,7 +75,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.view.resolution.status).toBe("template");
+      expect(result.view.resolvesTo.status).toBe("template");
       const produced = result.view.installments
         .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);
@@ -106,7 +106,7 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.view.resolution.status).toBe("template");
+      expect(result.view.resolvesTo.status).toBe("template");
       const produced = result.view.installments
         .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .reduce((n, i) => n + i.amount, 0);

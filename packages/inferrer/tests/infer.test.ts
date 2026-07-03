@@ -606,7 +606,7 @@ describe("inferSchedule — policy detection", () => {
     const stmt = normalizeProgram(
       parse("48000 VEST FROM DATE 2024-01-31 OVER 48 months EVERY 1 month"),
     )[0];
-    const installments: Installment[] = evaluateStatement(stmt, ctx).resolution
+    const installments: Installment[] = evaluateStatement(stmt, ctx).resolvesTo
       .installments;
     const tranches: TrancheInput[] = installments
       .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
@@ -679,7 +679,7 @@ describe("inferSchedule — policy detection", () => {
       events: {},
       grantQuantity: 6000,
       vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
-    }).resolution.installments;
+    }).resolvesTo.installments;
     const tranches: TrancheInput[] = installments
       .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
       .map((i) => ({ date: i.date, amount: i.amount }));
@@ -713,7 +713,7 @@ describe("inferSchedule — THEN chain recovery", () => {
       events: {},
       grantQuantity: inferred.diagnostics.totalQuantity,
       vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
-    }).resolution.status;
+    }).resolvesTo.status;
   }
 
   it("turns a rate-change stream into a single THEN template", () => {
@@ -821,7 +821,7 @@ function evalAllResolved(
   const map = new Map<string, number>();
   for (const stmt of program) {
     const result = evaluateStatement(stmt, ctx);
-    for (const inst of result.resolution.installments) {
+    for (const inst of result.resolvesTo.installments) {
       if (inst.state === "RESOLVED") {
         map.set(inst.date, (map.get(inst.date) ?? 0) + inst.amount);
       }
@@ -844,7 +844,7 @@ function evalProgramResolved(
   ctx: ResolutionContextInput,
 ): TrancheInput[] {
   const map = new Map<string, number>();
-  for (const inst of evaluateProgram(program, ctx).resolution.installments) {
+  for (const inst of evaluateProgram(program, ctx).resolvesTo.installments) {
     if (inst.state === "RESOLVED") {
       map.set(inst.date, (map.get(inst.date) ?? 0) + inst.amount);
     }
@@ -999,7 +999,7 @@ describe("inferSchedule — rounded trains", () => {
         ),
       )[0];
       const installments: Installment[] = evaluateStatement(stmt, ctx)
-        .resolution.installments;
+        .resolvesTo.installments;
       const tranches: TrancheInput[] = installments
         .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
         .map((i) => ({ date: i.date, amount: i.amount }));

@@ -45,7 +45,7 @@ describe("#251 AC12 — mode is un-settable on the input context types", () => {
       grantQuantity: 100,
       asOf: "2025-06-01",
       // @ts-expect-error — a caller cannot set the engine mode
-      mode: "interchange",
+      mode: "storable",
     };
     expect(bad).toBeDefined();
   });

@@ -116,7 +116,7 @@ export const unresolvedInstallments = (
   // (state UNRESOLVED, carrying the head's own blockers), so the tail's share
   // claim renders like any pending start: one undated lump. What the chain is
   // waiting on is reported once, on the schedule-level pending blocker list
-  // (`resolution.pending`), not restated per installment. The returned blocker list is
+  // (`resolvesTo.pending`), not restated per installment. The returned blocker list is
   // scoped to the cliff's own contribution, though — the head is a statement
   // in the same program and reports its start blockers itself, so restating
   // them on every tail would duplicate each pending-head blocker in the

@@ -6,7 +6,7 @@ import {
 } from "@vestlang/types";
 import {
   resolveToCore,
-  resolveInterchange,
+  resolveStorable,
   assertProgramInstallmentCap,
 } from "./resolve/index.js";
 import type { StatementContribution } from "./resolve/types.js";
@@ -15,7 +15,7 @@ import { assemble } from "./assemble.js";
 
 /**
  * Evaluate one normalized Statement. We work it out two ways: `resolveToCore`
- * gives the closed-world result against the events we know, and `resolveInterchange`
+ * gives the closed-world result against the events we know, and `resolveStorable`
  * gives the firing-invariant "what's storable" verdict. assemble pairs them into
  * one EvaluatedSchedule.
  */
@@ -25,12 +25,12 @@ export function evaluateStatement(
 ): EvaluatedSchedule {
   // The one structural / circular-gate guard for this path: resolveToCore enforces
   // only the installment cap now, so the hand-built program is vetted here, once,
-  // before either assemble arm reads it (resolveInterchange carries no guard of its
+  // before either assemble arm reads it (resolveStorable carries no guard of its
   // own, so this can't lean on argument-evaluation order).
   assertEvaluableProgram([stmt]);
   return assemble(
     resolveToCore([stmt], ctx_input),
-    resolveInterchange([stmt], ctx_input),
+    resolveStorable([stmt], ctx_input),
   );
 }
 
@@ -86,7 +86,7 @@ export function evaluateClauseGroups(
   return chainGroups(program).map((chain) =>
     assemble(
       resolveToCore(chain, ctx_input),
-      resolveInterchange(chain, ctx_input),
+      resolveStorable(chain, ctx_input),
     ),
   );
 }
@@ -105,7 +105,7 @@ export function evaluateProgram(
   assertEvaluableProgram(stmts);
   return assemble(
     resolveToCore(stmts, ctx_input),
-    resolveInterchange(stmts, ctx_input),
+    resolveStorable(stmts, ctx_input),
   );
 }
 
@@ -122,9 +122,9 @@ export function evaluateProgramWithContributions(
   ctx_input: ResolutionContextInput,
 ): { schedule: EvaluatedSchedule; contributions: StatementContribution[] } {
   assertEvaluableProgram(stmts);
-  const resolution = resolveToCore(stmts, ctx_input);
+  const resolvesTo = resolveToCore(stmts, ctx_input);
   return {
-    schedule: assemble(resolution, resolveInterchange(stmts, ctx_input)),
-    contributions: resolution.contributions,
+    schedule: assemble(resolvesTo, resolveStorable(stmts, ctx_input)),
+    contributions: resolvesTo.contributions,
   };
 }

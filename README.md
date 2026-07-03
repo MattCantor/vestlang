@@ -48,9 +48,9 @@ DSL string ──parse──▶ raw AST ──normalizeProgram──▶ Program 
                  resolve combinators vs. runtime, then CLASSIFY
                                    ▼
                           EvaluatedSchedule — two verdicts side by side:
-                            interchange  — what a record keeper can STORE
+                            storable     — what a record keeper can STORE
                                            (firing-invariant; safe to persist)
-                            resolution   — what it RESOLVES TO, given known events
+                            resolvesTo   — what it RESOLVES TO, given known events
                           + absenceAssumptions, findings, installments, blockers
 ```
 
@@ -78,19 +78,19 @@ multiple producers can share.
 Every evaluated schedule comes back with **two verdicts**, because "what can a record
 keeper *store* for this" and "what does it *resolve to* right now" are different questions:
 
-- **`interchange`** — the **storable** verdict, computed *without reading firings*, so a
+- **`storable`** — computed *without reading firings*, so a
   later event can never change it. Values: `template`, `events-only`, `unrepresentable`
   (no storable form even as bare events — a cross-unit deferred cliff, or a `THEN` tail
   behind an unfired start; an event-anchored cliff is *not* one of these — it stores as a
   `template`), `impossible` (a structural contradiction).
-- **`resolution`** — the **resolves-to** verdict, given the events currently known.
+- **`resolvesTo`** — what it works out to, given the events currently known.
   Values: `template`, `events-only`, `unresolved` (pending on an unfired event),
   `impossible`.
 
 They can differ for one schedule: a gated start `FROM DATE 2025-01-01 BEFORE EVENT "ipo"`
 is a storable `template`, but if `ipo` is already on record *before* that date it resolves
 to `impossible`. The flattened consumer view derives three reads — `representable` (from
-interchange), `pending` (from blockers; a `template` can be pending), `valid` (allocation ≤
+storable), `pending` (from blockers; a `template` can be pending), `valid` (allocation ≤
 grant) — so read each from its own flag, never from a `status`. Each installment also
 carries its own `state` of `RESOLVED`, `UNRESOLVED`, or `IMPOSSIBLE`.
 
@@ -160,9 +160,9 @@ const schedule = evaluateStatement(program[0], {
   // optional: vesting_day_of_month
 });
 
-schedule.interchange.status;       // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
-schedule.resolution.status;        // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
-schedule.resolution.installments;  // [{ amount, date, meta: { state } }, ...]
+schedule.storable.status;       // storable:    "template" | "events-only" | "unrepresentable" | "impossible"
+schedule.resolvesTo.status;        // resolves-to: "template" | "events-only" | "unresolved" | "impossible"
+schedule.resolvesTo.installments;  // [{ amount, date, meta: { state } }, ...]
 schedule.absenceAssumptions;       // [{ eventId, through }, ...] — events assumed not yet fired
 ```
 

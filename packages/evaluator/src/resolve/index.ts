@@ -177,8 +177,8 @@ export const resolveToCore = (
 
   // Read the literal user-supplied firings (`ctxInput.events`), not the rebuilt
   // null-prototype `ctx.events` — same key set, but the input is the honest source
-  // and dodges any question about the prototype copy. This rides the resolution arm
-  // by construction: the interchange context carries no firings to compare against.
+  // and dodges any question about the prototype copy. This rides the resolves-to arm
+  // by construction: the storable context carries no firings to compare against.
   return {
     ...verdict,
     findings: [
@@ -408,4 +408,4 @@ export {
 } from "./sidecar.js";
 export type { PersistedArtifact } from "./sidecar.js";
 export type { ResolveResult } from "./types.js";
-export { resolveInterchange } from "./interchange.js";
+export { resolveStorable } from "./storable.js";

@@ -1,7 +1,7 @@
-// A corpus-level net for the interchange verdict's defining property: the
+// A corpus-level net for the storable verdict's defining property: the
 // "storable" answer must not move when an event fires. The verdict is computed
-// against an events-blind context (resolveInterchange blanks the events map
-// before any lowering), so in principle *no* program's interchange verdict can
+// against an events-blind context (resolveStorable blanks the events map
+// before any lowering), so in principle *no* program's storable verdict can
 // depend on firings. This sweep runs a spread of shapes through three event
 // contexts and pins that equality, so the day someone breaks the blanking — or
 // lets a firing reach lowering through some other channel — a test goes red.
@@ -9,7 +9,7 @@
 // The companion check carries the real weight: for a schedule that references no
 // events at all, a closed-world `template` must come with a storable `template`.
 // That ties the two verdicts together rather than re-asserting the axis the
-// interchange verdict already discards.
+// storable verdict already discards.
 
 import { describe, it, expect } from "vitest";
 import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
@@ -408,7 +408,7 @@ const ctxWith = (events: Record<string, string>): ResolutionContextInput => ({
   grantQuantity: 100000,
 });
 
-describe("interchange — firing-invariance across a corpus of shapes", () => {
+describe("storable — firing-invariance across a corpus of shapes", () => {
   it("covers at least ten distinct program shapes", () => {
     expect(corpus.length).toBeGreaterThanOrEqual(10);
     expect(new Set(corpus.map((e) => e.name)).size).toBe(corpus.length);
@@ -422,13 +422,13 @@ describe("interchange — firing-invariance across a corpus of shapes", () => {
   // The headline property, swept across every shape: own-events, no-events, and
   // every-referenced-event-fired all produce the identical storable verdict.
   for (const { name, program, events } of corpus) {
-    it(`${name}: interchange verdict is identical across firing contexts`, () => {
-      const own = evaluateProgram(program, ctxWith(events)).interchange;
-      const none = evaluateProgram(program, ctxWith({})).interchange;
+    it(`${name}: storable verdict is identical across firing contexts`, () => {
+      const own = evaluateProgram(program, ctxWith(events)).storable;
+      const none = evaluateProgram(program, ctxWith({})).storable;
       const fired = evaluateProgram(
         program,
         ctxWith(allFired(program)),
-      ).interchange;
+      ).storable;
 
       expect(none).toEqual(own);
       expect(fired).toEqual(own);
@@ -438,11 +438,11 @@ describe("interchange — firing-invariance across a corpus of shapes", () => {
 
 // #363 AC-4(a) — the COMMITTED arm that carries the nested disclosure arises only
 // in `resolution` mode (the commit branch is mode-gated), so the firing-blind
-// interchange read never commits and surfaces no absence assumption. The schedule's
-// `absenceAssumptions` is the closed-world (resolution) read, so we assert the
+// storable read never commits and surfaces no absence assumption. The schedule's
+// `absenceAssumptions` is the closed-world (resolvesTo) read, so we assert the
 // firing-blind verdict is a stable EVENT template — the storable floor — rather than
 // anything that could have leaned on a firing.
-describe("interchange — nested committed disclosures do not reach the storable verdict", () => {
+describe("storable — nested committed disclosures do not reach the storable verdict", () => {
   const nested363 = corpus.filter((e) => e.name.includes("EARLIER OF"));
 
   it("the nested LATER-over-EARLIER shapes are in the corpus", () => {
@@ -450,20 +450,20 @@ describe("interchange — nested committed disclosures do not reach the storable
   });
 
   for (const { name, program } of nested363) {
-    it(`${name}: interchange is a firing-blind contingent-start template (no commitment)`, () => {
+    it(`${name}: storable is a firing-blind contingent-start template (no commitment)`, () => {
       const out = evaluateProgram(program, ctxWith({}));
-      if (out.interchange.status !== "template")
-        throw new Error(`expected interchange template for ${name}`);
+      if (out.storable.status !== "template")
+        throw new Error(`expected storable template for ${name}`);
       // The storable start is the contingent sentinel + an `evt:start` recipe, not
       // a committed date — the firing-blind path never commits, so nothing
       // absence-disclosure-shaped rode up into the storable verdict.
-      expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-      expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+      expect(out.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+      expect(Object.keys(out.storable.sourceMap)).toEqual(["evt:start"]);
     });
   }
 });
 
-describe("interchange — the all-fired context is non-vacuous", () => {
+describe("storable — the all-fired context is non-vacuous", () => {
   // Context (c) must fire at least every event the program's own context names,
   // or the sweep would be firing fewer events than the program references and
   // miss exactly the gap it exists to catch.
@@ -489,16 +489,16 @@ describe("interchange — the all-fired context is non-vacuous", () => {
   });
 });
 
-describe("interchange — firing-free programs tie the two verdicts together", () => {
+describe("storable — firing-free programs tie the two verdicts together", () => {
   // For a schedule that mentions no events, a closed-world `template` must come
   // with a storable `template`. Nothing fired can be hiding the storability.
   for (const { name, program } of corpus.filter((e) =>
     isFiringFree(e.program),
   )) {
-    it(`${name}: resolution template implies interchange template`, () => {
+    it(`${name}: resolvesTo template implies storable template`, () => {
       const out = evaluateProgram(program, ctxWith({}));
-      if (out.resolution.status === "template") {
-        expect(out.interchange.status).toBe("template");
+      if (out.resolvesTo.status === "template") {
+        expect(out.storable.status).toBe("template");
       }
     });
   }
@@ -509,18 +509,18 @@ describe("interchange — firing-free programs tie the two verdicts together", (
     const witnesses = corpus.filter(
       (e) =>
         isFiringFree(e.program) &&
-        evaluateProgram(e.program, ctxWith({})).resolution.status ===
+        evaluateProgram(e.program, ctxWith({})).resolvesTo.status ===
           "template",
     );
     expect(witnesses.length).toBeGreaterThan(0);
   });
 });
 
-// Issue #390 AC9 — the firing-blind interchange build of a pure milestone is ALSO
+// Issue #390 AC9 — the firing-blind storable build of a pure milestone is ALSO
 // schedule-less. The milestone-omit predicate lives in the shared `buildTemplate`,
-// so it fires on the storable floor too, not only on the resolution verdict. The
+// so it fires on the storable floor too, not only on the resolves-to verdict. The
 // schedule-less template must still be a valid OCFVestingTermsV2.
-describe("interchange — a pure milestone is schedule-less on the storable floor (#390 AC9)", () => {
+describe("storable — a pure milestone is schedule-less on the storable floor (#390 AC9)", () => {
   // `VEST CLIFF EVENT ipo` — a one-lump grid whose cliff is a bare event, which
   // lowers to a pure milestone (event_condition, no schedule).
   const pureMilestone: Program = [
@@ -532,35 +532,31 @@ describe("interchange — a pure milestone is schedule-less on the storable floo
     }),
   ];
 
-  it("the interchange template omits the schedule and carries the event_condition", () => {
+  it("the storable template omits the schedule and carries the event_condition", () => {
     const out = evaluateProgram(pureMilestone, ctxWith({}));
-    if (out.interchange.status !== "template")
-      throw new Error(
-        `expected interchange template, got ${out.interchange.status}`,
-      );
-    const s = out.interchange.template.statements[0];
+    if (out.storable.status !== "template")
+      throw new Error(`expected storable template, got ${out.storable.status}`);
+    const s = out.storable.template.statements[0];
     expect(scheduleOf(s)).toBeUndefined();
     expect(s.event_condition).toEqual({ event_id: "ipo" });
   });
 
-  it("the schedule-less interchange template passes assertValidVestingScheduleTemplate", () => {
+  it("the schedule-less storable template passes assertValidVestingScheduleTemplate", () => {
     const out = evaluateProgram(pureMilestone, ctxWith({}));
-    if (out.interchange.status !== "template")
-      throw new Error(
-        `expected interchange template, got ${out.interchange.status}`,
-      );
+    if (out.storable.status !== "template")
+      throw new Error(`expected storable template, got ${out.storable.status}`);
     // Bind the narrowed template to a local before the closure — the narrowing
     // doesn't survive a property access inside the nested arrow.
-    const { template } = out.interchange;
+    const { template } = out.storable;
     expect(() => assertValidVestingScheduleTemplate(template)).not.toThrow();
   });
 
   it("the storable floor is firing-invariant across firing contexts", () => {
-    const none = evaluateProgram(pureMilestone, ctxWith({})).interchange;
+    const none = evaluateProgram(pureMilestone, ctxWith({})).storable;
     const fired = evaluateProgram(
       pureMilestone,
       ctxWith({ ipo: "2026-06-01" }),
-    ).interchange;
+    ).storable;
     expect(fired).toEqual(none);
   });
 });

@@ -291,7 +291,7 @@ describe("chain origin day-of-month — never-clamped DAYS handoff (#171)", () =
       grantQuantity: 100000,
       events: {},
     });
-    const installments = schedule.resolution.installments.map((i) =>
+    const installments = schedule.resolvesTo.installments.map((i) =>
       i.state === "RESOLVED"
         ? { date: i.date, amount: i.amount }
         : { date: undefined, amount: i.amount },
@@ -1321,6 +1321,6 @@ describe("evaluateProgram — a dated PLUS list of overlapping month-end grids i
       grantQuantity: 600,
       vesting_day_of_month: "LAST_DAY_OF_MONTH",
     });
-    expect(schedule.resolution.status).toBe("events-only");
+    expect(schedule.resolvesTo.status).toBe("events-only");
   });
 });

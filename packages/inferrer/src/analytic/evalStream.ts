@@ -31,7 +31,7 @@ export function evalResolvedStream(
       grantQuantity: total,
       vesting_day_of_month: dom,
     };
-    const r = evaluateProgram(program, ctx).resolution;
+    const r = evaluateProgram(program, ctx).resolvesTo;
     const items: Installment[] = r.installments;
     const resolved = items.filter(
       (i): i is ResolvedInstallment => i.state === "RESOLVED",

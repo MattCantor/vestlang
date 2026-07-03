@@ -42,7 +42,7 @@ describe("runEvaluate", () => {
     const r = runEvaluate("VEST OVER 12 months EVERY 1 month", grant);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.view.resolution.status).toBe("template");
+      expect(r.view.resolvesTo.status).toBe("template");
       expect(r.breakdown).toHaveLength(1);
     }
   });
@@ -54,7 +54,7 @@ describe("runEvaluate", () => {
     );
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.view.resolution.status).toBe("template");
+      expect(r.view.resolvesTo.status).toBe("template");
       expect(r.view.findings).toEqual([]);
       // 33 + 33 + 34 across the three thirds — the whole grant, allocated once.
       expect(sumInstallments(r.view.installments)).toBe(100);
@@ -72,7 +72,7 @@ describe("runEvaluate", () => {
     );
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.view.resolution.status).toBe("template");
+      expect(r.view.resolvesTo.status).toBe("template");
       // 48 monthly tranches over the 12+36 chain, summing to the whole grant.
       expect(sumInstallments(r.view.installments)).toBe(48);
       // One THEN chain → one breakdown entry, carrying all 48 tranches.
@@ -743,13 +743,13 @@ describe("runEvaluate — pending-head chain with a tail event cliff (R2-B3/#255
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.interchange.status).toBe("template");
+    expect(r.view.storable.status).toBe("template");
   });
 });
 
 // #412: a THEN tail behind a head whose grid is held on an unfired event cliff is
 // not storable — canonical can't hold a fixed-date tail whose start waits on an
-// event. The interchange verdict is unrepresentable, so `representable` reads false.
+// event. The storable verdict is unrepresentable, so `representable` reads false.
 describe("runEvaluate — a held-cliff head's THEN tail is not representable (#412)", () => {
   it("reports unrepresentable / representable=false", () => {
     const r = runEvaluate(
@@ -759,7 +759,7 @@ describe("runEvaluate — a held-cliff head's THEN tail is not representable (#4
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.interchange.status).toBe("unrepresentable");
+    expect(r.view.storable.status).toBe("unrepresentable");
     expect(r.view.representable).toBe(false);
   });
 });
@@ -774,7 +774,7 @@ describe("runEvaluate — gated event cliff stores as a template (R2-B14/#255)",
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.view.interchange.status).toBe("template");
+    expect(r.view.storable.status).toBe("template");
   });
 });
 

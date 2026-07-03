@@ -826,12 +826,12 @@ describe("persist/rehydrate are clock-independent", () => {
   });
 });
 
-describe("#251 — persist gates on interchange; rehydrate never commits", () => {
+describe("#251 — persist gates on storable; rehydrate never commits", () => {
   // AC#7 — an EARLIER OF cliff resolves to `template` (it commits its floor) but its
-  // interchange is `unrepresentable` (an event arm can't be a duration cliff). Persist
-  // gates on interchange, so it must REFUSE — gating on resolution would store the
+  // storable is `unrepresentable` (an event arm can't be a duration cliff). Persist
+  // gates on storable, so it must REFUSE — gating on resolvesTo would store the
   // unstorable.
-  it("AC#7: persist refuses an EARLIER OF cliff even though its resolution is a template", () => {
+  it("AC#7: persist refuses an EARLIER OF cliff even though its resolvesTo is a template", () => {
     const r = runPersist({
       dsl: "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)",
       grant_date: "2025-01-01",
@@ -881,8 +881,8 @@ describe("#251 — persist gates on interchange; rehydrate never commits", () =>
   });
 
   // AC#9 — persist may surface a non-empty `dead`. A windowed gate is storable
-  // firing-blind (interchange template), yet a firing recorded OUTSIDE its window at
-  // persist time dies the gate in the closed-world resolution. So persist returns
+  // firing-blind (storable template), yet a firing recorded OUTSIDE its window at
+  // persist time dies the gate in the closed-world resolvesTo. So persist returns
   // ok:true WITH a non-empty `dead` (a revisable disclosure — events are the system
   // of record's, not the artifact's).
   it("AC#9: persist returns ok:true with a non-empty dead when a recorded firing dies the gate", () => {

@@ -7,13 +7,13 @@ Evaluation resolves a vesting program against runtime — the grant date, the sh
 
 Two verdicts, because "what could a cap-table system store for this schedule" and "what does it work out to given the events we currently know" are different questions with different answers:
 
-- **`interchange`** — the **storable** verdict. What a record keeper could hold for this schedule, asked _without looking at which events have fired_. Because it ignores firings, a later event can never change it — so it's the answer that's safe to persist.
-- **`resolution`** — the **resolves-to** verdict. What the schedule works out to _given the events currently known_, taken as the whole world. It reads firings, so it moves as events arrive.
+- **`storable`** — what a record keeper could hold for this schedule, asked _without looking at which events have fired_. Because it ignores firings, a later event can never change it — so it's the answer that's safe to persist.
+- **`resolvesTo`** — what the schedule works out to _given the events currently known_, taken as the whole world. It reads firings, so it moves as events arrive.
 
 ```ts
 interface EvaluatedSchedule {
-  interchange: InterchangeVerdict; // storable floor — never reads firings
-  resolution: EvaluatedScheduleVerdict; // resolves-to — closed-world, reads events
+  storable: StorableVerdict; // storable floor — never reads firings
+  resolvesTo: ClosedWorldVerdict; // resolves-to — closed-world, reads events
   absenceAssumptions: AbsenceAssumption[]; // events the resolves-to reading leans on
   findings: Finding[]; // schedule advisories — allocation (over / under), precision (a stored percentage too coarse to allocate exactly), and event-id case near-misses
 }
@@ -23,7 +23,7 @@ Each verdict is a `status` plus the payload that status carries (installments, a
 
 ## The two verdicts
 
-|                     | **Interchange** ("Storable")              | **Resolution** ("Resolves to")                        |
+|                     | **Storable**                              | **Resolves to**                                       |
 | :------------------ | :---------------------------------------- | :---------------------------------------------------- |
 | Question            | what can a record keeper store?           | what does it resolve to, given known events?          |
 | Reads firing dates? | never — firing-invariant                  | yes                                                   |
@@ -38,8 +38,8 @@ The values they share mean the same thing in both lenses:
 
 They differ only on the pending case, because they're asking different things:
 
-- **`unresolved`** is **resolution-only** — the closed-world "can't be materialized yet" (typically a cliff that needs a firing date to place its lump). The interchange lens never consults firings, so it has no pending state of its own.
-- **`unrepresentable`** is **interchange-only** — there's no storable shape at all, not even as bare events. Three causes remain today: an **impossible component beside a live portion** (a statically-impossible component — a start that contradicts itself, true regardless of firings — coexisting with a still-pending portion; the impossibility leads, since it can never be stored no matter what fires), a **cross-unit deferred cliff** (a cliff whose duration is in a different unit than the grid, so it can't be placed until a firing is known), and a **`THEN` tail behind an unfired start** (a chained segment that just can't be dated yet). An event-anchored cliff is **not** one of them anymore — it stores as a `template`, a time `cliff` plus an `event_condition` (see the [divergence example](#when-the-two-diverge) below). The interchange lens never consults firings, so it has no pending state of its own.
+- **`unresolved`** is **resolves-to-only** — the closed-world "can't be materialized yet" (typically a cliff that needs a firing date to place its lump). The storable lens never consults firings, so it has no pending state of its own.
+- **`unrepresentable`** is **storable-only** — there's no storable shape at all, not even as bare events. Three causes remain today: an **impossible component beside a live portion** (a statically-impossible component — a start that contradicts itself, true regardless of firings — coexisting with a still-pending portion; the impossibility leads, since it can never be stored no matter what fires), a **cross-unit deferred cliff** (a cliff whose duration is in a different unit than the grid, so it can't be placed until a firing is known), and a **`THEN` tail behind an unfired start** (a chained segment that just can't be dated yet). An event-anchored cliff is **not** one of them anymore — it stores as a `template`, a time `cliff` plus an `event_condition` (see the [divergence example](#when-the-two-diverge) below). The storable lens never consults firings, so it has no pending state of its own.
 
 ### When the two diverge
 
@@ -52,7 +52,7 @@ Keeping both is the whole point — the same schedule can land differently in ea
 
 The flattened `ScheduleView` derives three booleans, each from a different source — read each from its own flag, not from a `status`:
 
-- **`representable`** — from the **interchange** verdict: can a record keeper hold this at all?
+- **`representable`** — from the **storable** verdict: can a record keeper hold this at all?
 - **`pending`** — from the **blockers**: are witnesses (unfired events) still missing? A storable `template` can be pending — its projection stays empty until the event arrives.
 - **`valid`** — from the **findings**: is at most 100% of the grant allocated? This is about what was written, independent of either verdict and of which events fired.
 
@@ -62,7 +62,7 @@ The flattened `ScheduleView` derives three booleans, each from a different sourc
 
 ## Absence assumptions
 
-Closed-world resolution reads "no firing on record" as "hasn't happened." So the resolves-to verdict can quietly lean on an event _staying_ absent — and if that event is later recorded (even backdated), the answer changes. `absenceAssumptions` discloses every such dependency:
+The resolves-to reading treats "no firing on record" as "hasn't happened." So the resolves-to verdict can quietly lean on an event _staying_ absent — and if that event is later recorded (even backdated), the answer changes. `absenceAssumptions` discloses every such dependency:
 
 ```ts
 interface AbsenceAssumption {
@@ -159,8 +159,8 @@ Both verdicts `events-only` — _reason: "Two independent absolute-date vesting 
 
 A cliff gated on an event still stores as one template — a time `cliff` plus the event gate as an `event_condition`. `100 VEST OVER 48 months EVERY 3 months CLIFF LATER OF (+12 months, EVENT milestone)`, grant 2025-01-01 over 100 shares, `milestone` unfired:
 
-- **interchange: `template`** — the schedule is storable as written; the event hold lives in `event_condition`.
-- **resolution: `template`** — but `pending: true`, because `milestone` hasn't fired (blocker `EVENT_NOT_YET_OCCURRED`).
+- **storable: `template`** — the schedule is storable as written; the event hold lives in `event_condition`.
+- **resolvesTo: `template`** — but `pending: true`, because `milestone` hasn't fired (blocker `EVENT_NOT_YET_OCCURRED`).
 
 The installments are emitted symbolically until `milestone` fires (see [Partial knowledge](#partial-knowledge-for-later-of)). The `LATER OF` floor — nothing can vest before the 12-month mark — holds when the schedule is realized. The unfired symbolic dates keep their honest grid positions (so the first row's `date` reads `2025-04-01`), and each one _also_ discloses that floor as `floor: 2026-01-01` — the earliest it could land. The cadence date and the floor are both machine-readable, neither pretending to be the unknown true vesting date.
 

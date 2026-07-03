@@ -116,11 +116,11 @@ function characterize(c: CorpusCase): CaseSnapshot {
   // input, and it churns the snapshot on harmless rounding reshuffles.
   return {
     dsl: inferred.dsl,
-    status: schedule.resolution.status,
-    // The resolution reason is structured; render it so the snapshot stays the
+    status: schedule.resolvesTo.status,
+    // The resolves-to reason is structured; render it so the snapshot stays the
     // legible sentence it has always pinned.
-    ...(schedule.resolution.status === "events-only"
-      ? { reason: renderReason(schedule.resolution.reason) }
+    ...(schedule.resolvesTo.status === "events-only"
+      ? { reason: renderReason(schedule.resolvesTo.reason) }
       : {}),
     residual: inferred.diagnostics.residualError,
     decomposition: inferred.decomposition.map((c) => c.tag),

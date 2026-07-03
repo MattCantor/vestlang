@@ -35,7 +35,7 @@ export function evalUnder(
 export function resolvedStream(
   sched: EvaluatedSchedule,
 ): { date: OCTDate; amount: number }[] {
-  const items: Installment[] = sched.resolution.installments;
+  const items: Installment[] = sched.resolvesTo.installments;
   return items
     .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
     .map((i) => ({ date: i.date, amount: i.amount }));

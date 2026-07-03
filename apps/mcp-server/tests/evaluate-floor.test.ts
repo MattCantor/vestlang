@@ -5,7 +5,7 @@ import { createServer } from "../src/server.js";
 
 // #447 — the cliff `floor` on a held `UNRESOLVED_CLIFF` installment must survive
 // the end-to-end MCP path: `vestlang_evaluate` returns `...result.view`, and the
-// view hands `s.resolution.installments` through verbatim (pipeline/view.ts). No
+// view hands `s.resolvesTo.installments` through verbatim (pipeline/view.ts). No
 // code in the tool transforms it, so this is a pure passthrough — exactly the kind
 // a future view reshape or field-whitelist could silently drop. These tests pin
 // that the field reaches `structuredContent.installments[0].symbolicDate.floor`.
@@ -34,7 +34,7 @@ async function connectClient(): Promise<Client> {
 }
 
 type EvalView = {
-  interchange: { status: string };
+  storable: { status: string };
   installments: Installment[];
 };
 
@@ -97,14 +97,14 @@ describe("#447 — cliff floor rides the vestlang_evaluate passthrough", () => {
 describe("#463 — dead-code baseline for the two probe DSLs", () => {
   it("(a) partial LATER OF cliff holds the monthly grid and discloses the date floor", async () => {
     const client = await connectClient();
-    const { interchange, installments } = await evaluateView(
+    const { storable, installments } = await evaluateView(
       client,
       "VEST OVER 48 months EVERY 1 month CLIFF LATER OF (DATE 2026-06-01, EVENT fda)",
     );
 
     // Storable as one template; the held tranches keep their honest monthly
     // cadence and carry the resolved date arm as the floor (never folded onto it).
-    expect(interchange.status).toBe("template");
+    expect(storable.status).toBe("template");
     expect(installments).toHaveLength(48);
     expect(installments[0].symbolicDate).toEqual({
       type: "UNRESOLVED_CLIFF",
@@ -122,13 +122,13 @@ describe("#463 — dead-code baseline for the two probe DSLs", () => {
 
   it("(b) cross-unit deferred cliff is a single unrepresentable lump", async () => {
     const client = await connectClient();
-    const { interchange, installments } = await evaluateView(
+    const { storable, installments } = await evaluateView(
       client,
       "VEST FROM EVENT ipo OVER 48 months EVERY 1 month CLIFF +100 days",
     );
 
     // The cliff can't be placed until ipo fires, so there's no storable form.
-    expect(interchange.status).toBe("unrepresentable");
+    expect(storable.status).toBe("unrepresentable");
     expect(installments).toHaveLength(1);
     expect(installments[0].state).toBe("UNRESOLVED");
     expect(installments[0].symbolicDate?.type).toBe("UNRESOLVED_VESTING_START");

@@ -24,9 +24,9 @@ describe("QUANTITY claim capped at the grant", () => {
     };
 
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.status).toBe("template");
-    expect(schedule.resolution.installments).toHaveLength(1);
-    const [lump] = schedule.resolution.installments;
+    expect(schedule.resolvesTo.status).toBe("template");
+    expect(schedule.resolvesTo.installments).toHaveLength(1);
+    const [lump] = schedule.resolvesTo.installments;
     expect(lump.state).toBe("UNRESOLVED");
     expect(lump.amount).toBe(100); // capped: the grant only has 100
   });
@@ -89,8 +89,8 @@ describe("QUANTITY claim capped at the grant", () => {
     // evaluateProgram: template verdict, empty installments, no findings
     // (allocationFindings is suppressed at totalShares 0)
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.status).toBe("template");
-    expect(schedule.resolution.installments).toHaveLength(0);
+    expect(schedule.resolvesTo.status).toBe("template");
+    expect(schedule.resolvesTo.installments).toHaveLength(0);
     expect(schedule.findings).toHaveLength(0);
 
     // evaluateProgramAsOf: nothing in any bucket
@@ -133,7 +133,7 @@ describe("QUANTITY claim capped at the grant", () => {
 
     const schedule = evaluateProgram(program, ctx);
     // The compiled projection delivers 75 + 75 = 150 under an error finding.
-    expect(schedule.resolution.installments).toEqual([
+    expect(schedule.resolvesTo.installments).toEqual([
       { state: "RESOLVED", amount: 75, date: "2024-02-01" },
       { state: "RESOLVED", amount: 75, date: "2024-03-01" },
     ]);

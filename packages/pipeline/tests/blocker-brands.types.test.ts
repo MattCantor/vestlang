@@ -1,7 +1,7 @@
 // AC#1 — the two per-space blocker brands are mutually exclusive at the type level.
-// A `DeadBlocker` (resolution space) must not be assignable where a
-// `StaticImpossibleBlocker` (interchange space) is expected, nor the reverse, so
-// neither `interchange.blockers = resolution.dead` nor its converse type-checks.
+// A `DeadBlocker` (resolvesTo space) must not be assignable where a
+// `StaticImpossibleBlocker` (storable space) is expected, nor the reverse, so
+// neither `storable.blockers = resolvesTo.dead` nor its converse type-checks.
 //
 // `expectTypeOf` pins the brand relationship directly. A bare `@ts-expect-error`
 // would be too coarse — it passes on ANY incidental compile error, so it couldn't

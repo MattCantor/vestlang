@@ -53,7 +53,7 @@ const evaluate = (stmt: string, events: Record<string, OCTDate>) => {
   const rawProgram = parse(statement);
   const program = normalizeProgram(rawProgram);
   const expr = program[0];
-  const result = evaluateStatement(expr, ctx).resolution.installments;
+  const result = evaluateStatement(expr, ctx).resolvesTo.installments;
   return result;
 };
 

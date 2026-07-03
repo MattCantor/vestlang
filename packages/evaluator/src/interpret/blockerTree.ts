@@ -55,7 +55,7 @@ export function foldBlocker<T>(
 // upstream works in the unbranded `Blocker` union; the brand is applied as the
 // blockers cross into a verdict.
 
-// Split a resolution-space blocker list into what's still pending and what's dead.
+// Split a resolves-to-space blocker list into what's still pending and what's dead.
 // Routing is top-level, by whether each blocker's whole subtree is impossible —
 // `isImpossibleBlocker` (an `IMPOSSIBLE_SELECTOR` carries only `ImpossibleBlocker`
 // children, so it's dead all the way down; an `UNRESOLVED_SELECTOR` may hold a mixed
@@ -78,7 +78,7 @@ export function partitionResolutionBlockers(blockers: Blocker[]): {
   return { pending, dead };
 }
 
-// Brand the interchange `impossible` arm. The verdict is firing-blind, so its
+// Brand the storable `impossible` arm. The verdict is firing-blind, so its
 // blockers are static contradictions by construction — the cast just records that.
 export const brandStatic = (
   bs: ImpossibleBlocker[],

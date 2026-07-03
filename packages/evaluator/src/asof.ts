@@ -94,7 +94,7 @@ export function evaluateProgramAsOf(
     0,
   );
   return partitionAsOf(
-    schedule.resolution.installments,
+    schedule.resolvesTo.installments,
     ctx_input.asOf,
     programQuantity,
     // The findings ride along: the over-allocation the schedule carries is

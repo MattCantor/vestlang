@@ -90,10 +90,10 @@ export function evaluateVestingBase(
           };
     case "EVENT": {
       // The single firing read in the engine, and the one place mode decides what
-      // a named event "is". The `mode === "interchange"` test narrows the context
+      // a named event "is". The `mode === "storable"` test narrows the context
       // to the firing-blind DU arm, which carries no `events` field at all (#320) —
       // so every named event reads as not-fired, and the `ctx.events` read in the
-      // other branch only typechecks *because* we've narrowed away interchange
+      // other branch only typechecks *because* we've narrowed away storable
       // first. Firing-invariance is the type's guarantee now, not a convention a
       // future read could forget. In `resolution`/`rehydrate` we read the real
       // firing off the map the events-bearing arm carries.
@@ -104,7 +104,7 @@ export function evaluateVestingBase(
       // a named-but-unfired event is present with value `undefined`, and that must
       // stay pending, not resolve to a `undefined` date.
       const eventDate =
-        ctx.mode === "interchange"
+        ctx.mode === "storable"
           ? undefined
           : Object.hasOwn(ctx.events, base.value)
             ? ctx.events[base.value]

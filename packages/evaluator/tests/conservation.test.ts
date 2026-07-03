@@ -303,11 +303,11 @@ const firingPatterns = (events: string[]): Record<string, OCTDate>[] => {
 const seen = new Set<string>();
 
 function recordCoverage(s: EvaluatedSchedule): void {
-  const inst = s.resolution.installments;
+  const inst = s.resolvesTo.installments;
   const hasU = inst.some((i) => i.state === "UNRESOLVED");
   const hasR = inst.some((i) => i.state === "RESOLVED");
   const hasI = inst.some((i) => i.state === "IMPOSSIBLE");
-  switch (s.resolution.status) {
+  switch (s.resolvesTo.status) {
     case "template":
       seen.add(hasU ? "template/pending" : "template/dated");
       break;
@@ -324,8 +324,7 @@ function recordCoverage(s: EvaluatedSchedule): void {
       break;
   }
   if (inst.length === 0) seen.add("asof/fallback");
-  if (s.interchange.status === "events-only")
-    seen.add("interchange/events-only");
+  if (s.storable.status === "events-only") seen.add("storable/events-only");
   if (s.findings.some((f) => f.kind === "over-allocation"))
     seen.add("class/over-allocated");
   if (s.findings.some((f) => f.kind === "under-allocation"))
@@ -402,31 +401,31 @@ function checkCell(
 
   // The schedule stream itself, in whichever arm it landed.
   checkStream(
-    schedule.resolution.installments,
+    schedule.resolvesTo.installments,
     grant,
     T,
-    `${label}\n  surface: resolution.installments (status=${schedule.resolution.status})`,
+    `${label}\n  surface: resolvesTo.installments (status=${schedule.resolvesTo.status})`,
   );
 
-  // The firing-blind interchange stream, when it carries installments.
-  if (schedule.interchange.status === "events-only") {
+  // The firing-blind storable stream, when it carries installments.
+  if (schedule.storable.status === "events-only") {
     checkStream(
-      schedule.interchange.installments,
+      schedule.storable.installments,
       grant,
       T,
-      `${label}\n  surface: interchange.installments`,
+      `${label}\n  surface: storable.installments`,
     );
-    // Same stream, the negative check: no interchange tranche dates on the sentinel.
+    // Same stream, the negative check: no storable tranche dates on the sentinel.
     assertNoSentinelDate(
-      schedule.interchange.installments,
-      `${label}\n  surface: interchange.installments`,
+      schedule.storable.installments,
+      `${label}\n  surface: storable.installments`,
     );
   }
 
-  // The resolution stream always carries installments; none dates on the sentinel.
+  // The resolvesTo stream always carries installments; none dates on the sentinel.
   assertNoSentinelDate(
-    schedule.resolution.installments,
-    `${label}\n  surface: resolution.installments`,
+    schedule.resolvesTo.installments,
+    `${label}\n  surface: resolvesTo.installments`,
   );
 
   // Findings track the validity class exactly (a zero-share grant raises neither).
@@ -441,7 +440,7 @@ function checkCell(
     ).toBe(bigCmp(toBigRational(T), BIG_ONE) < 0);
   }
 
-  // The as-of partition at three dates. The total is asOf-invariant (resolution
+  // The as-of partition at three dates. The total is asOf-invariant (resolvesTo
   // never reads asOf; only the vested/unvested split moves) and vested grows
   // monotonically. The four buckets are disjoint, so impossible amounts are
   // added into the total alongside vested, unvested, and unresolved.
@@ -470,11 +469,11 @@ function checkCell(
         Math.max(grant - (sumAmounts(r.vested) + sumAmounts(r.unvested)), 0),
       );
     }
-    // Cross-surface agreement: when the resolution stream is non-empty, the
+    // Cross-surface agreement: when the resolvesTo stream is non-empty, the
     // as-of total equals the installment-stream sum.
-    if (schedule.resolution.installments.length > 0) {
+    if (schedule.resolvesTo.installments.length > 0) {
       expect(total, asOfLabel).toBe(
-        sumAmounts(schedule.resolution.installments),
+        sumAmounts(schedule.resolvesTo.installments),
       );
     }
     // Impossible is its own bucket now, not a slice of unresolved — both stay
@@ -525,8 +524,8 @@ describe("conservation invariant — spot values (R2-T1)", () => {
     const schedule = evaluateProgram(program, ctx);
     // Three distinct event starts are more than one start origin, so the
     // verdict is events-only; the lumps still telescope to [33, 33, 34].
-    expect(schedule.resolution.status).toBe("events-only");
-    expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
+    expect(schedule.resolvesTo.status).toBe("events-only");
+    expect(schedule.resolvesTo.installments.map((i) => i.amount)).toEqual([
       33, 33, 34,
     ]);
     expect(evaluateProgramAsOf(program, ctx).unresolved).toBe(100);
@@ -569,7 +568,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
+    expect(schedule.resolvesTo.installments.map((i) => i.amount)).toEqual([
       14, 28, 58,
     ]);
     expect(evaluateProgramAsOf(program, ctx).unresolved).toBe(100);
@@ -591,7 +590,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
+    expect(schedule.resolvesTo.installments.map((i) => i.amount)).toEqual([
       0, 0, 1,
     ]);
     expect(
@@ -617,7 +616,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    const inst = schedule.resolution.installments;
+    const inst = schedule.resolvesTo.installments;
     const resolved = inst.filter((i) => i.state === "RESOLVED");
     const unresolved = inst.filter((i) => i.state === "UNRESOLVED");
     expect(sumAmounts(resolved)).toBe(66);
@@ -641,7 +640,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    const unresolved = schedule.resolution.installments.filter(
+    const unresolved = schedule.resolvesTo.installments.filter(
       (i) => i.state === "UNRESOLVED",
     );
     expect(unresolved.map((i) => i.amount)).toEqual([33, 67]);
@@ -663,7 +662,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    const symbolic = schedule.resolution.installments.filter(
+    const symbolic = schedule.resolvesTo.installments.filter(
       (i) => i.state !== "RESOLVED",
     );
     expect(sumAmounts(symbolic)).toBe(100);
@@ -687,7 +686,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    const inst = schedule.resolution.installments;
+    const inst = schedule.resolvesTo.installments;
     const impossible = inst.filter((i) => i.state === "IMPOSSIBLE");
     const unresolved = inst.filter((i) => i.state === "UNRESOLVED");
     expect(sumAmounts(impossible)).toBe(34);
@@ -699,7 +698,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
     expect(sumAmounts(r.impossible) + r.unresolved).toBe(100);
   });
 
-  // 9. All-void clamps: two windows both violated, resolution status impossible.
+  // 9. All-void clamps: two windows both violated, resolvesTo status impossible.
   it("all-void clamps: both windowed statements violated", () => {
     const program = normalizeProgram(
       parse(
@@ -715,8 +714,8 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.status).toBe("impossible");
-    expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
+    expect(schedule.resolvesTo.status).toBe("impossible");
+    expect(schedule.resolvesTo.installments.map((i) => i.amount)).toEqual([
       66, 34,
     ]);
     const r = evaluateProgramAsOf(program, ctx);
@@ -746,7 +745,7 @@ describe("conservation invariant — spot values (R2-T1)", () => {
       asOf: AS_OFS[2],
     };
     const schedule = evaluateProgram(program, ctx);
-    expect(schedule.resolution.installments.map((i) => i.amount)).toEqual([
+    expect(schedule.resolvesTo.installments.map((i) => i.amount)).toEqual([
       100, 0,
     ]);
     expect(evaluateProgramAsOf(program, ctx).unresolved).toBe(100);
@@ -841,7 +840,7 @@ describe("conservation invariant — arm coverage", () => {
       "unresolved/with-impossible",
       "impossible",
       "asof/fallback",
-      "interchange/events-only",
+      "storable/events-only",
       "class/over-allocated",
       "class/under-allocated",
     ];

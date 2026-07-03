@@ -20,11 +20,11 @@ import {
 // `mode` is the second argument, not a field on the input: callers supply the
 // world (events, grant, quantity) but never get to choose which engine config
 // runs, so each entry point stamps its own mode here per the Decision-2 table
-// (resolveToCore/resolveVestingStart → "resolution", resolveInterchange →
-// "interchange", rehydrate → "rehydrate").
+// (resolveToCore/resolveVestingStart → "resolution", resolveStorable →
+// "storable", rehydrate → "rehydrate").
 // The as-of overload's `mode` is narrowed to the firing-reading modes: `AsOfContext`
-// is pinned to the events-bearing arm (an interchange + as-of context doesn't exist),
-// so an `"interchange"` mode could never build into the return type. As-of only ever
+// is pinned to the events-bearing arm (a storable + as-of context doesn't exist),
+// so a `"storable"` mode could never build into the return type. As-of only ever
 // runs under `"resolution"` (asof.ts), so this loses nothing.
 export function createEvaluationContext(
   input: AsOfContextInput,
@@ -108,13 +108,13 @@ export function createEvaluationContext(
   const vesting_day_of_month =
     input.vesting_day_of_month ?? DEFAULT_VESTING_DAY_OF_MONTH;
 
-  // The interchange arm carries no `events` at all (#320): firing-invariance is the
+  // The storable arm carries no `events` at all (#320): firing-invariance is the
   // type's job now, so dropping the map here is what makes a downstream firing read
   // a compile error rather than a convention. `events` is still validated above
   // regardless of mode — the input always carries it, the check is cheap — only
   // whether it rides into the built context changes. The branch narrows `mode` to a
   // literal because the wide `EvaluationMode` is assignable to neither DU arm.
-  if (mode === "interchange") {
+  if (mode === "storable") {
     return {
       grantDate: input.grantDate,
       grantQuantity: input.grantQuantity,

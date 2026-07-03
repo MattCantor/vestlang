@@ -44,12 +44,12 @@ describe("#285 — unfired prototype-key event evaluates without crashing", () =
     (key) => {
       const result = evaluateProgram(prog(schedule(key)), ctx());
 
-      // No events supplied, so the firing-blind interchange verdict and the
-      // closed-world resolution verdict both stay a storable template — the EVENT
+      // No events supplied, so the firing-blind storable verdict and the
+      // closed-world resolves-to verdict both stay a storable template — the EVENT
       // atom reads "not fired" rather than the inherited prototype value.
-      expect(result.interchange.status).toBe("template");
-      expect(result.resolution.status).toBe("template");
-      expect(result.resolution.pending).toContainEqual({
+      expect(result.storable.status).toBe("template");
+      expect(result.resolvesTo.status).toBe("template");
+      expect(result.resolvesTo.pending).toContainEqual({
         type: "EVENT_NOT_YET_OCCURRED",
         event: key,
       });
@@ -67,18 +67,18 @@ describe("#285 — a fired prototype-key event resolves end-to-end", () => {
     });
     const result = evaluateProgram(prog(schedule("constructor")), fired);
 
-    // The whole call survives — the interchange verdict is the path that crashed
+    // The whole call survives — the storable verdict is the path that crashed
     // today even when the event was fired, since it resolves events-blind.
-    expect(result.interchange.status).toBe("template");
-    expect(result.resolution.status).toBe("template");
+    expect(result.storable.status).toBe("template");
+    expect(result.resolvesTo.status).toBe("template");
 
     // Same firing date on a plain id produces the identical projection.
     const baseline = evaluateProgram(
       prog(schedule("ipo")),
       ctx({ events: { ipo: "2025-03-01" } }),
     );
-    expect(result.resolution.installments).toEqual(
-      baseline.resolution.installments,
+    expect(result.resolvesTo.installments).toEqual(
+      baseline.resolvesTo.installments,
     );
   });
 });
@@ -91,11 +91,11 @@ describe("#285 — rehydrate re-derives the start for a bare prototype-key event
     // prototype-safe path the EVENT atom uses, so a `constructor` firing is found
     // rather than shadowed by the inherited member.
     const DSL = "VEST FROM EVENT constructor OVER 4 months EVERY 1 month";
-    // Reload reads the firing-invariant interchange artifact (firing-free runtime).
-    const { interchange } = evaluateProgram(prog(DSL), ctx());
-    if (interchange.status !== "template")
-      throw new Error(`expected template, got ${interchange.status}`);
-    const { template, sourceMap, runtime } = interchange;
+    // Reload reads the firing-invariant storable artifact (firing-free runtime).
+    const { storable } = evaluateProgram(prog(DSL), ctx());
+    if (storable.status !== "template")
+      throw new Error(`expected template, got ${storable.status}`);
+    const { template, sourceMap, runtime } = storable;
     expect(sourceMap["evt:start"].definition).toContain("constructor");
 
     const result = rehydrate(
@@ -112,10 +112,10 @@ describe("#285 — rehydrate re-derives the start for a bare prototype-key event
 
   it("leaves the start pending when the prototype-key event is unfired", () => {
     const DSL = "VEST FROM EVENT constructor OVER 4 months EVERY 1 month";
-    const { interchange } = evaluateProgram(prog(DSL), ctx());
-    if (interchange.status !== "template")
-      throw new Error(`expected template, got ${interchange.status}`);
-    const { template, sourceMap, runtime } = interchange;
+    const { storable } = evaluateProgram(prog(DSL), ctx());
+    if (storable.status !== "template")
+      throw new Error(`expected template, got ${storable.status}`);
+    const { template, sourceMap, runtime } = storable;
 
     const result = rehydrate(template, sourceMap, runtime, ctx());
     expect(result.startToApply).toBeNull();
@@ -137,7 +137,7 @@ describe("#285 — named-but-unfired `undefined` event still reads pending", () 
         ctx({ events: { ipo: undefined } }),
       );
     expect(run).not.toThrow();
-    expect(run().resolution.pending).toContainEqual({
+    expect(run().resolvesTo.pending).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "ipo",
     });

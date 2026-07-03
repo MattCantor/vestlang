@@ -13,8 +13,8 @@
 
 import type {
   EvaluatedSchedule,
-  EvaluatedScheduleVerdict,
-  InterchangeVerdict,
+  ClosedWorldVerdict,
+  StorableVerdict,
 } from "@vestlang/types";
 import { partitionResolutionBlockers } from "./interpret/blockerTree.js";
 import { collectAbsences } from "./interpret/absences.js";
@@ -24,7 +24,7 @@ import type { ResolveResult } from "./resolve/types.js";
  *  The resolver hands back a flat blocker list per arm; the partition into
  *  `pending` (still waiting) and `dead` (contradicted given the firings) happens
  *  here, once, at the closed-world boundary. */
-const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
+const assembleVerdict = (result: ResolveResult): ClosedWorldVerdict => {
   switch (result.kind) {
     case "template": {
       // Pending witnesses (unfired atomic EVENT starts). A `template` can be
@@ -82,19 +82,19 @@ const assembleVerdict = (result: ResolveResult): EvaluatedScheduleVerdict => {
 
 /**
  * Build the published EvaluatedSchedule from the two verdicts. The closed-world
- * `resolution` is assembled here from the resolve result; the firing-invariant
- * `interchange` is computed separately (see resolve/interchange.ts) and passed in.
+ * `resolvesTo` is assembled here from the resolve result; the firing-invariant
+ * `storable` is computed separately (see resolve/storable.ts) and passed in.
  *
  * Findings come off the resolve result and ride at the top level — they're about
  * the schedule as written, not about either verdict. `absenceAssumptions` reads the
- * non-occurrences the closed-world `resolution` leaned on out of its own blockers.
+ * non-occurrences the closed-world `resolvesTo` leaned on out of its own blockers.
  */
 export const assemble = (
-  resolution: ResolveResult,
-  interchange: InterchangeVerdict,
+  resolvesTo: ResolveResult,
+  storable: StorableVerdict,
 ): EvaluatedSchedule => ({
-  interchange,
-  resolution: assembleVerdict(resolution),
-  absenceAssumptions: collectAbsences(resolution.blockers),
-  findings: resolution.findings,
+  storable,
+  resolvesTo: assembleVerdict(resolvesTo),
+  absenceAssumptions: collectAbsences(resolvesTo.blockers),
+  findings: resolvesTo.findings,
 });

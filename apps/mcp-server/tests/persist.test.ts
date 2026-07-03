@@ -357,7 +357,7 @@ describe("mcp-server / persistence tool pair", () => {
   it("AC#8: persist is firing-invariant — a firing supplied at persist is NOT baked; reload without resupply is pending", async () => {
     const client = await connectClient();
     // Persist WITH the firing. The artifact is built from the firing-invariant
-    // interchange, so the firing is NOT stored (Decision 7 reversal): the runtime
+    // storable, so the firing is NOT stored (Decision 7 reversal): the runtime
     // carries no eventFirings, byte-identical to persisting without the firing.
     const withFiring = await persistOk(client, {
       dsl: BARE_EVENT_DSL,
@@ -457,7 +457,7 @@ describe("mcp-server / persistence tool pair", () => {
 
   it("refuses an over-allocating single template, naming the over-allocation", async () => {
     const client = await connectClient();
-    // 6000 shares vest on a 4800-share grant — 125%. The resolution is a clean single
+    // 6000 shares vest on a 4800-share grant — 125%. The resolvesTo is a clean single
     // template, so the old shape gate alone would have let it through; the validity
     // gate is what now catches it. Without the fix this persists ok: true and the
     // rehydrated projection over-vests the grant.

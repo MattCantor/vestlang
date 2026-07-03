@@ -31,7 +31,7 @@ import {
  * consumer takes: evaluate the template, infer a program back from its tranche
  * stream, then re-evaluate that inferred program through the INDEPENDENT public
  * pipeline (parse → normalizeProgram → evaluateProgram). The verdict is read off
- * that re-evaluation's `resolution`, never off the inferrer's self-reported
+ * that re-evaluation's `resolvesTo`, never off the inferrer's self-reported
  * residual — grading the inferrer against its own collapse number would be
  * circular.
  *
@@ -153,7 +153,7 @@ function attemptTemplate(
   } catch {
     return null;
   }
-  const r = sched.resolution;
+  const r = sched.resolvesTo;
   const items: Installment[] = r.installments;
   if (r.status !== "template" || !items.every((i) => i.state === "RESOLVED"))
     return null;
@@ -251,7 +251,7 @@ function runCase(c: OracleCase): OracleEntry | null {
       c.total,
       inferred.diagnostics.vestingDayOfMonth,
     );
-    const rr = recSched.resolution;
+    const rr = recSched.resolvesTo;
     recoveredStatus = rr.status;
     recoveredTemplate = rr.status === "template" ? rr.template : null;
     recoveredAggregated = aggregateProjection(resolvedStream(recSched));

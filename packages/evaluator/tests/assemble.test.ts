@@ -1,5 +1,5 @@
 // The public evaluate path runs through resolve → classify → assemble → core,
-// tagging each EvaluatedSchedule by interchange fidelity. These assert the three
+// tagging each EvaluatedSchedule by storable fidelity. These assert the three
 // arms (template / events / unresolved) end-to-end and the exact-telescoping
 // property for template schedules.
 
@@ -32,14 +32,14 @@ import {
   scheduleOf,
 } from "./helpers";
 
-// Every assertion in this file is about the closed-world resolution verdict
+// Every assertion in this file is about the closed-world resolvesTo verdict
 // (which arm a schedule lands in, the dated installments, the blockers), so these
 // helpers grab that verdict straight off the result. The firing-invariant
-// interchange verdict has its own suite in interchange.test.ts.
+// storable verdict has its own suite in storable.test.ts.
 const evalStmt = (stmt: Statement, ctx: ResolutionContextInput) =>
-  evaluateStatement(stmt, ctx).resolution;
+  evaluateStatement(stmt, ctx).resolvesTo;
 const evalProgram = (program: Program, ctx: ResolutionContextInput) =>
-  evaluateProgram(program, ctx).resolution;
+  evaluateProgram(program, ctx).resolvesTo;
 
 const ctxInput = (
   overrides: Partial<AsOfContextInput> = {},
@@ -145,7 +145,7 @@ describe("assemble — events-only status", () => {
     const out = evalProgram(program, ctxInput());
     expect(out.status).toBe("events-only");
     if (out.status !== "events-only") throw new Error("expected events-only");
-    // The published resolution arm carries the reason structured (rendered to
+    // The published resolvesTo arm carries the reason structured (rendered to
     // prose only at the view boundary), so a consumer can gate on the kind.
     expect(out.reason).toEqual({ kind: "OVERLAPPING_ABSOLUTE_STARTS" });
     expect(out.installments.every((i) => i.state === "RESOLVED")).toBe(true);
@@ -338,10 +338,10 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
     expect(out.installments.reduce((a, i) => a + i.amount, 0)).toBe(100000);
   });
 
-  it("EARLIER OF(DATE future, EVENT ipo), ipo unfired → resolution commits to the date floor, discloses ipo (#251)", () => {
+  it("EARLIER OF(DATE future, EVENT ipo), ipo unfired → resolvesTo commits to the date floor, discloses ipo (#251)", () => {
     // The 2030 date arm resolves on its own; ipo is unfired. The date arm is a
     // LOWER bound on the start (the latest it could possibly be), so closed-world
-    // `resolution` COMMITS to it — a guaranteed vesting floor that any real ipo
+    // `resolvesTo` COMMITS to it — a guaranteed vesting floor that any real ipo
     // firing only moves earlier — and discloses ipo as still-absent through 2030.
     // (Pre-#251 this stayed pending forever and externalized as a synthetic event.)
     const earlierStmt = {
@@ -363,7 +363,7 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
 
     // Resolution: a DATE template hoisted to the committed floor — no synthetic
     // event, the grid lands off 2030-01-01.
-    const res = schedule.resolution;
+    const res = schedule.resolvesTo;
     if (res.status !== "template")
       throw new Error(`expected template, got ${res.status}`);
     expect(res.runtime.startDate).toBe("2030-01-01");
@@ -379,11 +379,11 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
       consequence: "grid-shift",
     });
 
-    // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still
+    // Storable (firing-blind, AC 5) is unchanged: it never commits, so it still
     // externalizes the gate as a contingent start (sentinel + evt:start recipe).
-    const ix = schedule.interchange;
+    const ix = schedule.storable;
     if (ix.status !== "template")
-      throw new Error(`expected interchange template, got ${ix.status}`);
+      throw new Error(`expected storable template, got ${ix.status}`);
     expect(ix.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
     expect(Object.keys(ix.sourceMap)).toEqual(["evt:start"]);
   });

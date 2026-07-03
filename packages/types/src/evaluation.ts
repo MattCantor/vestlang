@@ -15,15 +15,15 @@ import type { Finding } from "./diagnostic.js";
 //                     AND lets an EARLIER_OF commit to its resolved floor (its
 //                     resolved arm is a lower bound, so committing to it is the
 //                     latest-possible anchor — a guaranteed vesting floor).
-//   - "interchange" — the firing-invariant storable floor. Reads every named
+//   - "storable"    — the firing-invariant storable floor. Reads every named
 //                     event as "not fired" and never commits.
 //   - "rehydrate"   — reload from a stored artifact. Reads the world's attested
 //                     firings, but must NOT commit: committing would resolve a
 //                     stored gate to its date floor on every reload, fabricating
 //                     a firing the world never produced.
 // `rehydrate` is why a boolean is insufficient — it shares "reads firings" with
-// `resolution` but "does not commit" with `interchange`.
-export type EvaluationMode = "resolution" | "interchange" | "rehydrate";
+// `resolution` but "does not commit" with `storable`.
+export type EvaluationMode = "resolution" | "storable" | "rehydrate";
 
 // Fields every engine operation needs to resolve a schedule's structure,
 // independent of which mode it runs under: the grant anchor, share count, and the
@@ -40,18 +40,18 @@ interface ResolutionContextBase {
 }
 
 // The built context, discriminated on `mode` so firing-invariance is carried by
-// the type rather than by a runtime convention. The `interchange` arm omits
+// the type rather than by a runtime convention. The `storable` arm omits
 // `events` outright — a firing read on it is a compile error (#320), not a
-// disciplined `mode === "interchange"` check the next read site might forget.
+// disciplined `mode === "storable"` check the next read site might forget.
 // `resolution` and `rehydrate` both read real firings, so they carry the map.
 //
 // `mode` is stamped by each entry point, never by a caller — that's why `*Input`
 // drops it (and why the input type is defined independently below, not Omitted off
-// this union). It governs both the firing read (firing-blind in `interchange`) and
+// this union). It governs both the firing read (firing-blind in `storable`) and
 // whether a partial EARLIER_OF commits (only in `resolution`); see EvaluationMode.
 export type ResolutionContext =
   | (ResolutionContextBase & {
-      mode: "interchange";
+      mode: "storable";
     })
   | (ResolutionContextBase & {
       mode: "resolution" | "rehydrate";
@@ -62,7 +62,7 @@ export type ResolutionContext =
 // A point-in-time query adds the observation date on top of the structure
 // context. As-of only ever runs in `resolution` mode (asof.ts), so it's pinned to
 // the events-bearing arm — NOT `ResolutionContext & { asOf }`, which would
-// distribute over the union and re-introduce an `interchange + asOf` arm. The
+// distribute over the union and re-introduce a `storable + asOf` arm. The
 // firings-bearing arm is still a `ResolutionContext`, so an as-of entry can hand
 // its context straight down to the structure evaluators that ignore `asOf`.
 export type AsOfContext = Extract<
@@ -170,22 +170,22 @@ export type Blocker = UnresolvedBlocker | ImpossibleBlocker;
  * ------------------------ */
 
 // The engine reports two verdicts, and an `IMPOSSIBLE_*` blocker reads differently
-// in each. Firing-blind (interchange) it's a *static* contradiction — true no
-// matter what fires. Closed-world (resolution) the same object reads as *dead given
+// in each. Firing-blind (storable) it's a *static* contradiction — true no
+// matter what fires. Closed-world (resolves-to) the same object reads as *dead given
 // the firings we know*: the broader reading, since a static contradiction is dead
 // under any firing too. These two brands tag which reading a blocker carries, so the
 // type system keeps the spaces from leaking into each other. Same structure, distinct
 // nominal identity; they're mutually exclusive, so neither arm is assignable to the
-// other (a one-sided brand wouldn't stop interchange = resolution.dead, since a
+// other (a one-sided brand wouldn't stop storable = resolvesTo.dead, since a
 // branded subtype stays assignable to the unbranded base — both sides must carry one).
 //
 // The internal pipeline stays on the plain `ImpossibleBlocker`; the brand is minted
 // only at the two verdict boundaries, in blockerTree.ts. Nothing else casts to these.
 export type DeadBlocker = ImpossibleBlocker & {
-  readonly __space: "resolution";
+  readonly __space: "resolvesTo";
 };
 export type StaticImpossibleBlocker = ImpossibleBlocker & {
-  readonly __space: "interchange";
+  readonly __space: "storable";
 };
 
 /* ------------------------
@@ -220,7 +220,7 @@ export type CommittedNode = {
   date: OCTDate;
   // Required: the committed pick exists precisely to carry these. Each is a
   // still-pending sibling's blocker, already stamped `through` the committed date,
-  // so it flows to `absenceAssumptions` and `resolution.pending`.
+  // so it flows to `absenceAssumptions` and `resolvesTo.pending`.
   disclosures: Blocker[];
 };
 
@@ -343,7 +343,7 @@ export interface InstallmentSet {
 // static — this is the closed-world space). Both are `[]` on arms that can't carry
 // the relevant kind. The split is done once, in assemble.ts, off the flat blocker
 // list the resolver leaves behind.
-export type EvaluatedScheduleVerdict =
+export type ClosedWorldVerdict =
   | {
       status: "template";
       template: OCFVestingTermsV2;
@@ -366,7 +366,7 @@ export type EvaluatedScheduleVerdict =
       // symbolic (UNRESOLVED) installments, the same mixed-stream rule as the
       // unresolved arm.
       installments: Installment[];
-      // Structured, like the interchange verdict's — the same fact lands a
+      // Structured, like the storable verdict's — the same fact lands a
       // schedule off a single template in both. Rendered to prose only at the
       // view boundary, so a consumer can still gate on the kind.
       reason: NonTemplateReason;
@@ -391,7 +391,7 @@ export type EvaluatedScheduleVerdict =
     };
 
 /**
- * The resolution discriminant, read straight off the verdict arms so it can't
+ * The resolves-to discriminant, read straight off the verdict arms so it can't
  * drift from them — spans both *resolvability* and *fidelity*:
  *   - "template"    — resolvable AND fits canonical's one-template shape (spec held).
  *   - "events-only" — resolvable to dated amounts but doesn't fit one template
@@ -399,13 +399,13 @@ export type EvaluatedScheduleVerdict =
  *   - "unresolved"  — pending: can't be materialized yet (e.g. unfired event).
  *   - "impossible"  — terminal/unsatisfiable: no witness assignment can resolve it.
  *
- * Named for the resolution (closed-world, firing-aware) verdict specifically;
- * the interchange verdict below keeps its own, distinct status vocabulary.
+ * Named for the resolves-to (closed-world, firing-aware) verdict specifically;
+ * the storable verdict below keeps its own, distinct status vocabulary.
  */
-export type ResolutionStatus = EvaluatedScheduleVerdict["status"];
+export type ClosedWorldStatus = ClosedWorldVerdict["status"];
 
 /* ------------------------
- * Interchange verdict
+ * Storable verdict
  * ------------------------ */
 
 /**
@@ -450,7 +450,7 @@ export type NonTemplateReason =
  * What a record keeper could store for this schedule, asked WITHOUT looking at
  * which events have actually fired. This is the stable floor: because it ignores
  * firings, a new event arriving can never change the answer, so it's safe to
- * persist. (Contrast `EvaluatedScheduleVerdict` below, which answers the
+ * persist. (Contrast `ClosedWorldVerdict` below, which answers the
  * here-and-now question and does consult fired events.)
  *
  *   - "template"         stores as one canonical template. A single contingent
@@ -475,11 +475,11 @@ export type NonTemplateReason =
  *   - "impossible"       self-contradictory no matter what events fire (e.g. a date
  *                        required to fall after a strictly later date).
  */
-export type InterchangeVerdict =
+export type StorableVerdict =
   | {
       status: "template";
       template: OCFVestingTermsV2;
-      // Firing-invariant by construction: the interchange path is firing-blind, so
+      // Firing-invariant by construction: the storable path is firing-blind, so
       // its runtime can carry no firings at all. `StoredTerms` makes that
       // unrepresentable rather than merely empty — eventFirings is `?: never`.
       runtime: StoredTerms;
@@ -487,13 +487,13 @@ export type InterchangeVerdict =
     }
   | {
       status: "events-only";
-      // Same mixed stream as the resolution arm: a portion that floats on an
+      // Same mixed stream as the resolves-to arm: a portion that floats on an
       // event reads as unfired here (firings are ignored), so its share claim
       // rides along symbolically rather than vanishing from the total.
       installments: Installment[];
       reason: NonTemplateReason;
       // No `blockers` here, deliberately — and that asymmetry with the
-      // resolution events-only arm (which does carry them) is intentional.
+      // resolves-to events-only arm (which does carry them) is intentional.
       // A blocker like EVENT_NOT_YET_OCCURRED is a closed-world object: "not
       // yet occurred" only means something measured against known firings and
       // the as-of date, which is exactly the vocabulary a firing-invariant
@@ -508,11 +508,11 @@ export type InterchangeVerdict =
     }
   | { status: "unrepresentable"; reason: NonTemplateReason }
   // Firing-blind, so every blocker here is a *static* contradiction — branded as
-  // such (in interchange.ts) to keep it distinct from a resolution-space `dead`.
+  // such (in storable.ts) to keep it distinct from a resolves-to-space `dead`.
   | { status: "impossible"; blockers: StaticImpossibleBlocker[] };
 
 /**
- * One non-occurrence the current resolution is leaning on. Reading a schedule as,
+ * One non-occurrence the current resolves-to reading is leaning on. Reading a schedule as,
  * say, "vested" often quietly assumes some event hasn't happened yet; this records
  * that assumption so it can be disclosed and watched.
  *
@@ -549,17 +549,17 @@ export interface AbsenceAssumption extends AbsenceDescriptor {
  * "what can be stored for this schedule" and "what does it work out to given the
  * events we currently know" are genuinely different questions:
  *
- *   - `interchange` is firing-invariant — the storable floor (see InterchangeVerdict).
- *   - `resolution` is the closed-world, here-and-now answer that does read events.
+ *   - `storable` is firing-invariant — the storable floor (see StorableVerdict).
+ *   - `resolvesTo` is the closed-world, here-and-now answer that does read events.
  *
- * `absenceAssumptions` lists the non-occurrences `resolution` leaned on. `findings`
+ * `absenceAssumptions` lists the non-occurrences `resolvesTo` leaned on. `findings`
  * (over/under-allocation, etc.) sits at the top level because it's about the
  * schedule as written, independent of either verdict — a perfectly storable
  * `template` can still allocate more than 100% of the grant.
  */
 export interface EvaluatedSchedule {
-  interchange: InterchangeVerdict;
-  resolution: EvaluatedScheduleVerdict;
+  storable: StorableVerdict;
+  resolvesTo: ClosedWorldVerdict;
   absenceAssumptions: AbsenceAssumption[];
   findings: Finding[];
 }

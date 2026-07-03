@@ -119,8 +119,8 @@ describe("emission faithfulness: build → render → parse → normalize → ev
 
       // Both readings must land as a single storable template, and their per-date
       // projections must agree exactly.
-      expect(direct.resolution.status).toBe("template");
-      expect(roundTrip.resolution.status).toBe("template");
+      expect(direct.resolvesTo.status).toBe("template");
+      expect(roundTrip.resolvesTo.status).toBe("template");
 
       const directProjection = aggregateByDate(resolvedStream(direct));
       const roundTripProjection = aggregateByDate(resolvedStream(roundTrip));

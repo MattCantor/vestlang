@@ -28,10 +28,10 @@ const ctx = {
 describe("kernel fraction overflow — both operands non-terminating (#512)", () => {
   it("evaluates to a template stream instead of throwing the MAX_SAFE overflow", () => {
     const schedule = evaluateProgram(normalizeProgram(parse(DSL)), ctx);
-    expect(schedule.resolution.status).toBe("template");
-    if (schedule.resolution.status !== "template")
+    expect(schedule.resolvesTo.status).toBe("template");
+    if (schedule.resolvesTo.status !== "template")
       throw new Error("expected template");
-    const resolved = schedule.resolution.installments.filter(
+    const resolved = schedule.resolvesTo.installments.filter(
       (i): i is ResolvedInstallment => i.state === "RESOLVED",
     );
     // Cliff lump on 2024-09-01 (8 months in), then the two post-cliff bimonthly

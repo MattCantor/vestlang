@@ -73,9 +73,9 @@ See [Evaluation](./evaluation.md) for the full model; the short version:
 
 | Field | Type | Meaning |
 |---|---|---|
-| `interchange` | `{ status, reason? }` | The **storable** verdict — what a record keeper could hold, asked without reading firings. `status` ∈ `template` / `events-only` / `unrepresentable` / `impossible`. |
-| `resolution` | `{ status, reason? }` | The **resolves-to** verdict — what it works out to given the events you passed. `status` ∈ `template` / `events-only` / `unresolved` / `impossible`. |
-| `representable` | boolean | From `interchange` — can it be stored at all. |
+| `storable` | `{ status, reason? }` | What a record keeper could hold, asked without reading firings. `status` ∈ `template` / `events-only` / `unrepresentable` / `impossible`. |
+| `resolvesTo` | `{ status, reason? }` | What it works out to given the events you passed. `status` ∈ `template` / `events-only` / `unresolved` / `impossible`. |
+| `representable` | boolean | From `storable` — can it be stored at all. |
 | `pending` | boolean | From `blockers` — witnesses (unfired events) still missing. A `template` can be `pending`; read pending here, never from a `status`. |
 | `valid` | boolean | `false` when the schedule allocates more than the grant (see `findings`). |
 | `findings` | array | Schedule advisories — allocation problems, precision warnings, and event-id case near-misses — each with `kind`, `severity`, and a human `message` (allocation kinds also carry an exact `sum`). |

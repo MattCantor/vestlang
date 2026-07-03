@@ -1,4 +1,4 @@
-// The interchange verdict — what a record keeper could store for a schedule,
+// The storable verdict — what a record keeper could store for a schedule,
 // answered without looking at which events have fired. These pin the properties
 // that make it worth having as a separate verdict: it doesn't care how a start is
 // spelled, it doesn't move when an event fires, and it parts ways with the
@@ -55,7 +55,7 @@ const stmt = (
 
 const monthly48: VestingPeriod = { type: "MONTHS", length: 1, occurrences: 48 };
 
-describe("interchange — the storable verdict ignores how a start is spelled (#75)", () => {
+describe("storable — the storable verdict ignores how a start is spelled (#75)", () => {
   // The bug #75 fixes: the same schedule scored differently depending on whether
   // its start was written as a date or as an event. Here a date-anchored start and
   // an event-anchored start that fires on that very date produce the same dated
@@ -79,22 +79,22 @@ describe("interchange — the storable verdict ignores how a start is spelled (#
       ctxInput({ events: { ipo: "2030-01-01" } }),
     );
 
-    expect(fromDate.interchange.status).toBe("template");
-    expect(fromEvent.interchange.status).toBe("template");
+    expect(fromDate.storable.status).toBe("template");
+    expect(fromEvent.storable.status).toBe("template");
 
     // Same dated stream once the event lands on the date — the thing #75 says the
     // verdict must not disagree about.
     const dates = (r: typeof fromDate) =>
-      r.resolution.installments.flatMap((i) =>
+      r.resolvesTo.installments.flatMap((i) =>
         i.state === "RESOLVED" ? [i.date] : [],
       );
     expect(dates(fromEvent)).toEqual(dates(fromDate));
   });
 });
 
-describe("interchange — firing-invariance", () => {
+describe("storable — firing-invariance", () => {
   // The defining property: an event arriving must not change the storable verdict.
-  it("an event-anchored start gives the same interchange verdict fired or not", () => {
+  it("an event-anchored start gives the same storable verdict fired or not", () => {
     const program: Program = [
       stmt(
         portion(1, 1),
@@ -102,22 +102,22 @@ describe("interchange — firing-invariance", () => {
         monthly48,
       ),
     ];
-    const unfired = evaluateProgram(program, ctxInput()).interchange;
+    const unfired = evaluateProgram(program, ctxInput()).storable;
     const fired = evaluateProgram(
       program,
       ctxInput({ events: { ipo: "2027-03-01" } }),
-    ).interchange;
+    ).storable;
 
     expect(fired).toEqual(unfired);
     expect(unfired.status).toBe("template");
   });
 });
 
-describe("interchange — an event-held cliff stores as a template under both lenses (#255)", () => {
+describe("storable — an event-held cliff stores as a template under both lenses (#255)", () => {
   // An event-held cliff stores as a time `cliff` + an `event_condition` (Carta's
   // HYBRID model), so BOTH verdicts read template now — they no longer split
-  // events-only/unrepresentable. The resolution folds at the firing; the
-  // interchange is firing-blind and holds.
+  // events-only/unrepresentable. The resolvesTo folds at the firing; the
+  // storable is firing-blind and holds.
   it("a fired event cliff is a template under both lenses", () => {
     const out = evaluateStatement(
       stmt(
@@ -133,17 +133,17 @@ describe("interchange — an event-held cliff stores as a template under both le
       ctxInput({ events: { ipo: "2026-01-01" } }),
     );
 
-    expect(out.resolution.status).toBe("template");
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.template.statements[0].event_condition).toEqual({
+    expect(out.resolvesTo.status).toBe("template");
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.template.statements[0].event_condition).toEqual({
       event_id: "ipo",
     });
   });
 
   // The same cliff before its event fires: still a template (storability doesn't
-  // depend on firings), and the held grid projects nothing under resolution.
-  it("an unfired event cliff is a template under both lenses; resolution holds", () => {
+  // depend on firings), and the held grid projects nothing under resolvesTo.
+  it("an unfired event cliff is a template under both lenses; resolvesTo holds", () => {
     const out = evaluateStatement(
       stmt(
         portion(1, 1),
@@ -158,18 +158,18 @@ describe("interchange — an event-held cliff stores as a template under both le
       ctxInput(),
     );
 
-    expect(out.resolution.status).toBe("template");
-    expect(out.interchange.status).toBe("template");
+    expect(out.resolvesTo.status).toBe("template");
+    expect(out.storable.status).toBe("template");
     expect(
-      out.resolution.pending.some(
+      out.resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
   });
 
-  // AC 8: storability can't depend on the firing — the interchange verdict is
+  // AC 8: storability can't depend on the firing — the storable verdict is
   // byte-identical whether ipo has fired or not (deep-equal).
-  it("the event-cliff interchange verdict is firing-invariant (deep-equal fired vs unfired)", () => {
+  it("the event-cliff storable verdict is firing-invariant (deep-equal fired vs unfired)", () => {
     const s = stmt(
       portion(1, 1),
       makeSingletonNode(makeVestingBaseDate("2025-01-01")),
@@ -180,11 +180,11 @@ describe("interchange — an event-held cliff stores as a template under both le
         cliff: makeSingletonNode(makeVestingBaseEvent("ipo")),
       },
     );
-    const unfired = evaluateStatement(s, ctxInput()).interchange;
+    const unfired = evaluateStatement(s, ctxInput()).storable;
     const fired = evaluateStatement(
       s,
       ctxInput({ events: { ipo: "2026-01-01" } }),
-    ).interchange;
+    ).storable;
 
     expect(fired).toEqual(unfired);
     expect(unfired.status).toBe("template");
@@ -197,8 +197,8 @@ describe("interchange — an event-held cliff stores as a template under both le
   });
 
   // A gated event cliff (#113/#255): the gate is captured in a synthetic recipe, so
-  // the interchange stores a template regardless. Closed-world, the firing violates
-  // the gate → the resolution is impossible (the two-verdict split, AC 10).
+  // the storable stores a template regardless. Closed-world, the firing violates
+  // the gate → the resolvesTo is impossible (the two-verdict split, AC 10).
   it("a gated event cliff with a violated firing: impossible to resolve, template to store", () => {
     // CLIFF EVENT acquisition AFTER grantDate + 1 year, acquisition firing before
     // grantDate + 1 year → the cliff gate is violated.
@@ -223,13 +223,13 @@ describe("interchange — an event-held cliff stores as a template under both le
       ctxInput({ events: { acquisition: "2025-06-01" } }),
     );
 
-    expect(out.resolution.status).toBe("impossible");
+    expect(out.resolvesTo.status).toBe("impossible");
     // Firing-blind, the gate is uncaptured-as-a-verdict, so the synthetic
     // event_condition just holds → a storable template.
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
     expect(
-      out.interchange.template.statements[0].event_condition?.event_id,
+      out.storable.template.statements[0].event_condition?.event_id,
     ).toMatch(/^evt:\d+$/);
   });
 
@@ -258,12 +258,12 @@ describe("interchange — an event-held cliff stores as a template under both le
       ),
     ];
     const out = evaluateProgram(program, ctxInput());
-    expect(out.resolution.status).toBe("events-only");
-    expect(out.interchange.status).toBe("events-only");
+    expect(out.resolvesTo.status).toBe("events-only");
+    expect(out.storable.status).toBe("events-only");
   });
 });
 
-describe("interchange — distinguishing why an unresolved build is unstorable", () => {
+describe("storable — distinguishing why an unresolved build is unstorable", () => {
   // A THEN tail behind an unfired event head, with no cliff anywhere. The chain is
   // headed on ONE event — a single contingent origin — so it now stores as a
   // contingent-start `template` (sentinel + `evt:start` recipe), with both segments
@@ -293,11 +293,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     ];
 
     const out = evaluateProgram(program, ctxInput());
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.template.statements).toHaveLength(2);
-    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.template.statements).toHaveLength(2);
+    expect(out.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.storable.sourceMap)).toEqual(["evt:start"]);
   });
 
   // A cliff that genuinely can't be placed until a firing is known — a
@@ -318,9 +318,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
   // An event-anchored cliff on a dated start stores as a template now (the
@@ -340,16 +340,16 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.template.statements[0].event_condition).toEqual({
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.template.statements[0].event_condition).toEqual({
       event_id: "ipo",
     });
   });
 
   // An event cliff behind a *pending* event start → a COMPOUND template (AC 11):
   // a contingent start (sentinel + evt:start recipe) AND the cliff's event_condition.
-  // Both halves store, so the interchange is a template, not unrepresentable.
+  // Both halves store, so the storable is a template, not unrepresentable.
   it("an event cliff behind a pending event start → compound template", () => {
     const out = evaluateStatement(
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
@@ -361,11 +361,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
-    expect(out.interchange.template.statements[0].event_condition).toEqual({
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.storable.sourceMap)).toEqual(["evt:start"]);
+    expect(out.storable.template.statements[0].event_condition).toEqual({
       event_id: "acquisition",
     });
   });
@@ -387,7 +387,7 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
         periodicity,
       ),
       ctxInput(),
-    ).interchange;
+    ).storable;
     const dateStart = evaluateStatement(
       stmt(
         portion(1, 1),
@@ -395,7 +395,7 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
         periodicity,
       ),
       ctxInput(),
-    ).interchange;
+    ).storable;
 
     expect(pendingStart.status).toBe("template");
     expect(dateStart.status).toBe("template");
@@ -406,9 +406,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     expect(dateStart.template.statements[0].event_condition).toEqual(ec);
   });
 
-  // The resolution side holds both contingencies: nothing vests until BOTH the
+  // The resolvesTo side holds both contingencies: nothing vests until BOTH the
   // start event (ipo) and the cliff event (acquisition) fire. Both are disclosed.
-  it("a pending start with an event cliff holds on both events (resolution)", () => {
+  it("a pending start with an event cliff holds on both events (resolvesTo)", () => {
     const out = evaluateStatement(
       stmt(portion(1, 1), makeSingletonNode(makeVestingBaseEvent("ipo")), {
         type: "MONTHS",
@@ -419,15 +419,15 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.resolution.status).toBe("template");
-    if (out.resolution.status !== "template") return;
+    expect(out.resolvesTo.status).toBe("template");
+    if (out.resolvesTo.status !== "template") return;
     // Held to nothing while the start is pending.
     expect(
-      out.resolution.installments.every((i) => i.state !== "RESOLVED"),
+      out.resolvesTo.installments.every((i) => i.state !== "RESOLVED"),
     ).toBe(true);
-    expect(out.resolution.dead).toHaveLength(0);
+    expect(out.resolvesTo.dead).toHaveLength(0);
     // Both contingencies are disclosed as pending.
-    const pendingEvents = out.resolution.pending.flatMap((b) =>
+    const pendingEvents = out.resolvesTo.pending.flatMap((b) =>
       b.type === "EVENT_NOT_YET_OCCURRED" ? [b.event] : [],
     );
     expect(pendingEvents).toContain("ipo");
@@ -454,16 +454,16 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       ctxInput(),
     );
 
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
     expect(
-      out.interchange.template.statements[0].event_condition?.event_id,
+      out.storable.template.statements[0].event_condition?.event_id,
     ).toMatch(/^evt:\d+$/);
   });
 
-  // AC 8: the gated event cliff's interchange verdict is firing-invariant
+  // AC 8: the gated event cliff's storable verdict is firing-invariant
   // (deep-equal whether the event has fired and cleared the gate or not).
-  it("the gated-event-cliff interchange verdict is firing-invariant (deep-equal)", () => {
+  it("the gated-event-cliff storable verdict is firing-invariant (deep-equal)", () => {
     const s = stmt(
       portion(1, 1),
       makeSingletonNode(makeVestingBaseDate("2025-01-01")),
@@ -478,11 +478,11 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
         ),
       },
     );
-    const unfired = evaluateStatement(s, ctxInput()).interchange;
+    const unfired = evaluateStatement(s, ctxInput()).storable;
     const fired = evaluateStatement(
       s,
       ctxInput({ events: { ipo: "2026-06-01" } }), // fires after the gate date — gate satisfied
-    ).interchange;
+    ).storable;
 
     expect(fired).toEqual(unfired);
     expect(unfired.status).toBe("template");
@@ -497,7 +497,7 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
   // one. A lone contingent THEN chain would promote to a contingent-start template;
   // pairing it with an impossible sibling poisons the build to `unresolved` before
   // promotion runs, while the chain's pending head survives. The impossible
-  // component on its own would roll the interchange up to `impossible`; the live
+  // component on its own would roll the storable up to `impossible`; the live
   // pending head keeps it off that all-void rollup, so the impossibility surfaces
   // here as the reason — IMPOSSIBLE_COMPONENT, carrying the coexisting head's event.
   const monthly2: VestingPeriod = {
@@ -552,34 +552,34 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
     // The impossibility leads (AC1), the verdict stays `unrepresentable` not
     // `impossible` because the live chain may still vest (AC2), and the pending
     // head's event is carried so the live part isn't lost from the reason (AC3).
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({
       kind: "IMPOSSIBLE_COMPONENT",
       eventId: "ipo",
     });
   });
 
-  // AC6: the flip is interchange-only — the resolution verdict is exactly what it
+  // AC6: the flip is storable-only — the resolvesTo verdict is exactly what it
   // was before #381. The impossible sibling still surfaces as a dead blocker and a
   // leaf IMPOSSIBLE installment; the live chain still pends on `ipo`.
-  it("the resolution verdict is unchanged by the interchange flip", () => {
+  it("the resolvesTo verdict is unchanged by the storable flip", () => {
     const out = evaluateProgram(impossibleBesideChain(), ctxInput());
 
-    expect(out.resolution.status).toBe("unresolved");
+    expect(out.resolvesTo.status).toBe("unresolved");
     // The impossible sibling is dead.
     expect(
-      out.resolution.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
+      out.resolvesTo.dead.some((b) => b.type === "IMPOSSIBLE_CONDITION"),
     ).toBe(true);
     // The live chain still pends on its unfired head event.
     expect(
-      out.resolution.pending.some(
+      out.resolvesTo.pending.some(
         (b) => b.type === "EVENT_NOT_YET_OCCURRED" && b.event === "ipo",
       ),
     ).toBe(true);
     // A leaf IMPOSSIBLE installment for the dead portion still rides the stream.
     expect(
-      out.resolution.installments.some((i) => i.state === "IMPOSSIBLE"),
+      out.resolvesTo.installments.some((i) => i.state === "IMPOSSIBLE"),
     ).toBe(true);
   });
 
@@ -600,9 +600,9 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({
       kind: "IMPOSSIBLE_COMPONENT",
       eventId: "ipo",
     });
@@ -643,15 +643,15 @@ describe("interchange — distinguishing why an unresolved build is unstorable",
 
     const out = evaluateProgram(program, ctxInput());
 
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
     // No `eventId` key at all — deep-equal to the bare reason, which a materialized
     // `eventId: undefined` would fail.
-    expect(out.interchange.reason).toEqual({ kind: "IMPOSSIBLE_COMPONENT" });
+    expect(out.storable.reason).toEqual({ kind: "IMPOSSIBLE_COMPONENT" });
   });
 });
 
-describe("interchange — a pending-head THEN tail's cliff decides the reason (R2-B3)", () => {
+describe("storable — a pending-head THEN tail's cliff decides the reason (R2-B3)", () => {
   const monthly12: VestingPeriod = {
     type: "MONTHS",
     length: 1,
@@ -684,11 +684,11 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
-    expect(out.interchange.template.statements[1].event_condition).toEqual({
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.storable.sourceMap)).toEqual(["evt:start"]);
+    expect(out.storable.template.statements[1].event_condition).toEqual({
       event_id: "fda",
     });
   });
@@ -698,11 +698,11 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       ...monthly12,
       cliff: makeSingletonNode(makeVestingBaseEvent("fda")),
     });
-    const unfired = evaluateProgram(program, ctxInput()).interchange;
+    const unfired = evaluateProgram(program, ctxInput()).storable;
     const fired = evaluateProgram(
       program,
       ctxInput({ events: { ipo: "2026-06-01" } }),
-    ).interchange;
+    ).storable;
     expect(fired).toEqual(unfired);
   });
 
@@ -721,13 +721,13 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
-    expect(out.interchange.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
-    expect(Object.keys(out.interchange.sourceMap)).toEqual(["evt:start"]);
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
+    expect(out.storable.runtime.startDate).toBe(CONTINGENT_START_SENTINEL);
+    expect(Object.keys(out.storable.sourceMap)).toEqual(["evt:start"]);
     // The tail's grid-unit duration cliff survives onto the second statement.
     expect(
-      scheduleOf(out.interchange.template.statements[1])!.cliff,
+      scheduleOf(out.storable.template.statements[1])!.cliff,
     ).toBeDefined();
   });
 
@@ -745,9 +745,9 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
   // A gated duration cliff routes through the gate's verdict (UNRESOLVED), so
@@ -768,9 +768,9 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       chain({ ...monthly12, cliff: gatedCliff }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
   // R2-B14: a gated tail event cliff lowers to a SYNTHETIC event_condition (the gate
@@ -788,21 +788,21 @@ describe("interchange — a pending-head THEN tail's cliff decides the reason (R
       chain({ ...monthly12, cliff: gatedEventCliff }),
       ctxInput(),
     );
-    expect(out.interchange.status).toBe("template");
-    if (out.interchange.status !== "template") return;
+    expect(out.storable.status).toBe("template");
+    if (out.storable.status !== "template") return;
     expect(
-      out.interchange.template.statements[1].event_condition?.event_id,
+      out.storable.template.statements[1].event_condition?.event_id,
     ).toMatch(/^evt:\d+$/);
   });
 });
 
 // #412 — a THEN tail behind a head whose grid is held on an unfired event cliff
-// can't be stored. The interchange build is firing-blind, so EVERY held cliff reads
+// can't be stored. The storable build is firing-blind, so EVERY held cliff reads
 // unfired: the held head never hands off a date, the tail pends, and canonical can't
 // hold a tail with a fixed date when its start is held on an event. The verdict is
 // `unrepresentable`, NOT `template` (the old firing-blind build wrongly stored a
 // dated tail). It's also firing-invariant by construction — the build sees no firings.
-describe("interchange — a held-cliff head's THEN tail is unrepresentable (#412)", () => {
+describe("storable — a held-cliff head's THEN tail is unrepresentable (#412)", () => {
   const fourMonths: VestingPeriod = {
     type: "MONTHS",
     length: 1,
@@ -828,9 +828,9 @@ describe("interchange — a held-cliff head's THEN tail is unrepresentable (#412
       heldHeadChain(makeSingletonNode(makeVestingBaseEvent("ipo"))),
       ctx,
     );
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
-    expect(out.interchange.reason).toEqual({
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
+    expect(out.storable.reason).toEqual({
       kind: "EVENT_CHAINED_TAIL",
       eventId: "ipo",
     });
@@ -845,19 +845,19 @@ describe("interchange — a held-cliff head's THEN tail is unrepresentable (#412
       ],
     };
     const out = evaluateProgram(heldHeadChain(syntheticCliff), ctx);
-    expect(out.interchange.status).toBe("unrepresentable");
-    if (out.interchange.status !== "unrepresentable") return;
+    expect(out.storable.status).toBe("unrepresentable");
+    if (out.storable.status !== "unrepresentable") return;
     // No single real event names the hold (it's a LATER OF over two), so the
     // catch-all reason — never an EVENT_CHAINED_TAIL pointing at a minted evt:<n>.
-    expect(out.interchange.reason).toEqual({ kind: "DEFERRED_CLIFF" });
+    expect(out.storable.reason).toEqual({ kind: "DEFERRED_CLIFF" });
   });
 
   it("the verdict is firing-invariant — a fired ipo doesn't make it storable", () => {
     const program = heldHeadChain(
       makeSingletonNode(makeVestingBaseEvent("ipo")),
     );
-    const unfired = evaluateProgram(program, ctx).interchange;
-    // Pass a real firing: the interchange build still never reads it, so the
+    const unfired = evaluateProgram(program, ctx).storable;
+    // Pass a real firing: the storable build still never reads it, so the
     // verdict matches the unfired one exactly (still unrepresentable).
     const fired = evaluateProgram(
       program,
@@ -866,13 +866,13 @@ describe("interchange — a held-cliff head's THEN tail is unrepresentable (#412
         grantQuantity: 800,
         events: { ipo: "2025-12-01" },
       }),
-    ).interchange;
+    ).storable;
     expect(fired).toEqual(unfired);
     expect(fired.status).toBe("unrepresentable");
   });
 });
 
-describe("interchange — allocation is its own axis", () => {
+describe("storable — allocation is its own axis", () => {
   // Over-allocation and impossibility are two separate authoring mistakes; one
   // shouldn't hide the other. A program that is both over-allocated and impossible
   // closed-world must still report the over-allocation.
@@ -903,7 +903,7 @@ describe("interchange — allocation is its own axis", () => {
       ctxInput({ grantDate: "2025-01-01", events: { a: "2025-06-01" } }),
     );
 
-    expect(out.resolution.status).toBe("impossible");
+    expect(out.resolvesTo.status).toBe("impossible");
     expect(out.findings.some((f) => f.kind === "over-allocation")).toBe(true);
   });
 });

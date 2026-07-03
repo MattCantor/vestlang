@@ -126,14 +126,14 @@ function linterFails(src: string): boolean {
   );
 }
 
-// Evaluator verdict, mirroring gate-oracle.test.ts: collapse the resolution
+// Evaluator verdict, mirroring gate-oracle.test.ts: collapse the resolves-to
 // verdict to whether the gate committed to impossible.
 function evaluatorImpossible(src: string): boolean {
   const schedule: EvaluatedSchedule = evaluateProgram(
     normalizeProgram(parse(src)),
     { grantDate: GRANT, events: {}, grantQuantity: 100_000 },
   );
-  return schedule.resolution.status === "impossible";
+  return schedule.resolvesTo.status === "impossible";
 }
 
 describe("satisfiesRelation parity — primitive ⟺ evaluator ⟺ linter", () => {

@@ -252,7 +252,7 @@ const eventsArm = (
   const claims = symbolicClaims(resolutions, ctx.grantQuantity);
   resolutions.forEach((r, i) => {
     // A committed floor's disclosures (via `disclosuresOf`) surface here regardless
-    // of which branch the statement takes, or they'd vanish from resolution.pending
+    // of which branch the statement takes, or they'd vanish from resolvesTo.pending
     // and the absence-assumption disclosure — the symbolic branch's
     // unresolvedInstallments reads the cliff, not the start's absence assumptions.
     blockers.push(...disclosuresOf(r.start));
@@ -307,7 +307,7 @@ const unresolvedArm = (
     const ev = unresolvedInstallments(r, ctx, claims[i]);
     // unresolvedInstallments reads the cliff, not the committed start's absence
     // assumptions, so a committed floor's disclosures (via `disclosuresOf`) have
-    // to be surfaced here or they'd vanish from resolution.pending and the
+    // to be surfaced here or they'd vanish from resolvesTo.pending and the
     // absence-assumption disclosure. (Moot in the all-void rollup below, which
     // ignores `blockers` — a wholly-dead program has no live floor to disclose for.)
     blockers.push(...disclosuresOf(r.start));

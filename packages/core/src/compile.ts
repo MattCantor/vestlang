@@ -221,7 +221,7 @@ export const expandTemplateToRawEvents = (
 
   // The event-hold firing lookup: a statement's `event_condition` releases its grid
   // only once the matching firing is present in the runtime. Built once and shared.
-  // Empty in the firing-blind interchange world (StoredTerms carries no firings),
+  // Empty in the firing-blind storable world (StoredTerms carries no firings),
   // so every event-held statement reads as unfired there and projects nothing.
   const firingByEvent = new Map<string, OCTDate>(
     (runtime.eventFirings ?? []).map((f) => [f.event_id, f.date]),

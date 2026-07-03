@@ -57,11 +57,11 @@ describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", 
     const s = evaluate(DSL, { events });
     // A gated event cliff that fired and cleared its gate → a template (synthetic
     // event_condition), folded by core.compile to the same lump.
-    expect(s.resolution.status).toBe("template");
-    expect(allResolved(s.resolution.installments)).toBe(true);
+    expect(s.resolvesTo.status).toBe("template");
+    expect(allResolved(s.resolvesTo.installments)).toBe(true);
     // Default grid lands on the 10th, so 6 installments accrue by 07-12; the cliff
     // folds them into a 500 lump (6/12 of 1000), remainder over the 6 later ones.
-    expect(s.resolution.installments).toEqual([
+    expect(s.resolvesTo.installments).toEqual([
       { state: "RESOLVED", amount: 500, date: "2025-07-12" },
       { state: "RESOLVED", amount: 83, date: "2025-08-10" },
       { state: "RESOLVED", amount: 83, date: "2025-09-10" },
@@ -77,13 +77,13 @@ describe("#253 AC4 — vesting_start gate boundary is exact, grid still snaps", 
       events,
       vesting_day_of_month: "LAST_DAY_OF_MONTH",
     });
-    expect(s.resolution.status).toBe("template");
-    expect(allResolved(s.resolution.installments)).toBe(true);
+    expect(s.resolvesTo.status).toBe("template");
+    expect(allResolved(s.resolvesTo.installments)).toBe(true);
     // The grid snaps to month-end, so only 5 installments accrue by 07-12 (Jul-31
     // is after) → a 416 lump (5/12 of 1000, cumulative round-down), remainder over
     // the 7 later installments. The amounts differ from the default run; the gate
     // verdict does NOT.
-    expect(s.resolution.installments).toEqual([
+    expect(s.resolvesTo.installments).toEqual([
       { state: "RESOLVED", amount: 416, date: "2025-07-12" },
       { state: "RESOLVED", amount: 84, date: "2025-07-31" },
       { state: "RESOLVED", amount: 83, date: "2025-08-31" },
@@ -107,9 +107,9 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
 
   it("no firing → storable template with cliff.percentage 12/48 (under policy LAST_DAY_OF_MONTH)", () => {
     const s = evaluate(DSL, { vesting_day_of_month: "LAST_DAY_OF_MONTH" });
-    expect(s.interchange.status).toBe("template");
-    if (s.interchange.status !== "template") return; // narrow
-    const stmt = s.interchange.template.statements[0];
+    expect(s.storable.status).toBe("template");
+    if (s.storable.status !== "template") return; // narrow
+    const stmt = s.storable.template.statements[0];
     // The bare 12-month cliff over a 48-month grid is 12/48 = 1/4; the typed
     // Fraction is stored in reduced form.
     expect(scheduleOf(stmt)!.cliff).toEqual({
@@ -124,8 +124,8 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
       vesting_day_of_month: "LAST_DAY_OF_MONTH",
       events: { ipo: "2025-03-10" },
     });
-    expect(s.resolution.status).toBe("template");
-    const resolved = s.resolution.installments.filter(
+    expect(s.resolvesTo.status).toBe("template");
+    const resolved = s.resolvesTo.installments.filter(
       (i) => i.state === "RESOLVED",
     );
     // The cliff lump is the 12th grid installment — 1/4 of 1000 = 250 — on the
@@ -141,9 +141,9 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
     const s = evaluate(DSL, {
       vesting_day_of_month: "VESTING_START_DAY",
     });
-    expect(s.interchange.status).toBe("template");
-    if (s.interchange.status !== "template") return; // narrow
-    expect(scheduleOf(s.interchange.template.statements[0])!.cliff).toEqual({
+    expect(s.storable.status).toBe("template");
+    if (s.storable.status !== "template") return; // narrow
+    expect(scheduleOf(s.storable.template.statements[0])!.cliff).toEqual({
       length: 12,
       period_type: "MONTHS",
       percentage: "0.25",
@@ -155,8 +155,8 @@ describe("#253 AC6 — cliff still snaps; storability preserved", () => {
       vesting_day_of_month: "VESTING_START_DAY",
       events: { ipo: "2025-03-10" },
     });
-    expect(s.resolution.status).toBe("template");
-    const resolved = s.resolution.installments.filter(
+    expect(s.resolvesTo.status).toBe("template");
+    const resolved = s.resolvesTo.installments.filter(
       (i) => i.state === "RESOLVED",
     );
     // The default grid keeps ipo's day (the 10th); the cliff lands on the 12th
@@ -180,8 +180,8 @@ describe("#253 AC7 — recurring grid unchanged (still snaps to the month-end)",
       "1000 VEST FROM DATE 2025-01-10 OVER 4 months EVERY 1 month",
       { vesting_day_of_month: "LAST_DAY_OF_MONTH" },
     );
-    expect(s.resolution.status).toBe("template");
-    expect(dates(s.resolution.installments)).toEqual([
+    expect(s.resolvesTo.status).toBe("template");
+    expect(dates(s.resolvesTo.installments)).toEqual([
       "2025-02-28",
       "2025-03-31",
       "2025-04-30",
@@ -202,13 +202,13 @@ describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end 
     const s = evaluate(DSL, {
       vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
     });
-    expect(s.resolution.status).toBe("template");
-    expect(allResolved(s.resolution.installments)).toBe(true);
+    expect(s.resolvesTo.status).toBe("template");
+    expect(allResolved(s.resolvesTo.installments)).toBe(true);
     // Grid days under MINUS_ONE: Feb 27, Mar 30, Apr 29, May 30, Jun 29, Jul 30.
     // CLIFF 3 months lands on the 3rd grid day (2025-04-29), folding 3/6 of the
     // grant into a 500 lump; the remaining 500 spreads over the last three on
     // cumulative round-down (166 / 167 / 167).
-    expect(s.resolution.installments).toEqual([
+    expect(s.resolvesTo.installments).toEqual([
       { state: "RESOLVED", amount: 500, date: "2025-04-29" },
       { state: "RESOLVED", amount: 166, date: "2025-05-30" },
       { state: "RESOLVED", amount: 167, date: "2025-06-29" },
@@ -216,13 +216,13 @@ describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end 
     ]);
   });
 
-  it("stores the cliff as a 3/6 fraction on the interchange template", () => {
+  it("stores the cliff as a 3/6 fraction on the storable template", () => {
     const s = evaluate(DSL, {
       vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
     });
-    expect(s.interchange.status).toBe("template");
-    if (s.interchange.status !== "template") return; // narrow
-    expect(scheduleOf(s.interchange.template.statements[0])!.cliff).toEqual({
+    expect(s.storable.status).toBe("template");
+    if (s.storable.status !== "template") return; // narrow
+    expect(scheduleOf(s.storable.template.statements[0])!.cliff).toEqual({
       length: 3,
       period_type: "MONTHS",
       percentage: "0.5",

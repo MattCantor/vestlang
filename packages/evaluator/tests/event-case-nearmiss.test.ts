@@ -45,7 +45,7 @@ describe("#407 — event-id case near-miss warning", () => {
 
     // The advisory does not resolve the gate or invalidate the schedule — the
     // referenced `IpO` is still unfired, so the start stays pending.
-    expect(result.resolution.pending).toContainEqual({
+    expect(result.resolvesTo.pending).toContainEqual({
       type: "EVENT_NOT_YET_OCCURRED",
       event: "IpO",
     });
@@ -60,8 +60,8 @@ describe("#407 — event-id case near-miss warning", () => {
     );
 
     expect(caseFindings(result.findings)).toEqual([]);
-    expect(result.resolution.status).toBe("template");
-    expect(result.resolution.installments).toHaveLength(12);
+    expect(result.resolvesTo.status).toBe("template");
+    expect(result.resolvesTo.installments).toHaveLength(12);
   });
 
   // AC#3 — a legitimately-unfired event has no case twin, so it must not warn:
@@ -81,20 +81,20 @@ describe("#407 — event-id case near-miss warning", () => {
     expect(caseFindings(unrelated.findings)).toEqual([]);
   });
 
-  // AC#4 — the warning rides the resolution arm only. The firing-blind interchange
+  // AC#4 — the warning rides the resolvesTo arm only. The firing-blind storable
   // verdict compares against no firings, so it can never carry the near-miss. (The
-  // helper is only ever fed `ctxInput.events` on the resolution path; the
-  // interchange context drops `events` entirely.) Findings sit top-level off
-  // resolution, but pin the interchange verdict itself stays a clean template.
-  it("the interchange verdict carries no such warning", () => {
+  // helper is only ever fed `ctxInput.events` on the resolvesTo path; the
+  // storable context drops `events` entirely.) Findings sit top-level off
+  // resolvesTo, but pin the storable verdict itself stays a clean template.
+  it("the storable verdict carries no such warning", () => {
     const result = evaluateProgram(
       prog("VEST FROM EVENT IpO OVER 12 months EVERY 1 month"),
       ctx({ ipo: "2025-06-01" }),
     );
-    // Interchange is firing-blind — an unfired EVENT start is a storable template,
+    // Storable is firing-blind — an unfired EVENT start is a storable template,
     // and no firing comparison happens there to produce a case finding.
-    expect(result.interchange.status).toBe("template");
-    // The one finding that exists comes from the resolution arm.
+    expect(result.storable.status).toBe("template");
+    // The one finding that exists comes from the resolvesTo arm.
     expect(caseFindings(result.findings)).toHaveLength(1);
   });
 
@@ -155,7 +155,7 @@ describe("#407 — event-id case near-miss warning", () => {
   // pends exactly as it would with no firing at all (the case-twin never satisfies
   // the gate), so every part of the result except `findings` must match the
   // no-firing control: installments, blockers, both verdicts, absenceAssumptions.
-  it("leaves resolution, blockers and verdicts unchanged (advisory is additive)", () => {
+  it("leaves resolvesTo, blockers and verdicts unchanged (advisory is additive)", () => {
     const warned = evaluateProgram(
       prog("VEST FROM EVENT IpO OVER 12 months EVERY 1 month"),
       ctx({ ipo: "2025-06-01" }),
@@ -168,8 +168,8 @@ describe("#407 — event-id case near-miss warning", () => {
       ctx({}),
     );
 
-    expect(warned.resolution).toEqual(noFiring.resolution);
-    expect(warned.interchange).toEqual(noFiring.interchange);
+    expect(warned.resolvesTo).toEqual(noFiring.resolvesTo);
+    expect(warned.storable).toEqual(noFiring.storable);
     expect(warned.absenceAssumptions).toEqual(noFiring.absenceAssumptions);
     // The lone difference: the warned run carries the advisory, the unfired run does not.
     expect(caseFindings(warned.findings)).toHaveLength(1);
