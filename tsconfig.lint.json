@@ -18,10 +18,6 @@
     "**/dist",
     "**/build",
     "packages/dsl/src/generated",
-    // Inferrer characterization scaffolding: standalone scripts that import each
-    // other by `.ts` specifier (TS5097 under this whole-repo program) and read the
-    // built `dist`, not `src`. Excluded here, ignored in eslint/knip/prettier too.
-    "packages/inferrer/experiments",
     "apps/docs",
   ],
 }

@@ -22,7 +22,3 @@ apps/docs
 
 # Markdown is not Prettier-managed (kept hand-authored).
 **/*.md
-
-# Inferrer characterization scaffolding — excluded from the lint/typecheck program
-# and knip everywhere else, so keep it out of the format check too.
-packages/inferrer/experiments

@@ -104,7 +104,7 @@ function addDays(iso: OCTDate, days: number): OCTDate {
 /** Grant date per offset mode. `backdated` places the grant start + 6 months (so
  *  early installments fold onto the grant date). `offGridBackdated` pushes 14
  *  further days so the grant falls STRICTLY BETWEEN two installment dates. */
-export function grantDateFor(offset: OffsetMode, start: OCTDate): OCTDate {
+function grantDateFor(offset: OffsetMode, start: OCTDate): OCTDate {
   if (offset === "fromGrant") return start;
   const backdated = addMonthsClamped(start, 6);
   return offset === "backdated" ? backdated : addDays(backdated, 14);

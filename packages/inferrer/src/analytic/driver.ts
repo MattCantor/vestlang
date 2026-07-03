@@ -9,8 +9,7 @@
 // run; if nothing verifies, the literal per-date fallback keeps the projection
 // invariant.
 //
-// `inferSchedule` delegates here, and the experiments sweep runner drives the
-// same entry points behind the pluggable `InferrerFn`.
+// `inferSchedule` delegates to `analyze`, the single public entry here.
 
 import { parse } from "@vestlang/dsl";
 import { evaluateProgram } from "@vestlang/evaluator";
@@ -39,15 +38,6 @@ import {
   type Row,
 } from "./solvers.js";
 
-/** Assignable to the sweep runner's `InferrerFn` (a wider 2-arg call site); the
- *  optional third arg is the trusted day-of-month policy hint the caller may
- *  supply. */
-export type AnalyticInferrer = (
-  tranches: TrancheInput[],
-  grantDate: OCTDate,
-  policyHint?: VestingDayOfMonth,
-) => { dsl: string; vestingDayOfMonth: VestingDayOfMonth };
-
 /** The full analytic result the wired `inferSchedule` builds its `InferResult`
  *  from — the rendered DSL, the day-of-month it verified under, the typed winning
  *  program (evaluated directly by `@vestlang/recover`), the tagged decomposition,
@@ -59,21 +49,6 @@ export interface AnalysisResult {
   components: DecompositionComponent[];
   fallback: boolean;
 }
-
-export interface AnalyticStats {
-  cases: number;
-  evals: number;
-  fallbacks: number;
-  /** Candidate evaluations that THREW and were contained (scored out). */
-  candidateThrows: number;
-}
-
-export const analyticStats: AnalyticStats = {
-  cases: 0,
-  evals: 0,
-  fallbacks: 0,
-  candidateThrows: 0,
-};
 
 // Hard stop on candidate evaluations per case, so a pathological scan can never
 // hang the sweep. In practice the verified hit lands within the first handful.
@@ -114,7 +89,8 @@ function verify(
     const stream = items.map((i) => ({ date: i.date, amount: i.amount }));
     return projectionsEqual(aggregateProjection(stream), target);
   } catch {
-    analyticStats.candidateThrows++;
+    // A throwing candidate (e.g. a Fraction-overflow cliff product) is contained
+    // and scored out.
     return false;
   }
 }
@@ -188,14 +164,12 @@ function aggregateRows(tranches: TrancheInput[]): Row[] {
 }
 
 /** The wired entry point: decompose → hypothesize → verify, returning the full
- *  analytic result. `inferSchedule` assembles its `InferResult` from this; the
- *  experiments runners take the thinner `analyticInferrer` view below. */
+ *  analytic result. `inferSchedule` assembles its `InferResult` from this. */
 export function analyze(
   tranches: TrancheInput[],
   grantDate: OCTDate,
   policyHint?: VestingDayOfMonth,
 ): AnalysisResult {
-  analyticStats.cases++;
   try {
     const rows = aggregateRows(tranches);
     const T = rows.reduce((s, r) => s + r.amount, 0);
@@ -217,14 +191,12 @@ export function analyze(
       try {
         dsl = stringify(cand.program);
       } catch {
-        analyticStats.candidateThrows++;
         continue;
       }
       const key = `${cand.dom}|${dsl}`;
       if (seen.has(key)) continue;
       seen.add(key);
       if (++evals > MAX_EVALS) break;
-      analyticStats.evals++;
       // First verifying candidate in preference order wins.
       if (verify(dsl, cand.dom, grantDate, T, target))
         return {
@@ -235,21 +207,10 @@ export function analyze(
           fallback: false,
         };
     }
-    analyticStats.fallbacks++;
     return fallback(rows, grantDate);
   } catch {
     // Outer guard: a candidate-GENERATION throw still lands in the literal
     // fallback rather than crashing the inference.
-    analyticStats.fallbacks++;
     return fallback(aggregateRows(tranches), grantDate);
   }
 }
-
-export const analyticInferrer: AnalyticInferrer = (
-  tranches,
-  grantDate,
-  policyHint,
-) => {
-  const r = analyze(tranches, grantDate, policyHint);
-  return { dsl: r.dsl, vestingDayOfMonth: r.dom };
-};
