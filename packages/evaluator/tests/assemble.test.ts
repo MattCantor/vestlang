@@ -379,7 +379,7 @@ describe("assemble — combinator-over-anchors → contingent start (evt:start)"
       consequence: "grid-shift",
     });
 
-    // Interchange (firing-blind, AC 5) is unchanged: it never commits, so it still
+    // Storable (firing-blind, AC 5) is unchanged: it never commits, so it still
     // externalizes the gate as a contingent start (sentinel + evt:start recipe).
     const ix = schedule.storable;
     if (ix.status !== "template")

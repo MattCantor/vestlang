@@ -216,7 +216,7 @@ describe("VESTING_START_DAY_MINUS_ONE — cliff in MONTHS honors the policy end 
     ]);
   });
 
-  it("stores the cliff as a 3/6 fraction on the interchange template", () => {
+  it("stores the cliff as a 3/6 fraction on the storable template", () => {
     const s = evaluate(DSL, {
       vesting_day_of_month: "VESTING_START_DAY_MINUS_ONE",
     });

@@ -357,7 +357,7 @@ describe("mcp-server / persistence tool pair", () => {
   it("AC#8: persist is firing-invariant — a firing supplied at persist is NOT baked; reload without resupply is pending", async () => {
     const client = await connectClient();
     // Persist WITH the firing. The artifact is built from the firing-invariant
-    // interchange, so the firing is NOT stored (Decision 7 reversal): the runtime
+    // storable, so the firing is NOT stored (Decision 7 reversal): the runtime
     // carries no eventFirings, byte-identical to persisting without the firing.
     const withFiring = await persistOk(client, {
       dsl: BARE_EVENT_DSL,

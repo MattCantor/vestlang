@@ -1,4 +1,4 @@
-// The resolves-to reading reads "no firing recorded" as "hasn't happened," so its
+// The resolves-to reading treats "no firing recorded" as "hasn't happened," so its
 // answer can quietly depend on some event staying absent. `absenceAssumptions`
 // surfaces those dependencies direction-aware: each carries the boundary date
 // (`through`) plus the relation a dangerous firing would have to satisfy to move the

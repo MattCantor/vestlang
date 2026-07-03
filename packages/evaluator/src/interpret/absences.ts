@@ -26,7 +26,7 @@ const groupKey = (a: AbsenceAssumption): string =>
   `${a.eventId}|${a.direction}|${a.inclusive ? "1" : "0"}|${a.consequence}`;
 
 /**
- * The resolves-to reading reads "no firing on record" as "hasn't happened" — so
+ * The resolves-to reading treats "no firing on record" as "hasn't happened" — so
  * reading a schedule as, say, vested can quietly depend on some event still being
  * absent. We surface each such dependency from the given blockers: every "still
  * waiting on event X" blocker that got measured against a known date carries that

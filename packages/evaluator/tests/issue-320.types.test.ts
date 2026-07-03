@@ -19,7 +19,7 @@ type FiringContext = Extract<
 >;
 
 // AC#2 — a firing read in storable mode is a compile error, proven by read.
-describe("#320 AC2 — reading firings off an storable context is a type error", () => {
+describe("#320 AC2 — reading firings off a storable context is a type error", () => {
   it("the storable arm has no events field; the firing arm does", () => {
     const storable: StorableContext = {
       grantDate: "2025-01-01",
@@ -45,8 +45,8 @@ describe("#320 AC2 — reading firings off an storable context is a type error",
 });
 
 // AC#2 — a firing read in storable mode is a compile error, proven by
-// construction: an storable context that carries `events` doesn't typecheck.
-describe("#320 AC2 — constructing an storable context with events is a type error", () => {
+// construction: a storable context that carries `events` doesn't typecheck.
+describe("#320 AC2 — constructing a storable context with events is a type error", () => {
   it("events is an excess property on the storable arm; it's required on the firing arm", () => {
     const bad: StorableContext = {
       grantDate: "2025-01-01",

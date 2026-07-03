@@ -40,7 +40,7 @@ import {
 } from "./helpers";
 
 // Build a stored `template` artifact straight from DSL, the way persist does:
-// parse → normalize → evaluate, taking the firing-invariant INTERCHANGE verdict's
+// parse → normalize → evaluate, taking the firing-invariant STORABLE verdict's
 // frozen template, source map, and (StoredTerms) runtime.
 const storedFromDsl = (dsl: string, ctx: ResolutionContextInput) => {
   const program = normalizeProgram(parse(dsl));

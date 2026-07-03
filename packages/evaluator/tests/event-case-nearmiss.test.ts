@@ -91,7 +91,7 @@ describe("#407 — event-id case near-miss warning", () => {
       prog("VEST FROM EVENT IpO OVER 12 months EVERY 1 month"),
       ctx({ ipo: "2025-06-01" }),
     );
-    // Interchange is firing-blind — an unfired EVENT start is a storable template,
+    // Storable is firing-blind — an unfired EVENT start is a storable template,
     // and no firing comparison happens there to produce a case finding.
     expect(result.storable.status).toBe("template");
     // The one finding that exists comes from the resolvesTo arm.
