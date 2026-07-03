@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { errorDiagnostics, lintText } from "@vestlang/linter";
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { stringify } from "@vestlang/render";
 import {
   parseRaw,
@@ -287,7 +288,9 @@ export function createServer(): McpServer {
     {
       title: "Infer vestlang from tranche array",
       description:
-        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins; anything unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches (at most " +
+        MAX_INSTALLMENTS +
+        " entries) and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins; anything unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
       inputSchema: z.strictObject({
         tranches: z
           .array(
@@ -301,8 +304,12 @@ export function createServer(): McpServer {
             }),
           )
           .min(1, "tranches must contain at least one entry")
+          .max(
+            MAX_INSTALLMENTS,
+            `tranches must contain at most ${MAX_INSTALLMENTS} entries`,
+          )
           .describe(
-            "Array of {date, amount} vesting tranches. Same-date tranches are summed.",
+            `Array of {date, amount} vesting tranches. Same-date tranches are summed. At most ${MAX_INSTALLMENTS} entries.`,
           ),
         grant_date: ISO_DATE.optional().describe(
           "Optional grant date anchor. If omitted, defaults to the first tranche date.",

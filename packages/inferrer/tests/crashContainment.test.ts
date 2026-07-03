@@ -90,3 +90,50 @@ describe("inferSchedule crash containment", () => {
     },
   );
 });
+
+describe("inferSchedule degradation on an unverifiable stream", () => {
+  // Irregular gaps and non-monotone amounts, so no template family (plain, cliff,
+  // fold, or per-segment THEN) reproduces the stream. Whether the scan ends by
+  // exhausting the candidates or by hitting the internal work bound, the result is
+  // the same, and unobservable from here — so this pins the OUTCOME: the scan
+  // terminates (no hang) and returns the projection-lossless literal fallback.
+  const UNVERIFIABLE = [
+    { date: "2024-01-05", amount: 700 },
+    { date: "2024-02-19", amount: 300 },
+    { date: "2024-05-02", amount: 1100 },
+    { date: "2024-06-11", amount: 450 },
+    { date: "2024-09-23", amount: 900 },
+    { date: "2024-12-07", amount: 250 },
+  ] as const;
+
+  it("terminates and returns the literal fallback", () => {
+    const tranches = UNVERIFIABLE.map((t) => ({
+      date: t.date,
+      amount: t.amount,
+    }));
+    const grantDate = tranches[0].date;
+    const total = tranches.reduce((s, t) => s + t.amount, 0);
+
+    let result: ReturnType<typeof inferSchedule> | undefined;
+    expect(() => {
+      result = inferSchedule({ tranches, grantDate });
+    }).not.toThrow();
+
+    expect(result!.diagnostics.fallback).toBe(true);
+    expect(result!.decomposition.every((c) => c.tag === "literal")).toBe(true);
+
+    // Projection-lossless: the emitted per-date lumps re-evaluate to the input
+    // per-date totals under the reported day-of-month.
+    const recovered = aggregateByDate(
+      resolvedStream(
+        evalUnder(
+          result!.dsl,
+          grantDate,
+          total,
+          result!.diagnostics.vestingDayOfMonth,
+        ),
+      ),
+    );
+    expect(recovered).toEqual(aggregateByDate(tranches));
+  });
+});

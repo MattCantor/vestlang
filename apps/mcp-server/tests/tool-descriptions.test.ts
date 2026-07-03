@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { createServer } from "../src/server.js";
 
 // Tool descriptions are the behavioral contract LLM clients act on, so a stale one
@@ -113,6 +114,15 @@ describe("mcp-server / compile-does-not-certify-allocatability nudge (#431)", ()
       expect(description, tool).toContain("`valid`");
       expect(description, tool).toContain("`findings`");
     }
+  });
+});
+
+describe("mcp-server / vestlang_infer_schedule description states the input cap", () => {
+  it("names the maximum tranche-entry count", async () => {
+    // The tool description is the input contract LLM clients read; it must state
+    // the maximum entry count, sourced from the shared installment cap.
+    const description = await descriptionOf("vestlang_infer_schedule");
+    expect(description).toContain(String(MAX_INSTALLMENTS));
   });
 });
 
