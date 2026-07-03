@@ -45,6 +45,7 @@ export type {
   TrancheInput,
   DecompositionComponent,
   HypothesisFamily,
+  RecoveryMode,
 } from "@vestlang/inferrer";
 
 // Types (re-export commonly used types)

@@ -6,5 +6,6 @@ export type {
   HypothesisFamily,
   InferInput,
   InferResult,
+  RecoveryMode,
   TrancheInput,
 } from "./types.js";

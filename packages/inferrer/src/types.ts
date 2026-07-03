@@ -37,6 +37,22 @@ export type HypothesisFamily =
   | "then-segment"
   | "literal";
 
+/** How the emitted program was produced, as a whole. A multi-statement result is
+ * ambiguous on its own — it could be a sequence (THEN: terms changed partway) or a
+ * sum (PLUS: concurrent layers) — and the per-statement `HypothesisFamily` tags
+ * don't settle it either: a verified single dated lump carries the `literal` tag
+ * but is a real recovery, not the fallback. This names the emission mode directly:
+ * - `"single-schedule"` — one verified statement (incl. the zero-total degenerate);
+ * - `"then-chain"` — one schedule as a THEN chain of segments;
+ * - `"plus-cover"` — concurrent layers whose date-by-date sum is the stream;
+ * - `"literal"` — the per-date fallback fired (equivalent to `fallback === true`).
+ */
+export type RecoveryMode =
+  | "single-schedule"
+  | "then-chain"
+  | "plus-cover"
+  | "literal";
+
 /** One component per emitted statement, tagged by the family that produced it and
  * carrying that statement's derived parameters. A THEN chain contributes one
  * `then-segment` per segment (the head plus each chained tail); the literal
@@ -115,6 +131,8 @@ export interface InferResult {
     /** True when no hypothesis family verified and the literal per-date fallback
      * fired — the honest signal that the stream had no recognized template shape. */
     fallback: boolean;
+    /** The emission mode of the whole answer. `"literal"` iff `fallback` is true. */
+    recoveryMode: RecoveryMode;
     notes: string[];
   };
 }

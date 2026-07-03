@@ -217,9 +217,11 @@ const CORPUS: CorpusCase[] = [
     grantDate: "2023-11-01",
   },
   {
-    // Negative control. Two monthly grants on different days of the month (the 1st
-    // and the 15th). Their dates interleave and never line up, so this genuinely
-    // is two schedules and must never collapse into one.
+    // Negative control for single-schedule recovery. Two monthly grants on
+    // different days of the month (the 1st and the 15th). Their dates interleave
+    // and never line up, so this genuinely is two schedules and must never
+    // collapse into one — it comes back as two concurrent statements (a PLUS
+    // cover), not one template.
     id: "C5",
     witness:
       "two monthly grants on different days (1st and 15th) — two schedules",
@@ -237,9 +239,10 @@ const CORPUS: CorpusCase[] = [
     grantDate: "2024-01-01",
   },
   {
-    // Negative control, denser version of C5: three grants on the 1st, 10th, and
-    // 20th. One interleaved pair could be a fluke; three makes the point that the
-    // dates simply can't be threaded onto one schedule.
+    // Negative control for single-schedule recovery, denser version of C5: three
+    // grants on the 1st, 10th, and 20th. One interleaved pair could be a fluke;
+    // three makes the point that the dates simply can't be threaded onto one
+    // schedule. The three concurrent layers ARE recoverable as a PLUS cover.
     id: "C6",
     witness: "three monthly grants on different days (1st, 10th, 20th)",
     tranches: [
@@ -256,12 +259,15 @@ const CORPUS: CorpusCase[] = [
     grant: 570,
   },
   {
-    // Negative control. This is C1's shape with the last tranche bumped by 5, so
-    // no whole-share schedule reproduces it exactly. The inferrer must not "round"
-    // it into a template — only streams it can reproduce on the nose get rescued.
+    // Negative control for single-schedule recovery. This is C1's shape with the
+    // last tranche bumped by 5, so no ONE whole-share schedule reproduces it.
+    // It is, however, an exact SUM — a flat base train plus a short rate-change
+    // overlay — and the cover search reproduces it on the nose. The enduring
+    // invariant is that recovery is only ever exact (residual 0): a stream is
+    // never "rounded" into a near fit.
     id: "C7",
     witness:
-      "almost a clean chain, but the last tranche is off by 5 — no exact fit",
+      "almost a clean chain, but the last tranche is off by 5 — no single-schedule fit",
     tranches: [
       { date: "2023-12-01", amount: 100 },
       { date: "2024-01-01", amount: 100 },

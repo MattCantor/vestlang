@@ -6,29 +6,31 @@
 // instead of a cover search plus arithmetic fold guards, this derives candidate
 // templates in closed form (./families.ts) and lets ONE real evaluation per
 // candidate arbitrate. A candidate that throws scores out — it never crashes the
-// run; if nothing verifies, the literal per-date fallback keeps the projection
+// run. When nothing verifies, a bounded PLUS-cover post-pass (./cover.ts — the
+// one deliberately reintroduced search, confined to the additive subproblem) gets
+// a shot; only after that does the literal per-date fallback keep the projection
 // invariant.
 //
 // `inferSchedule` delegates to `analyze`, the single public entry here.
 
 import { parse } from "@vestlang/dsl";
-import { evaluateProgram } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
 import { stringify } from "@vestlang/render";
 import type {
-  Installment,
   OCTDate,
   Program,
-  ResolutionContextInput,
   Statement,
   VestingDayOfMonth,
 } from "@vestlang/types";
 import type {
   DecompositionComponent,
   HypothesisFamily,
+  RecoveryMode,
   TrancheInput,
 } from "../types.js";
+import { type CoverLayer, findPlusCover } from "./cover.js";
 import { bareLumpStmt } from "./emit.js";
+import { evalResolvedStream } from "./evalStream.js";
 import { candidates } from "./families.js";
 import {
   aggregateProjection,
@@ -41,18 +43,30 @@ import {
 /** The full analytic result the wired `inferSchedule` builds its `InferResult`
  *  from — the rendered DSL, the day-of-month it verified under, the typed winning
  *  program (evaluated directly by `@vestlang/recover`), the tagged decomposition,
- *  and whether the literal fallback fired. */
+ *  how the answer was produced, and whether the literal fallback fired. */
 export interface AnalysisResult {
   dsl: string;
   dom: VestingDayOfMonth;
   program: Program;
   components: DecompositionComponent[];
   fallback: boolean;
+  recoveryMode: RecoveryMode;
+  /** Present only when the PLUS-cover post-pass ran and came up empty — says
+   *  whether its work budget tripped or its seed space simply ran out. Either
+   *  way the result degraded to the literal fallback. */
+  coverSearch?: { budgetExhausted: boolean };
 }
 
 // Hard stop on candidate evaluations per case, so a pathological scan can never
 // hang the sweep. In practice the verified hit lands within the first handful.
 const MAX_EVALS = 700;
+
+// Separate budget for the PLUS-cover post-pass: every evaluator call it makes
+// (seed projections, residual verifications, assembled-program checks) draws one
+// unit, and exhaustion degrades to the literal fallback. Verified covers land
+// within the first dozen or so evaluations; the headroom is for fruitless
+// searches, which must end promptly rather than exactly.
+const MAX_COVER_EVALS = 400;
 
 /** Both projections are aggregated and date-sorted, so equality is a flat
  *  element-wise compare — kept local so the browser-bundled inferrer needs no
@@ -74,25 +88,17 @@ function verify(
   total: number,
   target: Projection,
 ): boolean {
+  let program: Program;
   try {
-    const program = normalizeProgram(parse(dsl));
-    const ctx: ResolutionContextInput = {
-      grantDate,
-      events: {},
-      grantQuantity: total,
-      vesting_day_of_month: dom,
-    };
-    const r = evaluateProgram(program, ctx).resolution;
-    if (r.status !== "template") return false;
-    const items: Installment[] = r.installments;
-    if (!items.every((i) => i.state === "RESOLVED")) return false;
-    const stream = items.map((i) => ({ date: i.date, amount: i.amount }));
-    return projectionsEqual(aggregateProjection(stream), target);
+    program = normalizeProgram(parse(dsl));
   } catch {
-    // A throwing candidate (e.g. a Fraction-overflow cliff product) is contained
-    // and scored out.
     return false;
   }
+  const r = evalResolvedStream(program, grantDate, total, dom);
+  // A single-schedule reading must stand as a clean `template`, not just
+  // resolve — that is what makes the winner storable.
+  if (r === null || r.status !== "template") return false;
+  return projectionsEqual(aggregateProjection(r.stream), target);
 }
 
 /** Read a built statement's parameters back for the tagged decomposition. The
@@ -153,6 +159,7 @@ function fallback(rows: Row[], grantDate: OCTDate): AnalysisResult {
     program,
     components: componentsOf(program, "literal"),
     fallback: true,
+    recoveryMode: "literal",
   };
 }
 
@@ -205,9 +212,37 @@ export function analyze(
           program: cand.program,
           components: componentsOf(cand.program, cand.tag),
           fallback: false,
+          // The THEN family is the only one emitting a multi-statement single
+          // schedule; every other win — a dated-lump win included, whose
+          // component tag is `literal` but which IS a verified recovery — is one
+          // schedule. Keying this off component tags would mislabel that case.
+          recoveryMode:
+            cand.tag === "then-segment" ? "then-chain" : "single-schedule",
         };
     }
-    return fallback(rows, grantDate);
+    // Every single-schedule reading failed. Before conceding the literal
+    // per-date list, try to un-mix the stream as a compact PLUS cover of
+    // concurrent layers (see ./cover.ts for the search and its bounds).
+    const cover = findPlusCover(rows, grantDate, policyHint, MAX_COVER_EVALS);
+    if (cover.kind === "cover") {
+      return {
+        dsl: cover.dsl,
+        dom: cover.dom,
+        program: cover.program,
+        // Components are built per layer: the peel seed reads `plain`, and each
+        // residual layer carries the tag of the reading that verified it (a THEN
+        // residual stamps its segments `then-segment`, a bare lump `literal`).
+        components: cover.layers.flatMap((l: CoverLayer) =>
+          l.program.map((stmt) => describeStatement(stmt, l.tag)),
+        ),
+        fallback: false,
+        recoveryMode: "plus-cover",
+      };
+    }
+    return {
+      ...fallback(rows, grantDate),
+      coverSearch: { budgetExhausted: cover.budgetExhausted },
+    };
   } catch {
     // Outer guard: a candidate-GENERATION throw still lands in the literal
     // fallback rather than crashing the inference.
