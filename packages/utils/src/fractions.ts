@@ -1,16 +1,18 @@
-// Exact-rational arithmetic over the canonical `Fraction`.
+// Exact-rational arithmetic for the canonical `Fraction`.
 //
-// Core computes shares-of-grant in exact rational so a schedule telescopes to
-// the total without float drift; these helpers keep fractions reduced as they
-// combine.
+// Core computes shares-of-grant in exact rational so a schedule telescopes to the
+// total without float drift. All the arithmetic lives in one place: the BigInt
+// `BigRational` family below (`bigMul`/`bigAdd`/`bigSub`/`bigCmp`, reduced after
+// every step). The Number-backed `Fraction` ops are that same arithmetic with a
+// narrowing tail — run it in BigInt, then `narrow` the result back to a Fraction.
 //
-// The Fraction shape is Number-based, but at extreme grant sizes the numerator
-// and denominator products run past 2^53 — where Number silently rounds, a
-// numerator can drift and a whole share can vanish or double. So the arithmetic
-// happens in BigInt: every product, sum, and comparison is exact, the result is
-// reduced while still a BigInt, and only then converted back. If a reduced
-// component still won't fit a safe integer we throw rather than hand back a
-// rounded fraction that lies about what it carries.
+// Narrowing is where the danger sits, so it happens in exactly one place. At
+// extreme grant sizes a numerator or denominator runs past 2^53, where a Number
+// silently rounds and a whole share can vanish or double. `narrow` refuses such a
+// value loudly rather than hand back a rounded fraction that lies about what it
+// carries. The BigInt family never narrows: the kernel and allocator carry a
+// `BigRational` end to end and only collapse to an integer at the share floor,
+// the one legitimate place an exact rational becomes a Number.
 
 import type { Fraction } from "@vestlang/types";
 
@@ -23,62 +25,16 @@ const bigGcd = (a: bigint, b: bigint): bigint => {
   return x || 1n;
 };
 
-const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
-
-// Reduce a BigInt numerator/denominator and convert back to a Number Fraction.
-// A component that survives reduction but still exceeds Number.MAX_SAFE_INTEGER
-// can't be represented exactly — refuse it loudly instead of letting the Number
-// cast round it. The denominator carries the operands' context for the message.
-const toFraction = (numerator: bigint, denominator: bigint): Fraction => {
-  const d = bigGcd(numerator, denominator);
-  const n = numerator / d;
-  const den = denominator / d;
-  const overflows = (v: bigint): boolean => (v < 0n ? -v : v) > MAX_SAFE;
-  if (overflows(n) || overflows(den)) {
-    throw new Error(
-      `fraction component exceeds Number.MAX_SAFE_INTEGER after reduction ` +
-        `(${n}/${den}); the grant or schedule is too large to allocate exactly`,
-    );
-  }
-  return { numerator: Number(n), denominator: Number(den) };
-};
-
-export const fracReduce = (f: Fraction): Fraction =>
-  toFraction(BigInt(f.numerator), BigInt(f.denominator));
-
-export const fracMul = (a: Fraction, b: Fraction): Fraction =>
-  toFraction(
-    BigInt(a.numerator) * BigInt(b.numerator),
-    BigInt(a.denominator) * BigInt(b.denominator),
-  );
-
-export const fracAdd = (a: Fraction, b: Fraction): Fraction =>
-  toFraction(
-    BigInt(a.numerator) * BigInt(b.denominator) +
-      BigInt(b.numerator) * BigInt(a.denominator),
-    BigInt(a.denominator) * BigInt(b.denominator),
-  );
-
-export const fracSub = (a: Fraction, b: Fraction): Fraction =>
-  toFraction(
-    BigInt(a.numerator) * BigInt(b.denominator) -
-      BigInt(b.numerator) * BigInt(a.denominator),
-    BigInt(a.denominator) * BigInt(b.denominator),
-  );
-
-export const ZERO: Fraction = { numerator: 0, denominator: 1 };
-export const ONE: Fraction = { numerator: 1, denominator: 1 };
-
 // A BigInt-backed exact rational. The kernel's internal share math multiplies a
 // statement's share of the grant by its cliff percentage, and when both are
 // non-terminating 10-place truncations the product's components run past 2^53 —
-// exactly where the Number-backed `Fraction` (its guard `toFraction`) has to
-// refuse them. So the kernel carries its fractionOfGrant and its running
-// cumulative as `BigRational` end to end and only narrows to a share count at the
-// integer floor, never back to a Number `Fraction`. Kept reduced after every
-// operation so operands can't grow unbounded across a long cumulative chain.
-// Denominators here are always positive (every operand widens from a validated
-// positive-denominator Fraction, and product/sum of positives stays positive).
+// exactly where the Number-backed `Fraction` (its guard `narrow`) has to refuse
+// them. So the kernel carries its fractionOfGrant and its running cumulative as
+// `BigRational` end to end and only narrows to a share count at the integer
+// floor, never back to a Number `Fraction`. Kept reduced after every operation so
+// operands can't grow unbounded across a long cumulative chain. Denominators here
+// are always positive (every operand widens from a validated positive-denominator
+// Fraction, and product/sum of positives stays positive).
 export interface BigRational {
   numerator: bigint;
   denominator: bigint;
@@ -115,19 +71,55 @@ export const bigSub = (a: BigRational, b: BigRational): BigRational =>
     a.denominator * b.denominator,
   );
 
+// Compare two rationals without dividing: a/b vs c/d has the same ordering as a·d
+// vs c·b, since every denominator here is positive. The cross products run in
+// BigInt, so the ordering stays exact at any size — a strictly larger denominator
+// against an equal numerator reads strictly smaller, where a Number cross product
+// would round the two equal. Operands need not be reduced. Returns -1, 0, or 1.
+export const bigCmp = (a: BigRational, b: BigRational): -1 | 0 | 1 => {
+  const lhs = a.numerator * b.denominator;
+  const rhs = b.numerator * a.denominator;
+  return lhs < rhs ? -1 : lhs > rhs ? 1 : 0;
+};
+
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+
+// The sole narrowing point, and the sole guard. Reduce an exact `BigRational`
+// (via the shared `bigReduce`) and bring it back to a Number `Fraction`. A
+// component that survives reduction but still exceeds Number.MAX_SAFE_INTEGER
+// can't be represented exactly, so refuse it loudly rather than let the Number
+// cast round it. The ceiling is inclusive: 2^53 − 1 is the largest value a Number
+// holds exactly, so a component exactly at it is accepted.
+const narrow = (r: BigRational): Fraction => {
+  const { numerator: n, denominator: den } = bigReduce(
+    r.numerator,
+    r.denominator,
+  );
+  const overflows = (v: bigint): boolean => (v < 0n ? -v : v) > MAX_SAFE;
+  if (overflows(n) || overflows(den)) {
+    throw new Error(
+      `fraction component exceeds Number.MAX_SAFE_INTEGER after reduction ` +
+        `(${n}/${den}); the grant or schedule is too large to allocate exactly`,
+    );
+  }
+  return { numerator: Number(n), denominator: Number(den) };
+};
+
+export const ZERO: Fraction = { numerator: 0, denominator: 1 };
+const ONE: Fraction = { numerator: 1, denominator: 1 };
+
+// Reduce a `Fraction` to lowest terms, sign on the numerator. A pure widen to
+// BigInt then a narrow back — `toBigRational` doesn't reduce, so `narrow` does.
+export const fracReduce = (f: Fraction): Fraction => narrow(toBigRational(f));
+
+const fracAdd = (a: Fraction, b: Fraction): Fraction =>
+  narrow(bigAdd(toBigRational(a), toBigRational(b)));
+
 /** Sum a list of fractions (empty list → 0). */
 export const fracSum = (fs: Fraction[]): Fraction => fs.reduce(fracAdd, ZERO);
 
-// Compare two fractions without dividing: a/b vs c/d has the same ordering as
-// a·d vs c·b, since every denominator in play here is positive. The cross
-// products run in BigInt so the comparison stays exact at any grant size.
-// Returns -1, 0, or 1 — the usual comparator sign — so callers can ask
-// `fracCmp(x, ONE) > 0` etc.
-export const fracCmp = (a: Fraction, b: Fraction): -1 | 0 | 1 => {
-  const lhs = BigInt(a.numerator) * BigInt(b.denominator);
-  const rhs = BigInt(b.numerator) * BigInt(a.denominator);
-  return lhs < rhs ? -1 : lhs > rhs ? 1 : 0;
-};
+const fracCmp = (a: Fraction, b: Fraction): -1 | 0 | 1 =>
+  bigCmp(toBigRational(a), toBigRational(b));
 
 // Where an allocation total sits relative to the whole grant: over the whole is
 // "over", short of it "under", on the nose "exact". The over=error / under=warning
