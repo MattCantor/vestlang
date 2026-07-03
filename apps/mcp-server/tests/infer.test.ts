@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { evaluateStatement } from "@vestlang/evaluator";
 import { parseToProgram } from "@vestlang/pipeline";
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import type {
   Installment,
   OCTDate,
@@ -178,6 +179,17 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     const res = await callInfer(client, { tranches: [] });
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toContain("at least one entry");
+  });
+
+  it("rejects an over-cap tranches array via the input schema, naming the limit", async () => {
+    const client = await connectClient();
+    const tranches = Array.from({ length: MAX_INSTALLMENTS + 1 }, () => ({
+      date: "2024-01-01",
+      amount: 1,
+    }));
+    const res = await callInfer(client, { tranches });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain(String(MAX_INSTALLMENTS));
   });
 
   it("rejects a malformed date via the input schema", async () => {

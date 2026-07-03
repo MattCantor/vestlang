@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@vestlang/dsl";
 import { evaluateProgram, evaluateStatement } from "@vestlang/evaluator";
 import { normalizeProgram } from "@vestlang/normalizer";
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import type {
   ResolutionContextInput,
   Installment,
@@ -999,5 +1000,26 @@ describe("inferSchedule — input contract", () => {
         ],
       }),
     ).toThrow(InferInputError);
+  });
+
+  it("rejects a tranche array longer than the installment cap", () => {
+    // A stream longer than the installment cap can never round-trip through the
+    // engine (which expands at most that many installments), so it is refused as
+    // a domain error rather than walked. The guard fires on length alone.
+    const tranches: TrancheInput[] = Array.from(
+      { length: MAX_INSTALLMENTS + 1 },
+      () => ({ date: "2024-01-01", amount: 1 }),
+    );
+    expect(() => inferSchedule({ tranches })).toThrow(InferInputError);
+  });
+
+  it("accepts an at-cap tranche array", () => {
+    // Exactly at the cap is allowed — the guard uses a strict `>`, matching the
+    // evaluator's own total-vs-cap convention. A clean uniform verifies in one
+    // evaluation, so the run stays cheap.
+    const tranches = monthly("2024-01-01", MAX_INSTALLMENTS, 1);
+    expect(tranches).toHaveLength(MAX_INSTALLMENTS);
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.totalQuantity).toBe(MAX_INSTALLMENTS);
   });
 });

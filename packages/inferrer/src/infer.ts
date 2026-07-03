@@ -1,3 +1,4 @@
+import { MAX_INSTALLMENTS } from "@vestlang/primitives";
 import { stringify } from "@vestlang/render";
 import type { Program } from "@vestlang/types";
 import { DEFAULT_VESTING_DAY_OF_MONTH } from "@vestlang/types";
@@ -21,6 +22,17 @@ import type { InferInput, InferResult } from "./types.js";
 export function inferSchedule(input: InferInput): InferResult {
   if (input.tranches.length === 0) {
     throw new InferInputError("tranches must not be empty");
+  }
+  // Bound the inference work downstream of parsing, which scales with the number
+  // of rows. The cap reuses the evaluator's installment ceiling: the engine never
+  // expands more than MAX_INSTALLMENTS installments, and a real schedule tops out
+  // near 500 tranches (a 40-year monthly grant), so this is generous headroom, not
+  // a new magic number. Strict `>` matches the evaluator's own total-vs-cap
+  // convention, so a length exactly at the cap is accepted.
+  if (input.tranches.length > MAX_INSTALLMENTS) {
+    throw new InferInputError(
+      `tranches has ${input.tranches.length} entries, exceeds the limit of ${MAX_INSTALLMENTS}`,
+    );
   }
   input.tranches.forEach((t, i) => {
     if (!Number.isInteger(t.amount) || t.amount < 0) {
