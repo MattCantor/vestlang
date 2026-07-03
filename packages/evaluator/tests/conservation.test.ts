@@ -19,8 +19,8 @@ import type { EvaluatedSchedule, Installment } from "@vestlang/types";
 import {
   CONTINGENT_START_SENTINEL,
   fracSum,
-  fracCmp,
-  ONE,
+  bigCmp,
+  BIG_ONE,
   toBigRational,
   ZERO,
 } from "@vestlang/utils";
@@ -362,7 +362,7 @@ function checkStream(
   const symbolic = sumAmounts(
     installments.filter((i) => i.state !== "RESOLVED"),
   );
-  if (fracCmp(T, ONE) <= 0) {
+  if (bigCmp(toBigRational(T), BIG_ONE) <= 0) {
     expect(resolved + symbolic, label).toBe(
       floorSharesAt(grant, toBigRational(T)),
     );
@@ -393,7 +393,7 @@ function checkCell(
 ): void {
   const program = normalizeProgram(parse(shape.dsl));
   const T = fractionTotal(shape, grant);
-  const overAllocated = fracCmp(T, ONE) > 0;
+  const overAllocated = bigCmp(toBigRational(T), BIG_ONE) > 0;
   const base = { grantDate: GRANT_DATE, events, grantQuantity: grant };
   const label = cellLabel(shape, grant, events);
 
@@ -438,7 +438,7 @@ function checkCell(
     expect(
       schedule.findings.some((f) => f.kind === "under-allocation"),
       `${label}\n  surface: findings`,
-    ).toBe(fracCmp(T, ONE) < 0);
+    ).toBe(bigCmp(toBigRational(T), BIG_ONE) < 0);
   }
 
   // The as-of partition at three dates. The total is asOf-invariant (resolution
@@ -461,7 +461,7 @@ function checkCell(
       sumAmounts(r.impossible) +
       r.unresolved;
 
-    if (fracCmp(T, ONE) <= 0) {
+    if (bigCmp(toBigRational(T), BIG_ONE) <= 0) {
       expect(total, asOfLabel).toBe(floorSharesAt(grant, toBigRational(T)));
     } else {
       // Over-allocation: the symbolic-and-impossible side claims exactly the gap
