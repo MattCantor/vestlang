@@ -17,6 +17,31 @@ import type {
   InferResult,
   TrancheInput,
 } from "../src/types.js";
+import { aggregateByDate, evalUnder, resolvedStream } from "./helpers.js";
+
+/** Re-evaluate an emitted DSL through the independent public pipeline under the
+ * reported day-of-month and compare per-date totals against the input. For a
+ * PLUS cover this is the only honest proof of exactness: each layer verified
+ * alone says nothing about the assembled emission, so the whole program is
+ * evaluated as one and compared date by date. */
+function expectExactReproduction(
+  result: InferResult,
+  tranches: TrancheInput[],
+  grantDate: OCTDate,
+): void {
+  const total = tranches.reduce((a, t) => a + t.amount, 0);
+  const recovered = aggregateByDate(
+    resolvedStream(
+      evalUnder(
+        result.dsl,
+        grantDate,
+        total,
+        result.diagnostics.vestingDayOfMonth,
+      ),
+    ),
+  );
+  expect(recovered).toEqual(aggregateByDate(tranches));
+}
 
 function d(s: string): OCTDate {
   return s;
@@ -257,10 +282,12 @@ describe("inferSchedule — pre-grant accrual (lump on the grant date)", () => {
 });
 
 describe("inferSchedule — superposition (additive shapes)", () => {
-  it("uniform + one-off bonus → the literal per-date fallback", () => {
-    // The analytic core has no additive/peel-and-recurse family, so a monthly train
-    // plus an off-grid bonus has no recognized template shape and degrades to the
-    // projection-lossless literal fallback (a PLUS list of dated lumps).
+  it("uniform + one-off bonus → a compact 2-statement PLUS cover", () => {
+    // No single schedule reads a monthly train with an off-grid bonus stacked on
+    // top, but the cover search peels the dominant train and re-reads the lone
+    // remaining date as its own small layer. Un-mixing a sum is non-unique, so
+    // the second layer's exact shape is not pinned — exactness, the statement
+    // count, and compactness are.
     const tranches: TrancheInput[] = [
       ...monthly("2024-02-01", 48, 1000),
       { date: d("2025-06-15"), amount: 10000 },
@@ -269,9 +296,16 @@ describe("inferSchedule — superposition (additive shapes)", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.diagnostics.fallback).toBe(true);
-    expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
-    expect(result.dsl).toMatch(/PLUS/);
+    expect(result.diagnostics.fallback).toBe(false);
+    expect(result.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(result.decomposition.map((c) => c.tag)).toEqual(["plain", "plain"]);
+    expect(result.dsl).toContain("PLUS");
+    expect(result.dsl).not.toContain("THEN");
+    // Strictly more compact than the one-lump-per-date literal form.
+    expect(result.program.length).toBeLessThan(
+      new Set(tranches.map((t) => t.date)).size,
+    );
+    expectExactReproduction(result, tranches, d("2024-02-01"));
   });
 
   it("two cadences (quarterly yr 1 + monthly yr 2+) → one THEN chain", () => {
@@ -296,6 +330,133 @@ describe("inferSchedule — superposition (additive shapes)", () => {
   });
 });
 
+describe("inferSchedule — cover search boundaries", () => {
+  it("four interleaved trains admit no compact cover — bounded degrade to the literal fallback", () => {
+    // Four concurrent monthly grants on the 1st/8th/15th/22nd. No single
+    // schedule reads the stream, so the cover search runs — but any exact cover
+    // needs all four layers, and the search stops at three statements. It must
+    // end promptly (the seed space or the work budget, whichever first) and
+    // degrade to the literal per-date list, saying so in the notes.
+    const tranches: TrancheInput[] = [];
+    for (const [day, amount] of [
+      ["01", 100],
+      ["08", 70],
+      ["15", 40],
+      ["22", 20],
+    ] as const) {
+      for (const month of ["02", "03", "04"]) {
+        tranches.push({ date: d(`2024-${month}-${day}`), amount });
+      }
+    }
+
+    const result = inferSchedule({ tranches });
+
+    expect(result.diagnostics.fallback).toBe(true);
+    expect(result.diagnostics.recoveryMode).toBe("literal");
+    expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
+    // The distinct cover-search note proves the stream actually reached the
+    // search before degrading (vs. never having left the single-schedule loop).
+    expect(
+      result.diagnostics.notes.some((n) => n.includes("PLUS-cover search")),
+    ).toBe(true);
+    expectExactReproduction(result, tranches, d("2024-02-01"));
+  });
+
+  it("a supplied policy steers the whole cover — every layer verifies under the hint", () => {
+    // Two trains projected by the real engine under VESTING_START_DAY_MINUS_ONE
+    // (day-16 and day-8 anchors landing on the 15th and 7th), then superposed.
+    // Hinted, the cover recovers under the hint: the seed collapses to it and
+    // threads it into the residual re-read, so one policy governs both layers.
+    const project = (dsl: string, total: number): TrancheInput[] => {
+      return resolvedStream(
+        evalUnder(dsl, d("2024-01-16"), total, "VESTING_START_DAY_MINUS_ONE"),
+      );
+    };
+    const tranches: TrancheInput[] = [
+      ...project(
+        "600 VEST FROM DATE 2024-01-16 OVER 6 months EVERY 1 month",
+        600,
+      ),
+      ...project(
+        "300 VEST FROM DATE 2024-01-08 OVER 6 months EVERY 1 month",
+        300,
+      ),
+    ];
+
+    const hinted = inferSchedule({
+      tranches,
+      grantDate: d("2024-01-16"),
+      policy: "VESTING_START_DAY_MINUS_ONE",
+    });
+    expect(hinted.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(hinted.diagnostics.vestingDayOfMonth).toBe(
+      "VESTING_START_DAY_MINUS_ONE",
+    );
+    expect(hinted.decomposition.map((c) => c.tag)).toEqual(["plain", "plain"]);
+    expectExactReproduction(hinted, tranches, d("2024-01-16"));
+
+    // Unhinted, the day pattern reads most naturally as VESTING_START_DAY
+    // (day-15/day-7 anchors) — also exact, but a different convention. The
+    // contrast is what shows the hint actually reached the seed enumeration and
+    // the residual re-read rather than being echoed after the fact.
+    const unhinted = inferSchedule({ tranches, grantDate: d("2024-01-16") });
+    expect(unhinted.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(unhinted.diagnostics.vestingDayOfMonth).toBe("VESTING_START_DAY");
+    expectExactReproduction(unhinted, tranches, d("2024-01-16"));
+  });
+});
+
+describe("inferSchedule — recoveryMode names the emission shape", () => {
+  it("a verified single template reads single-schedule", () => {
+    const result = inferSchedule({ tranches: monthly("2024-02-01", 48, 1000) });
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
+    expect(result.diagnostics.fallback).toBe(false);
+  });
+
+  it("a recovered THEN chain reads then-chain", () => {
+    const result = inferSchedule({
+      tranches: [
+        { date: d("2023-12-01"), amount: 100 },
+        { date: d("2024-01-01"), amount: 100 },
+        { date: d("2024-02-01"), amount: 200 },
+        { date: d("2024-03-01"), amount: 200 },
+        { date: d("2024-04-01"), amount: 100 },
+        { date: d("2024-05-01"), amount: 100 },
+      ],
+    });
+    expect(result.diagnostics.recoveryMode).toBe("then-chain");
+    expect(result.dsl).toContain("THEN");
+  });
+
+  it("a recovered concurrent superposition reads plus-cover", () => {
+    const result = inferSchedule({
+      tranches: [
+        { date: d("2024-02-01"), amount: 100 },
+        { date: d("2024-02-15"), amount: 50 },
+        { date: d("2024-03-01"), amount: 100 },
+        { date: d("2024-03-15"), amount: 50 },
+        { date: d("2024-04-01"), amount: 100 },
+        { date: d("2024-04-15"), amount: 50 },
+      ],
+      grantDate: d("2024-01-01"),
+    });
+    expect(result.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(result.dsl).toContain("PLUS");
+  });
+
+  it("the literal per-date fallback reads literal", () => {
+    const result = inferSchedule({
+      tranches: [
+        { date: d("2024-03-12"), amount: 10000 },
+        { date: d("2024-08-07"), amount: 25000 },
+        { date: d("2025-11-22"), amount: 15000 },
+      ],
+    });
+    expect(result.diagnostics.recoveryMode).toBe("literal");
+    expect(result.diagnostics.fallback).toBe(true);
+  });
+});
+
 describe("inferSchedule — degenerate", () => {
   it("single tranche → one dated lump (literal)", () => {
     const tranches: TrancheInput[] = [{ date: d("2025-06-15"), amount: 5000 }];
@@ -306,6 +467,11 @@ describe("inferSchedule — degenerate", () => {
     expect(nTag(result, "literal")).toBe(1);
     expect(result.dsl).toContain("5000 VEST");
     expect(result.dsl).toContain("FROM DATE 2025-06-15");
+    // The component tag is `literal` (a dated lump is the same shape the
+    // fallback emits), but this is a VERIFIED one-statement recovery, not the
+    // fallback — the emission mode says so where the tag can't.
+    expect(result.diagnostics.fallback).toBe(false);
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
   });
 
   it("three bespoke tranches with irregular dates → three literal lumps", () => {
@@ -335,6 +501,7 @@ describe("inferSchedule — zero-total tranche set", () => {
     expect(result.dsl).toBe("0 VEST FROM DATE 2025-02-01");
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.diagnostics.totalQuantity).toBe(0);
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
     expect(result.decomposition).toEqual([
       {
         tag: "literal",
@@ -936,18 +1103,26 @@ describe("inferSchedule — data-adaptive cadence", () => {
     expect(result.dsl).toMatch(/EVERY 5 months/i);
   });
 
-  it("monthly train + every-5-month bonus → the literal per-date fallback", () => {
-    // The bonus train sits off the monthly grid (day 15). With no additive family
-    // the superposition has no recognized template shape and degrades to the
-    // literal fallback.
+  it("monthly train + every-5-month bonus → a 2-statement PLUS cover", () => {
+    // The bonus train sits off the monthly grid (day 15), so no single schedule
+    // reads the superposition — but both layers are plain uniform trains, and
+    // peeling the dominant monthly train leaves the every-5-month bonus to
+    // verify on its own. Two concurrent statements, reproduced exactly.
     const tranches: TrancheInput[] = [
       ...monthly("2024-01-01", 24, 1000),
       ...everyMonths(2024, 5, 5, 4, 2000, 15),
     ];
     const result = inferSchedule({ tranches });
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.diagnostics.fallback).toBe(true);
-    expect(result.decomposition.every((c) => c.tag === "literal")).toBe(true);
+    expect(result.diagnostics.fallback).toBe(false);
+    expect(result.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(result.decomposition.map((c) => c.tag)).toEqual(["plain", "plain"]);
+    expect(result.dsl).toContain("PLUS");
+    expect(result.dsl).not.toContain("THEN");
+    expect(result.program.length).toBeLessThan(
+      new Set(tranches.map((t) => t.date)).size,
+    );
+    expectExactReproduction(result, tranches, d("2024-01-01"));
   });
 
   it("flat biweekly → one plain uniform at 14-day cadence", () => {

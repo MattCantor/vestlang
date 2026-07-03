@@ -301,10 +301,16 @@ templates are derived in closed form from the stream's date lattice and cumulati
 sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence
 `THEN` chain, or a single dated lump — and each is verified by evaluating it back
 through the real engine and checking it reproduces the input exactly. The first
-verifying candidate in a fixed preference order wins; anything unrecognized becomes
-a literal per-date list (projection-lossless by construction). It returns the `dsl`,
-a tagged `decomposition` (one component per statement, labelled by the family that
-recovered it), and diagnostics (residual error, detected day-of-month convention).
+verifying candidate in a fixed preference order wins. When no single schedule fits,
+a bounded **PLUS-cover** search runs before the fallback: it peels a dominant
+uniform train off the stream, re-reads the remainder with the same families, and
+emits the layers as one `PLUS` program when the assembled result reproduces the
+input exactly (at most three statements, always fewer than one per date). Anything
+still unrecognized becomes a literal per-date list (projection-lossless by
+construction). It returns the `dsl`, a tagged `decomposition` (one component per
+statement, labelled by the family that recovered it), and diagnostics (residual
+error, detected day-of-month convention, and a `recoveryMode` naming the emission
+shape: `single-schedule`, `then-chain`, `plus-cover`, or `literal`).
 
 It recovers more than parallel components. When the tranches read as **one schedule
 whose rate or cadence changes over time** — back-to-back segments on a continuing grid,

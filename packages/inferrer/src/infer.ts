@@ -12,8 +12,10 @@ import type { InferInput, InferResult } from "./types.js";
  * stream. The heavy lifting is the analytic hypothesize-and-verify core
  * (`./analytic/`): candidate templates are derived in closed form from the
  * stream's date lattice and cumulative sums, each is verified by one real
- * evaluation, and the first verifying candidate in a fixed preference order wins;
- * anything unrecognized degrades to a projection-lossless literal per-date list.
+ * evaluation, and the first verifying candidate in a fixed preference order wins.
+ * A stream no single schedule can read gets one bounded attempt at a compact
+ * PLUS cover of concurrent layers; anything still unrecognized degrades to a
+ * projection-lossless literal per-date list.
  *
  * `inferSchedule` owns the surface contract around that core: the input guard, the
  * all-zero short-circuit, grant-date defaulting, and shaping the tagged
@@ -79,6 +81,8 @@ export function inferSchedule(input: InferInput): InferResult {
         totalQuantity: 0,
         vestingDayOfMonth: dom,
         fallback: false,
+        // One verified degenerate statement — a single schedule, not a fallback.
+        recoveryMode: "single-schedule",
         notes,
       },
     };
@@ -104,6 +108,16 @@ export function inferSchedule(input: InferInput): InferResult {
       "no template shape verified; emitted the literal per-date fallback",
     );
   }
+  // The PLUS-cover post-pass ran and found nothing — say so, and how it ended,
+  // so a literal result that at least reached the cover search is tellable from
+  // one that never did.
+  if (result.coverSearch) {
+    notes.push(
+      result.coverSearch.budgetExhausted
+        ? "PLUS-cover search hit its work budget without a verifying cover"
+        : "PLUS-cover search exhausted its uniform seeds without a verifying cover",
+    );
+  }
 
   return {
     dsl: result.dsl,
@@ -116,6 +130,7 @@ export function inferSchedule(input: InferInput): InferResult {
       totalQuantity,
       vestingDayOfMonth: result.dom,
       fallback: result.fallback,
+      recoveryMode: result.recoveryMode,
       notes,
     },
   };
