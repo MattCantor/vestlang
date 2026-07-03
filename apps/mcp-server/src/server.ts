@@ -56,8 +56,11 @@ Typical workflows:
   \`pendingBlockers\` and \`deadBlockers\`), for when you need to see which clause
   produced what.
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
-  {date, amount} pairs to get the best-fit DSL (branch-and-bound
-  minimum-cardinality exact cover). Note that the returned diagnostics.vestingDayOfMonth is not
+  {date, amount} pairs to get the best-fit DSL. Candidate templates are derived
+  analytically from the stream's date lattice and cumulative sums, each verified by
+  evaluating it back through the real engine; the first that reproduces the stream
+  in a fixed preference order wins, and anything unrecognized falls back to a
+  literal per-date list. Note that the returned diagnostics.vestingDayOfMonth is not
   encoded in the DSL — pass it back as the vesting_day_of_month input when
   evaluating the returned DSL.
 - Persistence lifecycle: vestlang_persist compiles a DSL program ONCE into a
@@ -278,13 +281,13 @@ export function createServer(): McpServer {
     },
   );
 
-  /* infer_schedule: {date, amount}[] → DSL via branch-and-bound exact cover */
+  /* infer_schedule: {date, amount}[] → DSL via analytic hypothesize-and-verify */
   server.registerTool(
     "vestlang_infer_schedule",
     {
       title: "Infer vestlang from tranche array",
       description:
-        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Decomposes the stream by branch-and-bound minimum-cardinality exact cover — the fewest uniform trains, cliffs, and one-off pulses that reproduce it (a greedy seed sets the bound, then the search tries to beat it), with a cliff fold-up post-pass; anything unexplained becomes single-date statements. Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
+        "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins; anything unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
       inputSchema: z.strictObject({
         tranches: z
           .array(

@@ -90,7 +90,7 @@ turns out to have one.
 
 ### Inference (the inverse of evaluation)
 
-- `inferSchedule(input)` - Reconstruct a vestlang program from observed `{ date, amount }` vesting tranches by branch-and-bound minimum-cardinality exact cover (a greedy seed sets the bound, then the search looks for a smaller cover). Returns `{ dsl, program, decomposition, diagnostics }`, where `diagnostics` reports the residual error and any fallbacks taken.
+- `inferSchedule(input)` - Reconstruct a vestlang program from observed `{ date, amount }` vesting tranches by analytic hypothesize-and-verify: candidate templates are derived in closed form from the stream's date lattice and cumulative sums, each is verified by evaluating it back through the real engine, and the first that reproduces the stream in a fixed preference order wins (anything unrecognized falls back to a literal per-date list). Returns `{ dsl, program, decomposition, diagnostics }`, where `decomposition` tags each emitted statement by the family that recovered it and `diagnostics` reports the residual error and whether the literal fallback fired.
 
 ### Stringify
 

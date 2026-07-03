@@ -126,7 +126,7 @@ umbrella at build time and never published on their own.
 | `@vestlang/dsl` | — | PEG grammar + parser |
 | `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
 | `@vestlang/evaluator` | — | The resolver/classifier (the "extended" layer) |
-| `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (branch-and-bound exact cover) |
+| `@vestlang/inferrer` | — | The inverse: observed tranches → best-fit DSL (analytic hypothesize-and-verify) |
 | `@vestlang/recover` | — | Template recovery: composes evaluator + inferrer to rescue an `events-only` program into a template when its projection has one |
 | `@vestlang/pipeline` | — | The shared consumer layer both apps route through — parse → context → evaluate → view, behind one structured error model |
 | `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
@@ -296,11 +296,15 @@ An event-anchored cliff, `CLIFF EVENT ipo`, is *not* one — it now stores and r
 ### The inverse: tranches → DSL
 
 `inferSchedule` reconstructs a best-fit vestlang program from an observed array of
-`{ date, amount }` tranches by **branch-and-bound minimum-cardinality exact cover**:
-it covers the stream with the fewest components — uniform trains, cliffs, one-off
-pulses. A greedy pass (take the largest fitting component, subtract, repeat) seeds an
-upper bound, then the search tries to beat it. It returns the `dsl`, the decomposition,
-and diagnostics (residual error, detected policies).
+`{ date, amount }` tranches by **analytic hypothesize-and-verify**: candidate
+templates are derived in closed form from the stream's date lattice and cumulative
+sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence
+`THEN` chain, or a single dated lump — and each is verified by evaluating it back
+through the real engine and checking it reproduces the input exactly. The first
+verifying candidate in a fixed preference order wins; anything unrecognized becomes
+a literal per-date list (projection-lossless by construction). It returns the `dsl`,
+a tagged `decomposition` (one component per statement, labelled by the family that
+recovered it), and diagnostics (residual error, detected day-of-month convention).
 
 It recovers more than parallel components. When the tranches read as **one schedule
 whose rate or cadence changes over time** — back-to-back segments on a continuing grid,

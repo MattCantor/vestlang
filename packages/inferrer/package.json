@@ -18,14 +18,14 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@vestlang/dsl": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
+    "@vestlang/normalizer": "workspace:*",
     "@vestlang/primitives": "workspace:*",
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*"
   },
   "devDependencies": {
-    "@vestlang/dsl": "workspace:*",
-    "@vestlang/normalizer": "workspace:*",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"

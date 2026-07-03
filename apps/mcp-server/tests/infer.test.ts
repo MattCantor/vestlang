@@ -114,8 +114,9 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(diagnostics.vestingDayOfMonth).toBe("VESTING_START_DAY");
   });
 
-  // With grant_date supplied, the lump a year out is a cliff (cliffFolds=1); this
-  // asserts the {grant_date} arg is forwarded to inferSchedule as grantDate.
+  // With grant_date supplied, the lump a year out is a cliff (a `cliff`-tagged
+  // component); this asserts the {grant_date} arg is forwarded to inferSchedule as
+  // grantDate.
   it("forwards grant_date so the cliff lump is read as a cliff", async () => {
     const client = await connectClient();
     const tranches = tranchesFromDsl(
@@ -130,11 +131,11 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     });
 
     const sc = res.structuredContent as {
-      decomposition: { cliffFolds: number };
+      decomposition: { tag: string }[];
       diagnostics: { residualError: number };
     };
     expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(sc.decomposition.cliffFolds).toBe(1);
+    expect(sc.decomposition.some((c) => c.tag === "cliff")).toBe(true);
   });
 
   it("defaults grant_date to the first tranche date when omitted", async () => {

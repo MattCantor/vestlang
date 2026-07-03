@@ -23,6 +23,10 @@ import type { RecoveryOutcome } from "./types.js";
 // cheap-first — classify is the primary path, and the inference cost is only paid
 // on the events-only fallback — and bounded: at most one inferSchedule + one
 // re-classify, never a second rescue round.
+//
+// The inferrer's analytic core recovers a strict superset of the streams the old
+// search did (its literal per-date fallback is projection-lossless), so rescue only
+// widens: a program that used to rescue still does, and some that couldn't now can.
 export function evaluateProgramWithRecovery(
   stmts: Program,
   ctx: ResolutionContextInput,

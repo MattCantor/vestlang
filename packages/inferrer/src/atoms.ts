@@ -2,16 +2,14 @@ import type {
   OCTDate,
   Statement,
   SystemAnchorTag,
-  VestingDayOfMonth,
   VestingNodeExpr,
   VestingPeriod,
 } from "@vestlang/types";
-import { walk } from "./cadence.js";
 import type {
   CliffUniformComponent,
   Component,
+  PlainUniformComponent,
   SingleTrancheComponent,
-  UniformComponent,
 } from "./types.js";
 
 // A bare DATE anchor is positionally neutral — it fits a start or a cliff slot —
@@ -23,30 +21,6 @@ function bareDate<A extends SystemAnchorTag = SystemAnchorTag>(
     type: "NODE",
     base: { type: "DATE", value: date },
     offsets: [],
-  };
-}
-
-function buildUniform(
-  c: UniformComponent,
-  policy: VestingDayOfMonth,
-): Statement {
-  const total = c.total;
-  // The vesting start sits one period before the first installment: a FROM-anchored
-  // train's first tranche lands at start + 1 period, so back the start out by one.
-  const vestingStart = walk(c.startDate, c.cadence, -1, policy);
-  const periodicity: VestingPeriod = {
-    type: c.cadence.unit,
-    length: c.cadence.length,
-    occurrences: c.occurrences,
-  };
-  return {
-    type: "STATEMENT",
-    amount: { type: "QUANTITY", value: total },
-    expr: {
-      type: "SCHEDULE",
-      vesting_start: bareDate(vestingStart),
-      periodicity,
-    },
   };
 }
 
@@ -67,10 +41,29 @@ function buildSingle(c: SingleTrancheComponent): Statement {
   };
 }
 
+function buildPlainUniform(c: PlainUniformComponent): Statement {
+  const periodicity: VestingPeriod = {
+    type: c.cadence.unit,
+    length: c.cadence.length,
+    occurrences: c.occurrences,
+  };
+  return {
+    type: "STATEMENT",
+    amount: { type: "QUANTITY", value: c.total },
+    expr: {
+      type: "SCHEDULE",
+      vesting_start: bareDate(c.anchor),
+      periodicity,
+    },
+  };
+}
+
 function buildCliffUniform(c: CliffUniformComponent): Statement {
+  // Read the component's own total and cliff duration rather than re-deriving
+  // from rate × steps. Identity for every on-cadence shape the pipeline emits
+  // today; the point is that an off-cadence cliff length or a non-whole-multiple
+  // total renders faithfully the moment a constructor supplies one.
   const totalSteps = c.cliffSteps + c.tailOccurrences;
-  const total = c.perTrancheAmount * totalSteps;
-  const cliffDurationValue = c.cliffSteps * c.cadence.length;
   const periodicity: VestingPeriod = {
     type: c.cadence.unit,
     length: c.cadence.length,
@@ -81,7 +74,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
       offsets: [
         {
           type: "DURATION",
-          value: cliffDurationValue,
+          value: c.cliffLength,
           unit: c.cadence.unit,
           sign: "PLUS",
         },
@@ -90,7 +83,7 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
   };
   return {
     type: "STATEMENT",
-    amount: { type: "QUANTITY", value: total },
+    amount: { type: "QUANTITY", value: c.total },
     expr: {
       type: "SCHEDULE",
       vesting_start: bareDate(c.grantDate),
@@ -99,13 +92,15 @@ function buildCliffUniform(c: CliffUniformComponent): Statement {
   };
 }
 
-export function buildStatement(
-  c: Component,
-  policy: VestingDayOfMonth,
-): Statement {
-  if (c.kind === "UNIFORM") return buildUniform(c, policy);
-  if (c.kind === "SINGLE_TRANCHE") return buildSingle(c);
-  return buildCliffUniform(c);
+export function buildStatement(c: Component): Statement {
+  switch (c.kind) {
+    case "SINGLE_TRANCHE":
+      return buildSingle(c);
+    case "CLIFF_UNIFORM":
+      return buildCliffUniform(c);
+    case "PLAIN_UNIFORM":
+      return buildPlainUniform(c);
+  }
 }
 
 /**

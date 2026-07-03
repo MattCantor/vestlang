@@ -357,9 +357,9 @@ function buildPartition(run: OracleRun): string {
 
 let run: OracleRun;
 
-// One heavy sweep, memoized into the suite. A generous explicit timeout because
-// the cost is dominated by inferSchedule's per-case 32-policy day-of-month
-// search; the observed wall time is well under this budget (see the run report).
+// One heavy sweep, memoized into the suite. A generous explicit timeout, though
+// the analytic core's per-case cost is small (a handful of candidate evaluations);
+// the observed wall time is well under this budget.
 beforeAll(() => {
   run = runOracle();
 }, 120_000);
@@ -373,8 +373,9 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
       "ambiguous-recovery",
     ]);
     for (const e of run.entries) {
-      // Projection equality is the guard on every admitted case: a
-      // minimum-cardinality cover always reproduces the per-date totals.
+      // Projection equality is the guard on every admitted case: a verified
+      // candidate reproduces the per-date totals exactly, and the literal fallback
+      // is projection-lossless by construction.
       expect(e.projMatch).toBe(true);
       expect(buckets.has(e.bucket)).toBe(true);
     }

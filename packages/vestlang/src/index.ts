@@ -43,10 +43,8 @@ export type {
   InferInput,
   InferResult,
   TrancheInput,
-  Component,
-  UniformComponent,
-  SingleTrancheComponent,
-  CliffUniformComponent,
+  DecompositionComponent,
+  HypothesisFamily,
 } from "@vestlang/inferrer";
 
 // Types (re-export commonly used types)
