@@ -49,8 +49,9 @@ to expose and no `ok` on the result:
 - a date-math overflow past the representable range (`vestlang_add_period` /
   `vestlang_resolve_offset` on a huge offset);
 - an input-schema (zod) rejection (e.g. a `grant_quantity` past
-  `MAX_SAFE_INTEGER`, an impossible calendar date, or a `vestlang_infer_schedule`
-  `tranches` array over the maximum entry count).
+  `MAX_SAFE_INTEGER`, an impossible calendar date, a `vestlang_infer_schedule`
+  `tranches` array over the maximum entry count, or an `events` record over the
+  maximum entry count).
 
 A robust consumer checks `isError` first (protocol/exception failure), then `ok`
 (structured refusal vs. success).
