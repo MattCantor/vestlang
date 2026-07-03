@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
-import { MAX_INSTALLMENTS } from "@vestlang/primitives";
+import { MAX_INSTALLMENTS, MAX_EVENTS } from "@vestlang/primitives";
 import { createServer } from "../src/server.js";
 
 // Tool descriptions are the behavioral contract LLM clients act on, so a stale one
@@ -131,6 +131,15 @@ describe("mcp-server / vestlang_infer_schedule description states the input cap"
     // the maximum entry count, sourced from the shared installment cap.
     const description = await descriptionOf("vestlang_infer_schedule");
     expect(description).toContain(String(MAX_INSTALLMENTS));
+  });
+});
+
+describe("mcp-server / vestlang_evaluate description states the events cap", () => {
+  it("names the maximum events-map entry count", async () => {
+    // A distinguishing phrase, not a bare number: "1000" is a substring of the
+    // installment cap (10000), so match the count paired with "events".
+    const description = await descriptionOf("vestlang_evaluate");
+    expect(description).toMatch(new RegExp(`${MAX_EVENTS}\\s*events`, "i"));
   });
 });
 

@@ -11,6 +11,7 @@ import {
   isContingentStartSentinel,
   isValidCalendarDate,
 } from "@vestlang/utils";
+import { MAX_EVENTS, eventsCapMessage } from "@vestlang/primitives";
 
 // One builder over both context flavors: hand it a structure (no-`asOf`) input
 // and you get a `ResolutionContext` back; hand it an as-of input and the `asOf`
@@ -46,6 +47,14 @@ export function createEvaluationContext(
     throw new Error(
       `grantQuantity must be a non-negative safe integer (got ${input.grantQuantity})`,
     );
+  }
+
+  // Bound the events map before walking it. It's keyed by event name and a real
+  // grant references at most a few dozen, so an oversized map is a mistake (or a
+  // hostile client); refuse it up front rather than date-validate every entry.
+  const eventCount = Object.keys(input.events).length;
+  if (eventCount > MAX_EVENTS) {
+    throw new Error(eventsCapMessage(eventCount));
   }
 
   // Same funnel, same fail-loud stance for the context's *dates*. A bad date

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { errorDiagnostics, lintText } from "@vestlang/linter";
-import { MAX_INSTALLMENTS } from "@vestlang/primitives";
+import { MAX_INSTALLMENTS, MAX_EVENTS } from "@vestlang/primitives";
 import { stringify } from "@vestlang/render";
 import {
   parseRaw,
@@ -122,6 +122,18 @@ const DSL_INPUT = z
   .min(1, "dsl must not be empty")
   .describe("Vestlang DSL source (one or more statements)");
 
+// The events map, capped at MAX_EVENTS entries. ZodRecord has no `.max()`, so the
+// bound is a key-count refine applied BEFORE `.optional()` — an absent map bypasses
+// it. Shared by every events-accepting tool; each supplies its own description.
+const eventsRecord = (description: string) =>
+  z
+    .record(z.string().min(1), ISO_DATE)
+    .refine((v) => Object.keys(v).length <= MAX_EVENTS, {
+      message: `events must contain at most ${MAX_EVENTS} entries`,
+    })
+    .optional()
+    .describe(description);
+
 const EVAL_CONTEXT_FIELDS = {
   grant_date: ISO_DATE.describe("Grant date (YYYY-MM-DD)"),
   grant_quantity: z
@@ -133,12 +145,9 @@ const EVAL_CONTEXT_FIELDS = {
       "grant_quantity must be within the safe integer range",
     )
     .describe("Total shares granted"),
-  events: z
-    .record(z.string().min(1), ISO_DATE)
-    .optional()
-    .describe(
-      `Named events referenced by the DSL, e.g. {"ipo": "2027-06-01"}. grantDate is set automatically.`,
-    ),
+  events: eventsRecord(
+    `Named events referenced by the DSL, e.g. {"ipo": "2027-06-01"}. grantDate is set automatically. At most ${MAX_EVENTS} entries.`,
+  ),
   vesting_day_of_month: VESTING_DAY_OF_MONTH.optional().describe(
     `OCT VestingDayOfMonth. Defaults to ${DEFAULT_VESTING_DAY_OF_MONTH}.`,
   ),
@@ -352,7 +361,9 @@ export function createServer(): McpServer {
     {
       title: "Evaluate vesting schedule",
       description:
-        'Evaluate a vestlang program against a grant context. The program is treated as ONE grant: its statements collapse into a single schedule of installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) with blockers, and you get TWO verdicts on it. `storable` — what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — largely vacated for cliffs now; the remaining causes, each named in a `reason`: a cliff that can\'t be placed until an event fires (a cross-unit deferred cliff), or a THEN tail chained behind a start still waiting on an event. An event-held cliff is NOT unrepresentable — it stores as a `template`, with the time baseline in `cliff` and the event hold in `event_condition`), or "impossible" (a structural contradiction). `resolvesTo` — the resolves-to reading given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `storable`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `pendingBlockers`, never from a verdict status), `dead` (something contradicted given the firings — read off `deadBlockers`; distinct from a terminal `impossible` status, since a live statement can sit beside a dead one). A held grid (an unfired event-anchored or `LATER OF` cliff) emits UNRESOLVED installments whose `symbolicDate` is `{ type: "UNRESOLVED_CLIFF", date, floor? }`: `date` is the honest cadence (grid) position, and `floor` (optional) discloses the earliest the tranche could land — the resolved `LATER OF` time-arm date — present only when that time arm has resolved, omitted for a bare `CLIFF EVENT e`. The cadence `date` is not lifted to the floor; both are surfaced. Plus `valid` (false when the program allocates more than the grant) with a single `findings` array (each `kind`, `severity`, exact `sum`, human `message`) computed over the whole program; installments are still returned when `valid` is false but aren\'t a valid schedule. It carries `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, direction, inclusive, consequence, message } — direction-aware: `direction` ("before"/"after") and `inclusive` say which side of `through` a dangerous firing of the event falls on, so a `BEFORE`/EARLIER OF watch names the on/before side and an `AFTER`/LATER OF watch the on/after side; a later or backdated firing on that side could change the result. `consequence` says how much that firing changes: "flips-to-impossible" (a gate the grant can no longer satisfy — a dead grant) or "grid-shift" (a selector re-anchoring — the schedule just moves)), and `breakdown` — one entry per clause (a THEN chain reports as one entry, since its segments can\'t be placed apart) with that clause\'s own installments and blockers, split into `pendingBlockers` and `deadBlockers` (no verdict; a clause has no storable schedule of its own), for attribution. When a vesting start precedes the grant date, the breakdown\'s folded grant-date line also carries `scheduled` — the pre-fold partition `[{ scheduledDate, amount }]` of the shares it absorbed (each pre-grant row at the date it would have vested, plus any native grant-date share), `present only when at least one tranche was pulled forward onto the grant date` and summing to the line\'s amount. This rides the breakdown ONLY — the headline installments, `vestlang_evaluate_as_of`, and `vestlang_vested_between` stay folded and bare — so a consumer can report the would-have-vested dates without vestlang picking a side. The per-clause amounts are a true partition of the one headline allocation, so they sum to the headline by construction — each clause adopts the headline\'s odd-share placement (1/3 PLUS 1/3 PLUS 1/3 of 100 reads 33/33/34 here and in the headline). When `valid` is false the headline itself over-allocates the grant; the breakdown still sums to that over-allocating total — the warning is the over-allocation `findings` entry, not the breakdown. On a rescue — an events-only program whose realized projection collapses back to a single template — the verdict reads "template" and a `recovered` block records what it was rescued from (the events-only `reason`, the inferred single-template `dsl`, its `vestingDayOfMonth`, and a `residualError`); it is absent otherwise. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view. Note: compiling or evaluating a schedule does not by itself certify it fits the grant — the over-allocation answer is the `valid` / `findings` channel on this result (for a raw canonical template, the @vestlang/core checker `validateTemplateAllocatable`).',
+        'Evaluate a vestlang program against a grant context. The program is treated as ONE grant: its statements collapse into a single schedule of installments (RESOLVED / UNRESOLVED / IMPOSSIBLE) with blockers, and you get TWO verdicts on it. `storable` — what a record keeper could hold, computed WITHOUT reading firings: "template" (fits one canonical template), "events-only" (resolves to dated amounts but cannot be one template — e.g. two overlapping independent absolute starts — with a `reason`), "unrepresentable" (no storable form even as bare events — largely vacated for cliffs now; the remaining causes, each named in a `reason`: a cliff that can\'t be placed until an event fires (a cross-unit deferred cliff), or a THEN tail chained behind a start still waiting on an event. An event-held cliff is NOT unrepresentable — it stores as a `template`, with the time baseline in `cliff` and the event hold in `event_condition`), or "impossible" (a structural contradiction). `resolvesTo` — the resolves-to reading given the events you passed: "template", "events-only", "unresolved" (pending on an unfired event), or "impossible". The two can differ — a gated start is a storable `template` that may resolve to `impossible` after an early firing. Also returns `representable` (from `storable`), `pending` (witnesses still missing — a `template` can be pending, so read pending from this flag / `pendingBlockers`, never from a verdict status), `dead` (something contradicted given the firings — read off `deadBlockers`; distinct from a terminal `impossible` status, since a live statement can sit beside a dead one). A held grid (an unfired event-anchored or `LATER OF` cliff) emits UNRESOLVED installments whose `symbolicDate` is `{ type: "UNRESOLVED_CLIFF", date, floor? }`: `date` is the honest cadence (grid) position, and `floor` (optional) discloses the earliest the tranche could land — the resolved `LATER OF` time-arm date — present only when that time arm has resolved, omitted for a bare `CLIFF EVENT e`. The cadence `date` is not lifted to the floor; both are surfaced. Plus `valid` (false when the program allocates more than the grant) with a single `findings` array (each `kind`, `severity`, exact `sum`, human `message`) computed over the whole program; installments are still returned when `valid` is false but aren\'t a valid schedule. It carries `absenceAssumptions` (events the resolves-to reading assumes stayed absent, each { eventId, through, direction, inclusive, consequence, message } — direction-aware: `direction` ("before"/"after") and `inclusive` say which side of `through` a dangerous firing of the event falls on, so a `BEFORE`/EARLIER OF watch names the on/before side and an `AFTER`/LATER OF watch the on/after side; a later or backdated firing on that side could change the result. `consequence` says how much that firing changes: "flips-to-impossible" (a gate the grant can no longer satisfy — a dead grant) or "grid-shift" (a selector re-anchoring — the schedule just moves)), and `breakdown` — one entry per clause (a THEN chain reports as one entry, since its segments can\'t be placed apart) with that clause\'s own installments and blockers, split into `pendingBlockers` and `deadBlockers` (no verdict; a clause has no storable schedule of its own), for attribution. When a vesting start precedes the grant date, the breakdown\'s folded grant-date line also carries `scheduled` — the pre-fold partition `[{ scheduledDate, amount }]` of the shares it absorbed (each pre-grant row at the date it would have vested, plus any native grant-date share), `present only when at least one tranche was pulled forward onto the grant date` and summing to the line\'s amount. This rides the breakdown ONLY — the headline installments, `vestlang_evaluate_as_of`, and `vestlang_vested_between` stay folded and bare — so a consumer can report the would-have-vested dates without vestlang picking a side. The per-clause amounts are a true partition of the one headline allocation, so they sum to the headline by construction — each clause adopts the headline\'s odd-share placement (1/3 PLUS 1/3 PLUS 1/3 of 100 reads 33/33/34 here and in the headline). When `valid` is false the headline itself over-allocates the grant; the breakdown still sums to that over-allocating total — the warning is the over-allocation `findings` entry, not the breakdown. On a rescue — an events-only program whose realized projection collapses back to a single template — the verdict reads "template" and a `recovered` block records what it was rescued from (the events-only `reason`, the inferred single-template `dsl`, its `vestingDayOfMonth`, and a `residualError`); it is absent otherwise. Does not filter by date — use vestlang_evaluate_as_of for a point-in-time view. Note: compiling or evaluating a schedule does not by itself certify it fits the grant — the over-allocation answer is the `valid` / `findings` channel on this result (for a raw canonical template, the @vestlang/core checker `validateTemplateAllocatable`). The events map accepts at most ' +
+        MAX_EVENTS +
+        " events.",
       inputSchema: z.strictObject({
         dsl: DSL_INPUT,
         ...EVAL_CONTEXT_FIELDS,
@@ -547,12 +558,9 @@ export function createServer(): McpServer {
             "grant_quantity must be within the safe integer range",
           )
           .describe("Total shares granted, used to size the projection"),
-        events: z
-          .record(z.string().min(1), ISO_DATE)
-          .optional()
-          .describe(
-            `The world's named-event firings, e.g. {"ipo": "2027-06-01"}.`,
-          ),
+        events: eventsRecord(
+          `The world's named-event firings, e.g. {"ipo": "2027-06-01"}. At most ${MAX_EVENTS} entries.`,
+        ),
       }).shape,
       annotations: {
         readOnlyHint: true,
@@ -650,7 +658,9 @@ export function createServer(): McpServer {
             "Offset expression as it would appear after 'VEST FROM' in the DSL.",
           ),
         grant_date: ISO_DATE,
-        events: z.record(z.string().min(1), ISO_DATE).optional(),
+        events: eventsRecord(
+          `Named events referenced by the expression, e.g. {"ipo": "2027-06-01"}. At most ${MAX_EVENTS} entries.`,
+        ),
         vesting_day_of_month: VESTING_DAY_OF_MONTH.optional(),
       }).shape,
       annotations: {
