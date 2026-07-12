@@ -2,8 +2,8 @@
 title: vestlang — a shared language for vesting
 theme: moon
 highlightTheme: monokai
-css: assets/talk.css
-scripts: assets/talk.js
+css: /assets/talk.css
+scripts: /assets/talk.js
 revealOptions:
   transition: fade
   controls: true
@@ -18,30 +18,27 @@ revealOptions:
 
 <p class="byline">Matt Cantor · OCF summit</p>
 
+Note:
+- Executive compensation partner at Fenwick & West
+- Involved with the project for a few years, on the board, technical working group, law firm working group
+- hobbyist coder
+- obsessed with vesting
+
 ---
 
 ## A DSL for writing vesting intent
 
 ----
 
-<!-- ============================================================
-     BEAT 1 — Origin (story-first, identity woven in).
-     Cold open on the frustration; no bio slide. The speaker's
-     identity comes out in the telling, not on the slide.
-     ============================================================ -->
-
 ## This is a vesting schedule
 
 <blockquote class="clause">1/4th of the shares shall vest on the one-year anniversary of the Vesting Commencement Date, and an additional 1/48th of the shares shall vest on each monthly anniversary of the Vesting Commencement Date thereafter...</blockquote>
 
 Note:
-Beat 1 (~1 min). Open COLD — read the clause, don't introduce yourself first.
-This is the job: I'm an executive-compensation attorney, papering equity is what
-I do, and this prose is what I read all day. The thing that always got me was
-that there's no exact, shared way to *write it down* — someone re-keys it into a
-spreadsheet, by hand, lossily. So I got annoyed enough to build a language for
-it. (Kicker to hold for later: a lawyer built this, not an engineer.) The
-question on the slide is the whole setup — beat 2 is the answer.
+- This is how lawyers right vesting schedules
+- Its verbose, lots of different ways to say the same thing, but familiar enought that we all know what it means
+- There is no shared way to *write it down*
+- This has annoyed me forever, since I started my career
 
 ----
 
@@ -59,8 +56,8 @@ question on the slide is the whole setup — beat 2 is the answer.
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month</div>
 
-- `OVER 4 years` — the total span
-- `EVERY 1 month` — the release cadence
+<p class="fragment"><code>OVER -> </code>the total span</p>
+<p class="fragment"><code>EVERY -> </code>the release cadence</p> 
 
 Note:
 Beat 2, part 1 (~40 sec). Don't show the whole line — build it. Start with the
@@ -84,10 +81,6 @@ between systems. The next two slides finish the schedule from the opening clause
 ## Add the cliff
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month CLIFF 1 year</div>
-
-- `CLIFF 1 year` — nothing releases until one year after the vesting start
-
-> And that line *is* the clause we opened with.
 
 Note:
 Beat 2, part 2 (~40 sec). Add one word and the whole opening clause falls out. The
@@ -114,13 +107,17 @@ read this line back as the offer-letter sentence — same schedule, now exact.
      1 month.
      ============================================================ -->
 
-## Move the start
+## Vesting Start
 
-<div class="dsl-grow">VEST FROM DATE 2026-01-01 OVER 4 years EVERY 1 month</div>
+<div class="dsl-grow">VEST FROM DATE 6 months OVER 4 years EVERY 1 month</div>
 
-- `FROM DATE 2026-01-01` — a fixed start (default: the grant date)
-- `FROM 6 months` — an offset from the grant date, provided at runtime
-- `FROM EVENT ipo` — start when the IPO fires (no date yet — more later)
+<p class="fragment"><code>FROM &amp;lt;duration&amp;gt; -> </code>offset from grant date</p>
+
+<p class="fragment"><code>FROM DATE &amp;lt;iso date&amp;gt; -> </code>explicit vesting start</p>
+
+<p class="fragment"><code>FROM EVENT &amp;lt;event name&amp;gt; -> </code>event-based vesting start</p>
+
+<p class="fragment"><code>no FROM keyword -> </code>vesting starts from grant date</p>
 
 Note:
 Beat 2, part 3 (~30 sec). Where does the clock start? By default, the grant date.
@@ -212,18 +209,16 @@ halves here just isolate the timing.) Portions must sum to the whole.
      2,900 lump on 2027-06-01 then 100/mo — a clean template.
      ============================================================ -->
 
-## Defer to an event
-
-An anchor needn't be a fixed date — `LATER OF` waits for both, `EARLIER OF` takes whichever comes first.
+## Selectors
 
 ```vest
 VEST OVER 4 years EVERY 1 month
   CLIFF LATER OF (12 months, EVENT IPO)
 ```
 
-*Nothing releases until **both** a year of service **and** the IPO.*
+<p class="fragment"><code>LATER OF -> </code>Waits for both and compares</p>
 
-> The contingency prose can carry, but a spreadsheet of dates can't.
+<p class="fragment"><code>EARLIER OF -> </code>Whichever comes first</p>
 
 Note:
 Beat 2, part 5 (~40 sec). The step that makes vestlang more than shorthand. An anchor
@@ -296,15 +291,13 @@ there's a live standards effort, and vesting is squarely inside it.
 
 ## Vesting isn't a shape
 
-Most parts of a cap table are stored and read back.
+Most parts of a cap table are stored and read back.<!-- .element: class="fragment" -->
 
-The vesting schedule is different.
+The vesting schedule is different.<!-- .element: class="fragment" -->
 
-The cap table stores the vesting spec, and the vesting events that come out of it.
-A compiler is needed to turn the vesting spec into the vesting events.
+The cap table stores the vesting spec, and the vesting events that come out of it.<!-- .element: class="fragment" -->
 
-> OCF needs a reference compiler
-> Otherwise two systems may disagree on how to create vesting events from the vesting spec, and that's not interoperable.
+A compiler is needed to turn the vesting spec into the vesting events.<!-- .element: class="fragment" -->
 
 Note:
 Beat 4 (~1 min). The intellectual core — but don't PROVE it here, beat 2 already
@@ -417,7 +410,7 @@ VEST CLIFF
      rehydrate ipo@2026-03-01 → start_to_apply = 2026-03-01.
      ============================================================ -->
 
-## A blank, and a note
+## Example 1: Contingent Vesting Start
 
 *"Vesting starts when the IPO happens"* — but the record needs a **date**, and there isn't one yet.
 
