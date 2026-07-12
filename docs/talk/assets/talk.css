@@ -68,6 +68,56 @@
 .reveal .dsl-grow .hljs-number { color: #e0af68; }
 .reveal .dsl-grow .hljs-punctuation { opacity: 0.6; }
 
+/* Caption under a morphing dsl-grow line (the Vesting Start FROM forms).
+   Muted and small so the DSL stays the focus; it fade-swaps between
+   sub-slides while the line above glides. */
+.reveal .dsl-cap {
+  color: var(--vl-muted);
+  font-size: 0.62em;
+  margin-top: 0.7em;
+}
+.reveal .dsl-cap code {
+  color: #7dcfff;
+  font-weight: 600;
+}
+
+/* ---- dsl-lines: line-by-line grow (native reveal fragments) ----
+   talk.js recolors each <div class="dsl-line"> and pins the block's width to
+   its widest line (in ch); the .fragment lines are authored in the markdown so
+   reveal steps them itself. The fixed width keeps the left-aligned block
+   centered without shifting as lines appear; display:none on hidden fragments
+   makes the block actually grow taller instead of reserving blank space.
+   The nesting indent is CSS (i1/i2/i3 padding), NOT leading spaces in the
+   markup: reveal's markdown turns a deeply-indented line into a blank line
+   plus text, which white-space:pre then renders as an ugly vertical gap. */
+.reveal .dsl-lines {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.68em;
+  line-height: 1.35;
+  max-width: 100%;
+  margin: 0.6em auto;
+  text-align: left;
+}
+.reveal .dsl-lines .dsl-line { white-space: pre; }
+.reveal .dsl-lines .dsl-line.i1 { padding-left: 2ch; }
+.reveal .dsl-lines .dsl-line.i2 { padding-left: 4ch; }
+.reveal .dsl-lines .dsl-line.i3 { padding-left: 6ch; }
+.reveal .dsl-lines .dsl-line.fragment { display: none; }
+.reveal .dsl-lines .dsl-line.fragment.visible {
+  display: block;
+  animation: dsl-line-in 0.35s ease;
+}
+@keyframes dsl-line-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.reveal .dsl-lines .hljs-verb { color: #7dcfff; font-weight: 600; }
+.reveal .dsl-lines .hljs-selector,
+.reveal .dsl-lines .hljs-constraint,
+.reveal .dsl-lines .hljs-anchor { color: #7dcfff; }
+.reveal .dsl-lines .hljs-number { color: #e0af68; }
+.reveal .dsl-lines .hljs-punctuation { opacity: 0.6; }
+
 /* ---- animation host ---- */
 .reveal .vl-anim {
   display: block;

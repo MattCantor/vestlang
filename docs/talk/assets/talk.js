@@ -3,6 +3,9 @@
  *   2. dsl-grow — per-clause <span data-id> hosts so reveal's auto-animate
  *      can glide a statement's shared clauses between slides while a newly
  *      inserted clause fades in.
+ *   3. dsl-lines — per-line <div> hosts whose fragments are authored in the
+ *      markdown, so a statement grows one line per navigation step. talk.js
+ *      only recolors each line; reveal owns the fragment stepping.
  */
 (function () {
   "use strict";
@@ -85,26 +88,34 @@
   }
 
   // ======================================================================
-  // dsl-lines — line-by-line reveal. A <pre class="dsl-lines"><code> holds a
-  // multi-line statement; each line is highlighted and every line after the
-  // first is wrapped in a reveal .fragment, so the statement grows one line
-  // per navigation step (the capstone builds its nested cliff in front of the
-  // audience). Per-line highlighting is safe: the grammar has no cross-line
-  // state. reveal's default fragment style reserves the line's space, so the
-  // lines fade in place rather than shoving the block around.
+  // dsl-lines — line-by-line reveal. A <div class="dsl-lines"> holds one
+  // <div class="dsl-line"> per statement line; every line after the first
+  // also carries reveal's own .fragment class, authored right in the
+  // markdown. Because the fragments exist before Reveal.initialize(), reveal
+  // indexes them natively — no post-init inject + Reveal.sync() to gamble on.
+  // We only recolor each line's text in place (highlighting a line in
+  // isolation is safe: the grammar has no cross-line state), leaving the
+  // .dsl-line / .fragment wrappers untouched. There's no <code>, so reveal's
+  // highlight plugin never sees these blocks and can't flatten the spans.
   // ======================================================================
   function setupDslLines(hljs) {
-    document.querySelectorAll("pre.dsl-lines code").forEach(function (el) {
-      var lines = el.textContent.replace(/^\n+/, "").replace(/\s+$/, "").split("\n");
-      el.innerHTML = lines
-        .map(function (line, i) {
-          var body = hljs.highlight(line, { language: "vest" }).value;
-          return i === 0
-            ? "<span>" + body + "</span>"
-            : '<span class="fragment">' + body + "</span>";
-        })
-        .join("\n");
-      el.classList.add("hljs");
+    document.querySelectorAll(".dsl-lines").forEach(function (host) {
+      var maxCols = 0;
+      host.querySelectorAll(".dsl-line").forEach(function (el) {
+        // Indent lives in CSS (i1/i2/i3 padding); fold it back in to size the box.
+        var indent = el.classList.contains("i3")
+          ? 6
+          : el.classList.contains("i2")
+            ? 4
+            : el.classList.contains("i1")
+              ? 2
+              : 0;
+        maxCols = Math.max(maxCols, el.textContent.length + indent);
+        el.innerHTML = hljs.highlight(el.textContent, { language: "vest" }).value;
+      });
+      // Pin the block to its widest line (in ch) so it stays put as fragments
+      // reveal, rather than re-centering each time a longer line appears.
+      host.style.width = maxCols + 1 + "ch";
     });
   }
 
@@ -114,8 +125,8 @@
     setupVestHighlight(hljs);
     setupDslGrow(hljs);
     setupDslLines(hljs);
-    // We inject .fragment elements after init; re-index so reveal reveals them.
-    if (Reveal.sync) Reveal.sync();
+    // Recompute scaling now that recolored blocks have their final size.
+    if (Reveal.layout) Reveal.layout();
   }
 
   // Reveal may or may not be ready when this script runs; handle both.
