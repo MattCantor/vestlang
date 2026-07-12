@@ -441,39 +441,118 @@ VEST CLIFF
 ----
 
 <!-- ============================================================
-     A blank, and a note — how a contingency gets stored, told plainly.
-     A contingent start can't be a date, so vestlang stores a fail-visible
-     placeholder (the sentinel 9999-12-31) plus an out-of-band note (the
-     synthetic-event recipe evt:start), and fills the blank when the event
-     fires (rehydrate → start_to_apply). Verified: persist
-     `VEST FROM EVENT ipo` → sentinel + evt:start = "EVENT ipo";
+     A placeholder, and a note — how a contingent START gets stored.
+     NOT a blank: canonical's start is always a DATE, so vestlang stores
+     a real, valid, far-future date — the sentinel 9999-12-31 — that a
+     blind reader accepts but that never vests (fail-visible), plus an
+     out-of-band note (the synthetic-event recipe evt:start). Rehydrate
+     swaps the placeholder for the real date when the event fires.
+     Verified (persist VEST FROM EVENT ipo, grant 2026-01-01):
+     startDate = 9999-12-31, sidecar evt:start = "EVENT ipo";
      rehydrate ipo@2026-03-01 → start_to_apply = 2026-03-01.
+     Laid out as a 2×2 (canonical | note) × (stored | fired), matching
+     the classifier-in-action grid.
      ============================================================ -->
 
 ## Example 1: Contingent Vesting Start
 
-*"Vesting starts when the IPO happens"* — but the record needs a **date**, and there isn't one yet.
+<!-- .slide: class="storage-ex" -->
 
-So vestlang stores a **blank** where the date goes, and a **note** beside it:
+*"Vesting starts when the IPO happens"* — the record needs a **date**, and there's none yet. Canonical's start is *always* a date, so vestlang stores a **far-future placeholder** that never vests, with the true start in a **note**:
 
 <div class="two-col">
 <div class="col">
 
-**Stored today** — plain, blind
-- `vesting start = ▢`  *(a blank)*
-- note → *start = IPO*
+**Stored today** · canonical
+- `vesting start = 9999-12-31` *(never vests)*
 
 </div>
 <div class="col">
 
-**When the IPO fires** — Mar 2026
+**The note** · out-of-band
+- `evt:start → EVENT IPO`
+
+</div>
+</div>
+
+<div class="two-col">
+<div class="col">
+
+**IPO fires** · Mar 2026
 - `vesting start = 2026-03-01`
-- → the schedule follows
+
+</div>
+<div class="col">
+
+**The note resolves**
+- `IPO = 2026-03-01`
 
 </div>
 </div>
 
 > The contingency lived in the **note**. The record-keeper never had to understand it.
+
+----
+
+<!-- ============================================================
+     Example 2 — a GATED EVENT in the CLIFF, lowered into a synthetic
+     event. Same trick as Example 1, one level down: canonical can hold
+     a plain event_condition pointer, but NOT the contingency riding on
+     it (the IPO gated on firing before grant + 7 years). So the gated
+     event becomes a stand-in `evt:1` whose recipe lives in the note;
+     there's no time baseline, so no `cliff` field at all — the whole
+     cliff IS the event.
+     Verified (persist VEST OVER 4 years EVERY 1 month
+       CLIFF EVENT ipo BEFORE grantDate + 7 years, grant 2026-01-01):
+       no cliff, event_condition evt:1,
+       sidecar evt:1 = "EVENT ipo BEFORE EVENT grantDate +84 months".
+     Rehydrate ipo@2027-06-01 (in window) → firings_to_apply
+       evt:1 = 2027-06-01; ipo@2034 (out of window) → dead, empty
+       projection. Same 2×2 as Example 1.
+     ============================================================ -->
+
+## Example 2: Contingencies
+
+<!-- .slide: class="storage-ex" -->
+
+A **gated event** in the cliff — *the IPO, but only if it lands within seven years:*
+
+<div class="dsl-lines">
+<div class="dsl-line">VEST OVER 4 years EVERY 1 month</div>
+<div class="dsl-line i1">CLIFF EVENT IPO BEFORE grantDate + 7 years</div>
+</div>
+
+<div class="two-col">
+<div class="col">
+
+**Stored today** · canonical
+- `event_condition → evt:1`  *(a stand-in)*
+
+</div>
+<div class="col">
+
+**The note** · out-of-band
+- `evt:1 → IPO before grant + 7yr`
+
+</div>
+</div>
+
+<div class="two-col">
+<div class="col">
+
+**IPO fires** · Jun 2027
+- in window → `evt:1 = 2027-06-01`, vesting begins
+
+</div>
+<div class="col">
+
+**Outside the window**
+- `evt:1` never resolves → note goes **dead**
+
+</div>
+</div>
+
+> Same trick as the start — canonical holds a plain event pointer; the contingency lived in the **note**.
 
 ---
 
