@@ -2,8 +2,8 @@
 title: vestlang — a shared language for vesting
 theme: moon
 highlightTheme: monokai
-css: /assets/talk.css
-scripts: /assets/talk.js
+css: assets/talk.css
+scripts: assets/talk.js
 revealOptions:
   transition: fade
   controls: true
