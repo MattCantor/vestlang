@@ -3,9 +3,15 @@
    already sets the palette (dark teal bg, pale text, blue accents). */
 
 :root {
-  --vl-accent: #268bd2;   /* moon's link blue */
-  --vl-muted: #93a1a1;    /* moon's muted text */
-  --vl-warn: #b58900;     /* moon's bold/yellow */
+  --vl-bg: #002b36;       /* solarized base03 — moon background */
+  --vl-bg2: #073642;      /* base02 */
+  --vl-axis: #586e75;     /* base01 — axis / muted lines */
+  --vl-muted: #93a1a1;    /* base1 — muted text */
+  --vl-text: #eee8d5;     /* base2 — bright text */
+  --vl-accent: #268bd2;   /* blue   — train */
+  --vl-pulse: #b58900;    /* yellow — pulse / cliff lump */
+  --vl-sum: #859900;      /* green  — the summed schedule */
+  --vl-warn: #cb4b16;     /* orange — emphasis / residual */
 }
 
 .reveal .subtitle {
@@ -15,6 +21,14 @@
   margin-top: 0.4em;
 }
 
+/* Body paragraph text sits in an ~80% column deck-wide, so lines don't run the
+   full slide width. Utility paragraphs (byline / subtitle) are exempt. */
+.reveal .slides section p:not(.byline):not(.subtitle) {
+  max-width: 80%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .reveal .byline {
   font-size: 0.4em;
   color: var(--vl-muted);
@@ -22,13 +36,143 @@
   letter-spacing: 0.05em;
 }
 
-/* ---- animation placeholders (replaced by real A1/A2/A3 in a later pass) ---- */
+/* ---- vest DSL syntax colors (calm two-color scheme) ----
+   The full docs palette (10 token colors) reads as a christmas tree on a slide,
+   so: keywords in one accent (verbs bold), numbers pop, everything else plain.
+   Scopes are registered in talk.js; monokai doesn't define them, so we own them. */
+.reveal pre code.hljs .hljs-verb { color: #7dcfff; font-weight: 600; }
+.reveal pre code.hljs .hljs-selector,
+.reveal pre code.hljs .hljs-constraint,
+.reveal pre code.hljs .hljs-anchor { color: #7dcfff; }
+.reveal pre code.hljs .hljs-number { color: #e0af68; }
+.reveal pre code.hljs .hljs-punctuation { opacity: 0.6; }
+/* systemref, duration, date, ident → plain (theme default text) */
+
+/* ---- dsl-grow: per-clause morph line (reveal auto-animate) ----
+   talk.js expands <div class="dsl-grow">…plain DSL…</div> into per-clause
+   <span class="cl" data-id> tokens. inline-block lets auto-animate transform
+   each clause independently, so shared clauses glide while a new one fades in.
+   Colors mirror the ```vest palette above (which is scoped to pre code.hljs). */
+.reveal .dsl-grow {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.95em;
+  line-height: 1.6;
+  white-space: nowrap;
+  margin: 0.5em auto;
+}
+.reveal .dsl-grow .cl { display: inline-block; }
+.reveal .dsl-grow .hljs-verb { color: #7dcfff; font-weight: 600; }
+.reveal .dsl-grow .hljs-selector,
+.reveal .dsl-grow .hljs-constraint,
+.reveal .dsl-grow .hljs-anchor { color: #7dcfff; }
+.reveal .dsl-grow .hljs-number { color: #e0af68; }
+.reveal .dsl-grow .hljs-punctuation { opacity: 0.6; }
+
+/* ---- animation host ---- */
 .reveal .vl-anim {
+  display: block;
+  width: 100%;
+  margin: 0.2em auto 0.4em;
+}
+
+.reveal .vl-anim svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 56vh;
+}
+
+/* The running caption beneath each animation (the spoken idea, in text). */
+.reveal .vl-anim__caption {
+  display: block;
+  margin-top: 0.3em;
+  min-height: 1.5em;
+  color: var(--vl-muted);
+  font-style: italic;
+  font-size: 0.5em;
+  transition: opacity 0.3s ease;
+}
+
+/* ---- bar-chart animation primitives (shared by A1/A2/A3) ---- */
+/* Each bar is a <rect> inside a <g> pinned at its baseline; we reveal/hide it by
+   scaling vertically from the bottom, so motion reads as "shares growing on a
+   date." transform-box:fill-box pins the origin to the bar's own box. */
+.reveal .vl-bar {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transform: scaleY(0);
+  opacity: 0;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+}
+.reveal .vl-bar.is-shown {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.reveal .vl-axis-line { stroke: var(--vl-axis); stroke-width: 2; }
+.reveal .vl-tick { stroke: var(--vl-axis); stroke-width: 1; }
+.reveal .vl-tick-label {
+  fill: var(--vl-muted);
+  font-size: 18px;
+  text-anchor: middle;
+  font-family: inherit;
+}
+.reveal .vl-lane-label {
+  fill: var(--vl-muted);
+  font-size: 20px;
+  text-anchor: end;
+  font-family: inherit;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.reveal .vl-lane-label.is-shown { opacity: 1; }
+.reveal .vl-lane-label .accent { fill: var(--vl-text); font-weight: 700; }
+
+/* INFER: raw amount labels above bars + the recovered DSL line. */
+.reveal .vl-amt-label {
+  fill: var(--vl-muted);
+  font-size: 18px;
+  text-anchor: middle;
+  font-family: inherit;
+}
+.reveal .vl-dsl {
+  fill: var(--vl-text);
+  font-size: 30px;
+  font-weight: 600;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.reveal .vl-dsl.is-shown { opacity: 1; }
+
+/* A faint "ghost" outline showing where the summed bars will land. */
+.reveal .vl-ghost {
+  fill: none;
+  stroke: var(--vl-axis);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.reveal .vl-ghost.is-shown { opacity: 0.6; }
+
+/* Pulls focus to the slot where two components add. */
+.reveal .vl-highlight {
+  fill: none;
+  stroke: var(--vl-warn);
+  stroke-width: 2.5;
+  rx: 6;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.reveal .vl-highlight.is-shown { opacity: 1; }
+
+/* ---- placeholder boxes for animations not yet built (A2/A3/curves) ---- */
+.reveal .vl-anim.is-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 360px;
-  margin: 0.4em auto 0.6em;
   padding: 1em;
   border: 2px dashed rgba(38, 139, 210, 0.5);
   border-radius: 10px;
@@ -37,8 +181,7 @@
   font-size: 0.6em;
   text-align: center;
 }
-
-.reveal .vl-anim .vl-anim__tag {
+.reveal .vl-anim__tag {
   display: inline-block;
   margin-bottom: 0.5em;
   padding: 0.15em 0.6em;
@@ -50,23 +193,16 @@
   font-size: 0.8em;
 }
 
-.reveal .vl-anim .vl-anim__caption {
-  display: block;
-  margin-top: 0.4em;
-  color: var(--vl-muted);
-  font-style: italic;
-}
-
-.reveal .vl-anim .vl-anim__body {
-  opacity: 0.75;
-}
-
 /* ---- two-column "no free lunch" centerpiece ---- */
 .reveal .two-col {
   display: flex;
   gap: 1.4em;
   align-items: stretch;
   text-align: left;
+}
+/* Vertical gap between stacked two-col rows (the classifier-in-action 2×2). */
+.reveal .two-col + .two-col {
+  margin-top: 0.6em;
 }
 .reveal .two-col .col {
   flex: 1;
@@ -90,7 +226,38 @@
   line-height: 1.35;
 }
 
+/* "Two classifications": the two verdicts share 3 of 4 outcomes. Spotlight the
+   one that differs (row 3 — unrepresentable ↔ unresolved) in orange; the shared
+   rows keep their normal color. */
+.reveal .two-col.classify .col li:nth-child(3) strong {
+  color: var(--vl-warn);
+}
+
+/* Inline orange verdict — the "cannot" side of the seam, matching the highlighted
+   row on the "Two modes" slide. Used on the classifier-in-action slide. */
+.reveal .seam {
+  color: var(--vl-warn);
+  font-weight: 700;
+}
+
 .reveal blockquote {
   font-size: 0.62em;
   width: 100%;
+}
+
+/* Slide 1's vesting clause reads as a tighter pull-quote, not full-bleed. */
+.reveal blockquote.clause {
+  max-width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Hidden spans reveal.js counts as fragments to drive animation stepping. */
+.reveal .vl-frag {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }

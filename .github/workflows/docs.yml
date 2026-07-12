@@ -40,11 +40,11 @@ jobs:
 
       # Export the reveal-md talk into the Docusaurus static dir so it ships at
       # /vestlang/talk/. Run from docs/talk so reveal-md resolves the css/scripts
-      # front-matter paths relative to slides.md. Must precede the website build
+      # front-matter paths relative to slides-10min.md. Must precede the website build
       # so Docusaurus copies static/talk into the published output.
       - name: Build talk deck (reveal-md)
         working-directory: docs/talk
-        run: npx --yes reveal-md slides.md --static "$GITHUB_WORKSPACE/apps/docs/static/talk"
+        run: npx --yes reveal-md slides-10min.md --static "$GITHUB_WORKSPACE/apps/docs/static/talk"
 
       - name: Build website
         run: pnpm --filter @vestlang/docs build
