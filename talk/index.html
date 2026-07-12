@@ -24,30 +24,27 @@
 
 <p class="byline">Matt Cantor · OCF summit</p>
 
+Note:
+- Executive compensation partner at Fenwick & West
+- Involved with the project for a few years, on the board, technical working group, law firm working group
+- hobbyist coder
+- obsessed with vesting
+
 ---
 
 ## A DSL for writing vesting intent
 
 ----
 
-<!-- ============================================================
-     BEAT 1 — Origin (story-first, identity woven in).
-     Cold open on the frustration; no bio slide. The speaker's
-     identity comes out in the telling, not on the slide.
-     ============================================================ -->
-
 ## This is a vesting schedule
 
 <blockquote class="clause">1/4th of the shares shall vest on the one-year anniversary of the Vesting Commencement Date, and an additional 1/48th of the shares shall vest on each monthly anniversary of the Vesting Commencement Date thereafter...</blockquote>
 
 Note:
-Beat 1 (~1 min). Open COLD — read the clause, don't introduce yourself first.
-This is the job: I'm an executive-compensation attorney, papering equity is what
-I do, and this prose is what I read all day. The thing that always got me was
-that there's no exact, shared way to *write it down* — someone re-keys it into a
-spreadsheet, by hand, lossily. So I got annoyed enough to build a language for
-it. (Kicker to hold for later: a lawyer built this, not an engineer.) The
-question on the slide is the whole setup — beat 2 is the answer.
+- This is how lawyers right vesting schedules
+- Its verbose, lots of different ways to say the same thing, but familiar enought that we all know what it means
+- There is no shared way to *write it down*
+- This has annoyed me forever, since I started my career
 
 ----
 
@@ -65,8 +62,8 @@ question on the slide is the whole setup — beat 2 is the answer.
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month</div>
 
-- `OVER 4 years` — the total span
-- `EVERY 1 month` — the release cadence
+<p class="fragment"><code>OVER -> </code>the total span</p>
+<p class="fragment"><code>EVERY -> </code>the release cadence</p> 
 
 Note:
 Beat 2, part 1 (~40 sec). Don't show the whole line — build it. Start with the
@@ -91,10 +88,6 @@ between systems. The next two slides finish the schedule from the opening clause
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month CLIFF 1 year</div>
 
-- `CLIFF 1 year` — nothing releases until one year after the vesting start
-
-> And that line *is* the clause we opened with.
-
 Note:
 Beat 2, part 2 (~40 sec). Add one word and the whole opening clause falls out. The
 cliff isn't a negotiated 25% — it's a *gate*: nothing releases for a year, then the
@@ -107,32 +100,66 @@ read this line back as the offer-letter sentence — same schedule, now exact.
 <!-- .slide: data-auto-animate -->
 
 <!-- ============================================================
-     BEAT 2c — FROM: choosing the start. Morph step 3: FROM inserts
-     between VEST and OVER (OVER/EVERY glide right, FROM fades in). The
-     cliff is dropped here — the FROM line stays short and the cliff
-     isn't needed to show the start — so the 3→4 morph also fades CLIFF
-     out. FROM 6 months parses to a bare +6mo DURATION (AST sign PLUS),
-     i.e. an offset from the grant date, resolved at runtime. The event
-     form (FROM EVENT ipo → vesting_start base:EVENT, lint-clean) is a
-     start with no date yet — kept here as an explicit forward-reference
-     to the "A blank, and a note" beat, since it's real DSL today.
-     Verified lint-clean: VEST FROM DATE 2026-01-01 OVER 4 years EVERY
-     1 month.
+     BEAT 2c — FROM: choosing the start, walked as a four-step
+     auto-animate morph. The dsl-grow c-from clause morphs while
+     VEST/OVER/EVERY glide to make room; a caption under it names each
+     form. Each construction is its own sub-slide so reveal's
+     auto-animate runs (it only fires on slide transitions, not on
+     in-slide fragments):
+       offset   VEST FROM 6 months …         (+6mo DURATION, grant-relative)
+       date     VEST FROM DATE 2026-01-01 …  (explicit start)
+       event    VEST FROM EVENT IPO …        (base:EVENT — a start with no date yet)
+       default  VEST OVER 4 years …          (FROM fades out; the grant date)
+     All four verified lint-clean; offset parses to DURATION +6mo,
+     event to vesting_start base:EVENT. The event form is the forward
+     reference into the "A blank, and a note" beat.
      ============================================================ -->
 
-## Move the start
+## Vesting Start
+
+<div class="dsl-grow">VEST FROM 6 months OVER 4 years EVERY 1 month</div>
+
+<p class="dsl-cap">an <strong>offset</strong> from the grant date — resolved at runtime</p>
+
+Note:
+Beat 2, part 3 (~30 sec). Where does the clock start? Default: the grant date. FROM
+moves it — and it's one line morphing through four forms. First an offset, "six
+months after grant": you don't know the grant date when you write this, so it
+resolves at runtime.
+
+----
+
+<!-- .slide: data-auto-animate -->
+
+## Vesting Start
 
 <div class="dsl-grow">VEST FROM DATE 2026-01-01 OVER 4 years EVERY 1 month</div>
 
-- `FROM DATE 2026-01-01` — a fixed start (default: the grant date)
-- `FROM 6 months` — an offset from the grant date, provided at runtime
-- `FROM EVENT ipo` — start when the IPO fires (no date yet — more later)
+<p class="dsl-cap">an <strong>explicit</strong> calendar date</p>
+
+----
+
+<!-- .slide: data-auto-animate -->
+
+## Vesting Start
+
+<div class="dsl-grow">VEST FROM EVENT IPO OVER 4 years EVERY 1 month</div>
+
+<p class="dsl-cap"><strong>waits on an event</strong> — no date yet</p>
 
 Note:
-Beat 2, part 3 (~30 sec). Where does the clock start? By default, the grant date.
-FROM moves it: a fixed calendar date, or an offset ("six months after grant"). Tease
-the third option — the start can also wait on an *event* — and say "hold that," it's
-where this gets interesting.
+The event form is the one to flag: a start with no calendar date at all. "Hold that"
+— it's exactly where the talk goes next, the blank-and-a-note beat.
+
+----
+
+<!-- .slide: data-auto-animate -->
+
+## Vesting Start
+
+<div class="dsl-grow">VEST OVER 4 years EVERY 1 month</div>
+
+<p class="dsl-cap"><strong>no <code>FROM</code></strong> — the start is the grant date</p>
 
 ----
 
@@ -144,9 +171,9 @@ where this gets interesting.
 
 ## Vest just a portion
 
-```vest
-0.5 VEST OVER 2 years EVERY 1 month
-```
+<div class="dsl-lines">
+<div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
+</div>
 
 - a leading `0.5` gives this statement **half** the grant
 - the rest stays unallocated — so you combine it with more
@@ -169,10 +196,10 @@ setup: to use the whole grant, combine portions. Two ways to combine, next.
 
 ### one after another — `THEN`
 
-```vest
-0.5 VEST OVER 2 years EVERY 1 month
-  THEN 0.5 VEST OVER 2 years EVERY 1 month
-```
+<div class="dsl-lines">
+<div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">THEN 0.5 VEST OVER 2 years EVERY 1 month</div>
+</div>
 
 the second half starts when the first finishes — **4 years** end to end
 
@@ -195,10 +222,10 @@ halves appear next with PLUS — watch what changes.
 
 ### one on top of another — `PLUS`
 
-```vest
-0.5 VEST OVER 2 years EVERY 1 month
-  PLUS 0.5 VEST OVER 2 years EVERY 1 month
-```
+<div class="dsl-lines">
+<div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">PLUS 0.5 VEST OVER 2 years EVERY 1 month</div>
+</div>
 
 both halves run from the same start — done in **2 years**
 
@@ -218,18 +245,16 @@ halves here just isolate the timing.) Portions must sum to the whole.
      2,900 lump on 2027-06-01 then 100/mo — a clean template.
      ============================================================ -->
 
-## Defer to an event
+## Selectors
 
-An anchor needn't be a fixed date — `LATER OF` waits for both, `EARLIER OF` takes whichever comes first.
+<div class="dsl-lines">
+<div class="dsl-line">VEST OVER 4 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">CLIFF LATER OF (12 months, EVENT IPO)</div>
+</div>
 
-```vest
-VEST OVER 4 years EVERY 1 month
-  CLIFF LATER OF (12 months, EVENT IPO)
-```
+<p class="fragment"><code>LATER OF -> </code>Waits for both and compares</p>
 
-*Nothing releases until **both** a year of service **and** the IPO.*
-
-> The contingency prose can carry, but a spreadsheet of dates can't.
+<p class="fragment"><code>EARLIER OF -> </code>Whichever comes first</p>
 
 Note:
 Beat 2, part 5 (~40 sec). The step that makes vestlang more than shorthand. An anchor
@@ -242,22 +267,32 @@ this rule into actual dated numbers. That something is a compiler.
 ----
 
 <!-- ============================================================
-     BEAT 5 — Two-tier → storable OCF template. The proof, revealed
-     LINE BY LINE (pre.dsl-lines → each line after the first is a
-     reveal fragment): classic 4-yr monthly → a LATER OF cliff → its
-     second leg is an EARLIER OF of two events → each event carries a
-     grantDate + 7 years deadline (an explicit anchor + duration
-     offset, GRANT_DATE + 84mo). Bare 12-month cliff is vesting-start-
-     relative (taught on "Add the cliff"). Verified: stores as a
-     template; world picks the projection.
+     BEAT 5 — Two-tier → storable OCF template. The proof, grown
+     LINE BY LINE: each .dsl-line after the first is a native reveal
+     .fragment (authored here, not injected — reveal indexes them at
+     init), so the statement gains a line per → and gets taller:
+     classic 4-yr monthly → a LATER OF cliff → its second leg is an
+     EARLIER OF of two events → each event carries a grantDate + 7
+     years deadline (an explicit anchor + duration offset,
+     GRANT_DATE + 84mo). Bare 12-month cliff is vesting-start-relative
+     (taught on "Add the cliff"). talk.js recolors each line in place;
+     no <code>, so reveal's highlight plugin leaves the spans alone.
+     Nesting is driven by the i1/i2/i3 padding classes, not literal
+     leading spaces — reveal's markdown mangles deeply-indented lines
+     (turns the spaces into a blank line), so the indent lives in CSS.
+     Verified: stores as a template; world picks the projection.
      ============================================================ -->
 
 ## Two-Tier Vesting
 
-<pre class="dsl-lines"><code>VEST OVER 4 years EVERY 1 month
-  CLIFF LATER OF (12 months,
-                  EARLIER OF (EVENT IPO BEFORE grantDate + 7 years,
-                              EVENT CIC BEFORE grantDate + 7 years))</code></pre>
+<div class="dsl-lines">
+<div class="dsl-line">VEST OVER 4 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">CLIFF LATER OF (</div>
+<div class="dsl-line i2 fragment">12 months,</div>
+<div class="dsl-line i2 fragment">EARLIER OF (</div>
+<div class="dsl-line i3 fragment">EVENT IPO BEFORE grantDate + 7 years,</div>
+<div class="dsl-line i3 fragment">EVENT CIC BEFORE grantDate + 7 years))</div>
+</div>
 
 Note:
 Beat 5 (~2 min). The proof, on the single most common real contingency — build it
@@ -302,15 +337,13 @@ there's a live standards effort, and vesting is squarely inside it.
 
 ## Vesting isn't a shape
 
-Most parts of a cap table are stored and read back.
+Most parts of a cap table are stored and read back.<!-- .element: class="fragment" -->
 
-The vesting schedule is different.
+The vesting schedule is different.<!-- .element: class="fragment" -->
 
-The cap table stores the vesting spec, and the vesting events that come out of it.
-A compiler is needed to turn the vesting spec into the vesting events.
+The cap table stores the vesting spec, and the vesting events that come out of it.<!-- .element: class="fragment" -->
 
-> OCF needs a reference compiler
-> Otherwise two systems may disagree on how to create vesting events from the vesting spec, and that's not interoperable.
+A compiler is needed to turn the vesting spec into the vesting events.<!-- .element: class="fragment" -->
 
 Note:
 Beat 4 (~1 min). The intellectual core — but don't PROVE it here, beat 2 already
@@ -423,7 +456,7 @@ VEST CLIFF
      rehydrate ipo@2026-03-01 → start_to_apply = 2026-03-01.
      ============================================================ -->
 
-## A blank, and a note
+## Example 1: Contingent Vesting Start
 
 *"Vesting starts when the IPO happens"* — but the record needs a **date**, and there isn't one yet.
 
