@@ -290,6 +290,17 @@
   font-weight: 700;
 }
 
+/* Example 1 / 2 (the storage slides) pack a lead-in, a 2×2, and a punchline —
+   plus a DSL header on Example 2 — so they run taller than the classifier grid.
+   Tighten the spacing just for these two; the shared two-col metrics stay put. */
+.reveal .storage-ex p:not(.byline):not(.subtitle) { margin: 0.35em auto; }
+.reveal .storage-ex .two-col + .two-col { margin-top: 0.4em; }
+.reveal .storage-ex .two-col .col { padding: 0.4em 0.9em; }
+.reveal .storage-ex .two-col .col p { margin: 0.15em auto; }
+.reveal .storage-ex .two-col .col ul { margin: 0.1em 0; }
+.reveal .storage-ex .dsl-lines { margin: 0.4em auto; font-size: 0.6em; }
+.reveal .storage-ex blockquote { margin-top: 0.5em; }
+
 .reveal blockquote {
   font-size: 0.62em;
   width: 100%;
