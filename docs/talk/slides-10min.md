@@ -44,14 +44,6 @@ Note:
 
 <!-- .slide: data-auto-animate -->
 
-<!-- ============================================================
-     BEAT 2a — the skeleton, and the start of the auto-animate morph
-     chain (skeleton → +CLIFF → +FROM). Each clause is its own data-id
-     span (via talk.js dsl-grow), so shared clauses glide while the new
-     one fades in. Verified (grant 2025-01-01, 4,800 sh): 48 slices of
-     100, first 2025-02-01, last 2029-01-01 — clean template, no cliff.
-     ============================================================ -->
-
 ## What if the prose were parsable?
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month</div>
@@ -59,35 +51,14 @@ Note:
 <p class="fragment"><code>OVER -> </code>the total span</p>
 <p class="fragment"><code>EVERY -> </code>the release cadence</p> 
 
-Note:
-Beat 2, part 1 (~40 sec). Don't show the whole line — build it. Start with the
-shape: two words. OVER is the span, EVERY is the cadence. Both halves matter: a
-lawyer reads this sentence; a computer gets integer-exact allocation with no
-drift. Today you get prose OR a spreadsheet, never both in a form that moves
-between systems. The next two slides finish the schedule from the opening clause.
-
 ----
 
 <!-- .slide: data-auto-animate -->
 
-<!-- ============================================================
-     BEAT 2b — the cliff. Morph step 2: CLIFF 1 year appends to the
-     running line (a trailing grow). Ties back to the cold-open clause:
-     the 12-month cliff produces the "1/4" (12 of 48 months release at
-     once), then a 48th monthly. Verified: 1,200 on 2026-01-01, then
-     100/mo × 36 → 4,800 by 2029-01-01.
-     ============================================================ -->
 
 ## Add the cliff
 
 <div class="dsl-grow">VEST OVER 4 years EVERY 1 month CLIFF 1 year</div>
-
-Note:
-Beat 2, part 2 (~40 sec). Add one word and the whole opening clause falls out. The
-cliff isn't a negotiated 25% — it's a *gate*: nothing releases for a year, then the
-first twelve months land together (12/48 = a quarter), and monthly after. Reframing
-the cliff as a gate plants the idea the rest of the talk leans on. Close the loop:
-read this line back as the offer-letter sentence — same schedule, now exact.
 
 ----
 
@@ -113,13 +84,8 @@ read this line back as the offer-letter sentence — same schedule, now exact.
 
 <div class="dsl-grow">VEST FROM 6 months OVER 4 years EVERY 1 month</div>
 
-<p class="dsl-cap">an <strong>offset</strong> from the grant date — resolved at runtime</p>
+<p class="dsl-cap">an <strong>offset</strong> from the grant date</p>
 
-Note:
-Beat 2, part 3 (~30 sec). Where does the clock start? Default: the grant date. FROM
-moves it — and it's one line morphing through four forms. First an offset, "six
-months after grant": you don't know the grant date when you write this, so it
-resolves at runtime.
 
 ----
 
@@ -139,11 +105,8 @@ resolves at runtime.
 
 <div class="dsl-grow">VEST FROM EVENT IPO OVER 4 years EVERY 1 month</div>
 
-<p class="dsl-cap"><strong>waits on an event</strong> — no date yet</p>
+<p class="dsl-cap">vesting start contingent on an event</p>
 
-Note:
-The event form is the one to flag: a start with no calendar date at all. "Hold that"
-— it's exactly where the talk goes next, the blank-and-a-note beat.
 
 ----
 
@@ -157,45 +120,23 @@ The event form is the one to flag: a start with no calendar date at all. "Hold t
 
 ----
 
-<!-- ============================================================
-     BEAT 2d.1 — the portion prefix. A leading fraction gives a
-     statement part of the grant; a lone 0.5 is valid but warns
-     (portion-allocation: 50% allocated), which motivates combining.
-     ============================================================ -->
-
 ## Vest just a portion
 
 <div class="dsl-lines">
 <div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
 </div>
 
-- a leading `0.5` gives this statement **half** the grant
-- the rest stays unallocated — so you combine it with more
-
-Note:
-Beat 2, part 4a (~20 sec). Any statement can take a leading fraction — a portion of
-the grant. On its own, 0.5 leaves half unallocated (vestlang warns you), which is the
-setup: to use the whole grant, combine portions. Two ways to combine, next.
 
 ----
 
-<!-- ============================================================
-     BEAT 2d.2a — THEN (sequential). Same two halves as the PLUS
-     slide; only the operator differs. Verified (grant 2025-01-01,
-     4,800): 100/mo 2025-02-01 … 2029-01-01 — 4 yrs end to end; the
-     2nd half starts 2027-02 after the 1st finishes 2027-01. Lint clean.
-     ============================================================ -->
-
-## Combine portions
-
-### one after another — `THEN`
+## One After Another
 
 <div class="dsl-lines">
 <div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
-<div class="dsl-line i1 fragment">THEN 0.5 VEST OVER 2 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">THEN 0.5 VEST OVER 2 years EVERY 3 months</div>
 </div>
 
-the second half starts when the first finishes — **4 years** end to end
+<p class="fragment">the second half begins when the first ends - 4 years in total</p>
 
 Note:
 Beat 2, part 4b (~20 sec). THEN runs two portions in sequence: the second half waits
@@ -204,24 +145,16 @@ halves appear next with PLUS — watch what changes.
 
 ----
 
-<!-- ============================================================
-     BEAT 2d.2b — PLUS (parallel). Same two halves as the THEN slide.
-     Verified (grant 2025-01-01, 4,800): 200/mo 2025-02-01 … 2027-01-01
-     — both halves over the same 2 yrs. (Identical halves are artificial
-     — they isolate timing; real PLUS combines different schedules.)
-     Portions must sum to the whole. Lint clean.
-     ============================================================ -->
 
-## Combine portions
+## One on top of another
 
-### one on top of another — `PLUS`
 
 <div class="dsl-lines">
 <div class="dsl-line">0.5 VEST OVER 2 years EVERY 1 month</div>
-<div class="dsl-line i1 fragment">PLUS 0.5 VEST OVER 2 years EVERY 1 month</div>
+<div class="dsl-line i1 fragment">PLUS 0.5 VEST OVER 2 years EVERY 3 months</div>
 </div>
 
-both halves run from the same start — done in **2 years**
+<p class="fragment">both halves run from the same start — 2 years in total</p>
 
 Note:
 Beat 2, part 4c (~20 sec). Same two halves, one operator changed. PLUS runs them in
@@ -372,7 +305,7 @@ vestlang is a first reference compiler for the spec OCF Core is drafting.
 ### resolution
 *honors known events · intent lost, facts kept*
 
-- **template** — expressed as OCF vestig spec
+- **template** — expressed as OCF vesting spec
 - **events-only** — only vesting events, no spec
 - **unresolved** — still waiting on an event
 - **impossible** — self-contradictory
@@ -436,7 +369,7 @@ VEST CLIFF
 </div>
 </div>
 
-> One selector — `LATER OF` vs `EARLIER OF` — is the seam.
+> In this example `LATER OF` vs `EARLIER OF` is the seam between storable OCF and the vestlang extension.
 
 ----
 
@@ -458,19 +391,20 @@ VEST CLIFF
 
 <!-- .slide: class="storage-ex" -->
 
-*"Vesting starts when the IPO happens"* — the record needs a **date**, and there's none yet. Canonical's start is *always* a date, so vestlang stores a **far-future placeholder** that never vests, with the true start in a **note**:
+*"Vesting starts when the IPO happens"* 
 
 <div class="two-col">
 <div class="col">
 
-**Stored today** · canonical
-- `vesting start = 9999-12-31` *(never vests)*
+Storable
+
+- <span class="seam"><code>`vesting start = 9999-12-31`</code></span>
 
 </div>
 <div class="col">
 
-**The note** · out-of-band
-- `evt:start → EVENT IPO`
+Vestlang sidecar
+- <span class="seam"><code>`evt:start → EVENT IPO`</code></span>
 
 </div>
 </div>
@@ -478,20 +412,21 @@ VEST CLIFF
 <div class="two-col">
 <div class="col">
 
-**IPO fires** · Mar 2026
+Update record-keeper
 - `vesting start = 2026-03-01`
 
 </div>
 <div class="col">
 
-**The note resolves**
+The sidecar resolves
 - `IPO = 2026-03-01`
 
 </div>
 </div>
 
-> The contingency lived in the **note**. The record-keeper never had to understand it.
+> The contingency lives in the **vestlang sidecare**. The record-keeper never has to understand it. The user instructs the record-keeper to replace the far-future date with the actual date, just like today
 
+Note: `vesting start = 9999-12-31` the record needs a **date**, and there's none yet. Canonical's start is *always* a date, so vestlang stores a **far-future placeholder** that never vests, with the true start in a **note**:
 ----
 
 <!-- ============================================================
@@ -515,24 +450,22 @@ VEST CLIFF
 
 <!-- .slide: class="storage-ex" -->
 
-A **gated event** in the cliff — *the IPO, but only if it lands within seven years:*
-
 <div class="dsl-lines">
 <div class="dsl-line">VEST OVER 4 years EVERY 1 month</div>
-<div class="dsl-line i1">CLIFF EVENT IPO BEFORE grantDate + 7 years</div>
+<div class="dsl-line i1">CLIFF EVENT A BEFORE EVENT B</div>
 </div>
 
 <div class="two-col">
 <div class="col">
 
-**Stored today** · canonical
-- `event_condition → evt:1`  *(a stand-in)*
+Storable
+- <span class="seam"><code>`event_condition → evt:1`</code></span>
 
 </div>
 <div class="col">
 
-**The note** · out-of-band
-- `evt:1 → IPO before grant + 7yr`
+Vestlang sidecar
+- <span class="seam"><code>`evt:1 → EVENT A BEFORE EVENT B`</code></span>
 
 </div>
 </div>
@@ -540,19 +473,19 @@ A **gated event** in the cliff — *the IPO, but only if it lands within seven y
 <div class="two-col">
 <div class="col">
 
-**IPO fires** · Jun 2027
-- in window → `evt:1 = 2027-06-01`, vesting begins
+Update record-keeper
+- `evt:1 = 2027-06-01`
 
 </div>
 <div class="col">
 
-**Outside the window**
-- `evt:1` never resolves → note goes **dead**
+The sidecar resolves
+- `evt:1 = 2027-06-01`
 
 </div>
 </div>
 
-> Same trick as the start — canonical holds a plain event pointer; the contingency lived in the **note**.
+> Same mechanism as the contingent start. The record-keeper holds a plain event pointer and does not have to understand the contingency. The contingency lives in the **vestlang sidecar**.
 
 ---
 
@@ -576,8 +509,6 @@ A **gated event** in the cliff — *the IPO, but only if it lands within seven y
      ============================================================ -->
 
 ## From numbers back to a spec
-
-A real cap table isn't a spec — it's a **column of dates and amounts.**
 
 <div class="two-col">
 <div class="col">
@@ -607,7 +538,8 @@ VEST OVER 48 months
 
 No guessing: it proposes candidate specs, runs each **forward through the same compiler**, and keeps the one that reproduces your numbers **to the share.**
 
-> The reference compiler, used to *search* — a **verified** way into OCF for the cap tables that already exist.
+> The reference compiler, used to *search*. A **verified** way into OCF for cap tables that already exist,
+and a way to validate that a spec and its projection agree
 
 Note:
 The inferrer (~2 min), reworked to one slide, no animation. Real cap tables aren't
@@ -631,8 +563,6 @@ cliff back.
      ============================================================ -->
 
 ## Let's build on it
-
-- **Flip the dependency**. Build out the **reference compiler** for the OCF vesting spec and bring it an OCF repo
 
 <p class="subtitle">github.com/MattCantor/vestlang · mattcantor.github.io/vestlang</p>
 
