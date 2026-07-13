@@ -404,7 +404,7 @@ VEST CLIFF
 
 Storable
 
-- <span class="seam"><code>`vesting start = 9999-12-31`</code></span>
+- `vesting start = 9999-12-31`
 
 </div>
 <div class="col">
@@ -430,7 +430,7 @@ The sidecar resolves
 </div>
 </div>
 
-> The contingency lives in the **vestlang sidecare**. The record-keeper never has to understand it. The user instructs the record-keeper to replace the far-future date with the actual date, just like today
+> The contingency lives in the **vestlang sidecar** — the record-keeper never has to understand it. When the event fires, the user just swaps the placeholder for the real date, exactly as they would today.
 
 Note: `vesting start = 9999-12-31` the record needs a **date**, and there's none yet. Canonical's start is *always* a date, so vestlang stores a **far-future placeholder** that never vests, with the true start in a **note**:
 ----
@@ -465,7 +465,7 @@ Note: `vesting start = 9999-12-31` the record needs a **date**, and there's none
 <div class="col">
 
 Storable
-- <span class="seam"><code>`event_condition → evt:1`</code></span>
+- `event_condition → evt:1`
 
 </div>
 <div class="col">
@@ -486,7 +486,7 @@ Update record-keeper
 <div class="col">
 
 The sidecar resolves
-- `evt:1 = 2027-06-01`
+- `EVENT A = 2027-06-01`
 
 </div>
 </div>
@@ -561,14 +561,69 @@ it recovers the structure of what HAPPENED, not contingency that already resolve
 into the numbers — feed it the double-trigger's resolved output and you get a plain
 cliff back.
 
+----
+
+<!-- ============================================================
+     Inferrer slide 2 — coverage + graceful degradation. Left: the
+     shapes it recognizes as concise specs (each a candidate that must
+     round-trip through the compiler before it's offered). Right: the
+     literal per-date fallback for anything else — it never fails, it
+     bails to an imperative PLUS-chain of dated lumps.
+     Verified on the engine: clean cliff stream → a concise CLIFF spec
+     (residualError 0, fallback false); irregular 4-tranche stream →
+     500 VEST FROM DATE … PLUS … (residualError 0, fallback true, note
+     "no template shape verified; emitted the literal per-date fallback").
+     Families/order from the infer tool: plain < cliff < pre-grant fold
+     < THEN chain < single lump < literal. The bounded PLUS-cover pass
+     (concurrent superpositions) is deliberately left off — it's narrow,
+     undocumented in the tool, and a plausible superposition dropped to
+     the literal fallback in testing, so it's not a claim worth demoing.
+     The ~2,000 figure is the round-trip oracle
+     (packages/inferrer/tests/roundtripOracle.test.ts:553-582): ~2,010
+     generated inferences, every case projMatch=true, the structural-
+     failure set asserted empty. That is PROJECTION reproduction (numbers
+     to the share), NOT recovery of the original authoring intent —
+     fam1/fam2 ambiguity is expected and out of scope for this slide.
+     ============================================================ -->
+
+## Will it work on my cap table?
+
+<div class="two-col">
+<div class="col">
+
+**Shapes it recognizes**
+- a uniform **train**
+- a **cliff**
+- a **pre-grant fold** — vesting before the grant
+- a **`THEN` chain** of segments
+
+*each candidate round-trips through the compiler before it's offered*
+
+</div>
+<div class="col">
+
+**When nothing fits**
+
+```vest
+500 VEST FROM DATE 2026-03-15
+PLUS 1200 VEST FROM DATE 2026-09-02
+PLUS 300 VEST FROM DATE 2027-01-20
+⋮
+```
+
+*it never fails — worst case a literal, per-date list: imperative and ugly, but lossless and exact*
+
+</div>
+</div>
+
+> Across **~2,000** generated schedules, every one reproduces **to the share** — concise where there's structure, an honest event-by-event list where there isn't.
+
 ---
 
 <!-- ============================================================
      BEAT 8 — The invitation. Insider bringing a contribution;
      no hard ask, no manufactured question.
      ============================================================ -->
-
-## Let's build on it
 
 <p class="subtitle">github.com/MattCantor/vestlang · mattcantor.github.io/vestlang</p>
 
