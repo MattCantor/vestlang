@@ -1,4 +1,5 @@
-// `@vestlang/core` — the reference compiler for the Carta-aligned canonical
+// `@vestlang/core` — the reference compiler for the Open Cap Table Coalition
+// aligned canonical
 // interchange. The honest vestlang-blind surface: a resolved, combinator-free
 // template plus a per-grant runtime become exact integer installments.
 //
