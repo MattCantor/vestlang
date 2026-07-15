@@ -1,11 +1,13 @@
 name: Release
 
 # Manual-only until the first publish is bootstrapped. Trusted Publishing (OIDC)
-# can't CREATE a package that doesn't exist yet — @vestlang/vestlang has never
-# been published, so an automatic publish 404s. To enable auto-release: publish
-# once with a token (`cd packages/vestlang && npm publish --access public`),
-# configure the package's trusted publisher on npmjs.com (repo MattCantor/vestlang,
-# workflow release.yml), then restore the push trigger below.
+# can't CREATE a package that doesn't exist yet, and neither @vestlang/core nor
+# @vestlang/vestlang has ever been published — an automatic publish 404s for both.
+# To enable auto-release: publish each once with a token
+# (`cd packages/core && npm publish --access public`, then the same in
+# packages/vestlang), configure each package's trusted publisher on npmjs.com
+# (repo MattCantor/vestlang, workflow release.yml), then restore the push trigger
+# below.
 on:
   # push:
   #   branches: [main]
@@ -44,6 +46,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Refuse to publish artifacts that reach for anything a fresh npm install
+      # can't resolve (a private-package leak or a missing runtime dep).
+      - name: Guard published artifacts
+        run: pnpm check:artifacts
+
       - name: Test
         run: pnpm test
 
@@ -53,9 +60,21 @@ jobs:
 
       # No NODE_AUTH_TOKEN: npm exchanges the GitHub OIDC token for a short-lived
       # registry credential, per the trusted publisher configured on npmjs.com.
-      # Idempotent: the path filter fires on any package.json edit, so skip when
-      # this version is already on the registry (avoids a failing re-publish).
-      - name: Publish to npm (Trusted Publishing, OIDC)
+      # Idempotent: skip when this version is already on the registry (avoids a
+      # failing re-publish). Core publishes first — the umbrella depends on it, so
+      # `npm install @vestlang/vestlang` needs core already on the registry.
+      - name: Publish @vestlang/core (Trusted Publishing, OIDC)
+        working-directory: packages/core
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already published — skipping."
+          else
+            npm publish --access public
+          fi
+
+      - name: Publish @vestlang/vestlang (Trusted Publishing, OIDC)
         working-directory: packages/vestlang
         run: |
           NAME=$(node -p "require('./package.json').name")
