@@ -1,7 +1,7 @@
 {
   "name": "@vestlang/core",
   "version": "0.1.0",
-  "description": "Carta-aligned canonical interchange engine for vesting schedules.",
+  "description": "Open Cap Table Coalition aligned interchange engine for vesting schedules.",
   "license": "MIT",
   "keywords": [
     "vestlang",

@@ -1,7 +1,8 @@
 # @vestlang/core
 
 The reference compiler for the vestlang **canonical interchange** — the
-Carta-aligned schema for expressing a vesting schedule as storable data.
+Open Cap Table Coalition aligned schema for expressing a vesting schedule as
+storable data.
 
 Given a canonical schedule template and its runtime inputs (start anchor, share
 count, fired events), core compiles it, validates its structure, and reports
