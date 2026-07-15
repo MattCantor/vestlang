@@ -39,6 +39,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Scan the built artifacts of every publishable package for specifiers that
+      # wouldn't resolve from npm — a private-package leak or a missing runtime dep.
+      - name: Guard published artifacts
+        run: pnpm check:artifacts
+
       - name: Typecheck
         run: pnpm typecheck
 

@@ -12,7 +12,7 @@
     "declaration": false,
     "declarationMap": false,
   },
-  "include": ["packages", "apps/cli", "apps/mcp-server", "tests"],
+  "include": ["packages", "apps/cli", "apps/mcp-server", "tests", "scripts"],
   "exclude": [
     "**/node_modules",
     "**/dist",
