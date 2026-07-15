@@ -22,6 +22,10 @@ export interface Summary {
 // Total the shares across a list of installments.
 const sumAmounts = (xs: Installment[]) => xs.reduce((a, x) => a + x.amount, 0);
 
+// Ascending ISO-date order for anything date-carrying. Shared with verify.ts.
+export const byDate = (a: { date: OCTDate }, b: { date: OCTDate }) =>
+  a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+
 export function computeSummary(
   result: VestedResult,
   grantQuantity: number,
@@ -49,9 +53,6 @@ export function computeSummary(
   const resolvedUnvested = result.unvested.filter(isResolved);
 
   // Arrays are already date-ordered by the evaluator, but sort defensively.
-  const byDate = (a: { date: OCTDate }, b: { date: OCTDate }) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-
   const nextResolved = [...resolvedUnvested].sort(byDate)[0] ?? null;
   const next_vest_date = nextResolved?.date ?? null;
   const next_vest_amount = nextResolved?.amount ?? null;

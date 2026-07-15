@@ -10,9 +10,22 @@ export { normalizeProgram } from "@vestlang/normalizer";
 // Evaluator (the spec-to-canonical compiler)
 export type { VestedResult, StatementContribution } from "@vestlang/evaluator";
 
-// Pipeline — the consumer front door; owns schedule presentation.
-export { presentSchedule } from "@vestlang/pipeline";
-export type { SchedulePresentation } from "@vestlang/pipeline";
+// Pipeline — the consumer front door; owns schedule presentation and the
+// observation-verification read.
+export { presentSchedule, verifyObservations } from "@vestlang/pipeline";
+export type {
+  SchedulePresentation,
+  VerifyInput,
+  VerifyResult,
+  VerificationResult,
+  VerificationRow,
+  BalanceRow,
+  TrancheRow,
+  FigureCheck,
+  NearestInstallment,
+  Observation,
+  VerifyTolerance,
+} from "@vestlang/pipeline";
 
 // Recover — the public program-eval surface: it runs the evaluator, then rescues
 // an events-only verdict back to a template when the projection soundly has one.

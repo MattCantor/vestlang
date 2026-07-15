@@ -7,6 +7,16 @@ import type {
   VestedResult,
   StatementContribution,
   SchedulePresentation,
+  VerifyInput,
+  VerifyResult,
+  VerificationResult,
+  VerificationRow,
+  BalanceRow,
+  TrancheRow,
+  FigureCheck,
+  NearestInstallment,
+  Observation,
+  VerifyTolerance,
   RecoveryOutcome,
   RecoveredTemplate,
   LintResult,
@@ -36,6 +46,18 @@ it("re-exports every type in the umbrella's curated surface", () => {
   expectTypeOf<VestedResult>().not.toBeAny();
   expectTypeOf<StatementContribution>().not.toBeAny();
   expectTypeOf<SchedulePresentation>().not.toBeAny();
+  expectTypeOf<VerifyInput>().not.toBeAny();
+  expectTypeOf<VerifyResult>().not.toBeAny();
+  expectTypeOf<VerificationResult>().not.toBeAny();
+  expectTypeOf<VerificationRow>().not.toBeAny();
+  expectTypeOf<BalanceRow>().not.toBeAny();
+  expectTypeOf<TrancheRow>().not.toBeAny();
+  expectTypeOf<FigureCheck>().not.toBeAny();
+  expectTypeOf<NearestInstallment>().not.toBeAny();
+  expectTypeOf<Observation>().not.toBeAny();
+  expectTypeOf<VerifyTolerance>().not.toBeAny();
+  // The verification output reports facts, never a composite confidence score.
+  expectTypeOf<VerificationResult>().not.toHaveProperty("score");
   expectTypeOf<RecoveryOutcome>().not.toBeAny();
   expectTypeOf<RecoveredTemplate>().not.toBeAny();
   expectTypeOf<LintResult>().not.toBeAny();

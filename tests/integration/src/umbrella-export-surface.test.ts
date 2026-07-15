@@ -13,6 +13,7 @@ const EXPECTED_FUNCTIONS = [
   "parse",
   "normalizeProgram",
   "presentSchedule",
+  "verifyObservations",
   "evaluateProgramWithRecovery",
   "lintProgram",
   "lintText",
