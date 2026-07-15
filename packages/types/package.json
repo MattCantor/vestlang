@@ -22,8 +22,5 @@
     "@opencaptablecoalition/ocf-types": "file:../../vendor/ocf-types",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   }
 }

@@ -29,10 +29,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        env:
-          # The repo .npmrc references ${NODE_AUTH_TOKEN}; the default GITHUB_TOKEN
-          # satisfies it for installs from the GitHub registry.
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Build first: typecheck and type-aware lint resolve cross-package imports
       # through the built dist outputs.
