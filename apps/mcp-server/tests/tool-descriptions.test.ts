@@ -134,6 +134,25 @@ describe("mcp-server / vestlang_infer_schedule description states the input cap"
   });
 });
 
+describe("mcp-server / vestlang_infer_schedule context passthrough", () => {
+  // The day-of-month isn't encoded in the emitted DSL, so the tool hands back a
+  // context keyed as vestlang_evaluate's parameters. The description must instruct
+  // consumers to forward it — and the old "IMPORTANT … vesting_day_of_month" footgun
+  // caveat (which merely documented the divergence) must be gone.
+  it("the tool description tells consumers to forward the context to vestlang_evaluate", async () => {
+    const description = await descriptionOf("vestlang_infer_schedule");
+    expect(description).toContain("pass these directly to vestlang_evaluate");
+    expect(description).not.toMatch(/IMPORTANT[\s\S]*vesting_day_of_month/i);
+  });
+
+  it("the server instructions tell consumers to forward the context too", async () => {
+    const client = await connectedClient();
+    const instructions = client.getInstructions() ?? "";
+    expect(instructions).toContain("pass these directly to vestlang_evaluate");
+    expect(instructions).not.toMatch(/IMPORTANT[\s\S]*vesting_day_of_month/i);
+  });
+});
+
 describe("mcp-server / vestlang_evaluate description states the events cap", () => {
   it("names the maximum events-map entry count", async () => {
     // A distinguishing phrase, not a bare number: "1000" is a substring of the

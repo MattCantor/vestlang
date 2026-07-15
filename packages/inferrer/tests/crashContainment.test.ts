@@ -82,7 +82,7 @@ describe("inferSchedule crash containment", () => {
             result!.dsl,
             grantDate,
             total,
-            result!.diagnostics.vestingDayOfMonth,
+            result!.context.vesting_day_of_month!,
           ),
         ),
       );
@@ -130,7 +130,7 @@ describe("inferSchedule degradation on an unverifiable stream", () => {
           result!.dsl,
           grantDate,
           total,
-          result!.diagnostics.vestingDayOfMonth,
+          result!.context.vesting_day_of_month!,
         ),
       ),
     );

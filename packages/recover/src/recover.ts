@@ -91,11 +91,14 @@ export function evaluateProgramWithRecovery(
       grantDate: ctx.grantDate,
     });
 
-    // Re-classify the inferred program. The day-of-month convention isn't in the
-    // DSL text, so it has to ride in as context for the projection to line up.
+    // Re-classify the inferred program under the CALLER's grant. Take only the
+    // day-of-month from the inferred context (not in the DSL text, so it must ride
+    // in for the projection to line up) — the inferred context's grantQuantity is
+    // the tranche sum, and re-evaluating against a grant equal to its own
+    // allocation would mask an under-allocation on a grant larger than the schedule.
     const reclassifiedCtx = {
       ...ctx,
-      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+      vesting_day_of_month: inferred.context.vesting_day_of_month,
     };
     const published = evaluateProgram(inferred.program, reclassifiedCtx);
     // Recovery only runs on firing-invariant inputs, so the inferred template is
@@ -130,7 +133,9 @@ export function evaluateProgramWithRecovery(
         from: "events-only",
         reason,
         dsl: inferred.dsl,
-        vestingDayOfMonth: inferred.diagnostics.vestingDayOfMonth,
+        // Inference always populates the day-of-month; asserting non-null keeps a
+        // second default carrier from sneaking back in via a `?? DEFAULT`.
+        vestingDayOfMonth: inferred.context.vesting_day_of_month!,
         residualError,
       },
       // The original program's partition (pre-rescue), so the breakdown still

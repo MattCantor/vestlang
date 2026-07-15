@@ -76,10 +76,14 @@ export function inferSchedule(input: InferInput): InferResult {
           total: 0,
         },
       ],
+      context: {
+        grantDate,
+        events: {},
+        grantQuantity: 0,
+        vesting_day_of_month: dom,
+      },
       diagnostics: {
         residualError: 0,
-        totalQuantity: 0,
-        vestingDayOfMonth: dom,
         fallback: false,
         // One verified degenerate statement — a single schedule, not a fallback.
         recoveryMode: "single-schedule",
@@ -123,12 +127,18 @@ export function inferSchedule(input: InferInput): InferResult {
     dsl: result.dsl,
     program: result.program,
     decomposition: result.components,
+    // grantDate is the anchor inference ran under, never a fold's recovered
+    // pre-grant start (see the InferResult.context doc).
+    context: {
+      grantDate,
+      events: {},
+      grantQuantity: totalQuantity,
+      vesting_day_of_month: result.dom,
+    },
     diagnostics: {
       // Verification is exact projection equality and the fallback is
       // projection-lossless, so the emitted program always reproduces the input.
       residualError: 0,
-      totalQuantity,
-      vestingDayOfMonth: result.dom,
       fallback: result.fallback,
       recoveryMode: result.recoveryMode,
       notes,

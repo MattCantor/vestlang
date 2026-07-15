@@ -2,6 +2,7 @@ import type {
   OCTDate,
   PeriodTag,
   Program,
+  ResolutionContextInput,
   VestingDayOfMonth,
 } from "@vestlang/types";
 
@@ -121,13 +122,21 @@ export interface InferResult {
   dsl: string;
   program: Program;
   decomposition: DecompositionComponent[];
+  /** Exactly what `evaluate` consumes, so re-evaluating `dsl` under only this
+   *  reproduces the input tranches — the round-trip carrier. The day-of-month rule
+   *  and the grant anchor live here, not in a contract-free diagnostics bag,
+   *  because the DSL text alone can't encode them. `grantDate` is the anchor
+   *  inference actually ran under (the caller's, or the first tranche date when
+   *  omitted) — never a pre-grant fold's recovered start, which evaluate must
+   *  re-fold from the grant date. `grantQuantity` is the tranche sum; `events` is
+   *  always empty (nothing event-shaped is inferable); `vesting_day_of_month` is
+   *  always populated, even though the shared input type leaves it optional. */
+  context: ResolutionContextInput;
   diagnostics: {
     /** Absolute per-date disagreement between the emitted program and the input —
      * 0 whenever a candidate verified, and also 0 on the literal fallback, which
      * is projection-lossless by construction. */
     residualError: number;
-    totalQuantity: number;
-    vestingDayOfMonth: VestingDayOfMonth;
     /** True when no hypothesis family verified and the literal per-date fallback
      * fired — the honest signal that the stream had no recognized template shape. */
     fallback: boolean;

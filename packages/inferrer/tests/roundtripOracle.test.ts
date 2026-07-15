@@ -249,7 +249,7 @@ function runCase(c: OracleCase): OracleEntry | null {
       inferred.dsl,
       c.grantDate,
       c.total,
-      inferred.diagnostics.vestingDayOfMonth,
+      inferred.context.vesting_day_of_month!,
     );
     const rr = recSched.resolvesTo;
     recoveredStatus = rr.status;

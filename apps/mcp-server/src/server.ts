@@ -62,9 +62,10 @@ Typical workflows:
   in a fixed preference order wins. A stream no single schedule can read may still
   come back as a compact PLUS cover of concurrent layers, and anything still
   unrecognized falls back to a literal per-date list; diagnostics.recoveryMode says
-  which happened. Note that the returned diagnostics.vestingDayOfMonth is not
-  encoded in the DSL — pass it back as the vesting_day_of_month input when
-  evaluating the returned DSL.
+  which happened. The result also carries a \`context\` object keyed as
+  vestlang_evaluate's parameters (grant_date, grant_quantity, vesting_day_of_month,
+  events); pass these directly to vestlang_evaluate alongside the returned DSL to
+  re-evaluate it faithfully (the day-of-month is not encoded in the DSL).
 - Persistence lifecycle: vestlang_persist compiles a DSL program ONCE into a
   storable artifact (canonical template + runtime + an out-of-band sidecar that
   maps each synthetic event to its definition). A program is storable only when it
@@ -300,7 +301,7 @@ export function createServer(): McpServer {
       description:
         "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches (at most " +
         MAX_INSTALLMENTS +
-        " entries) and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins. When every single-schedule reading fails, a bounded PLUS-cover search runs before the fallback: it peels a dominant uniform train off the stream, re-reads the remainder with the same families, and emits the layers as one PLUS program when the assembled result reproduces the input exactly (at most 3 statements, always fewer than one-per-date). Anything still unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, when evaluated with the reported vestingDayOfMonth, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). diagnostics.recoveryMode names how the answer was produced: single-schedule (one verified statement), then-chain (one schedule as sequential THEN segments), plus-cover (concurrent layers summing to the stream), or literal (the per-date fallback; equivalent to diagnostics.fallback = true). IMPORTANT: the returned diagnostics.vestingDayOfMonth is NOT encoded in the DSL itself — consumers who later call vestlang_evaluate on the returned DSL must pass it back as the vesting_day_of_month input, or they will get a slightly different schedule.",
+        " entries) and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins. When every single-schedule reading fails, a bounded PLUS-cover search runs before the fallback: it peels a dominant uniform train off the stream, re-reads the remainder with the same families, and emits the layers as one PLUS program when the assembled result reproduces the input exactly (at most 3 statements, always fewer than one-per-date). Anything still unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, evaluated with the returned `context`, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). diagnostics.recoveryMode names how the answer was produced: single-schedule (one verified statement), then-chain (one schedule as sequential THEN segments), plus-cover (concurrent layers summing to the stream), or literal (the per-date fallback; equivalent to diagnostics.fallback = true). The result also carries a `context` object keyed exactly as vestlang_evaluate's parameters — grant_date, grant_quantity, vesting_day_of_month, and events; pass these directly to vestlang_evaluate alongside the returned dsl to re-evaluate the inferred schedule. The day-of-month is not encoded in the DSL, so evaluating without this context diverges.",
       inputSchema: z.strictObject({
         tranches: z
           .array(
@@ -341,7 +342,17 @@ export function createServer(): McpServer {
           })),
           grantDate: grant_date,
         });
-        return okResult({ ...result });
+        // Re-key the library's camelCase context to vestlang_evaluate's own
+        // parameter names for direct passthrough.
+        return okResult({
+          ...result,
+          context: {
+            grant_date: result.context.grantDate,
+            grant_quantity: result.context.grantQuantity,
+            vesting_day_of_month: result.context.vesting_day_of_month,
+            events: result.context.events,
+          },
+        });
       } catch (err: unknown) {
         // Input-contract violations carry a clean domain message; anything else
         // is an internal error from a deeper layer and must not leak its text.
