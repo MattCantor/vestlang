@@ -57,11 +57,21 @@ type OffsetError =
   | { ruleId: "offset-not-single-expression"; message: string }
   | { ruleId: "offset-unresolved"; message: string; unresolved: string };
 
+// verify's own refusals — an input the caller controls (grant quantity below one,
+// or no observations) and the one schedule-side refusal it adds beyond the shared
+// parse/evaluate arms: an over-allocating program, whose broken denominator makes
+// the percent-of-grant comparison meaningless.
+type VerifyError =
+  | { ruleId: "verify-invalid-grant-quantity"; message: string }
+  | { ruleId: "verify-no-observations"; message: string }
+  | { ruleId: "verify-over-allocation"; message: string };
+
 export type PipelineError =
   | SharedError
   | PersistError
   | RehydrateError
-  | OffsetError;
+  | OffsetError
+  | VerifyError;
 
 // A success carries its own named payload (e.g. `{ program }`); a failure
 // carries the error. Callers branch on `ok`.

@@ -44,3 +44,20 @@ export type {
   ResolveOffsetInput,
   ResolveOffsetResult,
 } from "./resolve-offset.js";
+
+// Verify a proposed schedule against dated observations (balance snapshots and/or
+// exact tranches). Composes the run* reads; grades every supplied figure as a
+// percent-of-grant gap against the schedule's own prediction.
+export { verifyObservations } from "./verify.js";
+export type {
+  VerifyInput,
+  VerifyResult,
+  VerificationResult,
+  VerificationRow,
+  BalanceRow,
+  TrancheRow,
+  FigureCheck,
+  NearestInstallment,
+  Observation,
+  VerifyTolerance,
+} from "./verify.js";
