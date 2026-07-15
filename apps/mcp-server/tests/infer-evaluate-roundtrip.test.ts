@@ -7,9 +7,9 @@ import { createServer } from "../src/server.js";
 // The inferrer advertises an "always round-trip verified" guarantee, but it
 // verifies through the whole-program collapse while a consumer re-evaluates the
 // emitted DSL through vestlang_evaluate — which computes a per-statement breakdown,
-// the path that once threw on any THEN chain the inferrer emitted (#143). These
-// tests close the gap end to end at the MCP boundary: infer a schedule, then
-// forward the tool's own `context` object straight into vestlang_evaluate, so the
+// the path that once threw on any THEN chain the inferrer emitted. These tests
+// close the gap end to end at the MCP boundary: infer a schedule, then forward
+// the tool's own `context` object straight into vestlang_evaluate, so the
 // day-of-month never has to be re-plucked and re-supplied by hand.
 
 type CallResult = {

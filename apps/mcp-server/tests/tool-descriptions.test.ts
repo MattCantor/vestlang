@@ -149,7 +149,7 @@ describe("mcp-server / vestlang_infer_schedule context passthrough", () => {
     const client = await connectedClient();
     const instructions = client.getInstructions() ?? "";
     expect(instructions).toContain("pass these directly to vestlang_evaluate");
-    expect(instructions).not.toMatch(/IMPORTANT[\s\S]*vesting_day_of_month/i);
+    expect(instructions).not.toContain("diagnostics.vestingDayOfMonth");
   });
 });
 

@@ -1322,7 +1322,7 @@ describe("inferSchedule — the returned context round-trips through evaluate", 
     assertContextRoundTrip(result, tranches);
   });
 
-  it("a month-end stream (the issue repro — the day-of-month rides in the context)", () => {
+  it("a month-end LAST_DAY_OF_MONTH stream — the day-of-month rides in the context, not the DSL", () => {
     // A month-end stream projected under LAST_DAY_OF_MONTH. The emitted DSL can't
     // encode the day-of-month rule, so re-evaluating under only the returned context
     // is the sole faithful round trip — the divergence the context field removes.
