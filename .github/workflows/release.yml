@@ -1,21 +1,19 @@
 name: Release
 
-# Manual-only until the first publish is bootstrapped. Trusted Publishing (OIDC)
-# can't CREATE a package that doesn't exist yet, and neither @vestlang/core nor
-# @vestlang/vestlang has ever been published — an automatic publish 404s for both.
-# To enable auto-release: publish each once with a token
-# (`cd packages/core && pnpm publish --access public`, then the same in
-# packages/vestlang), configure each package's trusted publisher on npmjs.com
-# (repo MattCantor/vestlang, workflow release.yml), then restore the push trigger
-# below. Publish with pnpm, not npm: npm packs `workspace:*` verbatim, so a plain
+# Publishes @vestlang/core and @vestlang/vestlang to npmjs via Trusted
+# Publishing (OIDC) — each package's trusted publisher on npmjs.com names this
+# repo and workflow, so no NPM_TOKEN secret exists anywhere. Fires when a merge
+# to main touches a publishable package's manifest (i.e. a `changeset version`
+# bump lands); the already-published guards make reruns and no-op fires safe.
+# Publish with pnpm, not npm: npm packs `workspace:*` verbatim, so a plain
 # `npm publish` ships an uninstallable umbrella tarball — pnpm rewrites those
 # ranges to concrete versions at pack time.
 on:
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "packages/vestlang/package.json"
-  #     - "packages/core/package.json"
+  push:
+    branches: [main]
+    paths:
+      - "packages/vestlang/package.json"
+      - "packages/core/package.json"
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
