@@ -4,7 +4,7 @@ import { CONTINGENT_START_SENTINEL } from "@vestlang/utils";
 import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 
-// Issue #345 — the MCP wire envelope is unified across all 14 tools onto an
+// Issue #345 — the MCP wire envelope is unified across all 15 tools onto an
 // explicit `ok` discriminant: success → { ok: true, ...payload }, structured
 // refusal → { ok: false, error: { ruleId, ... } }. A genuine exception stays on
 // MCP's separate `isError` channel. These tests crystallize the acceptance
@@ -86,7 +86,7 @@ const corruptArtifact = (eventId: string, definition: string) => ({
 });
 
 /* ====================================================================
- * AC#1 — uniform success envelope across all 14 tools.
+ * AC#1 — uniform success envelope across all 15 tools.
  * ==================================================================== */
 
 describe("#345 AC#1 — every tool returns { ok: true } and a falsy isError on valid input", () => {
@@ -105,6 +105,14 @@ describe("#345 AC#1 — every tool returns { ok: true } and a falsy isError on v
       [
         "vestlang_vested_between",
         { dsl: validDsl, ...GRANT, from: "2025-01-01", to: "2025-12-31" },
+      ],
+      [
+        "vestlang_verify_observations",
+        {
+          dsl: validDsl,
+          ...GRANT,
+          observations: [{ kind: "balance", date: "2026-01-01", vested: 250 }],
+        },
       ],
       ["vestlang_lint", { dsl: validDsl }],
       [
@@ -228,6 +236,20 @@ describe("#345 AC#2 — each refusal-capable tool surfaces { ok: false, error: {
       expect(sc(res).ok, name).toBe(false);
       expect(sc(res).error?.ruleId, name).toBe("syntax-error");
     }
+  });
+
+  it("verify_observations refuses an over-allocating program with verify-over-allocation", async () => {
+    const client = await connectClient();
+    const res = await call(client, "vestlang_verify_observations", {
+      dsl:
+        "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month PLUS " +
+        "0.6 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 1 month",
+      ...GRANT,
+      observations: [{ kind: "balance", date: "2026-01-01", vested: 1000 }],
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sc(res).ok).toBe(false);
+    expect(sc(res).error?.ruleId).toBe("verify-over-allocation");
   });
 
   it("persist refuses a non-template program with persist-not-storable (now on the wire)", async () => {

@@ -13,7 +13,9 @@ import {
   runPersist,
   runRehydrate,
   runResolveOffset,
+  verifyObservations,
   type GrantInput,
+  type VerificationResult,
 } from "@vestlang/pipeline";
 import type { OCTDate, Program, Statement } from "@vestlang/types";
 import {
@@ -26,8 +28,8 @@ import { PERSISTED_ARTIFACT } from "./artifact-schema.js";
 import { ISO_DATE } from "./iso-date.js";
 
 const INSTRUCTIONS = `Vestlang is a DSL for equity vesting schedules. This server
-exposes the full vestlang pipeline (parse, compile, evaluate, lint, stringify)
-as tools, and publishes the grammar/spec/examples as resources.
+exposes the full vestlang pipeline (parse, compile, evaluate, verify, lint,
+stringify) as tools, and publishes the grammar/spec/examples as resources.
 
 Typical workflows:
 - Natural language → vestlang: vestlang://docs/grammar is the authoritative
@@ -55,6 +57,13 @@ Typical workflows:
   answer — and a \`breakdown\`: each clause's own tranches and blockers (split into
   \`pendingBlockers\` and \`deadBlockers\`), for when you need to see which clause
   produced what.
+- Checking a schedule against disclosed evidence: call
+  vestlang_verify_observations with the DSL, the grant context, and dated
+  observations — balance snapshots (vested/unvested share counts) and/or exact
+  tranches (shares released on one date, e.g. a proxy footnote). It grades every
+  supplied figure as a percent-of-grant gap against the schedule's own prediction
+  and reports \`matches\` plus per-figure checks; it targets sparse evidence, where
+  vestlang_infer_schedule (full stream in, exact DSL out) doesn't fit.
 - Tranche array → vestlang: call vestlang_infer_schedule on an array of
   {date, amount} pairs to get the best-fit DSL. Candidate templates are derived
   analytically from the stream's date lattice and cumulative sums, each verified by
@@ -154,6 +163,52 @@ const EVAL_CONTEXT_FIELDS = {
   ),
 };
 
+// Verification measures every gap as a percent of the grant, so grant_quantity is
+// the shared denominator and cannot be 0 — the evaluate family's field, tightened
+// to min-1 (the stricter bound dominates).
+const GRANT_QUANTITY_MIN_1 = EVAL_CONTEXT_FIELDS.grant_quantity
+  .min(1, "grant_quantity must be at least 1")
+  .describe(
+    "Total shares granted (the percent-of-grant denominator; at least 1)",
+  );
+
+// A dated observation to check the schedule against: a cumulative balance snapshot
+// (vested and/or unvested shares) or a discrete tranche (shares released on exactly
+// that date). Same-date tranches are summed before comparison.
+const SHARE_COUNT = z.number().int("share counts must be whole numbers").min(0);
+const OBSERVATION = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("balance"),
+    date: ISO_DATE,
+    vested: SHARE_COUNT.optional().describe(
+      "Cumulative vested shares as of `date`",
+    ),
+    unvested: SHARE_COUNT.optional().describe("Unvested shares as of `date`"),
+  }),
+  z.strictObject({
+    kind: z.literal("tranche"),
+    date: ISO_DATE,
+    amount: SHARE_COUNT.describe("Shares that vested on exactly `date`"),
+  }),
+]);
+
+// How close an observed figure must sit to the prediction. One explicit setting,
+// discriminated on unit — percent of grant, or an absolute share count. Omitted
+// defaults to 5 percent of grant.
+const TOLERANCE = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("percent"),
+    value: z
+      .number()
+      .min(0)
+      .describe("Allowed gap as a percent of grant (5 = 5%)"),
+  }),
+  z.strictObject({
+    kind: z.literal("shares"),
+    value: SHARE_COUNT.describe("Allowed gap as an absolute share count"),
+  }),
+]);
+
 /* ------------------------
  * Helpers
  * ------------------------ */
@@ -195,6 +250,27 @@ function jsonResult<T>(output: T) {
 // arm already carries `ok: true`, so those go straight to `jsonResult(result)`.
 function okResult<T extends Record<string, unknown>>(payload: T) {
   return jsonResult({ ok: true as const, ...payload });
+}
+
+// One human-readable line built entirely from the structured verification facts —
+// how many checks landed within tolerance, the worst gap, and any date-less
+// pending/impossible shares. No thresholds or confidence labels invented here; the
+// consumer owns that policy.
+function summarizeVerification(r: VerificationResult): string {
+  const checks = r.rows.flatMap((row) =>
+    row.kind === "balance" ? row.checks : [row.check],
+  );
+  const failed = checks.filter((c) => !c.withinTolerance).length;
+  const n = checks.length;
+  const plural = n === 1 ? "" : "s";
+  const head = r.matches
+    ? `All ${n} check${plural} within tolerance`
+    : `${failed} of ${n} check${plural} outside tolerance`;
+  const held =
+    r.unresolved || r.impossible
+      ? `; ${r.unresolved} shares pending, ${r.impossible} impossible`
+      : "";
+  return `${head} (worst gap ${r.worstGap.toFixed(1)}% of grant)${held}.`;
 }
 
 /* ------------------------
@@ -474,6 +550,71 @@ export function createServer(): McpServer {
         valid: result.valid,
         findings: result.findings,
       });
+    },
+  );
+
+  /* verify_observations: DSL + context + dated observations → per-figure checks */
+  server.registerTool(
+    "vestlang_verify_observations",
+    {
+      title: "Verify a schedule against dated observations",
+      description:
+        "Check a proposed vesting schedule against dated evidence — balance snapshots (cumulative vested and/or unvested shares as of a date) and/or exact tranches (shares that vested on exactly one date, e.g. a DEF 14A footnote). Use it to test a schedule you already have against sparse reality; to reconstruct a full disclosed history instead, use vestlang_infer_schedule. Each supplied figure becomes its own check carrying { predicted, observed, delta (observed − predicted), gap, withinTolerance }; `gap` is the absolute delta as a percent of the grant (5.0 = 5%), one constant denominator at every date (never percent-of-expected). Balance rows report BOTH predicted vested and predicted unvested regardless of which figure came in; a two-figure balance yields two independent checks. Tranche dates are exact-match: a tranche on a date the schedule predicts nothing for fails and the row carries `nearest` (the closest predicted installment, ties broken to the earlier date; omitted when the schedule has no dated installments). Same-date tranche observations are summed first. `tolerance` is one setting discriminated on `kind` — { kind: 'percent', value } (percent of grant) or { kind: 'shares', value } (absolute count); omit it for a 5-percent-of-grant default. The result reports `matches` (true only when every check is within tolerance), the per-row `checks`, aggregate `worstGap` / `meanGap` (percent of grant, over checks), the date-less `unresolved` and `impossible` share totals (pending or never-vesting shares, both read as unvested here), and `absenceAssumptions` relayed from the evaluator (events the reading assumes stayed absent). There is deliberately no composite score — confidence policy is yours. Predicted vested counts only RESOLVED installments on or before the date given the events you pass, so a schedule waiting on an unfired gate still verifies with its shares reported unvested. The call refuses (ok: false) only when the arithmetic is broken: an over-allocating program (verify-over-allocation), unparseable DSL (syntax-error), or an evaluation failure — a bad-but-evaluable schedule (e.g. an unsatisfiable date window) is graded, not refused. grant_quantity must be a positive integer, since it is the percent-of-grant denominator.",
+      inputSchema: z.strictObject({
+        dsl: DSL_INPUT,
+        // The shared context fields, with grant_quantity overridden to the min-1
+        // variant (the later key wins the spread).
+        ...EVAL_CONTEXT_FIELDS,
+        grant_quantity: GRANT_QUANTITY_MIN_1,
+        observations: z
+          .array(OBSERVATION)
+          .min(1, "supply at least one observation")
+          .describe(
+            "Dated balance snapshots and/or exact tranches to check against.",
+          )
+          .superRefine((arr, ctx) => {
+            arr.forEach((o, i) => {
+              if (
+                o.kind === "balance" &&
+                o.vested === undefined &&
+                o.unvested === undefined
+              ) {
+                ctx.addIssue({
+                  code: "custom",
+                  path: [i],
+                  message:
+                    "a balance observation needs at least one of vested or unvested",
+                });
+              }
+            });
+          }),
+        tolerance: TOLERANCE.optional().describe(
+          "Match tolerance; defaults to 5 percent of grant when omitted.",
+        ),
+      }).shape,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const result = verifyObservations({
+        dsl: params.dsl,
+        grant_date: params.grant_date,
+        grant_quantity: params.grant_quantity,
+        events: params.events,
+        vesting_day_of_month: params.vesting_day_of_month,
+        observations: params.observations,
+        tolerance: params.tolerance,
+      });
+      // The Result rides the wire whole on both arms — a structured refusal
+      // (verify-*, or a propagated syntax/evaluation error) keeps its ruleId
+      // under { ok: false, error }; a graded result carries the facts plus a
+      // one-line human summary composed from them.
+      if (!result.ok) return jsonResult(result);
+      return jsonResult({ ...result, summary: summarizeVerification(result) });
     },
   );
 
