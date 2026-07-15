@@ -5,7 +5,9 @@
 import { describe, expect, it } from "vitest";
 import {
   findViolations,
+  findWorkspaceRangeViolations,
   type PackageScan,
+  type PackedManifest,
 } from "../../../scripts/check-published-artifacts.mjs";
 
 const PRIVATE = new Set(["@vestlang/primitives"]);
@@ -108,6 +110,49 @@ describe("publish guard scanner", () => {
       }),
       PRIVATE,
     );
+    expect(violations).toEqual([]);
+  });
+});
+
+describe("packed-manifest workspace-range check", () => {
+  it("flags a surviving workspace range with the package, dependency, and literal range", () => {
+    const violations = findWorkspaceRangeViolations({
+      name: "@vestlang/vestlang",
+      dependencies: { "@vestlang/core": "workspace:*", zod: "^4.0" },
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe("workspace-range");
+    expect(violations[0].package).toBe("@vestlang/vestlang");
+    expect(violations[0].message).toContain("@vestlang/core");
+    expect(violations[0].message).toContain("workspace:*");
+  });
+
+  it("flags workspace ranges in peer and optional deps, not just dependencies", () => {
+    const violations = findWorkspaceRangeViolations({
+      name: "@vestlang/pkg",
+      peerDependencies: { "@vestlang/a": "workspace:^" },
+      optionalDependencies: { "@vestlang/b": "workspace:~" },
+    });
+    expect(violations).toHaveLength(2);
+    expect(violations.every((v) => v.kind === "workspace-range")).toBe(true);
+    const messages = violations.map((v) => v.message).join("\n");
+    expect(messages).toContain("workspace:^");
+    expect(messages).toContain("workspace:~");
+  });
+
+  it("passes a manifest whose ranges were rewritten to concrete versions", () => {
+    const violations = findWorkspaceRangeViolations({
+      name: "@vestlang/vestlang",
+      dependencies: { "@vestlang/core": "0.1.0", zod: "^4.0" },
+    });
+    expect(violations).toEqual([]);
+  });
+
+  it("ignores a workspace range in devDependencies — a consumer never resolves them", () => {
+    const violations = findWorkspaceRangeViolations({
+      name: "@vestlang/core",
+      devDependencies: { "@vestlang/primitives": "workspace:*" },
+    } as PackedManifest);
     expect(violations).toEqual([]);
   });
 });
