@@ -22,6 +22,7 @@ import type {
   VestingDayOfMonth,
 } from "@vestlang/types";
 import type { Result } from "./parse.js";
+import { byDate } from "./summary.js";
 import {
   runEvaluate,
   runAsOf,
@@ -143,9 +144,6 @@ export type VerifyResult = Result<VerificationResult>;
 
 const DEFAULT_TOLERANCE: VerifyTolerance = { kind: "percent", value: 5 };
 
-const byDate = (a: { date: OCTDate }, b: { date: OCTDate }) =>
-  a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-
 // Gap as a percent of the grant. Multiplying the share delta by 100 BEFORE
 // dividing keeps a clean value exact (50 of 1000 is 5, not 4.999…), so a gap can
 // be compared to a percent tolerance without a float wobble at the boundary.
@@ -248,6 +246,23 @@ export function verifyObservations(input: VerifyInput): VerifyResult {
       error: {
         ruleId: "verify-no-observations",
         message: "No observations to verify against; supply at least one.",
+      },
+    };
+  }
+  // A balance with neither figure would produce a row with zero checks — a
+  // vacuous pass that grades nothing — so it's refused, not skipped.
+  const emptyBalance = input.observations.findIndex(
+    (o) =>
+      o.kind === "balance" &&
+      o.vested === undefined &&
+      o.unvested === undefined,
+  );
+  if (emptyBalance !== -1) {
+    return {
+      ok: false,
+      error: {
+        ruleId: "verify-empty-balance",
+        message: `Balance observation at index ${emptyBalance} (${input.observations[emptyBalance].date}) carries neither a vested nor an unvested figure; supply at least one.`,
       },
     };
   }

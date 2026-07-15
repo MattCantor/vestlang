@@ -56,7 +56,9 @@ describe("verifyObservations — a matching schedule", () => {
       { kind: "balance", date: "2025-04-01", vested: 300 },
     ]);
     expect(r.ok).toBe(true);
-    if (!r.ok || r.rows[0].kind !== "balance") return;
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("balance");
+    if (r.rows[0].kind !== "balance") return;
     expect(r.rows[0].predictedVested).toBe(300);
     expect(r.rows[0].predictedUnvested).toBe(900);
     expect(r.rows[0].checks).toHaveLength(1);
@@ -97,6 +99,7 @@ describe("verifyObservations — the gap denominator is the grant, everywhere", 
     const under = verify(monthly1000, [
       { kind: "balance", date: "2025-09-01", vested: 750 },
     ]);
+    expect(over.ok && under.ok).toBe(true);
     if (!over.ok || !under.ok) return;
     expect(
       (over.rows[0] as { checks: { delta: number }[] }).checks[0].delta,
@@ -121,6 +124,7 @@ describe("verifyObservations — tolerance", () => {
     const shares40 = verify(monthly1000, off50, {
       tolerance: { kind: "shares", value: 40 },
     });
+    expect(percent6.ok && shares40.ok).toBe(true);
     if (!percent6.ok || !shares40.ok) return;
     expect(percent6.matches).toBe(true);
     expect(shares40.matches).toBe(false);
@@ -133,6 +137,7 @@ describe("verifyObservations — tolerance", () => {
     const percent4 = verify(monthly1000, off50, {
       tolerance: { kind: "percent", value: 4 },
     });
+    expect(shares60.ok && percent4.ok).toBe(true);
     if (!shares60.ok || !percent4.ok) return;
     expect(shares60.matches).toBe(true);
     expect(percent4.matches).toBe(false);
@@ -140,6 +145,7 @@ describe("verifyObservations — tolerance", () => {
 
   it("defaults to 5 percent of grant when tolerance is omitted", () => {
     const r = verify(monthly1000, off50);
+    expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.tolerance).toEqual({ kind: "percent", value: 5 });
     // Exactly 5% sits on the boundary and is admitted.
@@ -152,7 +158,10 @@ describe("verifyObservations — balance figures are checked independently", () 
     const r = verify(monthly1000, [
       { kind: "balance", date: "2025-09-01", vested: 800 },
     ]);
-    if (!r.ok || r.rows[0].kind !== "balance") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("balance");
+    if (r.rows[0].kind !== "balance") return;
     expect(r.rows[0].checks).toHaveLength(1);
     expect(r.rows[0].checks[0].figure).toBe("vested");
   });
@@ -161,7 +170,10 @@ describe("verifyObservations — balance figures are checked independently", () 
     const r = verify(monthly1000, [
       { kind: "balance", date: "2025-09-01", unvested: 200 },
     ]);
-    if (!r.ok || r.rows[0].kind !== "balance") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("balance");
+    if (r.rows[0].kind !== "balance") return;
     expect(r.rows[0].checks).toHaveLength(1);
     expect(r.rows[0].checks[0].figure).toBe("unvested");
   });
@@ -172,7 +184,10 @@ describe("verifyObservations — balance figures are checked independently", () 
     const r = verify(monthly1000, [
       { kind: "balance", date: "2025-09-01", vested: 800, unvested: 350 },
     ]);
-    if (!r.ok || r.rows[0].kind !== "balance") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("balance");
+    if (r.rows[0].kind !== "balance") return;
     const vested = r.rows[0].checks.find((c) => c.figure === "vested")!;
     const unvested = r.rows[0].checks.find((c) => c.figure === "unvested")!;
     expect(vested.withinTolerance).toBe(true);
@@ -187,7 +202,10 @@ describe("verifyObservations — tranche semantics", () => {
     const r = verify(monthly1000, [
       { kind: "tranche", date: "2025-02-01", amount: 100 },
     ]);
-    if (!r.ok || r.rows[0].kind !== "tranche") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("tranche");
+    if (r.rows[0].kind !== "tranche") return;
     expect(r.rows[0].check.predicted).toBe(100);
     expect(r.rows[0].passes).toBe(true);
   });
@@ -197,8 +215,10 @@ describe("verifyObservations — tranche semantics", () => {
       { kind: "tranche", date: "2025-03-01", amount: 40 },
       { kind: "tranche", date: "2025-03-01", amount: 60 },
     ]);
+    expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].kind).toBe("tranche");
     if (r.rows[0].kind !== "tranche") return;
     expect(r.rows[0].check.observed).toBe(100);
     expect(r.rows[0].check.predicted).toBe(100);
@@ -211,7 +231,10 @@ describe("verifyObservations — tranche semantics", () => {
     const r = verify(monthly1000, [
       { kind: "tranche", date: "2025-02-15", amount: 100 },
     ]);
-    if (!r.ok || r.rows[0].kind !== "tranche") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("tranche");
+    if (r.rows[0].kind !== "tranche") return;
     expect(r.rows[0].check.withinTolerance).toBe(false);
     expect(r.rows[0].passes).toBe(false);
     expect(r.rows[0].nearest).toEqual({ date: "2025-02-01", amount: 100 });
@@ -226,7 +249,10 @@ describe("verifyObservations — tranche semantics", () => {
       },
       [{ kind: "tranche", date: "2025-06-01", amount: 100 }],
     );
-    if (!r.ok || r.rows[0].kind !== "tranche") return;
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rows[0].kind).toBe("tranche");
+    if (r.rows[0].kind !== "tranche") return;
     expect(r.rows[0].passes).toBe(false);
     expect(r.rows[0].nearest).toBeUndefined();
   });
@@ -238,6 +264,7 @@ describe("verifyObservations — mixed observation sets", () => {
       { kind: "balance", date: "2025-06-01", vested: 500 },
       { kind: "tranche", date: "2025-02-01", amount: 100 },
     ]);
+    expect(good.ok).toBe(true);
     if (!good.ok) return;
     expect(good.rows).toHaveLength(2);
     expect(good.matches).toBe(true);
@@ -248,6 +275,7 @@ describe("verifyObservations — mixed observation sets", () => {
       { kind: "balance", date: "2025-06-01", vested: 500 },
       { kind: "tranche", date: "2025-02-01", amount: 400 },
     ]);
+    expect(bad.ok).toBe(true);
     if (!bad.ok) return;
     expect(bad.matches).toBe(false);
   });
@@ -266,10 +294,10 @@ describe("verifyObservations — pending gates", () => {
     expect(r.matches).toBe(true);
     expect(r.unresolved).toBe(1200);
     expect(r.impossible).toBe(0);
-    if (r.rows[0].kind === "balance") {
-      expect(r.rows[0].predictedVested).toBe(0);
-      expect(r.rows[0].predictedUnvested).toBe(1200);
-    }
+    expect(r.rows[0].kind).toBe("balance");
+    if (r.rows[0].kind !== "balance") return;
+    expect(r.rows[0].predictedVested).toBe(0);
+    expect(r.rows[0].predictedUnvested).toBe(1200);
   });
 
   it("relays the evaluator's absence assumptions", () => {
@@ -281,6 +309,7 @@ describe("verifyObservations — pending gates", () => {
       },
       [{ kind: "balance", date: "2026-01-01", vested: 0 }],
     );
+    expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.absenceAssumptions.length).toBeGreaterThan(0);
     expect(r.absenceAssumptions[0].eventId).toBe("ipo");
@@ -296,6 +325,7 @@ describe("verifyObservations — pending gates", () => {
       ],
       { events: { ipo: "2025-01-01" } },
     );
+    expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.unresolved).toBe(0);
     expect(r.matches).toBe(true);
@@ -353,6 +383,21 @@ describe("verifyObservations — un-gradeable inputs refuse, bad-but-evaluable o
     expect(r.error.ruleId).toBe("verify-no-observations");
   });
 
+  it("refuses a balance observation with neither figure", () => {
+    // Without the guard such a row would carry zero checks and pass vacuously —
+    // a "match" that graded nothing.
+    const r = verify(monthly1000, [
+      { kind: "balance", date: "2025-06-01", vested: 500 },
+      { kind: "balance", date: "2025-09-01" },
+    ]);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.ruleId).toBe("verify-empty-balance");
+    // The message locates the offending observation.
+    expect(r.error.message).toContain("index 1");
+    expect(r.error.message).toContain("2025-09-01");
+  });
+
   it("grades an evaluable never-vesting schedule, disclosing its impossible shares", () => {
     // An unsatisfiable date window vests nothing but still evaluates; it is graded,
     // and the never-vesting shares surface in the impossible total.
@@ -379,6 +424,7 @@ describe("verifyObservations — aggregates without a score", () => {
     const r = verify(monthly1000, [
       { kind: "balance", date: "2025-09-01", vested: 850, unvested: 170 },
     ]);
+    expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.rows).toHaveLength(1);
     expect(r.worstGap).toBe(5);
