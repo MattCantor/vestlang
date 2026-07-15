@@ -133,9 +133,7 @@ export function evaluateProgramWithRecovery(
         from: "events-only",
         reason,
         dsl: inferred.dsl,
-        // Inference always populates the day-of-month; asserting non-null keeps a
-        // second default carrier from sneaking back in via a `?? DEFAULT`.
-        vestingDayOfMonth: inferred.context.vesting_day_of_month!,
+        vestingDayOfMonth: inferred.context.vesting_day_of_month,
         residualError,
       },
       // The original program's partition (pre-rescue), so the breakdown still

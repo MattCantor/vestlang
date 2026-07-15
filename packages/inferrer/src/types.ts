@@ -129,9 +129,10 @@ export interface InferResult {
    *  inference actually ran under (the caller's, or the first tranche date when
    *  omitted) — never a pre-grant fold's recovered start, which evaluate must
    *  re-fold from the grant date. `grantQuantity` is the tranche sum; `events` is
-   *  always empty (nothing event-shaped is inferable); `vesting_day_of_month` is
-   *  always populated, even though the shared input type leaves it optional. */
-  context: ResolutionContextInput;
+   *  always empty (nothing event-shaped is inferable). The intersection requires
+   *  `vesting_day_of_month`, which the shared input type leaves optional —
+   *  inference always populates it, and the type now says so. */
+  context: ResolutionContextInput & { vesting_day_of_month: VestingDayOfMonth };
   diagnostics: {
     /** Absolute per-date disagreement between the emitted program and the input —
      * 0 whenever a candidate verified, and also 0 on the literal fallback, which

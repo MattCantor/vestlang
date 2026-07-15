@@ -36,7 +36,7 @@ function expectExactReproduction(
         result.dsl,
         grantDate,
         total,
-        result.context.vesting_day_of_month!,
+        result.context.vesting_day_of_month,
       ),
     ),
   );
