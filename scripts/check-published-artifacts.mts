@@ -1,15 +1,27 @@
-// Publish-readiness guard. A publishable package must be self-contained: every
-// module specifier its *built* output reaches for — in the declarations and the
-// JS — has to resolve for a fresh `npm install`, i.e. name a package in that
-// manifest's runtime deps or a Node builtin. Private workspace packages never
-// reach npm, so a built artifact that still imports one is a broken publish.
+// Publish-readiness guard, two checks over every publishable package:
+//   1. Self-containment — every module specifier its *built* output reaches for
+//      (declarations and JS) resolves for a fresh `npm install`: a runtime dep or
+//      a Node builtin. A private workspace package never reaches npm, so a built
+//      artifact still importing one is a broken publish.
+//   2. No surviving `workspace:` range in the *packed* manifest's resolved deps —
+//      pnpm rewrites those to concrete versions at pack time, so a survivor means
+//      the tarball would install with EUNSUPPORTEDPROTOCOL.
 //
-// The scan logic is a pure function (`findViolations`) so it can be exercised
-// against fixture inputs; the CLI at the bottom is the thin live-tree wrapper.
+// Both are pure functions (`findViolations`, `findWorkspaceRangeViolations`) so
+// they can be exercised against fixture inputs; the CLI at the bottom is the thin
+// live-tree wrapper (it packs each package with pnpm to feed check 2).
 
 import { isBuiltin } from "node:module";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  mkdtempSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 // --- pure core -------------------------------------------------------------
@@ -30,8 +42,57 @@ export interface PackageScan {
 
 export interface Violation {
   package: string;
-  kind: "unresolved-specifier" | "private-runtime-dep";
+  kind: "unresolved-specifier" | "private-runtime-dep" | "workspace-range";
   message: string;
+}
+
+/**
+ * The dependency-bearing fields of a *packed* manifest — what a consumer's
+ * install actually resolves. The live-tree `Manifest` below extends this, so
+ * either form is accepted here.
+ */
+export interface PackedManifest {
+  name?: string;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
+
+const WORKSPACE_PROTOCOL = "workspace:";
+
+// A consumer resolves these three fields; devDependencies are out of scope —
+// nobody installs a dependency's devDeps, and a packed manifest legitimately
+// keeps private-package versions there.
+const RESOLVED_DEP_FIELDS = [
+  "dependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
+
+/**
+ * A published package must not carry a `workspace:` range in any field a
+ * consumer resolves: pnpm rewrites those to concrete versions when it packs, so
+ * a survivor means the tarball was built by a workspace-unaware tool (a plain
+ * `npm publish`) and would install with EUNSUPPORTEDPROTOCOL. Runs against the
+ * *packed* manifest — `workspace:*` in a package's source is correct pnpm usage.
+ */
+export function findWorkspaceRangeViolations(
+  manifest: PackedManifest,
+): Violation[] {
+  const violations: Violation[] = [];
+  const name = manifest.name ?? "<unnamed package>";
+  for (const field of RESOLVED_DEP_FIELDS) {
+    for (const [dep, range] of Object.entries(manifest[field] ?? {})) {
+      if (range.startsWith(WORKSPACE_PROTOCOL)) {
+        violations.push({
+          package: name,
+          kind: "workspace-range",
+          message: `${field} "${dep}" is still "${range}" — an unrewritten workspace range; pack with pnpm so it resolves to a concrete version`,
+        });
+      }
+    }
+  }
+  return violations;
 }
 
 // A bare specifier is one that isn't relative and isn't the package's own name.
@@ -138,12 +199,8 @@ export function findViolations(
 
 // --- live-tree CLI ---------------------------------------------------------
 
-interface Manifest {
-  name?: string;
+interface Manifest extends PackedManifest {
   private?: boolean;
-  dependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-  optionalDependencies?: Record<string, string>;
 }
 
 const BUILT_FILE = /\.(?:d\.ts|d\.cts|d\.mts|js|cjs|mjs)$/;
@@ -153,11 +210,7 @@ function readManifest(file: string): Manifest {
 }
 
 function runtimeDepsOf(manifest: Manifest): string[] {
-  return [
-    ...Object.keys(manifest.dependencies ?? {}),
-    ...Object.keys(manifest.peerDependencies ?? {}),
-    ...Object.keys(manifest.optionalDependencies ?? {}),
-  ];
+  return RESOLVED_DEP_FIELDS.flatMap((f) => Object.keys(manifest[f] ?? {}));
 }
 
 // pnpm-workspace.yaml holds the authoritative globs (the root package.json's
@@ -209,6 +262,57 @@ function collectArtifacts(pkgDir: string): BuiltArtifact[] {
   return out;
 }
 
+// Raised when the tarball can't be produced or read — a broken/uninstalled tree,
+// not a workspace-range violation. `pnpm pack` hard-errors on an uninstalled tree
+// (ERR_PNPM_CANNOT_RESOLVE_WORKSPACE_PROTOCOL); we report that as a tooling
+// problem so it's never mistaken for a real leak.
+export class PackToolingError extends Error {}
+
+/** The slice of `spawnSync` the packer uses — injectable so tests can fake a failing pack. */
+export type SpawnLike = (
+  command: string,
+  args: string[],
+  options: { cwd?: string; encoding: "utf8" },
+) => { status: number | null; stdout: string; stderr: string };
+
+// Pack a package the way the release does and hand back its packed manifest.
+// Success keys off the pack exit code plus a tarball landing in `packDest` —
+// never stderr, since pnpm's env/WARN noise is expected. The manifest is read
+// straight out of the tarball via the system `tar` (present on ubuntu-latest and
+// the dev box), which sidesteps adding a tar dependency knip would have to allow.
+export function packedManifest(
+  pkgDir: string,
+  packDest: string,
+  spawn: SpawnLike = spawnSync,
+): PackedManifest {
+  const pack = spawn("pnpm", ["pack", "--pack-destination", packDest], {
+    cwd: pkgDir,
+    encoding: "utf8",
+  });
+  const tarballs = existsSync(packDest)
+    ? readdirSync(packDest).filter((f) => f.endsWith(".tgz"))
+    : [];
+  if (pack.status !== 0 || tarballs.length === 0) {
+    throw new PackToolingError(
+      `\`pnpm pack\` failed in ${pkgDir} (exit ${pack.status ?? "?"}, ` +
+        `${tarballs.length} tarball(s) produced). Run \`pnpm install\` and ` +
+        `\`pnpm build\` before the guard.\n${pack.stderr ?? ""}`,
+    );
+  }
+
+  const tgz = join(packDest, tarballs[0]);
+  const extract = spawn("tar", ["-xzOf", tgz, "package/package.json"], {
+    encoding: "utf8",
+  });
+  if (extract.status !== 0 || !extract.stdout.trim()) {
+    throw new PackToolingError(
+      `could not read package/package.json from ${tgz} (tar exit ` +
+        `${extract.status ?? "?"}).\n${extract.stderr ?? ""}`,
+    );
+  }
+  return JSON.parse(extract.stdout) as PackedManifest;
+}
+
 function main(): void {
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
   const dirs = workspacePackageDirs(repoRoot);
@@ -225,13 +329,16 @@ function main(): void {
       .filter((n): n is string => Boolean(n)),
   );
 
+  const publishable = [...manifests.values()].filter(
+    ({ manifest }) => manifest.private !== true && manifest.name,
+  );
+
   const violations: Violation[] = [];
-  for (const { dir, manifest } of manifests.values()) {
-    if (manifest.private === true || !manifest.name) continue;
+  for (const { dir, manifest } of publishable) {
     violations.push(
       ...findViolations(
         {
-          name: manifest.name,
+          name: manifest.name!,
           runtimeDeps: runtimeDepsOf(manifest),
           artifacts: collectArtifacts(dir),
         },
@@ -240,18 +347,44 @@ function main(): void {
     );
   }
 
-  if (violations.length > 0) {
-    console.error("Published artifacts are not self-contained:\n");
-    for (const v of violations) {
-      console.error(`  [${v.package}] ${v.message}`);
+  // Pack each publishable package into a throwaway temp dir *outside* the repo
+  // (the default lands in the package cwd and would litter the tree ahead of
+  // `format:check`) and check its packed manifest for unrewritten workspace
+  // ranges. Each temp dir is removed in its own finally, so nothing survives an
+  // exception mid-scan.
+  try {
+    for (const { dir } of publishable) {
+      const dest = mkdtempSync(join(tmpdir(), "vestlang-pack-"));
+      try {
+        violations.push(
+          ...findWorkspaceRangeViolations(packedManifest(dir, dest)),
+        );
+      } finally {
+        rmSync(dest, { recursive: true, force: true });
+      }
     }
+  } catch (err) {
+    if (!(err instanceof PackToolingError)) throw err;
     console.error(
-      `\n${violations.length} violation(s). A published package must reach only its runtime deps and Node builtins.`,
+      `Publish guard could not pack a package — this is a tooling problem, not a workspace-range leak:\n\n  ${err.message}`,
     );
     process.exit(1);
   }
 
-  console.log("Published artifacts are self-contained.");
+  if (violations.length > 0) {
+    console.error("Published artifacts are not publishable as-is:\n");
+    for (const v of violations) {
+      console.error(`  [${v.package}] ${v.message}`);
+    }
+    console.error(
+      `\n${violations.length} violation(s). A published package must reach only its runtime deps and Node builtins, and ship no unrewritten workspace ranges.`,
+    );
+    process.exit(1);
+  }
+
+  console.log(
+    "Published artifacts are self-contained and their packed manifests carry no workspace ranges.",
+  );
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

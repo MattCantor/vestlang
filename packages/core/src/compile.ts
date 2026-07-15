@@ -7,7 +7,7 @@
 // expandAnchored).
 //
 // One engine, two output shapes:
-//   compile(...)             -> { date, amount: string }[]  (OCF/Carta-native)
+//   compile(...)             -> { date, amount: string }[]  (OCF-native)
 //   compileToInstallments(…) -> { date, amount: number }[]  (consumed by extended)
 
 import type {
@@ -30,7 +30,7 @@ import {
   assertValidVestingScheduleTemplate,
 } from "./validate";
 
-/** OCF/Carta-native vesting event — amount as a decimal string. */
+/** OCF-native vesting event — amount as a decimal string. */
 export interface CompiledEvent {
   date: OCTDate;
   amount: string;
@@ -69,7 +69,7 @@ const scheduleOf = (statement: OCFVestingStatement) =>
  * condition's event hasn't fired the whole grid is held (this returns no events);
  * once it fires the grid folds at max(time baseline date, firing) as ONE
  * proportional cliff — the lump takes whatever share of the grid accrued by then.
- * The stored time `cliff`'s percentage is the Carta-facing baseline and is not
+ * The stored time `cliff`'s percentage is the interchange-facing baseline and is not
  * applied as its own lump; only its date contributes (the floor in the max).
  */
 const expandAnchored = (
@@ -277,7 +277,7 @@ export const compileToInstallments = (
 ): CompiledInstallment[] => compileRaw(template, totalShares, runtime);
 
 /**
- * Compile to OCF/Carta-native vesting events ({ date, amount: string }), the
+ * Compile to OCF-native vesting events ({ date, amount: string }), the
  * shape OCF-Tools consumes directly.
  *
  * `compile` does not certify allocatability — pair it with

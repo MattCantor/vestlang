@@ -1,7 +1,29 @@
 {
   "name": "@vestlang/core",
   "version": "0.1.0",
-  "description": "Carta-aligned canonical interchange engine for vesting schedules.",
+  "description": "Open Cap Table Coalition aligned interchange engine for vesting schedules.",
+  "license": "MIT",
+  "keywords": [
+    "vestlang",
+    "vesting",
+    "equity",
+    "canonical",
+    "interchange",
+    "compiler",
+    "ocf"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MattCantor/vestlang.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/MattCantor/vestlang/issues"
+  },
+  "homepage": "https://github.com/MattCantor/vestlang#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",
@@ -15,7 +37,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsup",
