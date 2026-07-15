@@ -12,7 +12,8 @@
     "@vestlang/linter": "workspace:*",
     "@vestlang/normalizer": "workspace:*",
     "@vestlang/primitives": "workspace:*",
-    "@vestlang/types": "workspace:*"
+    "@vestlang/types": "workspace:*",
+    "@vestlang/vestlang": "workspace:*"
   },
   "devDependencies": {
     "@opencaptablecoalition/ocf-types": "file:../../vendor/ocf-types",

@@ -43,7 +43,6 @@
   },
   "dependencies": {
     "@vestlang/core": "workspace:*",
-    "@vestlang/primitives": "workspace:*",
     "zod": "^4.0"
   },
   "devDependencies": {

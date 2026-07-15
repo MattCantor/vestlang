@@ -584,9 +584,6 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../core
-      '@vestlang/primitives':
-        specifier: workspace:*
-        version: link:../primitives
       zod:
         specifier: ^4.0
         version: 4.3.5
@@ -673,6 +670,9 @@ importers:
       '@vestlang/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@vestlang/vestlang':
+        specifier: workspace:*
+        version: link:../../packages/vestlang
     devDependencies:
       '@opencaptablecoalition/ocf-types':
         specifier: file:../../vendor/ocf-types
