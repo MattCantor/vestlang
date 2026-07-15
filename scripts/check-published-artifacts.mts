@@ -266,15 +266,26 @@ function collectArtifacts(pkgDir: string): BuiltArtifact[] {
 // not a workspace-range violation. `pnpm pack` hard-errors on an uninstalled tree
 // (ERR_PNPM_CANNOT_RESOLVE_WORKSPACE_PROTOCOL); we report that as a tooling
 // problem so it's never mistaken for a real leak.
-class PackToolingError extends Error {}
+export class PackToolingError extends Error {}
+
+/** The slice of `spawnSync` the packer uses — injectable so tests can fake a failing pack. */
+export type SpawnLike = (
+  command: string,
+  args: string[],
+  options: { cwd?: string; encoding: "utf8" },
+) => { status: number | null; stdout: string; stderr: string };
 
 // Pack a package the way the release does and hand back its packed manifest.
 // Success keys off the pack exit code plus a tarball landing in `packDest` —
 // never stderr, since pnpm's env/WARN noise is expected. The manifest is read
 // straight out of the tarball via the system `tar` (present on ubuntu-latest and
 // the dev box), which sidesteps adding a tar dependency knip would have to allow.
-function packedManifest(pkgDir: string, packDest: string): PackedManifest {
-  const pack = spawnSync("pnpm", ["pack", "--pack-destination", packDest], {
+export function packedManifest(
+  pkgDir: string,
+  packDest: string,
+  spawn: SpawnLike = spawnSync,
+): PackedManifest {
+  const pack = spawn("pnpm", ["pack", "--pack-destination", packDest], {
     cwd: pkgDir,
     encoding: "utf8",
   });
@@ -290,7 +301,7 @@ function packedManifest(pkgDir: string, packDest: string): PackedManifest {
   }
 
   const tgz = join(packDest, tarballs[0]);
-  const extract = spawnSync("tar", ["-xzOf", tgz, "package/package.json"], {
+  const extract = spawn("tar", ["-xzOf", tgz, "package/package.json"], {
     encoding: "utf8",
   });
   if (extract.status !== 0 || !extract.stdout.trim()) {
