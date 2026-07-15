@@ -63,10 +63,7 @@ jobs:
 
       # No publish token: the spawned npm exchanges the GitHub OIDC token for a
       # short-lived registry credential, per the trusted publisher configured on
-      # npmjs.com. NODE_AUTH_TOKEN is set empty only to resolve the ${NODE_AUTH_TOKEN}
-      # placeholder in the root .npmrc's @mattcantor/GitHub-Packages auth line — a
-      # different registry than the npmjs.org publish target, so it's inert here and
-      # just silences pnpm's "Failed to replace env in config" warning.
+      # npmjs.com.
       #
       # `pnpm publish` (not npm) so `workspace:*` ranges are rewritten to concrete
       # versions in the packed manifest. Idempotent: skip when this version is
@@ -75,8 +72,6 @@ jobs:
       # already on the registry.
       - name: Publish @vestlang/core (Trusted Publishing, OIDC)
         working-directory: packages/core
-        env:
-          NODE_AUTH_TOKEN: ""
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
@@ -88,8 +83,6 @@ jobs:
 
       - name: Publish @vestlang/vestlang (Trusted Publishing, OIDC)
         working-directory: packages/vestlang
-        env:
-          NODE_AUTH_TOKEN: ""
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
