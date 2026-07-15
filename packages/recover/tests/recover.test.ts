@@ -43,6 +43,31 @@ describe("evaluateProgramWithRecovery", () => {
     expect(outcome.recovered.vestingDayOfMonth).toBe("VESTING_START_DAY");
   });
 
+  // Two 0.4 grids allocate only 80% of the grant, so the schedule under-allocates
+  // (a warning, not the error the gate declines on) — and the rescue still fires.
+  // The rescued template must keep the under-allocation finding, which it does only
+  // because recovery re-evaluates against the CALLER's grant. The inferred context's
+  // grantQuantity is the tranche sum (640 here); re-evaluating against THAT would
+  // allocate exactly 100% and silently drop the finding for a grant (800) larger
+  // than the schedule.
+  it("keeps the under-allocation finding when the grant exceeds the schedule's own allocation", () => {
+    const outcome = evaluateProgramWithRecovery(
+      prog(
+        "0.4 VEST FROM DATE 2024-01-01 OVER 4 months EVERY 1 month PLUS 0.4 VEST FROM DATE 2024-03-01 OVER 4 months EVERY 1 month",
+      ),
+      makeCtx({ grantQuantity: 800 }),
+    );
+
+    expect(outcome.rescued).toBe(true);
+    if (!outcome.rescued) return;
+    expect(outcome.schedule.resolvesTo.status).toBe("template");
+    expect(
+      outcome.schedule.findings.some(
+        (f) => f.kind === "under-allocation" && f.severity === "warning",
+      ),
+    ).toBe(true);
+  });
+
   // #75.2: recovery is gated on firing-invariance (event-freeness), not on a
   // literal `FROM DATE`. The same two overlapping grids written off the grant date
   // — `FROM grantDate` and `FROM grantDate + 2 months`, against grantDate

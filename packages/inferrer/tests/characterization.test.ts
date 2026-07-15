@@ -105,7 +105,7 @@ function characterize(c: CorpusCase): CaseSnapshot {
     grantDate: c.grantDate ?? c.tranches[0].date,
     events: {},
     grantQuantity: c.grant,
-    vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+    vesting_day_of_month: inferred.context.vesting_day_of_month,
   };
   const schedule = evaluateProgram(program, ctx);
 

@@ -36,7 +36,7 @@ function expectExactReproduction(
         result.dsl,
         grantDate,
         total,
-        result.diagnostics.vestingDayOfMonth,
+        result.context.vesting_day_of_month,
       ),
     ),
   );
@@ -389,7 +389,7 @@ describe("inferSchedule — cover search boundaries", () => {
       policy: "VESTING_START_DAY_MINUS_ONE",
     });
     expect(hinted.diagnostics.recoveryMode).toBe("plus-cover");
-    expect(hinted.diagnostics.vestingDayOfMonth).toBe(
+    expect(hinted.context.vesting_day_of_month).toBe(
       "VESTING_START_DAY_MINUS_ONE",
     );
     expect(hinted.decomposition.map((c) => c.tag)).toEqual(["plain", "plain"]);
@@ -401,7 +401,7 @@ describe("inferSchedule — cover search boundaries", () => {
     // the residual re-read rather than being echoed after the fact.
     const unhinted = inferSchedule({ tranches, grantDate: d("2024-01-16") });
     expect(unhinted.diagnostics.recoveryMode).toBe("plus-cover");
-    expect(unhinted.diagnostics.vestingDayOfMonth).toBe("VESTING_START_DAY");
+    expect(unhinted.context.vesting_day_of_month).toBe("VESTING_START_DAY");
     expectExactReproduction(unhinted, tranches, d("2024-01-16"));
   });
 });
@@ -500,7 +500,7 @@ describe("inferSchedule — zero-total tranche set", () => {
 
     expect(result.dsl).toBe("0 VEST FROM DATE 2025-02-01");
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.diagnostics.totalQuantity).toBe(0);
+    expect(result.context.grantQuantity).toBe(0);
     expect(result.diagnostics.recoveryMode).toBe("single-schedule");
     expect(result.decomposition).toEqual([
       {
@@ -523,7 +523,7 @@ describe("inferSchedule — zero-total tranche set", () => {
     });
 
     expect(result.dsl).toBe("0 VEST FROM DATE 2025-01-01");
-    expect(result.diagnostics.totalQuantity).toBe(0);
+    expect(result.context.grantQuantity).toBe(0);
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.program).toHaveLength(1);
   });
@@ -538,7 +538,7 @@ describe("inferSchedule — zero-total tranche set", () => {
       grantDate: d("2025-02-01"),
       events: {},
       grantQuantity: 0,
-      vesting_day_of_month: result.diagnostics.vestingDayOfMonth,
+      vesting_day_of_month: result.context.vesting_day_of_month,
     });
 
     expect(reTranches).toHaveLength(0);
@@ -564,7 +564,7 @@ describe("inferSchedule — zero-total tranche set", () => {
       ],
     });
 
-    expect(result.diagnostics.totalQuantity).toBe(100);
+    expect(result.context.grantQuantity).toBe(100);
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     expect(result.decomposition).toHaveLength(1);
     expect(result.decomposition[0].total).toBe(100);
@@ -574,7 +574,7 @@ describe("inferSchedule — zero-total tranche set", () => {
       grantDate: d("2025-01-01"),
       events: {},
       grantQuantity: 100,
-      vesting_day_of_month: result.diagnostics.vestingDayOfMonth,
+      vesting_day_of_month: result.context.vesting_day_of_month,
     });
     expect(reTranches).toEqual([{ date: "2025-03-01", amount: 100 }]);
   });
@@ -584,12 +584,12 @@ describe("inferSchedule — zero-total tranche set", () => {
       tranches: [{ date: d("2025-02-01"), amount: 0 }],
       policy: "LAST_DAY_OF_MONTH",
     });
-    expect(withPolicy.diagnostics.vestingDayOfMonth).toBe("LAST_DAY_OF_MONTH");
+    expect(withPolicy.context.vesting_day_of_month).toBe("LAST_DAY_OF_MONTH");
 
     const withoutPolicy = inferSchedule({
       tranches: [{ date: d("2025-02-01"), amount: 0 }],
     });
-    expect(withoutPolicy.diagnostics.vestingDayOfMonth).toBe(
+    expect(withoutPolicy.context.vesting_day_of_month).toBe(
       "VESTING_START_DAY",
     );
   });
@@ -617,7 +617,7 @@ describe("inferSchedule — policy detection", () => {
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
     // Either VESTING_START_DAY (seeded day 31) or LAST_DAY_OF_MONTH reproduces this
     // month-end stream; the month-end pattern prefers LAST_DAY_OF_MONTH.
-    expect(result.diagnostics.vestingDayOfMonth).toMatch(
+    expect(result.context.vesting_day_of_month).toMatch(
       /VESTING_START_DAY|LAST_DAY_OF_MONTH/,
     );
     expect(nTag(result, "plain")).toBe(1);
@@ -660,10 +660,10 @@ describe("inferSchedule — policy detection", () => {
     });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.diagnostics.vestingDayOfMonth).toBe(
+    expect(result.context.vesting_day_of_month).toBe(
       "VESTING_START_DAY_MINUS_ONE",
     );
-    expect(result.diagnostics.totalQuantity).toBe(6000);
+    expect(result.context.grantQuantity).toBe(6000);
   });
 
   it("day-31-start MINUS_ONE stream recovers under MINUS_ONE with no hint", () => {
@@ -687,10 +687,10 @@ describe("inferSchedule — policy detection", () => {
     const result = inferSchedule({ tranches });
 
     expect(result.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(result.diagnostics.vestingDayOfMonth).toBe(
+    expect(result.context.vesting_day_of_month).toBe(
       "VESTING_START_DAY_MINUS_ONE",
     );
-    expect(result.diagnostics.totalQuantity).toBe(6000);
+    expect(result.context.grantQuantity).toBe(6000);
   });
 });
 
@@ -711,8 +711,8 @@ describe("inferSchedule — THEN chain recovery", () => {
     return evaluateProgram(program, {
       grantDate,
       events: {},
-      grantQuantity: inferred.diagnostics.totalQuantity,
-      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+      grantQuantity: inferred.context.grantQuantity,
+      vesting_day_of_month: inferred.context.vesting_day_of_month,
     }).resolvesTo.status;
   }
 
@@ -798,7 +798,7 @@ describe("inferSchedule — a lump plus a fast train does not re-allocate the tr
       grantDate: "2025-02-01",
       events: {},
       grantQuantity: total,
-      vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+      vesting_day_of_month: inferred.context.vesting_day_of_month,
     });
     const byDate = new Map(reTranches.map((t) => [t.date, t.amount]));
 
@@ -882,7 +882,7 @@ function runRoundTrip(c: RoundTripCase) {
     grantDate,
     events: {},
     grantQuantity: totalFromInferred,
-    vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
+    vesting_day_of_month: inferred.context.vesting_day_of_month,
   };
   const reTranches = evalProgramResolved(inferredProgram, inferredCtx);
   const reByDate = new Map(reTranches.map((t) => [t.date, t.amount]));
@@ -1195,6 +1195,154 @@ describe("inferSchedule — input contract", () => {
     const tranches = monthly("2024-01-01", MAX_INSTALLMENTS, 1);
     expect(tranches).toHaveLength(MAX_INSTALLMENTS);
     const result = inferSchedule({ tranches });
-    expect(result.diagnostics.totalQuantity).toBe(MAX_INSTALLMENTS);
+    expect(result.context.grantQuantity).toBe(MAX_INSTALLMENTS);
+  });
+});
+
+/* ------------------------
+ * Context round-trip: evaluate(dsl, result.context) reproduces the input
+ * ------------------------ */
+
+/** Re-evaluate the emitted DSL under ONLY the returned context — nothing threaded
+ *  from the test's own setup — and confirm the input reproduces at per-date totals.
+ *  This is the contract the `context` field exists to hold: the day-of-month rule
+ *  and grant anchor the DSL text alone can't carry. Zero-amount input rows are
+ *  dropped first (inference drops them, so they never reappear as installments). */
+function assertContextRoundTrip(
+  result: InferResult,
+  tranches: TrancheInput[],
+): void {
+  // Nothing event-shaped is inferable, so the firing map is always empty.
+  expect(result.context.events).toEqual({});
+  expect(result.context.vesting_day_of_month).toBeDefined();
+
+  const program = normalizeProgram(parse(result.dsl));
+  const recovered = aggregateByDate(
+    resolvedStream(evaluateProgram(program, result.context)),
+  );
+  const nonzero = tranches.filter((t) => t.amount !== 0);
+  expect(recovered).toEqual(aggregateByDate(nonzero));
+}
+
+describe("inferSchedule — the returned context round-trips through evaluate", () => {
+  // One case per hypothesis family. Each pins its intended decomposition tag /
+  // recoveryMode so a case can't silently degrade to the literal fallback and still
+  // pass, then asserts the round trip through `result.context` alone.
+
+  it("a plain uniform train", () => {
+    const tranches = monthly("2024-02-01", 12, 1000);
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
+    expect(nTag(result, "plain")).toBe(1);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a cliff schedule", () => {
+    const tranches: TrancheInput[] = [
+      { date: d("2025-01-01"), amount: 12000 },
+      ...monthly("2025-02-01", 36, 1000),
+    ];
+    const result = inferSchedule({ tranches, grantDate: d("2024-01-01") });
+    expect(nTag(result, "cliff")).toBe(1);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a pre-grant fold with a defaulted grant date", () => {
+    // No grant date supplied, so it defaults to the first tranche (the lump); the
+    // fold recovers a vesting start earlier than that defaulted grant, and evaluate
+    // must re-fold the pre-grant months back onto it to reproduce the stream.
+    const tranches: TrancheInput[] = [
+      { date: d("2024-01-01"), amount: 3000 },
+      { date: d("2024-01-29"), amount: 1000 },
+      { date: d("2024-02-29"), amount: 1000 },
+      { date: d("2024-03-29"), amount: 1000 },
+      { date: d("2024-04-29"), amount: 1000 },
+      { date: d("2024-05-29"), amount: 1000 },
+      { date: d("2024-06-29"), amount: 1000 },
+    ];
+    const result = inferSchedule({ tranches });
+    expect(nTag(result, "fold")).toBe(1);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a THEN chain", () => {
+    const tranches: TrancheInput[] = [
+      { date: d("2023-12-01"), amount: 100 },
+      { date: d("2024-01-01"), amount: 100 },
+      { date: d("2024-02-01"), amount: 200 },
+      { date: d("2024-03-01"), amount: 200 },
+      { date: d("2024-04-01"), amount: 100 },
+      { date: d("2024-05-01"), amount: 100 },
+    ];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("then-chain");
+    expect(nTag(result, "then-segment")).toBe(3);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a single dated lump", () => {
+    const tranches: TrancheInput[] = [{ date: d("2025-06-15"), amount: 5000 }];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
+    expect(result.diagnostics.fallback).toBe(false);
+    expect(nTag(result, "literal")).toBe(1);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a PLUS cover", () => {
+    const tranches: TrancheInput[] = [
+      ...monthly("2024-02-01", 48, 1000),
+      { date: d("2025-06-15"), amount: 10000 },
+    ];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("plus-cover");
+    expect(result.dsl).toContain("PLUS");
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("the literal fallback", () => {
+    const tranches: TrancheInput[] = [
+      { date: d("2024-03-12"), amount: 10000 },
+      { date: d("2024-08-07"), amount: 25000 },
+      { date: d("2025-11-22"), amount: 15000 },
+    ];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("literal");
+    expect(result.diagnostics.fallback).toBe(true);
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("the all-zero degenerate", () => {
+    const tranches: TrancheInput[] = [{ date: d("2025-02-01"), amount: 0 }];
+    const result = inferSchedule({ tranches });
+    expect(result.diagnostics.recoveryMode).toBe("single-schedule");
+    expect(result.context.grantQuantity).toBe(0);
+    // The degenerate DSL evaluates to an empty stream, and the sole zero row is
+    // dropped, so both sides aggregate to nothing — a vacuous but honest round trip.
+    assertContextRoundTrip(result, tranches);
+  });
+
+  it("a month-end LAST_DAY_OF_MONTH stream — the day-of-month rides in the context, not the DSL", () => {
+    // A month-end stream projected under LAST_DAY_OF_MONTH. The emitted DSL can't
+    // encode the day-of-month rule, so re-evaluating under only the returned context
+    // is the sole faithful round trip — the divergence the context field removes.
+    const ctx: ResolutionContextInput = {
+      grantDate: d("2024-01-15"),
+      events: {},
+      grantQuantity: 12000,
+      vesting_day_of_month: "LAST_DAY_OF_MONTH",
+    };
+    const stmt = normalizeProgram(
+      parse("12000 VEST FROM DATE 2024-01-15 OVER 12 months EVERY 1 month"),
+    )[0];
+    const installments: Installment[] = evaluateStatement(stmt, ctx).resolvesTo
+      .installments;
+    const tranches: TrancheInput[] = installments
+      .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+      .map((i) => ({ date: i.date, amount: i.amount }));
+
+    const result = inferSchedule({ tranches });
+    expect(nTag(result, "plain")).toBe(1);
+    assertContextRoundTrip(result, tranches);
   });
 });

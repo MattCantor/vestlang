@@ -13,9 +13,9 @@ import { createServer } from "../src/server.js";
 
 // These tests exercise the MCP tool layer for `vestlang_infer_schedule` —
 // {tranches, grant_date} argument parsing/validation, the success envelope, the
-// diagnostics passthrough consumers must feed back, and the schema-error path.
-// The inference *logic* (decomposition, round-trip fidelity) is owned and
-// covered by @vestlang/inferrer; we do not re-test it here.
+// evaluate-keyed context a consumer forwards to vestlang_evaluate, and the
+// schema-error path. The inference *logic* (decomposition, round-trip fidelity) is
+// owned and covered by @vestlang/inferrer; we do not re-test it here.
 
 type CallResult = {
   isError?: boolean;
@@ -96,10 +96,10 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(typeof sc.dsl).toBe("string");
   });
 
-  it("surfaces the diagnostics passthrough consumers must feed back", async () => {
-    // Per the tool docs, vestingDayOfMonth is NOT encoded in the returned DSL;
-    // callers must pass it back as the vesting_day_of_month input. The tool layer
-    // must therefore expose it in the response.
+  it("returns the evaluate-keyed context a consumer forwards to vestlang_evaluate", async () => {
+    // The day-of-month is NOT encoded in the returned DSL; the tool hands back a
+    // context keyed exactly as vestlang_evaluate's parameters so a consumer forwards
+    // it straight through. The library's camelCase context must not leak alongside.
     const client = await connectClient();
     const res = await callInfer(client, {
       tranches: [
@@ -108,11 +108,15 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
       ],
     });
 
-    const diagnostics = (res.structuredContent as { diagnostics: unknown })
-      .diagnostics as {
-      vestingDayOfMonth: unknown;
-    };
-    expect(diagnostics.vestingDayOfMonth).toBe("VESTING_START_DAY");
+    const sc = res.structuredContent as { context: Record<string, unknown> };
+    expect(sc.context).toEqual({
+      grant_date: "2024-01-01",
+      grant_quantity: 1000,
+      vesting_day_of_month: "VESTING_START_DAY",
+      events: {},
+    });
+    expect(sc.context).not.toHaveProperty("grantDate");
+    expect(sc.context).not.toHaveProperty("grantQuantity");
   });
 
   // With grant_date supplied, the lump a year out is a cliff (a `cliff`-tagged
@@ -167,11 +171,12 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(res.isError).toBeFalsy();
     const sc = res.structuredContent as {
       dsl: string;
-      diagnostics: { residualError: number; totalQuantity: number };
+      diagnostics: { residualError: number };
+      context: { grant_quantity: number };
     };
     expect(sc.dsl).toBe("0 VEST FROM DATE 2025-02-01");
     expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
-    expect(sc.diagnostics.totalQuantity).toBe(0);
+    expect(sc.context.grant_quantity).toBe(0);
   });
 
   it("rejects an empty tranches array via the input schema", async () => {

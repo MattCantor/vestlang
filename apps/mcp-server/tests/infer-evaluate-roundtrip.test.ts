@@ -1,37 +1,76 @@
 import { describe, expect, it } from "vitest";
-import { inferSchedule } from "@vestlang/inferrer";
-import type { TrancheInput } from "@vestlang/inferrer";
-import { runEvaluate } from "@vestlang/pipeline";
-import type { ResolvedInstallment } from "@vestlang/types";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import type { Installment, ResolvedInstallment } from "@vestlang/types";
+import { createServer } from "../src/server.js";
 
 // The inferrer advertises an "always round-trip verified" guarantee, but it
-// verifies through `evaluateProgram` — the whole-program collapse — while
-// consumers re-evaluate the emitted DSL through `runEvaluate`. Before #143 that
-// path computed a per-statement breakdown, which threw on any THEN chain the
-// inferrer emitted. These tests close the gap: every THEN-emitting candidate
-// family must survive the actual consumer path, not just the verifier's.
+// verifies through the whole-program collapse while a consumer re-evaluates the
+// emitted DSL through vestlang_evaluate — which computes a per-statement breakdown,
+// the path that once threw on any THEN chain the inferrer emitted. These tests
+// close the gap end to end at the MCP boundary: infer a schedule, then forward
+// the tool's own `context` object straight into vestlang_evaluate, so the
+// day-of-month never has to be re-plucked and re-supplied by hand.
 
-const grantQuantity = (tranches: TrancheInput[]) =>
-  tranches.reduce((n, t) => n + t.amount, 0);
+type CallResult = {
+  isError?: boolean;
+  content: { type: string; text: string }[];
+  structuredContent?: Record<string, unknown>;
+};
 
-/** Infer a schedule from a tranche stream, then re-evaluate the emitted DSL the
- *  way a consumer does — through `runEvaluate`. Returns the inferred DSL and the
- *  run result so a test can assert on both. */
-function inferThenEvaluate(tranches: TrancheInput[], grantDate: string) {
-  const inferred = inferSchedule({ tranches, grantDate });
-  const result = runEvaluate(inferred.dsl, {
-    grant_date: grantDate,
-    grant_quantity: grantQuantity(tranches),
-    vesting_day_of_month: inferred.diagnostics.vestingDayOfMonth,
-  });
-  return { dsl: inferred.dsl, result };
+type Tranche = { date: string; amount: number };
+
+async function connectClient(): Promise<Client> {
+  const server = createServer();
+  const client = new Client({ name: "test-client", version: "0.0.0" });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
+  return client;
 }
 
-describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
+/** Infer a schedule through the tool, then evaluate the emitted DSL by forwarding
+ *  the tool's own `context` object — the passthrough the tool is designed for, with
+ *  nothing re-derived from the test's own setup. */
+async function inferThenEvaluate(tranches: Tranche[], grantDate: string) {
+  const client = await connectClient();
+  const inferRes = (await client.callTool({
+    name: "vestlang_infer_schedule",
+    arguments: { tranches, grant_date: grantDate },
+  })) as CallResult;
+  const inferSc = inferRes.structuredContent as {
+    dsl: string;
+    context: Record<string, unknown>;
+  };
+
+  const evalRes = (await client.callTool({
+    name: "vestlang_evaluate",
+    arguments: { dsl: inferSc.dsl, ...inferSc.context },
+  })) as CallResult;
+  const evalSc = evalRes.structuredContent as {
+    resolvesTo: { status: string };
+    installments: Installment[];
+    breakdown: unknown[];
+  };
+  return { dsl: inferSc.dsl, evalSc };
+}
+
+const sumOf = (tranches: Tranche[]) =>
+  tranches.reduce((n, t) => n + t.amount, 0);
+
+const resolvedSum = (installments: Installment[]) =>
+  installments
+    .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
+    .reduce((n, i) => n + i.amount, 0);
+
+describe("vestlang_infer_schedule → vestlang_evaluate round-trip (context passthrough)", () => {
   // Family 1: a plain forward rate change. The inferrer segments it into
   // back-to-back equal-rate runs and writes them as a head + chained tails.
-  it("recovers a rate-change stream as a THEN chain that runEvaluate accepts", () => {
-    const rateChange: TrancheInput[] = [
+  it("recovers a rate-change stream as a THEN chain that evaluate accepts", async () => {
+    const rateChange: Tranche[] = [
       { date: "2023-12-01", amount: 100 },
       { date: "2024-01-01", amount: 100 },
       { date: "2024-02-01", amount: 200 },
@@ -39,28 +78,22 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
       { date: "2024-04-01", amount: 100 },
       { date: "2024-05-01", amount: 100 },
     ];
-    const { dsl, result } = inferThenEvaluate(rateChange, "2023-12-01");
+    const { dsl, evalSc } = await inferThenEvaluate(rateChange, "2023-12-01");
     expect(dsl).toContain("THEN");
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.view.resolvesTo.status).toBe("template");
-      // Every original tranche is reproduced — the round-trip is exact.
-      const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
-        .reduce((n, i) => n + i.amount, 0);
-      expect(produced).toBe(grantQuantity(rateChange));
-      // The whole chain attributes to one breakdown entry.
-      expect(result.breakdown).toHaveLength(1);
-    }
+    expect(evalSc.resolvesTo.status).toBe("template");
+    // Every original tranche is reproduced — the round-trip is exact.
+    expect(resolvedSum(evalSc.installments)).toBe(sumOf(rateChange));
+    // The whole chain attributes to one breakdown entry.
+    expect(evalSc.breakdown).toHaveLength(1);
   });
 
   // Family 2: a lead lump (300 = 3 × 100) that hands off to a slower tail. The
   // cliff family needs a uniform-amount tail (this one steps 100 → 50), so recovery
   // falls to the per-segment THEN family: a short first segment plus continuations —
   // one schedule (THEN), with the lead reading as a plain segment, not a CLIFF.
-  it("recovers a lead-lump THEN tail that runEvaluate accepts", () => {
-    const leadLumpThenTail: TrancheInput[] = [
+  it("recovers a lead-lump THEN tail that evaluate accepts", async () => {
+    const leadLumpThenTail: Tranche[] = [
       { date: "2024-02-01", amount: 300 },
       { date: "2024-03-01", amount: 100 },
       { date: "2024-04-01", amount: 100 },
@@ -69,48 +102,35 @@ describe("inferrer → runEvaluate round-trip (the consumer path)", () => {
       { date: "2024-07-01", amount: 50 },
       { date: "2024-08-01", amount: 50 },
     ];
-    const { dsl, result } = inferThenEvaluate(leadLumpThenTail, "2023-11-01");
+    const { dsl, evalSc } = await inferThenEvaluate(
+      leadLumpThenTail,
+      "2023-11-01",
+    );
     expect(dsl).toContain("THEN");
     expect(dsl).not.toContain("CLIFF");
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.view.resolvesTo.status).toBe("template");
-      const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
-        .reduce((n, i) => n + i.amount, 0);
-      expect(produced).toBe(grantQuantity(leadLumpThenTail));
-      expect(result.breakdown).toHaveLength(1);
-    }
+    expect(evalSc.resolvesTo.status).toBe("template");
+    expect(resolvedSum(evalSc.installments)).toBe(sumOf(leadLumpThenTail));
+    expect(evalSc.breakdown).toHaveLength(1);
   });
 
-  // Family 3: a rate change whose handoff falls on a short month. The chain's
-  // grid springs back to the month's last day; written as THEN the tail carries
-  // no start of its own, so the clamp can't strand it off the running grid.
+  // Family 3: a rate change whose handoff falls on a short month. The chain's grid
+  // springs back to the month's last day; written as THEN the tail carries no start
+  // of its own, so the clamp can't strand it off the running grid.
   //
-  // The head (200 of 800 = 1/4) and tail (600 of 800 = 3/4) are terminating
-  // shares, so the inferred THEN chain stores both percentages exactly and
-  // round-trips. A split into thirds wouldn't: each statement's percentage stores
-  // as a truncated Numeric decimal, the re-evaluated chain wouldn't reproduce the
-  // stream, and the inferrer would (correctly) fall back to independent dated
-  // amounts instead of a THEN chain.
-  it("recovers a month-end-clamped THEN chain that runEvaluate accepts", () => {
-    const monthEnd: TrancheInput[] = [
+  // The head (200 of 800 = 1/4) and tail (600 of 800 = 3/4) are terminating shares,
+  // so the inferred THEN chain stores both percentages exactly and round-trips.
+  it("recovers a month-end-clamped THEN chain that evaluate accepts", async () => {
+    const monthEnd: Tranche[] = [
       { date: "2023-12-31", amount: 100 },
       { date: "2024-01-31", amount: 100 },
       { date: "2024-02-29", amount: 300 },
       { date: "2024-03-31", amount: 300 },
     ];
-    const { dsl, result } = inferThenEvaluate(monthEnd, "2023-11-30");
+    const { dsl, evalSc } = await inferThenEvaluate(monthEnd, "2023-11-30");
     expect(dsl).toContain("THEN");
 
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.view.resolvesTo.status).toBe("template");
-      const produced = result.view.installments
-        .filter((i): i is ResolvedInstallment => i.state === "RESOLVED")
-        .reduce((n, i) => n + i.amount, 0);
-      expect(produced).toBe(grantQuantity(monthEnd));
-    }
+    expect(evalSc.resolvesTo.status).toBe("template");
+    expect(resolvedSum(evalSc.installments)).toBe(sumOf(monthEnd));
   });
 });
