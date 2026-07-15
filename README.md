@@ -191,7 +191,8 @@ date math, and grid kernel — and bundles it in, so a core consumer pulls in no
 
 `apps/mcp-server` exposes the full pipeline as Model Context Protocol tools —
 `vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_as_of`,
-`vestlang_lint`, `vestlang_stringify`, `vestlang_infer_schedule` —
+`vestlang_vested_between`, `vestlang_verify_observations`, `vestlang_lint`,
+`vestlang_stringify`, `vestlang_infer_schedule` —
 and publishes the grammar/spec/examples as resources. This is the surface for driving
 vestlang from an LLM agent.
 

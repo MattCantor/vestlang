@@ -37,6 +37,10 @@ across every refusal-capable tool:
 - **`vestlang_resolve_offset`** — `ruleId: "offset-unresolved"` (carries
   `unresolved`, the blocking reason) when a referenced event hasn't fired, or
   `"offset-not-single-expression"` when the input isn't one offset expression.
+- **`vestlang_verify_observations`** — `ruleId: "verify-over-allocation"` when the
+  schedule allocates more than the grant (the percent-of-grant denominator loses
+  meaning), plus the shared `"syntax-error"` / `"evaluation-error"` for unparseable
+  or un-evaluable DSL. A bad-but-evaluable schedule is graded, not refused.
 
 ### The `isError` boundary (exceptions, not refusals)
 
@@ -138,6 +142,31 @@ installments have not vested by definition.
 ```
 from: 2025-07-01, to: 2025-12-31  →  tranches_in_window + vested_in_window
 ```
+
+## Verifying against observations: `vestlang_verify_observations`
+
+Use to check a proposed schedule against sparse disclosed evidence — a couple of
+fiscal-year-end balances plus a footnote tranche or two. Supply dated
+observations, each either a **balance** snapshot (`{ kind: "balance", date,
+vested?, unvested? }`) or an exact **tranche** (`{ kind: "tranche", date, amount
+}`, shares released on that exact date). Every supplied figure becomes its own
+check against the schedule's own prediction, and the gap is reported as a percent
+of the grant — one constant denominator at every date.
+
+```
+observations: [
+  { kind: "balance", date: "2025-12-31", vested: 500, unvested: 700 },
+  { kind: "tranche", date: "2025-02-01", amount: 100 }
+]
+tolerance: { kind: "percent", value: 5 }   // or { kind: "shares", value: N }; default 5%
+→ matches, rows[], worstGap, meanGap, unresolved, impossible, absenceAssumptions
+```
+
+`matches` is true only when every check is within tolerance. Tranche dates are
+exact-match: a tranche on a date the schedule predicts nothing for fails and the
+row carries a `nearest` pointer. There is no composite score — the per-figure facts
+are yours to weigh. To reconstruct a full disclosed history instead, use
+`vestlang_infer_schedule`.
 
 ## Date-math tools
 

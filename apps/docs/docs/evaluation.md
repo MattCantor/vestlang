@@ -187,6 +187,10 @@ Both verdicts `impossible`. Note that an unfired _event_ in a gate is **not** im
 
 Both verdicts `template`, carrying `recovered: { from: "events-only", dsl: "100 VEST FROM DATE 2025-07-01 OVER 12 months EVERY 6 months", … }`. Without recovery, the raw classification is still `events-only`; recovery only fires when the inferred template reproduces the projection exactly, and only for firing-invariant programs (no event anchors), so contingent schedules are never collapsed into a snapshot of one firing.
 
+### Verifying against observations
+
+Evaluation also underwrites a read that runs it in reverse for confirmation: the `vestlang_verify_observations` tool grades a proposed schedule against dated evidence — balance snapshots and exact tranches — measuring each figure's gap from the schedule's own prediction as a percent of the grant. Pending and impossible shares (this section's `unresolved` and IMPOSSIBLE amounts) read as unvested from that reporting view, so a schedule still waiting on an unfired gate verifies with those shares disclosed rather than refused.
+
 ## Installment states
 
 Each installment carries its own `state`, separate from the schedule-level verdicts.
