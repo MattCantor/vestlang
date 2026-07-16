@@ -1,6 +1,6 @@
 {
   "name": "@vestlang/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open Cap Table Coalition aligned interchange engine for vesting schedules.",
   "license": "MIT",
   "keywords": [
