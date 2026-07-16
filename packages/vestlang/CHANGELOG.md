@@ -1,5 +1,11 @@
 # @vestlang/vestlang
 
+## 0.6.0
+
+### Minor Changes
+
+- dfb6e9e: Export `summarizeVerification`, the one-line human summary composed from a `verifyObservations` result, so consumers can share it instead of hand-copying the composition.
+
 ## 0.5.1
 
 ### Patch Changes
