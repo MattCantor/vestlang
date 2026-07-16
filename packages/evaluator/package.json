@@ -1,6 +1,6 @@
 {
   "name": "@vestlang/evaluator",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The spec-to-canonical compiler: resolves vestlang programs against runtime into the canonical interchange. Proposed reference implementation.",
   "private": true,
   "type": "module",

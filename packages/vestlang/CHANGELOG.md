@@ -1,5 +1,16 @@
 # @vestlang/vestlang
 
+## 0.5.1
+
+### Patch Changes
+
+- 9550f7b: Build with tsdown instead of tsup (no longer actively maintained), completing
+  the repo-wide migration. The published artifact is unchanged in shape and
+  content — same entry points, self-contained declarations, `@vestlang/core` and
+  `zod` external as real dependencies.
+- Updated dependencies [9550f7b]
+  - @vestlang/core@0.1.1
+
 ## 0.5.0
 
 ### Minor Changes
