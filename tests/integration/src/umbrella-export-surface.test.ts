@@ -14,6 +14,7 @@ const EXPECTED_FUNCTIONS = [
   "normalizeProgram",
   "presentSchedule",
   "verifyObservations",
+  "summarizeVerification",
   "evaluateProgramWithRecovery",
   "lintProgram",
   "lintText",
