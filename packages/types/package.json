@@ -16,11 +16,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup"
+    "build": "tsdown"
   },
   "devDependencies": {
     "@opencaptablecoalition/ocf-types": "file:../../vendor/ocf-types",
-    "tsup": "^8.5.0",
+    "tsdown": "^0.22.8",
     "typescript": "^5.9.2"
   }
 }
