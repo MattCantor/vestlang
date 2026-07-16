@@ -1,0 +1,53 @@
+name: Version PR
+
+# Maintains the rolling "Version Packages" PR: on every push to main with
+# pending changesets, changesets/action runs `changeset version` and opens (or
+# force-updates) a PR carrying the accumulated bumps and changelog entries.
+# Merging that PR is the release act — it touches the publishable manifests,
+# which fires the Release workflow's Trusted Publishing steps. Deliberately no
+# `publish` input here: this workflow versions, Release publishes.
+#
+# Known limitation, accepted on purpose: the PR is opened with the default
+# GITHUB_TOKEN, and events caused by that token never trigger other workflows —
+# so the rolling PR gets no CI run when the bot creates or updates it. Close
+# and reopen it (a human action) to fire CI before merging. The alternative is
+# a PAT/GitHub-App token, which we've traded away for zero token upkeep.
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  version-pr:
+    name: Version PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      # Run the JS actions on Node 24 now — GitHub is removing the Node 20 runtime
+      # (forced default 2026-06-02). Keeps the proven action versions; just the runtime.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Open or update the Version Packages PR
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

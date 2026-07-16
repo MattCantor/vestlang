@@ -54,6 +54,30 @@ describe("release workflow publishes with pnpm", () => {
   });
 });
 
+describe("version-pr workflow versions but never publishes", () => {
+  const workflow = readFileSync(
+    join(repoRoot, ".github/workflows/version-pr.yml"),
+    "utf8",
+  );
+  const lines = workflow
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => !line.startsWith("#"));
+
+  it("runs changesets/action with pnpm-driven versioning", () => {
+    expect(lines.some((l) => l.startsWith("uses: changesets/action"))).toBe(
+      true,
+    );
+    expect(lines).toContain("version: pnpm changeset version");
+  });
+
+  it("carries no publish input — Release owns publishing (Trusted Publishing)", () => {
+    // A `publish:` input would create a second, tokenless publish path that
+    // bypasses the Release workflow npm's trusted publisher is pinned to.
+    expect(lines.some((l) => l.startsWith("publish:"))).toBe(false);
+  });
+});
+
 interface CoreManifest {
   license?: string;
   repository?: { url?: string; directory?: string };
