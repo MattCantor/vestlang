@@ -42,7 +42,7 @@ export type {
   Diagnostic,
   Finding,
 } from "./diagnostic.js";
-export {
+export type {
   Duration,
   DurationMonth,
   DurationDay,
@@ -82,7 +82,7 @@ export {
   Program,
   RawProgram,
 } from "./ast.js";
-export {
+export type {
   EvaluationMode,
   ResolutionContext,
   ResolutionContextInput,

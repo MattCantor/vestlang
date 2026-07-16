@@ -42,7 +42,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "test": "vitest run",
     "test:mutation": "stryker run",
     "clean": "rimraf dist"
@@ -54,7 +54,7 @@
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*",
     "rimraf": "^6.0.1",
-    "tsup": "^8.5.0",
+    "tsdown": "^0.22.8",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },

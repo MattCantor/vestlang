@@ -104,6 +104,55 @@ describe("publish guard scanner", () => {
     expect(violations).toEqual([]);
   });
 
+  it("flags a relative specifier with no file behind it — the #542 shape", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.d.ts",
+            content: `const z = __importStar(require("./external.cjs"));\n__exportStar(require("./external.cjs"), exports);`,
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    // Both requires name the same missing file; each occurrence is reported.
+    expect(violations).toHaveLength(2);
+    expect(violations[0].kind).toBe("unresolved-specifier");
+    expect(violations[0].message).toContain("./external.cjs");
+  });
+
+  it("accepts a relative specifier that lands on a built file", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.js",
+            content: `export * from "./chunk-abc.js";`,
+          },
+          { path: "dist/chunk-abc.js", content: "export const x = 1;" },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it("leaves relative specifiers without a built-file extension unjudged", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.js",
+            content: `import data from "./data.json";\nimport extless from "./extless";`,
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toEqual([]);
+  });
+
   it("accepts Node builtins with and without the node: prefix", () => {
     const violations = findViolations(
       scan({
