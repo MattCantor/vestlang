@@ -21,13 +21,27 @@ describe("release workflow publishes with pnpm", () => {
     .map((line) => line.trim())
     .filter((line) => !line.startsWith("#"));
 
-  it("runs pnpm publish for both packages, each with public + no-git-checks", () => {
+  it("runs pnpm publish for both packages with public access", () => {
     const publishes = runCommands.filter((l) => /\bpnpm\s+publish\b/.test(l));
     expect(publishes).toHaveLength(2);
     for (const cmd of publishes) {
       expect(cmd).toContain("--access public");
-      expect(cmd).toContain("--no-git-checks");
     }
+  });
+
+  it("disables git checks via the setting, never the CLI flag npm rejects", () => {
+    // pnpm forwards its publish argv verbatim to the spawned `npm publish`
+    // (only --publish-branch is stripped), and current npm hard-errors on the
+    // unknown --git-checks flag. The env-var setting is the channel pnpm reads
+    // and npm merely warns about — this broke the 0.1.1 publish once already.
+    // Scan the comment-stripped lines: the workflow's own comments are allowed
+    // to name the forbidden flag while explaining why it is forbidden.
+    for (const line of runCommands) {
+      expect(line).not.toContain("--no-git-checks");
+    }
+    expect(
+      runCommands.filter((l) => /npm_config_git_checks:\s*"false"/.test(l)),
+    ).toHaveLength(2);
   });
 
   it("never runs npm publish (comments may still mention it)", () => {

@@ -70,24 +70,34 @@ jobs:
       # already on the registry (avoids a failing re-publish). Core publishes first —
       # the umbrella depends on it, so `npm install @vestlang/vestlang` needs core
       # already on the registry.
+      #
+      # Git checks are disabled through pnpm's `git-checks` *setting* (the env
+      # var), never the `--no-git-checks` CLI flag: pnpm forwards its publish
+      # argv to the spawned `npm publish` verbatim, and current npm hard-errors
+      # (EUNKNOWNCONFIG) on the unknown flag. npm only warns on the inherited
+      # env setting; pnpm honors it and skips the detached-HEAD branch check.
       - name: Publish @vestlang/core (Trusted Publishing, OIDC)
         working-directory: packages/core
+        env:
+          npm_config_git_checks: "false"
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION is already published — skipping."
           else
-            pnpm publish --access public --no-git-checks
+            pnpm publish --access public
           fi
 
       - name: Publish @vestlang/vestlang (Trusted Publishing, OIDC)
         working-directory: packages/vestlang
+        env:
+          npm_config_git_checks: "false"
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION is already published — skipping."
           else
-            pnpm publish --access public --no-git-checks
+            pnpm publish --access public
           fi
