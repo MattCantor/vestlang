@@ -14,8 +14,8 @@ import {
   runRehydrate,
   runResolveOffset,
   verifyObservations,
+  summarizeVerification,
   type GrantInput,
-  type VerificationResult,
 } from "@vestlang/pipeline";
 import type { OCTDate, Program, Statement } from "@vestlang/types";
 import {
@@ -250,27 +250,6 @@ function jsonResult<T>(output: T) {
 // arm already carries `ok: true`, so those go straight to `jsonResult(result)`.
 function okResult<T extends Record<string, unknown>>(payload: T) {
   return jsonResult({ ok: true as const, ...payload });
-}
-
-// One human-readable line built entirely from the structured verification facts —
-// how many checks landed within tolerance, the worst gap, and any date-less
-// pending/impossible shares. No thresholds or confidence labels invented here; the
-// consumer owns that policy.
-function summarizeVerification(r: VerificationResult): string {
-  const checks = r.rows.flatMap((row) =>
-    row.kind === "balance" ? row.checks : [row.check],
-  );
-  const failed = checks.filter((c) => !c.withinTolerance).length;
-  const n = checks.length;
-  const plural = n === 1 ? "" : "s";
-  const head = r.matches
-    ? `All ${n} check${plural} within tolerance`
-    : `${failed} of ${n} check${plural} outside tolerance`;
-  const held =
-    r.unresolved || r.impossible
-      ? `; ${r.unresolved} shares pending, ${r.impossible} impossible`
-      : "";
-  return `${head} (worst gap ${r.worstGap.toFixed(1)}% of grant)${held}.`;
 }
 
 /* ------------------------

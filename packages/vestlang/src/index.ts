@@ -12,7 +12,11 @@ export type { VestedResult, StatementContribution } from "@vestlang/evaluator";
 
 // Pipeline — the consumer front door; owns schedule presentation and the
 // observation-verification read.
-export { presentSchedule, verifyObservations } from "@vestlang/pipeline";
+export {
+  presentSchedule,
+  verifyObservations,
+  summarizeVerification,
+} from "@vestlang/pipeline";
 export type {
   SchedulePresentation,
   VerifyInput,

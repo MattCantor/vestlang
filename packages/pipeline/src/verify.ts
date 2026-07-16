@@ -411,3 +411,28 @@ export function verifyObservations(input: VerifyInput): VerifyResult {
     absenceAssumptions: evaluated.view.absenceAssumptions,
   };
 }
+
+/* ------------------------
+ * Summary
+ * ------------------------ */
+
+// One human-readable line built entirely from the structured verification facts —
+// how many checks landed within tolerance, the worst gap, and any date-less
+// pending/impossible shares. No thresholds or confidence labels invented here; the
+// consumer owns that policy.
+export function summarizeVerification(result: VerificationResult): string {
+  const checks = result.rows.flatMap((row) =>
+    row.kind === "balance" ? row.checks : [row.check],
+  );
+  const failed = checks.filter((c) => !c.withinTolerance).length;
+  const n = checks.length;
+  const plural = n === 1 ? "" : "s";
+  const head = result.matches
+    ? `All ${n} check${plural} within tolerance`
+    : `${failed} of ${n} check${plural} outside tolerance`;
+  const held =
+    result.unresolved || result.impossible
+      ? `; ${result.unresolved} shares pending, ${result.impossible} impossible`
+      : "";
+  return `${head} (worst gap ${result.worstGap.toFixed(1)}% of grant)${held}.`;
+}

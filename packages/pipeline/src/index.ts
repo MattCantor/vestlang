@@ -48,7 +48,7 @@ export type {
 // Verify a proposed schedule against dated observations (balance snapshots and/or
 // exact tranches). Composes the run* reads; grades every supplied figure as a
 // percent-of-grant gap against the schedule's own prediction.
-export { verifyObservations } from "./verify.js";
+export { verifyObservations, summarizeVerification } from "./verify.js";
 export type {
   VerifyInput,
   VerifyResult,
