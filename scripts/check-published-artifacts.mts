@@ -1,8 +1,12 @@
 // Publish-readiness guard, two checks over every publishable package:
 //   1. Self-containment — every module specifier its *built* output reaches for
-//      (declarations and JS) resolves for a fresh `npm install`: a runtime dep or
-//      a Node builtin. A private workspace package never reaches npm, so a built
-//      artifact still importing one is a broken publish.
+//      (declarations and JS) resolves for a fresh `npm install`: a runtime dep, a
+//      Node builtin, or — for relative specifiers — a file that actually exists in
+//      the built output. A private workspace package never reaches npm, so a built
+//      artifact still importing one is a broken publish; a relative specifier with
+//      no file behind it is a bundler resolve failure that shipped (#542's
+//      malformed d.ts carried a live `require("./external.cjs")` with no such
+//      file in dist).
 //   2. No surviving `workspace:` range in the *packed* manifest's resolved deps —
 //      pnpm rewrites those to concrete versions at pack time, so a survivor means
 //      the tarball would install with EUNSUPPORTEDPROTOCOL.
@@ -20,7 +24,7 @@ import {
   readFileSync,
   rmSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -110,6 +114,11 @@ function isRelative(specifier: string): boolean {
   return specifier.startsWith(".") || specifier.startsWith("/");
 }
 
+// The artifact extensions the guard scans — shared by the CLI's dist walk and the
+// relative-specifier existence check (only paths of these shapes are judged, so a
+// relative reach for e.g. a .json asset is never a false positive).
+const BUILT_FILE = /\.(?:d\.ts|d\.cts|d\.mts|js|cjs|mjs)$/;
+
 // Every syntactic form a specifier can hide in — including the inline
 // `import("…")` type reference a resolve failure emits, which a from-clause-only
 // scan would miss.
@@ -165,10 +174,25 @@ export function findViolations(
   }
 
   const resolvable = (name: string): boolean => deps.has(name);
+  const artifactPaths = new Set(pkg.artifacts.map((a) => a.path));
 
   for (const artifact of pkg.artifacts) {
     for (const specifier of collectSpecifiers(artifact.content)) {
-      if (isRelative(specifier)) continue;
+      if (isRelative(specifier)) {
+        // A relative specifier must land on a real built file. A dangling one is
+        // a bundler resolve failure baked into the artifact — the #542 shape,
+        // where the d.ts bundle carried `require("./external.cjs")` verbatim.
+        // Only judge built-file shapes; extensionless or asset paths pass.
+        if (!BUILT_FILE.test(specifier)) continue;
+        if (!artifactPaths.has(join(dirname(artifact.path), specifier))) {
+          violations.push({
+            package: pkg.name,
+            kind: "unresolved-specifier",
+            message: `${artifact.path} references "${specifier}", which does not exist in the built output`,
+          });
+        }
+        continue;
+      }
       const name = packageNameOf(specifier);
       if (name === pkg.name) continue;
       if (isBuiltin(specifier) || isBuiltin(name)) continue;
@@ -202,8 +226,6 @@ export function findViolations(
 interface Manifest extends PackedManifest {
   private?: boolean;
 }
-
-const BUILT_FILE = /\.(?:d\.ts|d\.cts|d\.mts|js|cjs|mjs)$/;
 
 function readManifest(file: string): Manifest {
   return JSON.parse(readFileSync(file, "utf8")) as Manifest;
