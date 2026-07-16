@@ -43,6 +43,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # changesets runs prettier over the changelogs it writes, and the root
+      # .prettierrc loads @vestlang/prettier-plugin-vestlang globally — unbuilt,
+      # the plugin makes that write throw, changesets swallows the error, and the
+      # changelog entry is silently lost while the version bump still lands. So
+      # build it (turbo pulls in its workspace deps) before the changesets action.
+      # The ordering is load-bearing: this build regenerates dsl's tracked grammar
+      # files, and it's the action's own `git reset --hard` that keeps them out of
+      # the version commit. The `test -f` is there because a wrong --filter makes
+      # turbo match nothing and exit 0 — fail loudly here, not silently at release.
+      - name: Build the prettier plugin (changesets formats changelogs with it)
+        run: |
+          pnpm turbo run build --filter=@vestlang/prettier-plugin-vestlang
+          test -f packages/prettier-plugin-vestlang/dist/index.js
+
       - name: Open or update the Version Packages PR
         uses: changesets/action@v1
         with:
