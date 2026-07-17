@@ -541,6 +541,163 @@ describe("@vestlang/linter", () => {
     });
   });
 
+  describe("ambiguous-month-end-start", () => {
+    const flaggedOf = (src: string) =>
+      diagnosticsOf(src).filter(
+        (d) => d.ruleId === "ambiguous-month-end-start",
+      );
+
+    it("flags a 30-day month-end start on a monthly grid", () => {
+      const flagged = flaggedOf(`
+        VEST FROM DATE 2026-06-30 OVER 18 months EVERY 1 month
+      `);
+      expect(flagged).toHaveLength(1);
+      expect(flagged[0].severity).toBe("info");
+      expect(flagged[0].path).toEqual(["Program", 0, "expr", "vesting_start"]);
+    });
+
+    it("flags the other 30-day month-ends", () => {
+      for (const date of ["2026-04-30", "2026-09-30", "2026-11-30"]) {
+        expect(
+          flaggedOf(`VEST FROM DATE ${date} OVER 18 months EVERY 1 month`),
+        ).toHaveLength(1);
+      }
+    });
+
+    it("flags February month-ends, resolving the leap year", () => {
+      // Feb 28 in a common year and Feb 29 in a leap year are each their
+      // month's last day.
+      expect(
+        flaggedOf(`VEST FROM DATE 2027-02-28 OVER 18 months EVERY 6 months`),
+      ).toHaveLength(1);
+      expect(
+        flaggedOf(`VEST FROM DATE 2028-02-29 OVER 18 months EVERY 6 months`),
+      ).toHaveLength(1);
+      // Feb 2028 is a leap year, so its last day is the 29th — the 28th is not
+      // a month-end and stays quiet.
+      expect(
+        flaggedOf(`VEST FROM DATE 2028-02-28 OVER 18 months EVERY 6 months`),
+      ).toEqual([]);
+    });
+
+    it("never flags a start on the 31st", () => {
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-01-31 OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-03-31 OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+    });
+
+    it("never flags the 30th of a 31-day month", () => {
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-01-30 OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-03-30 OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+    });
+
+    it("does not flag anchors that aren't a bare literal date", () => {
+      // A runtime anchor (grant date / event) carries no literal to inspect.
+      expect(
+        flaggedOf(`VEST FROM GRANT_DATE OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+      expect(
+        flaggedOf(`VEST FROM EVENT ipo OVER 18 months EVERY 1 month`),
+      ).toEqual([]);
+      // A node-level selector is not a single dated anchor.
+      expect(
+        flaggedOf(`
+          VEST FROM EARLIER OF (DATE 2026-06-30, DATE 2026-09-30) OVER 18 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("does not flag when an offset or gate moves the anchor off the literal", () => {
+      // An offset shifts the effective anchor away from the typed date.
+      expect(
+        flaggedOf(`
+          VEST FROM DATE 2026-06-30 + 1 month OVER 18 months EVERY 1 month
+        `),
+      ).toEqual([]);
+      // A start gate resolves to the later of the date and the fired event, so
+      // the literal date is no longer necessarily where vesting begins.
+      expect(
+        flaggedOf(`
+          VEST FROM DATE 2026-06-30 AFTER EVENT ipo OVER 18 months EVERY 1 month
+        `),
+      ).toEqual([]);
+    });
+
+    it("does not flag a day-based grid", () => {
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-06-30 OVER 540 days EVERY 1 day`),
+      ).toEqual([]);
+    });
+
+    it("does not flag whole-year cadences", () => {
+      // 12- and 24-month steps revisit the anchor's own month, so a month-end
+      // start never drifts.
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-06-30 OVER 5 years EVERY 1 year`),
+      ).toEqual([]);
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-06-30 OVER 4 years EVERY 2 years`),
+      ).toEqual([]);
+      // A genuinely sub-annual step (or a non-whole-year one) that can diverge
+      // still fires.
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-06-30 OVER 18 months EVERY 6 months`),
+      ).toHaveLength(1);
+      expect(
+        flaggedOf(`VEST FROM DATE 2026-06-30 OVER 18 months EVERY 18 months`),
+      ).toHaveLength(1);
+    });
+
+    it("is advisory, not error-blocking", () => {
+      const diagnostics = diagnosticsOf(`
+        VEST FROM DATE 2026-06-30 OVER 18 months EVERY 1 month
+      `);
+      const flagged = diagnostics.filter(
+        (d) => d.ruleId === "ambiguous-month-end-start",
+      );
+      expect(flagged).toHaveLength(1);
+      expect(errorDiagnostics(diagnostics)).toEqual([]);
+    });
+
+    it("names the start date and the LAST_DAY_OF_MONTH remedy", () => {
+      const flagged = flaggedOf(`
+        VEST FROM DATE 2026-06-30 OVER 18 months EVERY 1 month
+      `);
+      expect(flagged[0].message).toContain("2026-06-30");
+      expect(flagged[0].message).toContain("LAST_DAY_OF_MONTH");
+    });
+
+    it("is safe on a THEN-chained tail", () => {
+      // The chained tail has a null start; the rule must not dereference it.
+      // The head steps once a year, so it stays clean too — leaving the null
+      // guard as the only thing under test.
+      const src = `
+        VEST FROM DATE 2026-06-30 OVER 24 months EVERY 12 months
+        THEN VEST OVER 12 months EVERY 1 month
+      `;
+      expect(() => flaggedOf(src)).not.toThrow();
+      expect(flaggedOf(src)).toEqual([]);
+    });
+
+    it("flags each qualifying arm of a schedule-level start selector", () => {
+      // Each arm is its own SCHEDULE node, so both month-end arms are flagged.
+      const flagged = flaggedOf(`
+        VEST EARLIER START OF (
+          FROM DATE 2026-06-30 OVER 18 months EVERY 1 month,
+          FROM DATE 2026-09-30 OVER 18 months EVERY 1 month
+        )
+      `);
+      expect(flagged).toHaveLength(2);
+    });
+  });
+
   // A duplicate selector arm can't reach `lintProgram` — the normalizer dedupes
   // it during canonicalization, before the linter runs. So the warning is raised
   // by the normalizer itself and surfaced through `lintText`, which threads a

@@ -1,3 +1,4 @@
+import { ruleAmbiguousMonthEndStart } from "./ambiguous-month-end-start.js";
 import { ruleCliffExceedsSpan } from "./cliff-exceeds-span.js";
 import { ruleInstallmentCap } from "./installment-cap.js";
 import { rulePortionAllocation } from "./portion-allocation.js";
@@ -8,4 +9,5 @@ export const buildInRules = [
   ruleCliffExceedsSpan,
   ruleInstallmentCap,
   ruleUnsatisfiableDateWindow,
+  ruleAmbiguousMonthEndStart,
 ] as const;

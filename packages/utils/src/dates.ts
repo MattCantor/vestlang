@@ -40,13 +40,15 @@ export function isContingentStartSentinel(d: string): boolean {
   return d === CONTINGENT_START_SENTINEL;
 }
 
-const daysInMonth = (year: number, month: number): number => {
-  // Gregorian leap rule; month is 1-based.
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+/** Days in a given 1-based month, Gregorian leap rule applied. */
+export const daysInMonth = (year: number, month: number): number => {
   if (month === 2) {
     const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     return leap ? 29 : 28;
   }
-  return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return DAYS_IN_MONTH[month - 1];
 };
 
 /**
