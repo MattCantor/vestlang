@@ -7,6 +7,33 @@ import { bareLumpStmt } from "./analytic/emit.js";
 import { InferInputError } from "./errors.js";
 import type { InferInput, InferResult } from "./types.js";
 
+type Coverage = NonNullable<InferResult["diagnostics"]["coverage"]>;
+
+/** Compare the tranche sum to a caller-stated grant total. Pure arithmetic that
+ * never touches inference: it returns the coverage tell and, on a mismatch, pushes
+ * a human note onto `notes` (appended last, after the inference notes). A partial
+ * stream and a legitimately under-allocating schedule are indistinguishable here,
+ * so the shortfall note names both readings and steers, rather than asserting a
+ * slice. */
+function coverageTell(
+  notes: string[],
+  trancheSum: number,
+  grantQuantity: number,
+): Coverage {
+  const delta = trancheSum - grantQuantity;
+  const status = delta === 0 ? "complete" : delta < 0 ? "partial" : "over";
+  if (status === "partial") {
+    notes.push(
+      `tranche sum ${trancheSum} is below the stated grant ${grantQuantity}; if the stream is a partial slice rather than a legitimately under-allocating schedule, check with vestlang_verify_observations`,
+    );
+  } else if (status === "over") {
+    notes.push(
+      `tranche sum ${trancheSum} exceeds the stated grant ${grantQuantity} (over-alloc: ${delta} shares beyond the grant)`,
+    );
+  }
+  return { grantQuantity, trancheSum, delta, status };
+}
+
 /**
  * Reconstruct a vestlang program from an observed `{ date, amount }` tranche
  * stream. The heavy lifting is the analytic hypothesize-and-verify core
@@ -43,6 +70,17 @@ export function inferSchedule(input: InferInput): InferResult {
       );
     }
   });
+  // A supplied grant total is checked here, alongside the other input guards and
+  // ahead of the zero-total short-circuit, so a bad value always throws regardless
+  // of what the tranches contain. A real grant is at least one share.
+  if (
+    input.grantQuantity !== undefined &&
+    (!Number.isInteger(input.grantQuantity) || input.grantQuantity < 1)
+  ) {
+    throw new InferInputError(
+      `grantQuantity must be a positive integer (got ${input.grantQuantity})`,
+    );
+  }
 
   const totalQuantity = input.tranches.reduce((a, t) => a + t.amount, 0);
   const firstDate = input.tranches.reduce(
@@ -64,6 +102,10 @@ export function inferSchedule(input: InferInput): InferResult {
     if (input.grantDate === undefined) {
       notes.push(`grantDate defaulted to first tranche date (${firstDate})`);
     }
+    const coverage =
+      input.grantQuantity === undefined
+        ? undefined
+        : coverageTell(notes, 0, input.grantQuantity);
     return {
       dsl: stringify(program),
       program,
@@ -88,6 +130,7 @@ export function inferSchedule(input: InferInput): InferResult {
         // One verified degenerate statement — a single schedule, not a fallback.
         recoveryMode: "single-schedule",
         notes,
+        ...(coverage !== undefined ? { coverage } : {}),
       },
     };
   }
@@ -122,6 +165,10 @@ export function inferSchedule(input: InferInput): InferResult {
         : "PLUS-cover search exhausted its uniform seeds without a verifying cover",
     );
   }
+  const coverage =
+    input.grantQuantity === undefined
+      ? undefined
+      : coverageTell(notes, totalQuantity, input.grantQuantity);
 
   return {
     dsl: result.dsl,
@@ -142,6 +189,7 @@ export function inferSchedule(input: InferInput): InferResult {
       fallback: result.fallback,
       recoveryMode: result.recoveryMode,
       notes,
+      ...(coverage !== undefined ? { coverage } : {}),
     },
   };
 }

@@ -26,6 +26,13 @@ export interface InferInput {
    * doesn't record which one made it). Provide a hint only when you know the
    * provenance. */
   policy?: VestingDayOfMonth;
+  /** Optional stated grant total to check the reconstructed stream against.
+   * Diagnostic only: when supplied, the result carries `diagnostics.coverage`
+   * comparing it to the tranche sum, and a mismatch appends a human note — but
+   * inference, the emitted DSL, and `context.grantQuantity` (still the tranche
+   * sum) are untouched. Omit it and the output is identical to before. Must be a
+   * positive integer; a real grant is at least one share. */
+  grantQuantity?: number;
 }
 
 /** The hypothesis family the analytic core recovered a statement under. Carried on
@@ -144,5 +151,17 @@ export interface InferResult {
     /** The emission mode of the whole answer. `"literal"` iff `fallback` is true. */
     recoveryMode: RecoveryMode;
     notes: string[];
+    /** Present only when the caller supplied a grant total to check the stream
+     * against. Pure arithmetic — it never changes inference. `delta = trancheSum -
+     * grantQuantity` (negative: the stream sums below the stated grant; positive:
+     * above), and `status` is `"partial"` / `"over"` / `"complete"` accordingly.
+     * A `"partial"` result is ambiguous — a sparse slice and a legitimately
+     * under-allocating schedule both land here — so it is a tell, never a refusal. */
+    coverage?: {
+      grantQuantity: number;
+      trancheSum: number;
+      delta: number;
+      status: "complete" | "partial" | "over";
+    };
   };
 }

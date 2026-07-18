@@ -365,7 +365,7 @@ export function createServer(): McpServer {
       description:
         "Reverse of vestlang_evaluate: take an array of {date, amount} vesting tranches (at most " +
         MAX_INSTALLMENTS +
-        " entries) and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins. When every single-schedule reading fails, a bounded PLUS-cover search runs before the fallback: it peels a dominant uniform train off the stream, re-reads the remainder with the same families, and emits the layers as one PLUS program when the assembled result reproduces the input exactly (at most 3 statements, always fewer than one-per-date). Anything still unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, evaluated with the returned `context`, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). diagnostics.recoveryMode names how the answer was produced: single-schedule (one verified statement), then-chain (one schedule as sequential THEN segments), plus-cover (concurrent layers summing to the stream), or literal (the per-date fallback; equivalent to diagnostics.fallback = true). The result also carries a `context` object keyed exactly as vestlang_evaluate's parameters — grant_date, grant_quantity, vesting_day_of_month, and events; pass these directly to vestlang_evaluate alongside the returned dsl to re-evaluate the inferred schedule. The day-of-month is not encoded in the DSL, so evaluating without this context diverges. This tool assumes the tranches are the complete grant, so a sparse or partial set (a few footnote tranches, a year-end balance) yields a confidently wrong reading with a too-small implied grant quantity — for that case draft from the narrative and check it with vestlang_verify_observations, following the recipe at vestlang://docs/authoring.",
+        " entries) and return the best-fit vestlang DSL source. Candidates are derived analytically from the stream's date lattice and cumulative sums — a plain uniform train, a cliff, a pre-grant fold, a per-segment-cadence THEN chain, or a single dated lump — and each is verified by evaluating it through the real engine and checking it reproduces the input exactly. The first verifying candidate in a fixed preference order (plain < cliff < pre-grant fold < THEN chain < single lump) wins. When every single-schedule reading fails, a bounded PLUS-cover search runs before the fallback: it peels a dominant uniform train off the stream, re-reads the remainder with the same families, and emits the layers as one PLUS program when the assembled result reproduces the input exactly (at most 3 statements, always fewer than one-per-date). Anything still unrecognized becomes a literal per-date list (projection-lossless by construction). Always round-trip verified: the returned DSL, evaluated with the returned `context`, reproduces the input. The `decomposition` field is one component per emitted statement, each tagged by the family that produced it (plain | cliff | fold | then-segment | literal) with its derived parameters (start, occurrences, period, total, and cliff length where present). diagnostics.recoveryMode names how the answer was produced: single-schedule (one verified statement), then-chain (one schedule as sequential THEN segments), plus-cover (concurrent layers summing to the stream), or literal (the per-date fallback; equivalent to diagnostics.fallback = true). The result also carries a `context` object keyed exactly as vestlang_evaluate's parameters — grant_date, grant_quantity, vesting_day_of_month, and events; pass these directly to vestlang_evaluate alongside the returned dsl to re-evaluate the inferred schedule. The day-of-month is not encoded in the DSL, so evaluating without this context diverges. This tool assumes the tranches are the complete grant, so a sparse or partial set (a few footnote tranches, a year-end balance) yields a confidently wrong reading with a too-small implied grant quantity — for that case draft from the narrative and check it with vestlang_verify_observations, following the recipe at vestlang://docs/authoring. To make that completeness assumption checkable when you do know the real total, pass the optional grant_quantity: it is diagnostic only — it never changes the inferred schedule and never refuses — and returns diagnostics.coverage ({ grantQuantity, trancheSum, delta, status: complete | partial | over }) plus a note when the tranche sum disagrees with the stated grant.",
       inputSchema: z.strictObject({
         tranches: z
           .array(
@@ -389,6 +389,9 @@ export function createServer(): McpServer {
         grant_date: ISO_DATE.optional().describe(
           "Optional grant date anchor. If omitted, defaults to the first tranche date.",
         ),
+        grant_quantity: GRANT_QUANTITY_MIN_1.optional().describe(
+          "Optional stated grant total to check the tranche stream against. Diagnostic only — surfaces diagnostics.coverage and, on a mismatch, a note; it never changes the inferred schedule and never refuses. A whole number of at least 1.",
+        ),
       }).shape,
       annotations: {
         readOnlyHint: true,
@@ -397,7 +400,7 @@ export function createServer(): McpServer {
         openWorldHint: false,
       },
     },
-    async ({ tranches, grant_date }) => {
+    async ({ tranches, grant_date, grant_quantity }) => {
       try {
         const result = inferSchedule({
           tranches: tranches.map((t) => ({
@@ -405,6 +408,7 @@ export function createServer(): McpServer {
             amount: t.amount,
           })),
           grantDate: grant_date,
+          grantQuantity: grant_quantity,
         });
         // Re-key the library's camelCase context to vestlang_evaluate's own
         // parameter names for direct passthrough.

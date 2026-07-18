@@ -202,6 +202,15 @@ implied grant quantity far below the real one. Sparse partial evidence is exactl
 what this recipe is for: draft from the narrative and check it against the anchors
 with `vestlang_verify_observations` instead.
 
+If you happen to know the real grant total, pass it as the optional
+`grant_quantity`. The tool still will not refuse — inference is unchanged — but it
+adds a deterministic `diagnostics.coverage` tell (`{ grantQuantity, trancheSum,
+delta, status }`) and, on a shortfall, a note: the arithmetic signal that the
+tranche sum falls below the stated grant — which may mean the stream is only a partial slice.
+It is a `partial` reading either way — a legitimately under-allocating schedule
+sums below its grant too — so treat it as a prompt to check with
+`vestlang_verify_observations`, not proof.
+
 ## Narrative vs. anchors
 
 When you present the final DSL, separate what the anchors proved from what only the
