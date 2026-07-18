@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="generator" content="Docusaurus v3.9.1">
 <title data-rh="true">Authoring from a Narrative | vestlang</title><meta data-rh="true" name="viewport" content="width=device-width,initial-scale=1"><meta data-rh="true" name="twitter:card" content="summary_large_image"><meta data-rh="true" property="og:url" content="https://MattCantor.github.io/vestlang/authoring"><meta data-rh="true" property="og:locale" content="en"><meta data-rh="true" name="docusaurus_locale" content="en"><meta data-rh="true" name="docsearch:language" content="en"><meta data-rh="true" name="docusaurus_version" content="current"><meta data-rh="true" name="docusaurus_tag" content="docs-default-current"><meta data-rh="true" name="docsearch:version" content="current"><meta data-rh="true" name="docsearch:docusaurus_tag" content="docs-default-current"><meta data-rh="true" property="og:title" content="Authoring from a Narrative | vestlang"><meta data-rh="true" name="description" content="A common starting point is not a clean spec but a loose description — &quot;four years,"><meta data-rh="true" property="og:description" content="A common starting point is not a clean spec but a loose description — &quot;four years,"><link data-rh="true" rel="icon" href="/vestlang/img/vestlang-icon.png"><link data-rh="true" rel="canonical" href="https://MattCantor.github.io/vestlang/authoring"><link data-rh="true" rel="alternate" href="https://MattCantor.github.io/vestlang/authoring" hreflang="en"><link data-rh="true" rel="alternate" href="https://MattCantor.github.io/vestlang/authoring" hreflang="x-default"><script data-rh="true" type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Authoring from a Narrative","item":"https://MattCantor.github.io/vestlang/authoring"}]}</script><link rel="stylesheet" href="/vestlang/assets/css/styles.b9c62cb6.css">
-<script src="/vestlang/assets/js/runtime~main.66b42cf8.js" defer="defer"></script>
+<script src="/vestlang/assets/js/runtime~main.660f04fb.js" defer="defer"></script>
 <script src="/vestlang/assets/js/main.a97fecbf.js" defer="defer"></script>
 </head>
 <body class="navigation-with-keyboard">
@@ -113,6 +113,13 @@ points as the whole grant and returns a confident but wrong schedule, with an
 implied grant quantity far below the real one. Sparse partial evidence is exactly
 what this recipe is for: draft from the narrative and check it against the anchors
 with <code>vestlang_verify_observations</code> instead.</p>
+<p>If you happen to know the real grant total, pass it as the optional
+<code>grant_quantity</code>. The tool still will not refuse — inference is unchanged — but it
+adds a deterministic <code>diagnostics.coverage</code> tell (<code>{ grantQuantity, trancheSum, delta, status }</code>) and, on a shortfall, a note: the arithmetic signal that the
+tranche sum falls below the stated grant — which may mean the stream is only a partial slice.
+It is a <code>partial</code> reading either way — a legitimately under-allocating schedule
+sums below its grant too — so treat it as a prompt to check with
+<code>vestlang_verify_observations</code>, not proof.</p>
 <h2 class="anchor anchorWithStickyNavbar_hMtt" id="narrative-vs-anchors">Narrative vs. anchors<a href="#narrative-vs-anchors" class="hash-link" aria-label="Direct link to Narrative vs. anchors" title="Direct link to Narrative vs. anchors" translate="no">​</a></h2>
 <p>When you present the final DSL, separate what the anchors proved from what only the
 narrative asserts. In the first example the cliff and the cadence are pinned by the
