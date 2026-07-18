@@ -86,8 +86,9 @@ describe("QUANTITY claim capped at the grant", () => {
       asOf: "2026-06-01",
     };
 
-    // evaluateProgram: template verdict, empty installments, no findings
-    // (allocationFindings is suppressed at totalShares 0)
+    // evaluateProgram: template verdict, empty installments, no findings — the
+    // QUANTITY lowers to ZERO against a zero-share grant, so the sum is 0, well
+    // within the grant, not an over-allocation.
     const schedule = evaluateProgram(program, ctx);
     expect(schedule.resolvesTo.status).toBe("template");
     expect(schedule.resolvesTo.installments).toHaveLength(0);

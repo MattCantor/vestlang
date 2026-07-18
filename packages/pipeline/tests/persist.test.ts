@@ -615,14 +615,19 @@ describe("runRehydrate refuses an over-allocating artifact (AC#1–#4, #6)", () 
     expect(r).not.toHaveProperty("pending");
   });
 
-  it("a zero-share grant on an over-allocating template is NOT refused (nothing to allocate)", () => {
-    // The zero guard lives in the shared primitive, so rehydrate inherits persist's
-    // behavior: no shares means no allocation to over-run, hence no refusal.
-    const out = rehydrateOk({
+  it("refuses an over-allocating template even at a zero-share grant", () => {
+    // Over-allocation is grant-independent, so rehydrate refuses the 125% artifact
+    // whether or not the grant has shares — matching its verdict at grant > 0.
+    const r = runRehydrate({
       artifact: overAllocatingDateArtifact(),
       grant_quantity: 0,
     });
-    expect(out.projection).toBeDefined();
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.ruleId).toBe("rehydrate-over-allocation");
+    expect(r.error.message).toContain("125%");
+    expect(r.error.message).toMatch(/over-allocat/);
+    expect(r).not.toHaveProperty("projection");
   });
 
   it("refuses a well-formed but oversized stored percentage rather than crashing (#359)", () => {

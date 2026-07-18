@@ -698,12 +698,19 @@ describe("validateTemplateAllocatable (#418)", () => {
     expect(result.findings).toEqual([]);
   });
 
-  it("raises no allocation finding for a zero-share grant (structural-only)", () => {
-    // totalShares 0 means nothing to allocate against, so even a 150% template is
-    // valid here — mirroring allocationFindingsFromFractions' zero guard.
+  it("flags an over-allocating template at a zero-share grant", () => {
+    // Over-allocation is grant-independent, so a 150% template is invalid here
+    // just as it is against a real grant — the share count doesn't rescue it.
     const result = validateTemplateAllocatable(template("0.75", "0.75"), 0);
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
     expect(result.errors).toEqual([]);
-    expect(result.findings).toEqual([]);
+    expect(result.findings).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 3, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
   });
 });

@@ -109,6 +109,48 @@ describe("runEvaluate", () => {
     }
   });
 
+  it("gives the same over-allocation verdict at a zero-share grant as at a real one", () => {
+    // 0.6 + 0.6 = 120% of the grant. The ratio is grant-independent, so evaluate
+    // must flag it at grant 0 exactly as it does at a real grant — not report a
+    // spurious valid:true just because there are no shares to divide against.
+    const repro =
+      "0.6 VEST OVER 12 months EVERY 1 month PLUS 0.6 VEST OVER 12 months EVERY 1 month";
+    const expected = {
+      kind: "over-allocation",
+      severity: "error",
+      sum: { numerator: 6, denominator: 5 },
+      path: ["Program"],
+    };
+
+    for (const grant_quantity of [0, 100]) {
+      const r = runEvaluate(repro, {
+        grant_date: "2025-01-01",
+        grant_quantity,
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.view.valid).toBe(false);
+      expect(r.view.findings).toHaveLength(1);
+      expect(r.view.findings[0]).toMatchObject(expected);
+    }
+  });
+
+  it("raises no over-allocation for an over-claiming QUANTITY at a zero-share grant", () => {
+    // 1500 of a 0-share grant lowers to nothing (QUANTITY → ZERO), so the sum is
+    // within the grant. The over-allocation check must not misfire on it — only
+    // pure PORTION amounts can exceed the grant when there are no shares.
+    const r = runEvaluate("1500 VEST OVER 12 months EVERY 1 month", {
+      grant_date: "2025-01-01",
+      grant_quantity: 0,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.view.valid).toBe(true);
+    expect(r.view.findings.some((f) => f.kind === "over-allocation")).toBe(
+      false,
+    );
+  });
+
   // #239: an over-allocating program (two 3/4 grids summing to 3/2) must keep its
   // diagnosis. Template recovery used to "rescue" the over-grant projection into a
   // clean template with a `recovered` block — contradictory, since the schedule is

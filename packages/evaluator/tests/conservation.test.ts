@@ -428,7 +428,9 @@ function checkCell(
     `${label}\n  surface: resolvesTo.installments`,
   );
 
-  // Findings track the validity class exactly (a zero-share grant raises neither).
+  // Findings track the validity class exactly once the grant has shares. At a
+  // zero-share grant under-allocation goes silent and QUANTITY amounts lower to
+  // nothing, so the finding no longer mirrors T there — gate the correspondence.
   if (grant > 0) {
     expect(
       schedule.findings.some((f) => f.kind === "over-allocation"),

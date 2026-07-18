@@ -20,18 +20,19 @@ export const allocationFindingsFromFractions = (
   fractions: Fraction[],
   totalShares: number,
 ): Finding[] => {
-  // A grant of zero shares can't over- or under-allocate — there's nothing to
-  // allocate against — so any sum is moot and we raise no finding.
-  if (totalShares === 0) return [];
-
   const sum = fracSum(fractions);
   const where = classifyAllocation(sum);
   if (where === "over") {
+    // Over-allocation is a grant-independent ratio, so it fires even at zero
+    // shares — where only PORTION sums can still exceed the grant, since QUANTITY
+    // amounts have already lowered to ZERO.
     return [
       { kind: "over-allocation", severity: "error", sum, path: ["Program"] },
     ];
   }
-  if (where === "under") {
+  if (where === "under" && totalShares !== 0) {
+    // Under-allocation is moot against a zero-share grant — nothing left to leave
+    // unvested — so gate it there.
     return [
       { kind: "under-allocation", severity: "warning", sum, path: ["Program"] },
     ];

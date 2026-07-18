@@ -106,7 +106,9 @@ export const validateVestingScheduleTemplate = (
  * them:
  *   - `errors`   — the structural ValidationError[].
  *   - `findings` — the allocation Finding[] (over-allocation = error,
- *                  under-allocation = warning, none at 100% or 0 shares).
+ *                  under-allocation = warning, none at exactly 100%). Over fires
+ *                  even at 0 shares — a grant-independent ratio — while under
+ *                  stays silent there (nothing left to leave unvested).
  *   - `valid`    — structurally valid AND no error-severity finding. We key on
  *                  `severity === "error"`, not on `kind === "over-allocation"`,
  *                  so any future error-level finding blocks without an
