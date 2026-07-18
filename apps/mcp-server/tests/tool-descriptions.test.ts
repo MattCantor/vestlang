@@ -248,3 +248,21 @@ describe("mcp-server / authoring recipe pointers in tool descriptions", () => {
     expect(description).toContain("vestlang://docs/authoring");
   });
 });
+
+describe("mcp-server / vestlang_infer_schedule grant_quantity guard in description", () => {
+  it("names the optional grant_quantity, its diagnostic-only nature, and diagnostics.coverage — without dropping the sparse-stream warning", async () => {
+    const description = await descriptionOf("vestlang_infer_schedule");
+    // The new guard: the optional input, the promise it never changes inference or
+    // refuses, and the field it surfaces.
+    expect(description).toContain("grant_quantity");
+    expect(description).toContain("diagnostics.coverage");
+    expect(description).toMatch(/never refuses/i);
+    // The pre-existing sparse-stream warning is EXTENDED, not replaced — its three
+    // pinned substrings must survive alongside the guard.
+    expect(description).toContain(
+      "assumes the tranches are the complete grant",
+    );
+    expect(description).toContain("vestlang://docs/authoring");
+    expect(description).toContain("pass these directly to vestlang_evaluate");
+  });
+});

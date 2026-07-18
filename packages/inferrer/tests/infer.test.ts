@@ -1199,6 +1199,129 @@ describe("inferSchedule — input contract", () => {
   });
 });
 
+describe("inferSchedule — grant-quantity coverage tell", () => {
+  // Supplying a grant total is a diagnostic overlay: inference is untouched, and a
+  // mismatch is flagged (a structured `coverage` field plus a human note), never
+  // refused.
+
+  it("omits the coverage diagnostic when no grant quantity is supplied", () => {
+    const result = inferSchedule({ tranches: monthly("2024-02-01", 48, 1000) });
+    expect("coverage" in result.diagnostics).toBe(false);
+    expect(result.diagnostics.coverage).toBeUndefined();
+  });
+
+  it("reports a partial-coverage tell when the stream sums below the stated grant", () => {
+    const tranches = monthly("2024-02-01", 48, 1000); // sums to 48000
+    const result = inferSchedule({ tranches, grantQuantity: 60000 });
+    expect(result.diagnostics.coverage).toEqual({
+      grantQuantity: 60000,
+      trancheSum: 48000,
+      delta: -12000,
+      status: "partial",
+    });
+    expect(
+      result.diagnostics.notes.some(
+        (n) =>
+          n.includes("48000") &&
+          n.includes("60000") &&
+          n.includes("vestlang_verify_observations"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports an over-coverage tell when the stream sums above the stated grant", () => {
+    const tranches = monthly("2024-02-01", 48, 1000); // sums to 48000
+    const result = inferSchedule({ tranches, grantQuantity: 30000 });
+    expect(result.diagnostics.coverage).toEqual({
+      grantQuantity: 30000,
+      trancheSum: 48000,
+      delta: 18000,
+      status: "over",
+    });
+    expect(
+      result.diagnostics.notes.some(
+        (n) =>
+          n.includes("48000") &&
+          n.includes("30000") &&
+          n.includes("over-alloc"),
+      ),
+    ).toBe(true);
+  });
+
+  it("reports a complete-coverage tell with no note when the stream sums to the stated grant", () => {
+    const tranches = monthly("2024-02-01", 48, 1000); // sums to 48000
+    const withQty = inferSchedule({
+      tranches,
+      grantDate: d("2024-02-01"),
+      grantQuantity: 48000,
+    });
+    const omitted = inferSchedule({ tranches, grantDate: d("2024-02-01") });
+    expect(withQty.diagnostics.coverage).toEqual({
+      grantQuantity: 48000,
+      trancheSum: 48000,
+      delta: 0,
+      status: "complete",
+    });
+    // An exact match adds no note. With the defaulted-grantDate note suppressed by
+    // the explicit grantDate, the notes match the same stream run with no grant.
+    expect(withQty.diagnostics.notes).toEqual(omitted.diagnostics.notes);
+  });
+
+  it("leaves inference, the DSL, and context.grantQuantity untouched whatever the stated grant", () => {
+    const tranches = monthly("2024-02-01", 48, 1000);
+    const omitted = inferSchedule({ tranches });
+    for (const grantQuantity of [30000, 48000, 60000]) {
+      const supplied = inferSchedule({ tranches, grantQuantity });
+      expect(supplied.dsl).toEqual(omitted.dsl);
+      expect(supplied.program).toEqual(omitted.program);
+      expect(supplied.decomposition).toEqual(omitted.decomposition);
+      expect(supplied.context).toEqual(omitted.context);
+      // context.grantQuantity is the tranche sum, never the stated grant.
+      expect(supplied.context.grantQuantity).toBe(48000);
+    }
+    expect(omitted.context.grantQuantity).toBe(48000);
+  });
+
+  it("rides the zero-total short-circuit, flagging partial with a zero tranche sum", () => {
+    const tranches: TrancheInput[] = [{ date: d("2025-02-01"), amount: 0 }];
+    const omitted = inferSchedule({ tranches });
+    const supplied = inferSchedule({ tranches, grantQuantity: 1000 });
+    // The degenerate emission itself is unchanged by the supplied grant.
+    expect(supplied.dsl).toEqual(omitted.dsl);
+    expect(supplied.program).toEqual(omitted.program);
+    expect(supplied.decomposition).toEqual(omitted.decomposition);
+    expect(supplied.context).toEqual(omitted.context);
+    expect(supplied.diagnostics.coverage).toEqual({
+      grantQuantity: 1000,
+      trancheSum: 0,
+      delta: -1000,
+      status: "partial",
+    });
+    // The existing zero-total note stays; the coverage note is added on top.
+    expect(
+      supplied.diagnostics.notes.some((n) =>
+        n.includes("all tranches were zero"),
+      ),
+    ).toBe(true);
+    expect(
+      supplied.diagnostics.notes.some((n) =>
+        n.includes("vestlang_verify_observations"),
+      ),
+    ).toBe(true);
+  });
+
+  it("throws on a non-positive or non-integer grant quantity, even for a degenerate stream", () => {
+    // The guard runs ahead of the zero-total short-circuit, so an all-zero stream
+    // (which would otherwise return a degenerate template) still throws.
+    const tranches: TrancheInput[] = [{ date: d("2025-02-01"), amount: 0 }];
+    for (const bad of [0, -5, 3.5]) {
+      expect(() => inferSchedule({ tranches, grantQuantity: bad })).toThrow(
+        InferInputError,
+      );
+    }
+  });
+});
+
 /* ------------------------
  * Context round-trip: evaluate(dsl, result.context) reproduces the input
  * ------------------------ */

@@ -42,6 +42,7 @@ function callInfer(
   args: {
     tranches: { date: string; amount: number }[];
     grant_date?: string;
+    grant_quantity?: number;
   },
 ): Promise<CallResult> {
   return client.callTool({
@@ -177,6 +178,83 @@ describe("mcp-server / vestlang_infer_schedule tool layer", () => {
     expect(sc.dsl).toBe("0 VEST FROM DATE 2025-02-01");
     expect(sc.diagnostics.residualError).toBeLessThan(1e-6);
     expect(sc.context.grant_quantity).toBe(0);
+  });
+
+  it("passes through grant_quantity and surfaces diagnostics.coverage in camelCase", async () => {
+    // The optional grant total rides straight into the library; the coverage tell
+    // it produces flows back through the `diagnostics` spread unchanged — only
+    // `context` is re-keyed to snake_case, never `diagnostics`.
+    const client = await connectClient();
+    const res = await callInfer(client, {
+      tranches: [
+        { date: "2024-01-01", amount: 1000 },
+        { date: "2024-02-01", amount: 1000 },
+        { date: "2024-03-01", amount: 1000 },
+      ],
+      grant_quantity: 10000,
+    });
+
+    expect(res.isError).toBeFalsy();
+    const sc = res.structuredContent as {
+      diagnostics: {
+        notes: string[];
+        coverage?: {
+          grantQuantity: number;
+          trancheSum: number;
+          delta: number;
+          status: string;
+        };
+      };
+    };
+    expect(sc.diagnostics.coverage).toEqual({
+      grantQuantity: 10000,
+      trancheSum: 3000,
+      delta: -7000,
+      status: "partial",
+    });
+    expect(
+      sc.diagnostics.notes.some((n) =>
+        n.includes("vestlang_verify_observations"),
+      ),
+    ).toBe(true);
+  });
+
+  it("omits diagnostics.coverage when grant_quantity is not supplied", async () => {
+    const client = await connectClient();
+    const res = await callInfer(client, {
+      tranches: [
+        { date: "2024-01-01", amount: 1000 },
+        { date: "2024-02-01", amount: 1000 },
+        { date: "2024-03-01", amount: 1000 },
+      ],
+    });
+
+    const sc = res.structuredContent as {
+      diagnostics: Record<string, unknown>;
+    };
+    expect(sc.diagnostics).not.toHaveProperty("coverage");
+  });
+
+  it("rejects a below-1 grant_quantity via the input schema", async () => {
+    const client = await connectClient();
+    for (const grant_quantity of [0, -5]) {
+      const res = await callInfer(client, {
+        tranches: [{ date: "2024-01-01", amount: 1000 }],
+        grant_quantity,
+      });
+      expect(res.isError).toBe(true);
+      expect(res.content[0].text).toContain("at least 1");
+    }
+  });
+
+  it("rejects a non-integer grant_quantity via the input schema", async () => {
+    const client = await connectClient();
+    const res = await callInfer(client, {
+      tranches: [{ date: "2024-01-01", amount: 1000 }],
+      grant_quantity: 3.5,
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("whole number");
   });
 
   it("rejects an empty tranches array via the input schema", async () => {
