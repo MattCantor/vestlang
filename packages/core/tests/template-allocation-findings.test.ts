@@ -54,12 +54,17 @@ describe("templateAllocationFindings (AC#5)", () => {
     ]);
   });
 
-  it("raises no finding for a zero-share grant — nothing to allocate against", () => {
-    // The zero guard lives in the shared primitive, so the template path inherits
-    // it: a 5/4 template that would over-allocate any real grant is silent here.
-    expect(templateAllocationFindings(oneStatementTemplate(5, 4), 0)).toEqual(
-      [],
-    );
+  it("flags an over-allocating template at a zero-share grant", () => {
+    // Over-allocation is grant-independent, so the template path inherits it from
+    // the shared primitive: a 5/4 template is over the grant at any share count.
+    expect(templateAllocationFindings(oneStatementTemplate(5, 4), 0)).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 5, denominator: 4 },
+        path: ["Program"],
+      },
+    ]);
   });
 
   it("sums across statements, not per-statement", () => {

@@ -1316,11 +1316,10 @@ describe("resolveToCore — over-allocation finding", () => {
     });
   });
 
-  it("a zero-share grant raises no finding — nothing can allocate against it", () => {
-    // 3/2 would over-allocate against any real grant, but a zero-share grant can't
-    // allocate at all, so the check is skipped rather than flagging it. (A QUANTITY
-    // against zero shares is covered separately below — it lowers to 0, not a
-    // degenerate fraction.)
+  it("a zero-share grant still flags an over-allocating portion", () => {
+    // 3/2 is over the grant regardless of the share count, so the finding stands
+    // even at zero shares. (A QUANTITY against zero shares lowers to 0, not a
+    // degenerate fraction, so it can't over-allocate — covered separately below.)
     const program: Program = [
       stmt(
         portion(3, 2),
@@ -1328,7 +1327,14 @@ describe("resolveToCore — over-allocation finding", () => {
         yearly,
       ),
     ];
-    expect(resolveToCore(program, ctxInput({}, 0)).findings).toEqual([]);
+    expect(resolveToCore(program, ctxInput({}, 0)).findings).toEqual([
+      {
+        kind: "over-allocation",
+        severity: "error",
+        sum: { numerator: 3, denominator: 2 },
+        path: ["Program"],
+      },
+    ]);
   });
 
   it("QUANTITY on a zero-share grant down the events path allocates nothing, no throw", () => {
