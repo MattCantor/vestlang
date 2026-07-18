@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { foldByCliffDate, foldToGrantDate } from "../src/fold";
+import type { Installment } from "@vestlang/types";
+import {
+  foldByCliffDate,
+  foldToGrantDate,
+  foldSameDateInstallments,
+} from "../src/fold";
+
+const sumAmounts = (xs: Installment[]): number =>
+  xs.reduce((a, x) => a + x.amount, 0);
 
 describe("foldByCliffDate", () => {
   it("aggregates pre-cliff amounts onto the cliff date when it lands on a boundary", () => {
@@ -92,5 +100,57 @@ describe("foldToGrantDate", () => {
     );
     expect(dates).toEqual(["2024-01-01", "2024-02-01"]);
     expect(amounts).toEqual([15, 10]); // pre-grant 5 merges into the grant-date 10
+  });
+});
+
+describe("foldSameDateInstallments", () => {
+  // A mixed stream: same-date RESOLVED duplicates (a later one appearing after a
+  // symbolic row), plus an UNRESOLVED and an IMPOSSIBLE row to leave in place.
+  const mixed: Installment[] = [
+    { state: "RESOLVED", amount: 8, date: "2025-02-01" },
+    { state: "RESOLVED", amount: 8, date: "2025-02-01" },
+    { state: "RESOLVED", amount: 9, date: "2025-03-01" },
+    {
+      state: "UNRESOLVED",
+      amount: 50,
+      symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+    },
+    { state: "RESOLVED", amount: 8, date: "2025-03-01" },
+    { state: "IMPOSSIBLE", amount: 5 },
+    { state: "RESOLVED", amount: 3, date: "2025-04-01" },
+  ];
+
+  it("merges same-date RESOLVED rows into one and passes symbolic rows through in place", () => {
+    // The 2025-03-01 duplicate that trails the UNRESOLVED row still merges up into
+    // the first-seen 2025-03-01 (9 + 8 = 17); the symbolic rows keep their slots.
+    expect(foldSameDateInstallments(mixed)).toEqual([
+      { state: "RESOLVED", amount: 16, date: "2025-02-01" },
+      { state: "RESOLVED", amount: 17, date: "2025-03-01" },
+      {
+        state: "UNRESOLVED",
+        amount: 50,
+        symbolicDate: { type: "UNRESOLVED_VESTING_START" },
+      },
+      { state: "IMPOSSIBLE", amount: 5 },
+      { state: "RESOLVED", amount: 3, date: "2025-04-01" },
+    ]);
+  });
+
+  it("conserves the stream total", () => {
+    expect(sumAmounts(foldSameDateInstallments(mixed))).toBe(sumAmounts(mixed));
+  });
+
+  it("does not mutate the input array or its installments", () => {
+    const before = structuredClone(mixed);
+    foldSameDateInstallments(mixed);
+    expect(mixed).toEqual(before);
+  });
+
+  it("is a no-op on an already one-per-date stream", () => {
+    const distinct: Installment[] = [
+      { state: "RESOLVED", amount: 10, date: "2025-02-01" },
+      { state: "RESOLVED", amount: 10, date: "2025-03-01" },
+    ];
+    expect(foldSameDateInstallments(distinct)).toEqual(distinct);
   });
 });

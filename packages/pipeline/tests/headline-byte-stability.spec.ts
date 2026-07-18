@@ -9,14 +9,19 @@ import {
   type GrantInput,
 } from "../src/index";
 
-// AC8 (#442, D1): the headline allocation is byte-stable across the breakdown
-// unification. These golden literals were captured from origin/main BEFORE the
-// change and are asserted byte-for-byte — they are NOT regenerated from the
-// refactored code. The pending / contingent-start rows are pinned in their FULL
-// UNRESOLVED shape (state + amount + symbolicDate, no `date`), which a
-// date+amount-only literal could not pin. The persist/rehydrate `projection` (the
-// one byte-sensitive `compileToInstallments` consumer outside the assemble
-// chokepoint) is captured too.
+// The headline allocation is byte-stable across the breakdown-attribution refactor.
+// Most golden literals below were captured from origin/main BEFORE that change and
+// are asserted byte-for-byte — they are NOT regenerated from the refactored code.
+// The pending / contingent-start rows are pinned in their FULL UNRESOLVED shape
+// (state + amount + symbolicDate, no `date`), which a date+amount-only literal
+// could not pin. The persist/rehydrate `projection` (the one byte-sensitive
+// `compileToInstallments` consumer outside the assemble chokepoint) is captured too.
+//
+// Two goldens are DELIBERATELY not byte-identical to that origin/main capture, each
+// flagged inline: the carve-out that surfaces a dropped-share bug, and the
+// over-allocating PLUS whose same-date tranches now fold to one per date. Folding
+// same-date RESOLVED installments into one tranche per date is the projection
+// contract these read tools share; it leaves the validity channel untouched.
 
 // A run of month-1st ISO dates, for the long uniform schedules.
 const months = (year: number, month: number, n: number): string[] => {
@@ -52,7 +57,7 @@ const GRANT_2025: GrantInput = {
   grant_quantity: 1200,
 };
 
-describe("headline byte-stability — golden literals (#442 / D1)", () => {
+describe("headline byte-stability — golden literals", () => {
   it("resolved monthly grid", () => {
     expect(headline("VEST OVER 12 months EVERY 1 month", GRANT_2025)).toEqual(
       resolved(months(2025, 2, 12), () => 100),
@@ -130,16 +135,18 @@ describe("headline byte-stability — golden literals (#442 / D1)", () => {
     ]);
   });
 
-  it("over-allocating PLUS — both same-date tranches survive", () => {
+  // Same-date fold applies to over-allocating schedules too: the 66 and 67 arms
+  // land on one date and collapse to a single 133 tranche. Over-allocation stays
+  // disclosed through the validity channel (asserted elsewhere), not by leaving
+  // duplicate rows in the stream; the per-arm 66/67 split still lives in the
+  // breakdown. Deliberately NOT byte-identical to the old duplicate-date capture.
+  it("over-allocating PLUS — same-date tranches fold to one", () => {
     expect(
       headline(
         "2/3 VEST OVER 1 month EVERY 1 month PLUS 2/3 VEST OVER 1 month EVERY 1 month",
         { grant_date: "2025-01-01", grant_quantity: 100 },
       ),
-    ).toEqual([
-      { state: "RESOLVED", amount: 66, date: "2025-02-01" },
-      { state: "RESOLVED", amount: 67, date: "2025-02-01" },
-    ]);
+    ).toEqual([{ state: "RESOLVED", amount: 133, date: "2025-02-01" }]);
   });
 
   it("recovered #43 grids — the rescued 6-tranche headline", () => {

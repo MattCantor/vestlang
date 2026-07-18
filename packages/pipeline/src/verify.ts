@@ -205,9 +205,9 @@ function nearestInstallment(
  * ------------------------ */
 
 // Same-date tranche observations are summed before comparison, mirroring how the
-// engine folds same-date installments — so a footnote listing two releases on one
-// day reads as one predicted-vs-disclosed check. Returns distinct dates in
-// first-seen order.
+// projection tools fold same-date installments into one tranche per date — so a
+// footnote listing two releases on one day reads as one predicted-vs-disclosed
+// check. Returns distinct dates in first-seen order.
 function sumTranchesByDate(
   observations: Observation[],
 ): { date: OCTDate; amount: number }[] {

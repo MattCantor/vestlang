@@ -13,7 +13,11 @@ import {
   chainGroupIndices,
   type StatementContribution,
 } from "@vestlang/evaluator";
-import { coalesceAtGrantDate, type CoalesceRow } from "@vestlang/primitives";
+import {
+  coalesceAtGrantDate,
+  foldSameDateInstallments,
+  type CoalesceRow,
+} from "@vestlang/primitives";
 import { toScheduleView, reasonToString, type ScheduleView } from "./view.js";
 import { evaluateProgramWithRecovery } from "@vestlang/recover";
 import type {
@@ -227,6 +231,12 @@ export function runEvaluate(
   try {
     const outcome = evaluateProgramWithRecovery(parsed.program, ctx);
     const view = toScheduleView(outcome.schedule);
+    // The headline is a projection view: one tranche per date. Two arms landing
+    // on the same date (an unrecoverable events-only grid) reach here as raw
+    // duplicates, so fold before presenting. The breakdown below stays per-arm —
+    // it is the attribution view, not the projection. verify.ts reads this same
+    // folded headline for its nearest-tranche pointer.
+    view.installments = foldSameDateInstallments(view.installments);
     const breakdown = clauseBreakdown(
       parsed.program,
       ctx,
@@ -267,16 +277,25 @@ export function runAsOf(
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
     const { valid, findings } = asOfFindings(result.findings);
+    // Fold the dated partitions to one RESOLVED tranche per date, then read the
+    // summary off the folded partitions so next_vest_amount is the folded per-date
+    // total, not one arm's slice. The impossible partition carries no dated rows,
+    // so it needs no fold.
+    const folded = {
+      ...result,
+      vested: foldSameDateInstallments(result.vested),
+      unvested: foldSameDateInstallments(result.unvested),
+    };
     return {
       ok: true,
       asOf: ctx.asOf,
-      vested: result.vested,
-      unvested: result.unvested,
-      impossible: result.impossible,
-      unresolved: result.unresolved,
+      vested: folded.vested,
+      unvested: folded.unvested,
+      impossible: folded.impossible,
+      unresolved: folded.unresolved,
       // When invalid, the summary keeps its numbers honest and only drops the
       // completion date — see computeSummary.
-      summary: computeSummary(result, ctx.grantQuantity, valid),
+      summary: computeSummary(folded, ctx.grantQuantity, valid),
       valid,
       findings,
     };
@@ -308,7 +327,14 @@ export function runVestedBetween(
   const ctx = buildAsOfContext({ ...g, as_of: to });
   try {
     const result = evaluateProgramAsOf(parsed.program, ctx);
-    const { installments, total } = filterByWindow(result.vested, from, to);
+    const { installments: windowed, total } = filterByWindow(
+      result.vested,
+      from,
+      to,
+    );
+    // Fold to one tranche per date, so the count is per-date and not per-arm. The
+    // sum is fold-invariant, so `total` still holds.
+    const installments = foldSameDateInstallments(windowed);
     // No summary path here, so validity reads straight off the same findings.
     const { valid, findings } = asOfFindings(result.findings);
     return {
