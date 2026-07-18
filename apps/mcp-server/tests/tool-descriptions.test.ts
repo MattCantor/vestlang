@@ -195,3 +195,56 @@ describe("mcp-server / server INSTRUCTIONS unified envelope (#345, AC#7)", () =>
     expect(instructions).toMatch(/isError[\s\S]*exception/i);
   });
 });
+
+describe("mcp-server / authoring recipe routing in INSTRUCTIONS", () => {
+  // Each workflow entry begins on its own `- ` bullet. Split on that anchor so the
+  // pointers can be checked in the RIGHT entry — a flat occurrence count would pass
+  // with both mentions crammed into one bullet, but placement is the requirement.
+  function bulletEntries(instructions: string): string[] {
+    return instructions.split(/\n- /).slice(1);
+  }
+
+  it("gives the narrative-plus-figures workflow its own entry pointing at the recipe", async () => {
+    const client = await connectedClient();
+    const entries = bulletEntries(client.getInstructions() ?? "");
+    const authoring = entries.find((e) =>
+      e.startsWith("Narrative + a few known figures"),
+    );
+    expect(authoring, "no narrative-plus-figures workflow entry").toBeDefined();
+    expect(authoring).toContain("vestlang://docs/authoring");
+  });
+
+  it("routes the natural-language entry to the recipe when figures accompany the description", async () => {
+    const client = await connectedClient();
+    const entries = bulletEntries(client.getInstructions() ?? "");
+    const nl = entries.find((e) => e.startsWith("Natural language → vestlang"));
+    expect(nl, "no natural-language workflow entry").toBeDefined();
+    expect(nl).toContain("vestlang://docs/authoring");
+  });
+
+  it("caveats the tranche-array entry with infer_schedule's completeness assumption", async () => {
+    const client = await connectedClient();
+    const entries = bulletEntries(client.getInstructions() ?? "");
+    const tranche = entries.find((e) =>
+      e.startsWith("Tranche array → vestlang"),
+    );
+    expect(tranche, "no tranche-array workflow entry").toBeDefined();
+    expect(tranche).toContain("assumes the tranches are the complete grant");
+  });
+});
+
+describe("mcp-server / authoring recipe pointers in tool descriptions", () => {
+  it("verify_observations points at the recipe and flags weak evidence on a bare match", async () => {
+    const description = await descriptionOf("vestlang_verify_observations");
+    expect(description).toContain("vestlang://docs/authoring");
+    expect(description).toContain("weak evidence");
+  });
+
+  it("infer_schedule states the complete-grant assumption and routes sparse cases to the recipe", async () => {
+    const description = await descriptionOf("vestlang_infer_schedule");
+    expect(description).toContain(
+      "assumes the tranches are the complete grant",
+    );
+    expect(description).toContain("vestlang://docs/authoring");
+  });
+});

@@ -70,6 +70,15 @@ export const RESOURCES: ResourceSpec[] = [
     mimeType: "text/markdown",
     path: "apps/docs/docs/common_queries.md",
   },
+  {
+    name: "authoring",
+    uri: "vestlang://docs/authoring",
+    title: "Authoring from a Narrative with Sparse Anchors",
+    description:
+      "The propose→verify→refine recipe for authoring vestlang from a loose narrative description plus a few known figures (a footnote tranche, fiscal-year-end balances). Fetch this before drafting when the description is informal or the evidence is sparse — it maps narrative phrases to observation kinds, walks the verify loop, and covers what to do when the anchors cannot discriminate between candidate schedules.",
+    mimeType: "text/markdown",
+    path: "apps/docs/docs/authoring.md",
+  },
 ];
 
 export function registerResources(server: McpServer): void {
