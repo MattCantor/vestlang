@@ -3,7 +3,12 @@
 // `foldToGrantDate`; in-repo the fold is reached via that wrapper (the kernel's
 // grant-date fold and the evaluator's unresolved-arm folds).
 
-import type { OCTDate, ScheduledFold } from "@vestlang/types";
+import type {
+  Installment,
+  OCTDate,
+  ResolvedInstallment,
+  ScheduledFold,
+} from "@vestlang/types";
 import { eq, gt, lt } from "./dates.js";
 
 // The boundary both the fold and the provenance allocator key on: a date before
@@ -192,6 +197,43 @@ export function coalesceAtGrantDate(
         ? { date: grantDate, amount: grantSum, scheduled: grantFolds }
         : { date: grantDate, amount: grantSum },
     );
+  }
+  return out;
+}
+
+/**
+ * Collapse a projection stream to one RESOLVED tranche per calendar date. Each
+ * RESOLVED installment merges — summing `amount` — into the first-seen entry of
+ * its date; later same-date duplicates drop out. UNRESOLVED / IMPOSSIBLE rows
+ * carry a symbolic or absent position rather than a calendar date, so they pass
+ * through untouched, keeping their original slot relative to the rows around them.
+ * The merge only sums integers that are already there, so the stream total is
+ * unchanged (an over-allocating stream still over-allocates by the same amount).
+ *
+ * Where two statements land installments on the same date — overlapping PLUS
+ * arms, or an unrecoverable events-only grid — the raw per-arm stream carries
+ * duplicate dates; this is what gives the three projection tools one strictly
+ * date-increasing tranche list apiece.
+ */
+export function foldSameDateInstallments(
+  installments: Installment[],
+): Installment[] {
+  const out: Installment[] = [];
+  const firstByDate = new Map<OCTDate, ResolvedInstallment>();
+  for (const inst of installments) {
+    if (inst.state !== "RESOLVED") {
+      out.push(inst);
+      continue;
+    }
+    const seen = firstByDate.get(inst.date);
+    if (seen) {
+      seen.amount += inst.amount;
+    } else {
+      // A fresh copy so the running sum never mutates the caller's installment.
+      const merged = { ...inst };
+      firstByDate.set(inst.date, merged);
+      out.push(merged);
+    }
   }
   return out;
 }
