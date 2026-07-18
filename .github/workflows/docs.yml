@@ -18,19 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Don't use cache: pnpm here (it invokes pnpm before it's installed)
+      # Mirror ci.yml: tsdown (the package builder since #543) needs Node >=22.18
+      # to load its TS config, so the workspace-deps build dies on Node 20.
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Use pnpm 9.x
-        run: corepack prepare pnpm@9 --activate
-
-      - name: Show pnpm version (debug)
-        run: pnpm -v
+          node-version: 22
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
