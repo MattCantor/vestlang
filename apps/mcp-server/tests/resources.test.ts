@@ -38,3 +38,51 @@ describe("MCP resources", () => {
     );
   });
 });
+
+// The authoring recipe is a live MCP resource — a page that CI can't typecheck, so
+// the facts it teaches can drift from the tools it choreographs without anything
+// noticing. The presence test keeps the resource wired; the content test pins the
+// exact strings below. Beyond those, the page must keep teaching all six of:
+//   1. the propose→verify→refine loop;
+//   2. the mapping from narrative phrases to observation kinds (tranche, balance);
+//   3. the discrimination test, and that a match under the default tolerance is
+//      weak evidence (tighten the tolerance or compare gaps);
+//   4. the month-end / day-of-month wrinkle in both forms — a literal start caught
+//      by lint, and an implicit start at a month-end grant date that lint can't see;
+//   5. when NOT to use infer_schedule (its complete-grant assumption);
+//   6. surfacing which parts of the final DSL rest on the narrative vs. the anchors.
+// Those are diff-reviewed against the prose, not string-matched here.
+describe("MCP resources — authoring recipe", () => {
+  const authoring = RESOURCES.find(
+    (r) => r.uri === "vestlang://docs/authoring",
+  );
+  // Read the page once; empty when the resource is gone, so both tests fail loud.
+  const text = authoring
+    ? readFileSync(resolve(REPO_ROOT, authoring.path), "utf8")
+    : "";
+
+  it("registers the authoring resource pointing at the recipe page", () => {
+    expect(authoring).toBeDefined();
+    expect(authoring!.name).toBe("authoring");
+    expect(authoring!.path).toBe("apps/docs/docs/authoring.md");
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  it("keeps the exact facts the recipe page must state", () => {
+    // The three tools the recipe choreographs.
+    expect(text).toContain("vestlang_lint");
+    expect(text).toContain("vestlang_verify_observations");
+    expect(text).toContain("vestlang_infer_schedule");
+    // The discrimination signal.
+    expect(text).toContain("worstGap");
+    // The month-end wrinkle: the lint ruleId for the literal case, and the
+    // day-of-month convention that both cases name (the ruleId alone would miss
+    // the implicit case, which never trips lint).
+    expect(text).toContain("ambiguous-month-end-start");
+    expect(text).toContain("LAST_DAY_OF_MONTH");
+    // The completeness caveat, verbatim.
+    expect(text).toContain("assumes the tranches are the complete grant");
+    // The provenance section.
+    expect(text).toMatch(/^#{1,3} .*Narrative vs\. anchors/im);
+  });
+});
