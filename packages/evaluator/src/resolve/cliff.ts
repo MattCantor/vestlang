@@ -17,9 +17,12 @@
 //   - the percentage is the proportional pre-cliff share m/N (DSL cliffs are
 //     always proportional; non-proportional cliffs arrive only via OCF data).
 //
-// EARLIER OF cliffs are deliberately NOT decomposed here — an `EARLIER OF` is
-// acceleration (a ceiling, no Carta home), so it keeps its existing time-cliff /
-// unresolved behaviour and never grows an `event_condition`.
+// A top-level `EARLIER OF` splits on its arms. When every arm references an event,
+// the whole `EARLIER OF` stores as one synthetic event hold — its recipe re-resolves
+// to the earliest live arm on reload — the same joint a `LATER OF` over events uses.
+// But an `EARLIER OF` with any pure time/date arm is left whole: that's acceleration,
+// a ceiling with no Carta home, so it keeps its existing time-cliff / unresolved
+// behaviour and never grows an `event_condition`.
 
 import type {
   Blocker,
@@ -261,20 +264,29 @@ const timeCliffAt = (
 };
 
 // A `LATER OF`'s arms, or undefined when `expr` isn't one. The cliff decomposition
-// only opens a top-level `LATER OF`; an `EARLIER OF` (acceleration) is left whole.
+// only opens a top-level `LATER OF`; an `EARLIER OF` is left whole — an all-event one
+// rides through as a single synthetic event side, a time/date-armed one keeps its
+// plain time-cliff lowering.
 const laterOfArms = (
   expr: VestingNodeExpr<"VESTING_START">,
 ): VestingNodeExpr<"VESTING_START">[] | undefined =>
   expr.type === "NODE_LATER_OF" ? [...expr.items] : undefined;
 
-// Does this cliff lower to an `event_condition`? Yes for an event-referencing leaf
-// or a top-level `LATER OF` (a hold, or a time baseline + a hold). NOT for a
-// top-level `EARLIER OF`: that's acceleration — a ceiling with no Carta home — so
-// it keeps its plain time-cliff lowering and never grows an event hold (AC 9). A
-// non-event cliff is no, trivially.
+// Does this cliff lower to an `event_condition`? Yes for an event-referencing leaf,
+// a top-level `LATER OF` (a hold, or a time baseline + a hold), or a top-level
+// `EARLIER OF` whose arms ALL reference an event — the whole `EARLIER OF` then
+// stores as one synthetic event whose recipe re-resolves to the earliest live arm
+// on reload. That per-arm `referencesEvent` test is exactly the one the `LATER OF`
+// partition uses to split its arms. NOT for an `EARLIER OF` with any pure time/date
+// arm: that's acceleration — a ceiling with no Carta home — so it keeps its plain
+// time-cliff lowering and never grows an event hold. A non-event cliff is no,
+// trivially.
 const decomposesToEventCondition = (
   expr: VestingNodeExpr<"VESTING_START">,
-): boolean => expr.type !== "NODE_EARLIER_OF" && referencesEvent(expr);
+): boolean =>
+  expr.type === "NODE_EARLIER_OF"
+    ? expr.items.every((arm) => referencesEvent(arm))
+    : referencesEvent(expr);
 
 // Wrap one or more arms back into a single expression: a lone arm stands on its
 // own, several become a `LATER OF` (max of them). Used to rebuild the time side
@@ -348,8 +360,9 @@ export const lowerCliff = (
   // An event-referencing cliff decomposes into a time baseline + an event hold.
   // `referencesEvent` descends, so it sees an event hiding in a LATER OF arm or a
   // gate reference (the leaf-only `eventBaseId` never would). A top-level EARLIER OF
-  // is excluded — acceleration has no Carta home, so it keeps its existing
-  // time-cliff/commit behaviour and never grows an event_condition (AC 9).
+  // decomposes only when every arm references an event (→ one synthetic event side);
+  // one with any pure time/date arm is excluded — acceleration, no Carta home — so it
+  // keeps its existing time-cliff/commit behaviour.
   if (decomposesToEventCondition(cliffExpr)) {
     return lowerEventCliff(
       cliffExpr,
@@ -369,9 +382,10 @@ export const lowerCliff = (
     return { state: "IMPOSSIBLE", blockers: res.blockers };
 
   // A cliff date is known when the expression fully resolves OR an EARLIER_OF cliff
-  // committed to its floor (`pickedDate` covers both). A partial LATER_OF without
-  // an event arm can't arise (the event branch above claims every event-referencing
-  // cliff), so what's left here is an ordinary date/duration cliff.
+  // committed to its floor (`pickedDate` covers both). The event branch above took
+  // every event-referencing cliff except a time/date-armed EARLIER_OF (excluded
+  // there), so what reaches here is a plain date/duration cliff or that EARLIER_OF —
+  // never a partial LATER_OF still holding on an unfired event arm.
   const cliffDate = pickedDate(res);
   if (!cliffDate) {
     return {
@@ -528,7 +542,8 @@ export const lowerDeferredCliff = (
   // baseline (this path expresses a `vestingStart + duration` cliff anchor-free)
   // plus the `event_condition`. The event side is firing-blind here — the start is
   // pending, so the firing can't be placed; the hold stands with no firing. An
-  // EARLIER OF is excluded (acceleration, AC 9), same as the anchored path.
+  // all-event EARLIER OF decomposes here too (one synthetic event side); one with any
+  // pure time/date arm is excluded (acceleration), same as the anchored path.
   if (decomposesToEventCondition(cliffExpr)) {
     const arms = laterOfArms(cliffExpr);
     const eventArms = arms
@@ -587,9 +602,10 @@ export const lowerDeferredCliff = (
   // start's, reported on the start, not doubled onto the cliff. An ungated one (a
   // cross-unit duration) simply stays unresolved until the firing date arrives.
   //
-  // Whether gated-and-satisfied or ungated, a top-level `EARLIER OF (DATE d, EVENT e)`
-  // reaches here — it's acceleration, so it never decomposes to an event_condition,
-  // and a combinator has no derivable relative duration. Its DATE arm still folds to a
+  // Whether gated-and-satisfied or ungated, a top-level `EARLIER OF` with a pure
+  // date/duration arm (e.g. `EARLIER OF (DATE d, EVENT e)`) reaches here — a mixed
+  // EARLIER OF is acceleration, so it never decomposes to an event_condition, and a
+  // combinator has no derivable relative duration. Its DATE arm still folds to a
   // committed floor with `e` as a pending sibling, so harvest that floor (mirroring the
   // anchored path) so it doesn't read as certain, dropping any vestingStart placeholder
   // (the start's pending-ness, not the cliff's). A cliff with no committed floor yields
