@@ -61,11 +61,27 @@ Durations are written "<integer> <unit>", where unit is day(s), week(s), month(s
 
 ## Amount
 
-An amount prefixes the statement and says how much of the grant it covers. A decimal in [0, 1] or a fraction is a portion; a bare integer is an absolute share count. Portions across a program should add up to the whole grant.
+An amount prefixes the statement and says how much of the grant it covers. A decimal below 1, or a fraction, is a *portion* of the grant; a bare integer is an *absolute share count*. Portions across a program should add up to the whole grant.
+
+Mind that boundary: a bare 1 is one share, not 100%. For the whole grant, write no amount at all.
 
 \`\`\`vest
 0.25 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 3 months
   PLUS 0.75 VEST FROM DATE 2026-01-01 OVER 36 months EVERY 1 month
+\`\`\`
+
+Thirds are exact as a fraction and lossy as a decimal, so write the fraction:
+
+\`\`\`vest
+1/3 VEST FROM DATE 2025-01-01 OVER 12 months EVERY 3 months
+  PLUS 2/3 VEST FROM DATE 2026-01-01 OVER 24 months EVERY 3 months
+\`\`\`
+
+Absolute counts are for a description that hands specific tranches specific share numbers — 1,000 shares at the first anniversary and 4,000 monthly after that:
+
+\`\`\`vest
+1000 VEST FROM grantDate + 12 months
+  PLUS 4000 VEST FROM DATE 2026-01-01 OVER 36 months EVERY 1 month
 \`\`\`
 
 ## Anchors — what FROM and CLIFF point at
@@ -82,10 +98,22 @@ Event names are identifiers you coin, one per trigger the description names: ipo
 
 vestingStart cannot anchor a FROM (it would define itself), and grantDate cannot anchor a CLIFF (a bare CLIFF duration is already measured from the vesting start).
 
-Any anchor may be shifted by signed durations — EVENT ipo + 6 months, DATE 2025-01-01 - 2 days:
+Any anchor may be shifted by one or more signed durations:
 
 \`\`\`vest
 VEST FROM EVENT ipo + 6 months OVER 24 months EVERY 1 month
+\`\`\`
+
+Offsets stack, and mixed units always apply months first regardless of the order written — "+ 20 days + 1 month" and "+ 1 month + 20 days" mean the same thing:
+
+\`\`\`vest
+VEST FROM EVENT ipo + 1 month + 20 days OVER 24 months EVERY 1 month
+\`\`\`
+
+A negative offset pulls the anchor earlier:
+
+\`\`\`vest
+VEST FROM DATE 2025-01-01 - 2 days OVER 48 months EVERY 1 month
 \`\`\`
 
 ## Choosing between anchors
@@ -198,5 +226,6 @@ VEST FROM EARLIER OF (EVENT closing, DATE 2025-06-30) OVER 48 months EVERY 1 mon
 - VEST FROM EVENT ipo OVER 24 months — EVERY is missing; the pair is all-or-nothing.
 - VEST EARLIER START OF (VEST FROM …, VEST FROM …) — operands never repeat VEST.
 - 0.5 VEST … PLUS 0.75 VEST … — portions over-allocate the grant.
+- 1 VEST … for the whole grant — that is one share, and it lints clean, so nothing will catch it. Omit the amount instead.
 - VEST FROM DATE 2026-01-01 THEN VEST FROM DATE 2027-01-01 — a THEN tail takes no start of its own; use PLUS for two independent starts.
 - Answering with the statement wrapped in prose or a code fence.`;

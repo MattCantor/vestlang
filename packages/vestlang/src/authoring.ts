@@ -91,7 +91,10 @@ export type AuthorResult =
     }
   | { ok: false; reason: "indeterminate"; attempts: number };
 
-const FIRST_CLOSED_FENCE = /```[^\n]*\n([\s\S]*?)```/;
+// Both fences must open a line (markdown allows up to three spaces of indent).
+// Unanchored, a stray triple-backtick inside a sentence would open a "block"
+// that closes at the real fence and captures nothing.
+const FIRST_CLOSED_FENCE = /^ {0,3}```[^\n]*\n([\s\S]*?)^ {0,3}```/m;
 
 /**
  * Deliberately not clever. A heuristic extractor — longest run of lines that
@@ -142,8 +145,12 @@ export async function authorVestlang(
 
   for (let attempts = 1; ; attempts++) {
     const reply = await complete({
+      // A copy, because the loop keeps appending to `messages` after this
+      // returns. A caller that files the request away — a transcript, a debug
+      // log, a span attribute — should keep the turn it was actually sent, not
+      // watch it grow into the final conversation.
       system: VESTLANG_AUTHORING_PROMPT,
-      messages,
+      messages: [...messages],
     });
     const dsl = extractStatement(reply);
 

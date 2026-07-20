@@ -5,6 +5,7 @@ import {
   authorVestlang,
   INDETERMINATE_SENTINEL,
   VESTLANG_AUTHORING_PROMPT,
+  validateVestlang,
   type AuthoringRequest,
   type AuthorResult,
 } from "@vestlang/vestlang/authoring";
@@ -29,6 +30,13 @@ function scripted(replies: string[]) {
     return Promise.resolve(reply);
   };
   return { complete, requests };
+}
+
+/** The blocking messages a candidate produces, as the corrective turn reports them. */
+function faultsOf(dsl: string): string[] {
+  const result = validateVestlang(dsl);
+  if (result.ok) return [];
+  return result.diagnostics.map((d) => d.message);
 }
 
 /** Narrows to the invalid arm, so a test can read its `dsl` and `diagnostics`. */
@@ -84,8 +92,13 @@ describe("authorVestlang", () => {
     // The model sees its own answer exactly as it wrote it, fences included —
     // the extracted text is for validation, not for the transcript.
     expect(second[1]).toEqual({ role: "assistant", content: firstReply });
+    // …and the corrective turn has to name the fault. Echoing the statement back
+    // without saying what was wrong with it would satisfy a weaker assertion.
     expect(second[2].role).toBe("user");
     expect(second[2].content).toContain(INVALID);
+    for (const message of faultsOf(INVALID)) {
+      expect(second[2].content).toContain(message);
+    }
   });
 
   // Omitted, the budget is 3; supplied, it is honoured exactly. Either way the
@@ -105,6 +118,20 @@ describe("authorVestlang", () => {
     expect(requests).toHaveLength(expected);
     expect(result.dsl).toBe(INVALID);
     expect(result.diagnostics.length).toBeGreaterThan(0);
+  });
+
+  // The give-up arm reports what was *validated*, not what arrived. With an
+  // unfenced reply the two are identical, so the fences have to be there for the
+  // distinction to mean anything.
+  it("gives up carrying the extracted statement, not the raw reply", async () => {
+    const fencedInvalid = `\`\`\`vest\n${INVALID}\n\`\`\``;
+    const { complete } = scripted([fencedInvalid, fencedInvalid]);
+    const result = invalidArm(
+      await authorVestlang({ context: "…", complete, maxAttempts: 2 }),
+    );
+
+    expect(result.dsl).toBe(INVALID);
+    expect(result.dsl).not.toContain("`");
   });
 
   it.each([0, -1, 2.5, NaN])(
@@ -194,11 +221,22 @@ describe("extracting the statement from a reply", () => {
   // Everything below is a reply the extractor deliberately refuses to rescue —
   // guessing at unfenced prose is how a confident wrong statement gets made.
   it("does not carve a statement out of unfenced prose", async () => {
+    const prose = `Here is the schedule: ${VALID}. Let me know if that helps.`;
+    const result = invalidArm(await replyOnce(prose));
+
+    // The whole reply goes to the validator untouched — an extractor that
+    // returned the statement (or nothing) would land somewhere else entirely.
+    expect(result.dsl).toBe(prose);
+  });
+
+  it("ignores a triple-backtick that does not open a line", async () => {
     const result = await replyOnce(
-      `Here is the schedule: ${VALID}. Let me know if that helps.`,
+      `You can wrap it in \`\`\` if you like. Here it is:\n\n\`\`\`vest\n${VALID}\n\`\`\``,
     );
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.dsl).toBe(VALID);
   });
 
   it("treats an unterminated fence as no fence at all", async () => {
