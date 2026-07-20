@@ -103,6 +103,30 @@ turns out to have one.
 - `lintProgram(program, options?)` - Lint a normalized program
 - `lintText(source, parser, options?)` - Lint source text
 
+## Authoring from prose
+
+If you drive an LLM yourself — a pipeline, a batch job, an extraction service — the
+`@vestlang/vestlang/authoring` subpath ships the parts you would otherwise hand-copy:
+the prompt that teaches a model the grammar, the parse-and-lint check, the corrective
+re-prompt, and the propose → verify → refine loop. It has no model SDK and no transport;
+you pass in a `complete` function that runs one turn against whatever client you already use.
+
+```typescript
+import { authorVestlang } from "@vestlang/vestlang/authoring";
+
+const result = await authorVestlang({
+  context: "Monthly over four years with a one-year cliff.",
+  complete: async ({ system, messages }) => yourModelClient(system, messages),
+});
+
+if (result.ok) console.log(result.dsl, result.program);
+```
+
+`result.ok` means the statement parses and lints — not that it matches the prose. To check
+meaning, feed the program to `verifyObservations` with figures you already know. The subpath
+also exports `validateVestlang`, `formatAuthoringFeedback`, `VESTLANG_AUTHORING_PROMPT`, and
+`INDETERMINATE_SENTINEL` if you would rather run the loop yourself.
+
 ## Types
 
 The package exports commonly used types:
