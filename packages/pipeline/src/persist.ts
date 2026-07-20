@@ -90,10 +90,10 @@ export type PersistResult = Result<{
 // the status that blocked it.
 //
 // The storability gate reads the firing-invariant `storable` verdict, NOT
-// `resolvesTo`. They can diverge: after the EARLIER_OF commit, an EARLIER_OF cliff
-// resolves to `template` while its storable stays `unrepresentable` — gating on
-// resolvesTo would silently make an unstorable schedule storable (AC 7). The
-// artifact (template + StoredTerms runtime + sourceMap) is built from storable
+// `resolvesTo`. They can diverge: after the EARLIER_OF commit, a date/duration-armed
+// EARLIER_OF cliff resolves to `template` while its storable stays `unrepresentable`
+// — gating on resolvesTo would silently make an unstorable schedule storable (AC 7).
+// The artifact (template + StoredTerms runtime + sourceMap) is built from storable
 // too, so it's firing-invariant by construction.
 //
 // The returned `pending`/`dead` come from `resolvesTo` (the verdict that speaks
@@ -160,8 +160,8 @@ export function runPersist(input: PersistInput): PersistResult {
   // Gate on the firing-invariant storable verdict — that's what determines
   // whether the schedule has a single storable canonical form at all. (resolvesTo
   // can read `template` for a schedule whose storable is unrepresentable, e.g.
-  // an EARLIER_OF cliff that commits its floor; gating on it would store the
-  // unstorable.)
+  // a date/duration-armed EARLIER_OF cliff that commits its floor; gating on it would
+  // store the unstorable.)
   const storable = schedule.storable;
   if (storable.status !== "template") {
     return {

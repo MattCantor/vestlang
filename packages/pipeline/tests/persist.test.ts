@@ -832,11 +832,13 @@ describe("persist/rehydrate are clock-independent", () => {
 });
 
 describe("#251 — persist gates on storable; rehydrate never commits", () => {
-  // AC#7 — an EARLIER OF cliff resolves to `template` (it commits its floor) but its
-  // storable is `unrepresentable` (an event arm can't be a duration cliff). Persist
+  // AC#7 — a date/duration-armed EARLIER OF cliff resolves to `template` (it commits
+  // its floor) but its storable is `unrepresentable` (the pure time arm keeps it off
+  // the event_condition path, and the event arm can't be a duration cliff). Persist
   // gates on storable, so it must REFUSE — gating on resolvesTo would store the
-  // unstorable.
-  it("AC#7: persist refuses an EARLIER OF cliff even though its resolvesTo is a template", () => {
+  // unstorable. (An all-event EARLIER OF cliff, by contrast, does store — see the
+  // event_condition round-trip suite below.)
+  it("AC#7: persist refuses a date/duration-armed EARLIER OF cliff even though its resolvesTo is a template", () => {
     const r = runPersist({
       dsl: "VEST OVER 48 months EVERY 1 month CLIFF EARLIER OF (+12 months, EVENT fda)",
       grant_date: "2025-01-01",
@@ -1040,5 +1042,118 @@ describe("runPersist/runRehydrate — event_condition round-trip (#255)", () => 
     expect(both.projection.reduce((a, e) => a + e.amount, 0)).toBe(4800);
     // The first tranche is the board-firing fold (24 months from ipo accrued).
     expect(both.projection[0].date).toBe("2027-06-01");
+  });
+});
+
+// An EARLIER OF cliff whose arms all reference an event stores the same way its
+// nested-under-a-LATER-OF sibling already does: one synthetic event_condition, the
+// whole EARLIER OF carried verbatim in the sidecar. The bare case used to be refused
+// as unrepresentable; these pin the persisted artifact and the reload.
+describe("runPersist/runRehydrate — all-event EARLIER OF cliff stores as a synthetic event_condition", () => {
+  const BARE =
+    "VEST OVER 4 years EVERY 1 month CLIFF EARLIER OF " +
+    "(event IPO before grantDate + 7 years, event CIC before grantDate + 7 years)";
+  const RECIPE =
+    "EARLIER OF (EVENT IPO BEFORE EVENT grantDate +84 months, " +
+    "EVENT CIC BEFORE EVENT grantDate +84 months)";
+
+  it("persists with no time cliff, one synthetic event_condition, and the EARLIER OF recipe", () => {
+    const persisted = persistOk({
+      dsl: BARE,
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    expect(persisted.artifact).toEqual({
+      template: {
+        object_type: "VESTING_TERMS",
+        id: "resolved",
+        statements: [
+          {
+            order: 1,
+            percentage: "1",
+            schedule: { occurrences: 48, period: 1, period_type: "MONTHS" },
+            event_condition: { event_id: "evt:1" },
+          },
+        ],
+      },
+      runtime: { startDate: "2025-01-01", grantDate: "2025-01-01" },
+      sidecar: { vestlang: { "evt:1": { definition: RECIPE } } },
+    });
+  });
+
+  it("stores the two-tier LATER OF (12 months, EARLIER OF(events)) with the time cliff plus the same recipe", () => {
+    // The nested sibling already persisted; the bare-case fix must not perturb it —
+    // this pins it byte-for-byte (the 12-month arm becomes the time cliff, the inner
+    // all-event EARLIER OF the same synthetic event_condition).
+    const persisted = persistOk({
+      dsl:
+        "VEST OVER 4 years EVERY 1 month CLIFF LATER OF " +
+        "(12 months, EARLIER OF (event IPO before grantDate + 7 years, " +
+        "event CIC before grantDate + 7 years))",
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+    expect(persisted.artifact).toEqual({
+      template: {
+        object_type: "VESTING_TERMS",
+        id: "resolved",
+        statements: [
+          {
+            order: 1,
+            percentage: "1",
+            schedule: {
+              occurrences: 48,
+              period: 1,
+              period_type: "MONTHS",
+              cliff: { length: 12, period_type: "MONTHS", percentage: "0.25" },
+            },
+            event_condition: { event_id: "evt:1" },
+          },
+        ],
+      },
+      runtime: { startDate: "2025-01-01", grantDate: "2025-01-01" },
+      sidecar: { vestlang: { "evt:1": { definition: RECIPE } } },
+    });
+  });
+
+  it("rehydrates: both firings fold at the earlier date; IPO alone stays held (no commit)", () => {
+    const persisted = persistOk({
+      dsl: BARE,
+      grant_date: "2025-01-01",
+      grant_quantity: 4800,
+    });
+
+    // Both fired → the sidecar recipe re-resolves the EARLIER OF to the earlier arm
+    // (min = IPO @ 2026-07-01) and the cliff folds there (18 months accrued = 1800).
+    const both = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { IPO: "2026-07-01", CIC: "2026-09-01" },
+    });
+    expect(both.firings_to_apply).toHaveLength(1);
+    expect(both.firings_to_apply[0]).toMatchObject({ date: "2026-07-01" });
+    expect(both.projection[0]).toEqual({ date: "2026-07-01", amount: 1800 });
+    expect(both.projection.reduce((a, e) => a + e.amount, 0)).toBe(4800);
+
+    // Reload never commits an EARLIER OF: with CIC still open, IPO alone leaves the
+    // grid held (CIC could still fold it earlier) rather than fabricating a floor. The
+    // hold discloses on the real events, never the minted synthetic id.
+    const ipoOnly = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+      events: { IPO: "2026-07-01" },
+    });
+    expect(ipoOnly.projection).toHaveLength(0);
+    expect(JSON.stringify(ipoOnly.pending)).toContain("CIC");
+    expect(JSON.stringify(ipoOnly.pending)).not.toContain("evt:1");
+
+    // Nothing fired → held, disclosing both real events.
+    const held = rehydrateOk({
+      artifact: persisted.artifact,
+      grant_quantity: 4800,
+    });
+    expect(held.projection).toHaveLength(0);
+    expect(JSON.stringify(held.pending)).toContain("IPO");
+    expect(JSON.stringify(held.pending)).not.toContain("evt:1");
   });
 });

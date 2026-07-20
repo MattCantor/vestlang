@@ -204,9 +204,9 @@ describe("lowerCliff", () => {
     }
   });
 
-  // AC 9: an EARLIER OF cliff never grows an event_condition — it keeps the
-  // existing behaviour (acceleration, no Carta home). Here both arms are known, so
-  // the EARLIER OF commits to its floor as a plain time cliff.
+  // AC 9: a date/duration-armed EARLIER OF cliff never grows an event_condition — the
+  // pure time arm keeps it off the event path (acceleration, no Carta home). Here both
+  // arms are known, so the EARLIER OF commits to its floor as a plain time cliff.
   it("EARLIER OF(+12 months, EVENT ipo) → no EVENT_HELD (stays a plain time cliff)", () => {
     const cliff: VestingNodeExpr<"VESTING_START"> = {
       type: "NODE_EARLIER_OF",
@@ -327,6 +327,86 @@ describe("lowerCliff — gated event cliff (#113)", () => {
     if (result.state === "EVENT_HELD") {
       expect(result.event.kind).toBe("synthetic");
       expect(result.firing).toBeUndefined();
+    }
+  });
+});
+
+// An EARLIER OF whose arms ALL reference an event decomposes to an event hold, the
+// same joint a LATER OF over events uses — the whole EARLIER OF becomes one synthetic
+// event side (no time baseline), its firing the earliest live arm (min). An EARLIER OF
+// with any pure time/date arm is excluded and keeps its plain time-cliff lowering.
+describe("lowerCliff — all-event EARLIER OF grows an event_condition", () => {
+  const earlierOf = (
+    ...items: VestingNodeExpr<"VESTING_START">[]
+  ): VestingNodeExpr<"VESTING_START"> => ({
+    type: "NODE_EARLIER_OF",
+    items: items as [
+      VestingNodeExpr<"VESTING_START">,
+      VestingNodeExpr<"VESTING_START">,
+      ...VestingNodeExpr<"VESTING_START">[],
+    ],
+  });
+
+  it("EARLIER OF(EVENT a, EVENT b), both fired → EVENT_HELD, synthetic, no time cliff, firing = min(a,b)", () => {
+    const c = baseCtx({
+      grantDate: "2025-01-01",
+      events: { a: "2026-07-01", b: "2026-09-01" },
+    });
+    const cliff = earlierOf(
+      makeSingletonNode(makeVestingBaseEvent("a")),
+      makeSingletonNode(makeVestingBaseEvent("b")),
+    );
+    const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, c);
+    expect(result.state).toBe("EVENT_HELD");
+    if (result.state === "EVENT_HELD") {
+      expect(result.event.kind).toBe("synthetic");
+      expect(result.cliff).toBeUndefined();
+      expect(result.firing).toBe("2026-07-01"); // min(a, b)
+    }
+  });
+
+  it("EARLIER OF(EVENT a, EVENT b), both unfired → EVENT_HELD, no firing (held)", () => {
+    const c = baseCtx({ grantDate: "2025-01-01", events: {} });
+    const cliff = earlierOf(
+      makeSingletonNode(makeVestingBaseEvent("a")),
+      makeSingletonNode(makeVestingBaseEvent("b")),
+    );
+    const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, c);
+    expect(result.state).toBe("EVENT_HELD");
+    if (result.state === "EVENT_HELD") {
+      expect(result.event.kind).toBe("synthetic");
+      expect(result.firing).toBeUndefined();
+    }
+  });
+
+  // Scope guard: a single pure date/duration arm keeps the whole EARLIER OF off the
+  // event path (acceleration), even though its other arm references an event. The
+  // +12-month sibling of this case lives in the main lowerCliff block above.
+  it("EARLIER OF(DATE d, EVENT ipo) → not decomposed (a pure date arm keeps it a plain time cliff)", () => {
+    const c = baseCtx({
+      grantDate: "2025-01-01",
+      events: { ipo: "2026-04-01" },
+    });
+    const cliff = earlierOf(
+      makeSingletonNode(makeVestingBaseDate("2026-01-01")),
+      makeSingletonNode(makeVestingBaseEvent("ipo")),
+    );
+    const result = lowerCliff(cliff, anchor, "MONTHS", 1, 48, c);
+    expect(result.state).not.toBe("EVENT_HELD");
+  });
+
+  // The deferred (anchor-free) path admits the all-event EARLIER OF the same way, so a
+  // pending-start schedule stores it rather than falling back to UNRESOLVED.
+  it("all-event EARLIER OF on a deferred start → EVENT_HELD, synthetic, no time baseline", () => {
+    const cliff = earlierOf(
+      makeSingletonNode(makeVestingBaseEvent("a")),
+      makeSingletonNode(makeVestingBaseEvent("b")),
+    );
+    const result = lowerDeferredCliff(cliff, "MONTHS", 1, 48, ctx);
+    expect(result.state).toBe("EVENT_HELD");
+    if (result.state === "EVENT_HELD") {
+      expect(result.event.kind).toBe("synthetic");
+      expect(result.cliff).toBeUndefined();
     }
   });
 });
