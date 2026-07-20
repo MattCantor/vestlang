@@ -19,13 +19,16 @@ const PROMPT_SOURCE = readFileSync(
 // instruction that host will follow — and a user asking about their vesting gets
 // back a bare DSL string, or a sentinel word.
 describe("the grammar guide", () => {
-  it("carries no reply-format rule", () => {
-    expect(VESTLANG_GRAMMAR_GUIDE).not.toContain(
-      "Reply with vestlang source and nothing else",
-    );
-    expect(VESTLANG_GRAMMAR_GUIDE).not.toContain(
-      "wrapped in prose or a code fence",
-    );
+  // Each rule is checked in both directions. An assertion that only said the
+  // guide lacks the text would go quietly vacuous the first time someone
+  // rewords it in prompt.ts; requiring the prompt to still carry it means a
+  // reword fails here instead.
+  it.each([
+    "Reply with vestlang source and nothing else",
+    "wrapped in prose or a code fence",
+  ])("keeps the reply-format rule %j out of the guide", (rule) => {
+    expect(VESTLANG_AUTHORING_PROMPT).toContain(rule);
+    expect(VESTLANG_GRAMMAR_GUIDE).not.toContain(rule);
   });
 
   it("carries no sentinel, including in the worked translation that taught it", () => {
@@ -48,6 +51,10 @@ describe("the prompt and the guide", () => {
     "Offsets stack, and mixed units always apply months first",
     "vestingStart cannot anchor a FROM (it would define itself)",
     "# Mistakes that fail validation",
+    // These two open a bullet and a worked translation whose endings differ per
+    // audience, which is exactly where a near-duplicate literal would creep back.
+    "A description pins nothing down when it names no cadence",
+    '"Vests as set forth in the participant\'s award agreement."',
   ];
 
   it.each(SHARED)("writes %j once and hands it to both", (sentence) => {

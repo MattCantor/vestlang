@@ -36,7 +36,8 @@ describe("a relocated package", () => {
     const home = await mkdtemp(join(tmpdir(), "vestlang-mcp-install-"));
     installDir = home;
     await Promise.all([
-      // Source maps would point back into the repo, and vitest says so loudly.
+      // Maps are left behind — their sources aren't here, and nothing under test
+      // reads them.
       cp(dist, join(home, "dist"), {
         recursive: true,
         filter: (source) => !source.endsWith(".map"),

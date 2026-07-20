@@ -11,6 +11,7 @@
     "resources"
   ],
   "scripts": {
+    "predev": "tsx scripts/copy-resources.ts",
     "dev": "tsx src/index.ts",
     "prebuild": "tsx scripts/copy-resources.ts",
     "build": "tsc -p tsconfig.json",

@@ -1,13 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { VESTLANG_GRAMMAR_GUIDE } from "@vestlang/vestlang/authoring";
 import { RESOURCES } from "../src/resources.js";
 import { RESOURCE_DIR } from "../scripts/copy-resources.js";
-import {
-  RESOURCE_SOURCES,
-  readSource,
-  sourcePath,
-} from "../scripts/resource-sources.js";
+import { RESOURCE_SOURCES, sourcePath } from "../scripts/resource-sources.js";
 
 // Two lists describe the same seven resources: the shipped manifest (what the
 // server registers and which file it reads) and the build-time source map (where
@@ -43,11 +40,24 @@ describe("MCP resources", () => {
   });
 
   // A rewritten line ending or a re-encoded body would be invisible to every
-  // other check here. This says nothing about staleness — the copy runs in
-  // globalSetup, moments before this reads it; turbo's inputs guard that.
-  it.each(["spec", "grammar"])("copies %s byte for byte", async (name) => {
-    const copied = readFileSync(join(RESOURCE_DIR, `${name}.md`));
-    expect(copied.equals(await readSource(RESOURCE_SOURCES[name]))).toBe(true);
+  // other check here. Both expectations are read independently of the copy
+  // script's own helper, so a transcode inside it still shows up. This says
+  // nothing about staleness — the copy runs in globalSetup, moments before this
+  // reads it; turbo's inputs guard that.
+  it("copies a docs page byte for byte", () => {
+    expect(
+      readFileSync(join(RESOURCE_DIR, "spec.md")).equals(
+        readFileSync(sourcePath("spec")),
+      ),
+    ).toBe(true);
+  });
+
+  it("copies the published guide byte for byte", () => {
+    expect(
+      readFileSync(join(RESOURCE_DIR, "grammar.md")).equals(
+        Buffer.from(VESTLANG_GRAMMAR_GUIDE, "utf8"),
+      ),
+    ).toBe(true);
   });
 });
 

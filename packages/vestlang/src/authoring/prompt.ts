@@ -21,24 +21,30 @@ export const OUTPUT_CONTRACT = `Reply with vestlang source and nothing else — 
  * — is written once, below.
  */
 type Audience = {
-  /** Heading and opening bullets: the rules to hold before the grammar. */
-  groundRules: string;
-  /** The worked translation for a description that determines nothing. */
-  nothingIsPinnedDown: string;
+  /** Names the opening section. */
+  rulesHeading: string;
+  /** Bullets that shape the reply itself. Empty for a reader sending none. */
+  replyRules: string;
+  /** Closes the don't-guess bullet: what to do when nothing is determined. */
+  dontGuessRule: string;
+  /** Answers the worked translation whose description determines nothing. */
+  awardAgreementAnswer: string;
   /** Trailing entries for the closing list of mistakes. May be empty. */
   closingMistakes: string;
 };
 
-// Hand-written for a model rather than for a reader: dense, imperative,
-// example-first. It is a third restatement of a grammar whose source of truth is
-// the peggy definition in @vestlang/dsl, so it needs sweeping whenever the
-// grammar moves — the same maintenance habit the docs site already carries.
-// Every ```vest block here is checked against the real parser and linter by the
-// integration suite, so an example that goes stale fails the build.
+// The grammar itself, restated for a reader who has to write it: dense,
+// example-first, no productions. Its source of truth is the peggy definition in
+// @vestlang/dsl, so it needs sweeping whenever the grammar moves — the same
+// maintenance habit the docs site already carries. Every ```vest block here is
+// checked against the real parser and linter by the integration suite, so an
+// example that goes stale fails the build.
 function compose(audience: Audience): string {
   return `You translate plain-English descriptions of equity vesting into vestlang, a small DSL for vesting schedules.
 
-${audience.groundRules}
+# ${audience.rulesHeading}
+
+${audience.replyRules}- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. ${audience.dontGuessRule}
 - One program may hold more than one statement when the description needs it (see PLUS and THEN).
 - Never invent a date, a duration, a percentage, or a trigger the description does not state.
 - Do not write the grant's share count into the statement. Size is supplied at evaluation time. The only exception is a description that allocates fixed share counts to separate tranches.
@@ -226,7 +232,7 @@ VEST OVER 36 months EVERY 3 months CLIFF EVENT changeOfControl
 VEST FROM EARLIER OF (EVENT closing, DATE 2025-06-30) OVER 48 months EVERY 1 month CLIFF 12 months
 \`\`\`
 
-${audience.nothingIsPinnedDown}
+"Vests as set forth in the participant's award agreement." — ${audience.awardAgreementAnswer}
 
 # Mistakes that fail validation
 
@@ -239,13 +245,17 @@ ${audience.nothingIsPinnedDown}
 - VEST FROM DATE 2026-01-01 THEN VEST FROM DATE 2027-01-01 — a THEN tail takes no start of its own; use PLUS for two independent starts.${audience.closingMistakes}`;
 }
 
-/** The system prompt `authorVestlang` sends. */
+/**
+ * The system prompt `authorVestlang` sends. Written for a model rather than for a
+ * reader: it dictates the shape of the reply, and every rule about that shape
+ * lives in this call rather than in the shared body.
+ */
 export const VESTLANG_AUTHORING_PROMPT = compose({
-  groundRules: `# Output contract
-
-- ${OUTPUT_CONTRACT}
-- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. A guess that parses is worse than an honest ${INDETERMINATE_SENTINEL}.`,
-  nothingIsPinnedDown: `"Vests as set forth in the participant's award agreement." — nothing is pinned down:
+  rulesHeading: "Output contract",
+  replyRules: `- ${OUTPUT_CONTRACT}
+`,
+  dontGuessRule: `A guess that parses is worse than an honest ${INDETERMINATE_SENTINEL}.`,
+  awardAgreementAnswer: `nothing is pinned down:
 
     ${INDETERMINATE_SENTINEL}`,
   closingMistakes: `
@@ -257,9 +267,11 @@ export const VESTLANG_AUTHORING_PROMPT = compose({
  * vestlang by hand. The MCP server publishes it as `vestlang://docs/grammar`.
  */
 export const VESTLANG_GRAMMAR_GUIDE = compose({
-  groundRules: `# Ground rules
-
-- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. Say which part is missing and ask for it; a guess that parses is worse than an admitted gap.`,
-  nothingIsPinnedDown: `"Vests as set forth in the participant's award agreement." — no cadence, no span, no trigger, and the document that would supply them is not in front of you. There is no statement to write. Name what is missing and ask for the award agreement; a four-year monthly default would lint clean and still be invented.`,
+  rulesHeading: "Ground rules",
+  replyRules: "",
+  dontGuessRule:
+    "Say which part is missing and ask for it; a guess that parses is worse than an admitted gap.",
+  awardAgreementAnswer:
+    "no cadence, no span, no trigger, and the document that would supply them is not in front of you. There is no statement to write. Name what is missing and ask for the award agreement; a four-year monthly default would lint clean and still be invented.",
   closingMistakes: "",
 });
