@@ -3,8 +3,14 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-// From apps/mcp-server/{src,dist}/resources.{ts,js} up to repo root.
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+// resources/ sits at the package root, so this names the same directory from
+// src/resources.ts and from dist/resources.js — and keeps naming it once the
+// package is installed under someone else's node_modules. A build step fills it;
+// nothing here reaches outside the package.
+const RESOURCE_DIR = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../resources",
+);
 
 type ResourceSpec = {
   name: string;
@@ -12,18 +18,18 @@ type ResourceSpec = {
   title: string;
   description: string;
   mimeType: string;
-  path: string;
+  file: string;
 };
 
 export const RESOURCES: ResourceSpec[] = [
   {
     name: "grammar",
     uri: "vestlang://docs/grammar",
-    title: "Vestlang DSL Grammar",
+    title: "Vestlang Authoring Guide",
     description:
-      "Full grammar reference for the vestlang DSL (schedule expressions, vesting anchors, conditions, durations). Fetch this before composing a new vestlang statement.",
+      "The working reference for writing vestlang: the statement form and every clause, anchors and offsets, selectors, window conditions, PLUS/THEN composition, worked translations from plain English, and the mistakes that fail validation. Prose and examples rather than formal productions — every example in it is checked against the real parser and linter. Fetch this before composing a new vestlang statement.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/dsl_grammar.md",
+    file: "grammar.md",
   },
   {
     name: "spec",
@@ -32,7 +38,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "Proposed OCF-aligned simple vesting specification that vestlang targets. Useful context for why the DSL exists and how it maps to the OCT schema.",
     mimeType: "text/markdown",
-    path: "docs/simple-vesting-spec.md",
+    file: "spec.md",
   },
   {
     name: "evaluation",
@@ -41,7 +47,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "Explains the evaluation model: the two verdicts (`storable`, the firing-blind floor, and `resolvesTo`, the closed-world reading), the representable/pending/valid flags, absence assumptions, gate (BEFORE/AFTER) provisos, and the resolved/unresolved/impossible installment states. Fetch this to interpret vestlang_evaluate output; vestlang_evaluate_as_of partitions the same installments by date but carries no verdict.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/evaluation.md",
+    file: "evaluation.md",
   },
   {
     name: "ast",
@@ -50,7 +56,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "Describes the raw vs. normalized AST and the invariants the normalizer enforces. Fetch this when consuming vestlang_parse or vestlang_compile output.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/ast.md",
+    file: "ast.md",
   },
   {
     name: "examples",
@@ -59,7 +65,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "Curated intent→syntax examples (time-based, milestone/event starts, selectors, conditions, cliffs, parallel schedules) — a supporting pattern reference. vestlang://docs/grammar is authoritative for syntax and constraints; validate composed statements with vestlang_lint.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/examples.md",
+    file: "examples.md",
   },
   {
     name: "common-queries",
@@ -68,7 +74,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "Reference for the summary object on vestlang_evaluate_as_of, the vestlang_vested_between window tool, and the date-math tools. Fetch this when answering aggregation or date-arithmetic questions to avoid re-deriving numbers from installment arrays.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/common_queries.md",
+    file: "common-queries.md",
   },
   {
     name: "authoring",
@@ -77,7 +83,7 @@ export const RESOURCES: ResourceSpec[] = [
     description:
       "The propose→verify→refine recipe for authoring vestlang from a loose narrative description plus a few known figures (a footnote tranche, fiscal-year-end balances). Fetch this before drafting when the description is informal or the evidence is sparse — it maps narrative phrases to observation kinds, walks the verify loop, and covers what to do when the anchors cannot discriminate between candidate schedules.",
     mimeType: "text/markdown",
-    path: "apps/docs/docs/authoring.md",
+    file: "authoring.md",
   },
 ];
 
@@ -92,8 +98,7 @@ export function registerResources(server: McpServer): void {
         mimeType: r.mimeType,
       },
       async (uri) => {
-        const abs = resolve(REPO_ROOT, r.path);
-        const text = await readFile(abs, "utf8");
+        const text = await readFile(resolve(RESOURCE_DIR, r.file), "utf8");
         return {
           contents: [
             {

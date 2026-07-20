@@ -4,6 +4,9 @@ dist/
 .DS_Store
 *.log
 
+# The MCP server's resource bodies, copied from their sources at build time
+/apps/mcp-server/resources/
+
 # Stryker mutation-testing output
 .stryker-tmp/
 **/reports/mutation/

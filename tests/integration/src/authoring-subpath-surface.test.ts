@@ -38,9 +38,10 @@ describe("the authoring subpath", () => {
     }
   });
 
-  it("exposes the prompt and the sentinel as non-empty strings", () => {
+  it("exposes the prompt, the guide, and the sentinel as non-empty strings", () => {
     for (const name of [
       "VESTLANG_AUTHORING_PROMPT",
+      "VESTLANG_GRAMMAR_GUIDE",
       "INDETERMINATE_SENTINEL",
     ] as const) {
       expect(typeof authoring[name], name).toBe("string");
