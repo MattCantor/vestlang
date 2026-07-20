@@ -6,11 +6,16 @@
   "bin": {
     "vestlang-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "resources"
+  ],
   "scripts": {
     "dev": "tsx src/index.ts",
+    "prebuild": "tsx scripts/copy-resources.ts",
     "build": "tsc -p tsconfig.json",
     "test": "vitest",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist resources"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
@@ -26,6 +31,7 @@
   },
   "devDependencies": {
     "@vestlang/core": "workspace:*",
+    "@vestlang/vestlang": "workspace:*",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",

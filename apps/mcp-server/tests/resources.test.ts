@@ -1,48 +1,75 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { RESOURCES } from "../src/resources.js";
+import { RESOURCE_DIR } from "../scripts/copy-resources.js";
+import {
+  RESOURCE_SOURCES,
+  readSource,
+  sourcePath,
+} from "../scripts/resource-sources.js";
 
-// Guards the wiring that started #44: a published MCP resource whose `path`
-// silently points at a moved or deleted file. Every registered resource must
-// resolve to a readable, non-empty file under the repo root. Mirrors the path
-// resolution in registerResources (resources.ts).
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-
+// Two lists describe the same seven resources: the shipped manifest (what the
+// server registers and which file it reads) and the build-time source map (where
+// each body is copied from). Neither knows about the other, so they are pinned
+// against each other here.
 describe("MCP resources", () => {
   it("registers at least one resource", () => {
     expect(RESOURCES.length).toBeGreaterThan(0);
   });
 
-  it.each(RESOURCES.map((r) => [r.name, r.path] as [string, string]))(
-    "%s resolves to a non-empty file",
-    (_name, path) => {
-      const text = readFileSync(resolve(REPO_ROOT, path), "utf8");
+  it("names the same resources as the source map, in both directions", () => {
+    expect(new Set(RESOURCES.map((r) => r.name))).toEqual(
+      new Set(Object.keys(RESOURCE_SOURCES)),
+    );
+  });
+
+  it.each(RESOURCES.map((r) => [r.name, r.file] as const))(
+    "%s is copied to a non-empty file in the package",
+    (_name, file) => {
+      const text = readFileSync(join(RESOURCE_DIR, file), "utf8");
       expect(text.trim().length).toBeGreaterThan(0);
     },
   );
 
-  // #469 — the evaluation doc is a live MCP resource that CI can't typecheck, so the
-  // blocker shape it documents can silently drift from the type. Guard the migration:
-  // the EVENT_NOT_YET_OCCURRED arm carries a nested `boundary?:`, not the old flat
-  // `direction?:` / `inclusive?:` / `consequence?:` / `through?:` fields.
+  // The grammar resource now serves the published guide; the docs-site page it
+  // used to serve is a docs page and nothing more.
+  it("sources no resource from the docs-site grammar page", () => {
+    for (const source of Object.values(RESOURCE_SOURCES)) {
+      if (source.from === "file") {
+        expect(source.path).not.toContain("dsl_grammar");
+      }
+    }
+  });
+
+  // A rewritten line ending or a re-encoded body would be invisible to every
+  // other check here. This says nothing about staleness — the copy runs in
+  // globalSetup, moments before this reads it; turbo's inputs guard that.
+  it.each(["spec", "grammar"])("copies %s byte for byte", async (name) => {
+    const copied = readFileSync(join(RESOURCE_DIR, `${name}.md`));
+    expect(copied.equals(await readSource(RESOURCE_SOURCES[name]))).toBe(true);
+  });
+});
+
+// The pages below are live MCP resources that CI can't typecheck, so what they
+// document can drift from the code. These read the SOURCE page, not the copy —
+// a stale page has to fail here, and the copy is only ever as good as its source.
+describe("MCP resources — page currency", () => {
+  // #469 — guard the migration of the EVENT_NOT_YET_OCCURRED blocker: its arm
+  // carries a nested `boundary?:`, not the old flat `direction?:` /
+  // `inclusive?:` / `consequence?:` / `through?:` fields.
   it("documents the EVENT_NOT_YET_OCCURRED blocker with a nested boundary, not flat fields", () => {
-    const evaluation = RESOURCES.find((r) => r.name === "evaluation");
-    expect(evaluation).toBeDefined();
-    const text = readFileSync(resolve(REPO_ROOT, evaluation!.path), "utf8");
+    const text = readFileSync(sourcePath("evaluation"), "utf8");
     expect(text).toContain("boundary?:");
-    // None of the four old flat fields may reappear as an optional blocker member.
     expect(text).not.toMatch(
       /\b(?:through|direction|inclusive|consequence)\?:/,
     );
   });
 });
 
-// The authoring recipe is a live MCP resource — a page that CI can't typecheck, so
-// the facts it teaches can drift from the tools it choreographs without anything
-// noticing. The presence test keeps the resource wired; the content test pins the
-// exact strings below. Beyond those, the page must keep teaching all six of:
+// The authoring recipe teaches facts about the tools it choreographs, and those
+// can drift without anything noticing. The strings below are pinned; beyond them
+// the page must keep teaching all six of:
 //   1. the propose→verify→refine loop;
 //   2. the mapping from narrative phrases to observation kinds (tranche, balance);
 //   3. the discrimination test, and that a match under the default tolerance is
@@ -53,18 +80,18 @@ describe("MCP resources", () => {
 //   6. surfacing which parts of the final DSL rest on the narrative vs. the anchors.
 // Those are diff-reviewed against the prose, not string-matched here.
 describe("MCP resources — authoring recipe", () => {
-  const authoring = RESOURCES.find(
-    (r) => r.uri === "vestlang://docs/authoring",
-  );
-  // Read the page once; empty when the resource is gone, so both tests fail loud.
-  const text = authoring
-    ? readFileSync(resolve(REPO_ROOT, authoring.path), "utf8")
-    : "";
+  const text = readFileSync(sourcePath("authoring"), "utf8");
 
-  it("registers the authoring resource pointing at the recipe page", () => {
+  it("registers the authoring resource against the recipe page", () => {
+    const authoring = RESOURCES.find(
+      (r) => r.uri === "vestlang://docs/authoring",
+    );
     expect(authoring).toBeDefined();
     expect(authoring!.name).toBe("authoring");
-    expect(authoring!.path).toBe("apps/docs/docs/authoring.md");
+    expect(RESOURCE_SOURCES.authoring).toEqual({
+      from: "file",
+      path: "apps/docs/docs/authoring.md",
+    });
     expect(text.trim().length).toBeGreaterThan(0);
   });
 

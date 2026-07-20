@@ -195,6 +195,9 @@ importers:
       '@vestlang/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@vestlang/vestlang':
+        specifier: workspace:*
+        version: link:../../packages/vestlang
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1

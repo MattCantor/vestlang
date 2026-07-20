@@ -125,7 +125,9 @@ if (result.ok) console.log(result.dsl, result.program);
 `result.ok` means the statement parses and lints — not that it matches the prose. To check
 meaning, feed the program to `verifyObservations` with figures you already know. The subpath
 also exports `validateVestlang`, `formatAuthoringFeedback`, `VESTLANG_AUTHORING_PROMPT`, and
-`INDETERMINATE_SENTINEL` if you would rather run the loop yourself.
+`INDETERMINATE_SENTINEL` if you would rather run the loop yourself, plus
+`VESTLANG_GRAMMAR_GUIDE` — the same grammar material as a reference document, with the
+reply-format rules left out, for a chat agent or a human composing vestlang by hand.
 
 ## Types
 

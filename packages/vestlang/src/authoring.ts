@@ -12,9 +12,14 @@ import {
   INDETERMINATE_SENTINEL,
   OUTPUT_CONTRACT,
   VESTLANG_AUTHORING_PROMPT,
+  VESTLANG_GRAMMAR_GUIDE,
 } from "./authoring/prompt.js";
 
-export { INDETERMINATE_SENTINEL, VESTLANG_AUTHORING_PROMPT };
+export {
+  INDETERMINATE_SENTINEL,
+  VESTLANG_AUTHORING_PROMPT,
+  VESTLANG_GRAMMAR_GUIDE,
+};
 
 export type AuthoringMessage = { role: "user" | "assistant"; content: string };
 

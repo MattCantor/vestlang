@@ -12,23 +12,34 @@ export const INDETERMINATE_SENTINEL = "INDETERMINATE";
  */
 export const OUTPUT_CONTRACT = `Reply with vestlang source and nothing else — no prose, no explanation, no markdown code fences. If the description does not determine a schedule, reply with exactly ${INDETERMINATE_SENTINEL}.`;
 
+/**
+ * The pieces the two audiences do not share. A system prompt drives a program
+ * making one API call, so it can dictate the shape of the reply; the guide is
+ * served to an MCP host that answers a human in its own voice, and a reply-format
+ * rule sitting in its context is an instruction it will follow to the user's
+ * confusion. Everything else — the grammar, the worked translations, the mistakes
+ * — is written once, below.
+ */
+type Audience = {
+  /** Heading and opening bullets: the rules to hold before the grammar. */
+  groundRules: string;
+  /** The worked translation for a description that determines nothing. */
+  nothingIsPinnedDown: string;
+  /** Trailing entries for the closing list of mistakes. May be empty. */
+  closingMistakes: string;
+};
+
 // Hand-written for a model rather than for a reader: dense, imperative,
 // example-first. It is a third restatement of a grammar whose source of truth is
 // the peggy definition in @vestlang/dsl, so it needs sweeping whenever the
 // grammar moves — the same maintenance habit the docs site already carries.
 // Every ```vest block here is checked against the real parser and linter by the
 // integration suite, so an example that goes stale fails the build.
-//
-// Annotated `: string` on purpose. Left to infer, the declaration file carries
-// the whole 7 KB as a literal type — shipping the text a second time, interning
-// it in every consumer's tsc, and making a wording tweak a type change.
-export const VESTLANG_AUTHORING_PROMPT: string = `You translate plain-English descriptions of equity vesting into vestlang, a small DSL for vesting schedules.
+function compose(audience: Audience): string {
+  return `You translate plain-English descriptions of equity vesting into vestlang, a small DSL for vesting schedules.
 
-# Output contract
-
-- ${OUTPUT_CONTRACT}
-- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. A guess that parses is worse than an honest ${INDETERMINATE_SENTINEL}.
-- One reply may hold more than one statement when the description needs it (see PLUS and THEN).
+${audience.groundRules}
+- One program may hold more than one statement when the description needs it (see PLUS and THEN).
 - Never invent a date, a duration, a percentage, or a trigger the description does not state.
 - Do not write the grant's share count into the statement. Size is supplied at evaluation time. The only exception is a description that allocates fixed share counts to separate tranches.
 
@@ -215,9 +226,7 @@ VEST OVER 36 months EVERY 3 months CLIFF EVENT changeOfControl
 VEST FROM EARLIER OF (EVENT closing, DATE 2025-06-30) OVER 48 months EVERY 1 month CLIFF 12 months
 \`\`\`
 
-"Vests as set forth in the participant's award agreement." — nothing is pinned down:
-
-    ${INDETERMINATE_SENTINEL}
+${audience.nothingIsPinnedDown}
 
 # Mistakes that fail validation
 
@@ -227,5 +236,30 @@ VEST FROM EARLIER OF (EVENT closing, DATE 2025-06-30) OVER 48 months EVERY 1 mon
 - VEST EARLIER START OF (VEST FROM …, VEST FROM …) — operands never repeat VEST.
 - 0.5 VEST … PLUS 0.75 VEST … — portions over-allocate the grant.
 - 1 VEST … for the whole grant — that is one share, and it lints clean, so nothing will catch it. Omit the amount instead.
-- VEST FROM DATE 2026-01-01 THEN VEST FROM DATE 2027-01-01 — a THEN tail takes no start of its own; use PLUS for two independent starts.
-- Answering with the statement wrapped in prose or a code fence.`;
+- VEST FROM DATE 2026-01-01 THEN VEST FROM DATE 2027-01-01 — a THEN tail takes no start of its own; use PLUS for two independent starts.${audience.closingMistakes}`;
+}
+
+/** The system prompt `authorVestlang` sends. */
+export const VESTLANG_AUTHORING_PROMPT = compose({
+  groundRules: `# Output contract
+
+- ${OUTPUT_CONTRACT}
+- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. A guess that parses is worse than an honest ${INDETERMINATE_SENTINEL}.`,
+  nothingIsPinnedDown: `"Vests as set forth in the participant's award agreement." — nothing is pinned down:
+
+    ${INDETERMINATE_SENTINEL}`,
+  closingMistakes: `
+- Answering with the statement wrapped in prose or a code fence.`,
+});
+
+/**
+ * The same material as a reference document, for an agent or a human composing
+ * vestlang by hand. The MCP server publishes it as `vestlang://docs/grammar`.
+ */
+export const VESTLANG_GRAMMAR_GUIDE = compose({
+  groundRules: `# Ground rules
+
+- A description pins nothing down when it names no cadence, no span, and no trigger, or when it defers to a document you were not given. Say which part is missing and ask for it; a guess that parses is worse than an admitted gap.`,
+  nothingIsPinnedDown: `"Vests as set forth in the participant's award agreement." — no cadence, no span, no trigger, and the document that would supply them is not in front of you. There is no statement to write. Name what is missing and ask for the award agreement; a four-year monthly default would lint clean and still be invented.`,
+  closingMistakes: "",
+});

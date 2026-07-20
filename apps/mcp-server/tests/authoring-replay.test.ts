@@ -2,9 +2,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createServer } from "../src/server.js";
+import { sourcePath } from "../scripts/resource-sources.js";
 
 // The authoring recipe embeds each worked example's verify call as a paired
 // `verify-input` / `verify-output` JSON fence. If the engine's numbers move, the
@@ -12,12 +11,10 @@ import { createServer } from "../src/server.js";
 // vestlang_verify_observations tool and checks the page's output block still
 // matches — so the examples cannot drift from the tool they teach. The inputs
 // under test ARE the page's own blocks, so input drift is caught by construction.
-
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const PAGE = resolve(REPO_ROOT, "apps/docs/docs/authoring.md");
+// Reads the source page, not the copy the server ships: a stale page has to fail.
 
 // The page is static for the run, so read and parse it once.
-const SOURCE = readFileSync(PAGE, "utf8");
+const SOURCE = readFileSync(sourcePath("authoring"), "utf8");
 
 type CallResult = {
   isError?: boolean;

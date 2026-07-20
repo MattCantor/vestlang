@@ -4,6 +4,7 @@ import {
   formatAuthoringFeedback,
   validateVestlang,
   VESTLANG_AUTHORING_PROMPT,
+  VESTLANG_GRAMMAR_GUIDE,
 } from "@vestlang/vestlang/authoring";
 
 // A statement that lints clean but trips the month-end advisory; one that trips
@@ -123,10 +124,16 @@ describe("formatAuthoringFeedback", () => {
   });
 });
 
-describe("the shipped authoring prompt", () => {
-  const examples = [
-    ...VESTLANG_AUTHORING_PROMPT.matchAll(/```vest\r?\n([\s\S]*?)```/g),
-  ].map((m) => m[1]);
+// Both shipped texts teach the grammar by example, so both have to be checked —
+// each with its own count assertion, so a renamed fence language can't pass by
+// finding nothing to run.
+describe.each([
+  ["the authoring prompt", VESTLANG_AUTHORING_PROMPT],
+  ["the grammar guide", VESTLANG_GRAMMAR_GUIDE],
+])("%s", (_label, text) => {
+  const examples = [...text.matchAll(/```vest\r?\n([\s\S]*?)```/g)].map(
+    (m) => m[1],
+  );
 
   it("carries worked DSL examples", () => {
     expect(examples.length).toBeGreaterThan(0);
