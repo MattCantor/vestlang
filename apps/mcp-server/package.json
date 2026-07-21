@@ -39,6 +39,7 @@
     "dev": "tsx src/index.ts",
     "prebuild": "tsx scripts/copy-resources.ts",
     "build": "tsdown",
+    "prepublishOnly": "pnpm build",
     "test": "vitest",
     "clean": "rimraf dist resources"
   },

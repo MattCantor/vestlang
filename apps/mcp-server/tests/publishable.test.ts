@@ -63,7 +63,14 @@ describe("the published manifest", () => {
     }
   });
 
-  it("packs files that are all actually there", () => {
+  it("packs the built output, the resources, and the landing page", () => {
+    // Naming them is the point: iterating whatever `files` happens to hold can
+    // only catch an entry that points nowhere, never one that was dropped. Lose
+    // "dist" and the bin target is absent from the tarball; lose "resources" and
+    // every resource read fails on an installed copy.
+    expect(manifest.files).toEqual(
+      expect.arrayContaining(["dist", "resources", "README.md", "LICENSE"]),
+    );
     for (const entry of manifest.files ?? []) {
       expect(existsSync(join(PACKAGE_DIR, entry)), entry).toBe(true);
     }

@@ -33,17 +33,40 @@ describe("release workflow publishes with pnpm", () => {
     .map((line) => line.trim())
     .filter((line) => !line.startsWith("#"));
 
-  it("gives every publishable package a step, with public access", () => {
-    const publishes = runCommands.filter((l) => /\bpnpm\s+publish\b/.test(l));
-    expect(publishes).toHaveLength(publishable.length);
-    for (const cmd of publishes) {
-      expect(cmd).toContain("--access public");
+  // Each publish step is checked as a unit rather than by counting occurrences
+  // across the whole file: a step is free to carry more than one `npm view` (the
+  // mcp-server step needs a second one to recognise a name that has never been
+  // published), and a total count would read that as a step gone missing.
+  // Comments come out first — the prose above the publish steps quotes the very
+  // commands being counted, and would register as steps of its own.
+  const publishSteps = workflow
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("#"))
+    .join("\n")
+    .split(/^ {6}- name: /m)
+    .slice(1)
+    .filter((step) => /\bpnpm\s+publish\b/.test(step));
+
+  it("gives every publishable package a step pointing at its directory", () => {
+    expect(publishSteps).toHaveLength(publishable.length);
+    for (const pkg of publishable) {
+      const step = publishSteps.filter((s) =>
+        s.includes(`working-directory: ${pkg.path}\n`),
+      );
+      expect(step, pkg.name).toHaveLength(1);
     }
   });
 
-  it("points each step at its package directory", () => {
-    for (const pkg of publishable) {
-      expect(runCommands, pkg.name).toContain(`working-directory: ${pkg.path}`);
+  it("publishes publicly, idempotently, and with git checks off", () => {
+    // pnpm forwards its publish argv verbatim to the spawned `npm publish`
+    // (only --publish-branch is stripped), and current npm hard-errors on the
+    // unknown --git-checks flag. The env-var setting is the channel pnpm reads
+    // and npm merely warns about — this broke the 0.1.1 publish once already.
+    for (const step of publishSteps) {
+      const label = step.split("\n")[0];
+      expect(step, label).toContain("--access public");
+      expect(step, label).toMatch(/\bnpm\s+view\b/);
+      expect(step, label).toMatch(/npm_config_git_checks:\s*"false"/);
     }
   });
 
@@ -53,30 +76,17 @@ describe("release workflow publishes with pnpm", () => {
     }
   });
 
-  it("disables git checks via the setting, never the CLI flag npm rejects", () => {
-    // pnpm forwards its publish argv verbatim to the spawned `npm publish`
-    // (only --publish-branch is stripped), and current npm hard-errors on the
-    // unknown --git-checks flag. The env-var setting is the channel pnpm reads
-    // and npm merely warns about — this broke the 0.1.1 publish once already.
+  it("never reaches for the CLI flag npm rejects", () => {
     // Scan the comment-stripped lines: the workflow's own comments are allowed
     // to name the forbidden flag while explaining why it is forbidden.
     for (const line of runCommands) {
       expect(line).not.toContain("--no-git-checks");
     }
-    expect(
-      runCommands.filter((l) => /npm_config_git_checks:\s*"false"/.test(l)),
-    ).toHaveLength(publishable.length);
   });
 
   it("never runs npm publish (comments may still mention it)", () => {
     const npmPublishes = runCommands.filter((l) => /\bnpm\s+publish\b/.test(l));
     expect(npmPublishes).toEqual([]);
-  });
-
-  it("keeps the npm view idempotence guard around every publish step", () => {
-    expect(workflow.match(/\bnpm\s+view\b/g) ?? []).toHaveLength(
-      publishable.length,
-    );
   });
 });
 

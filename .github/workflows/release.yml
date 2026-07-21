@@ -108,6 +108,17 @@ jobs:
 
       # The MCP server bundles the private packages into its own dist, so it has
       # no ordering constraint against the two above.
+      #
+      # Because it bundles them, changesets will not bump this package when one of
+      # them changes — a devDependency edge never cascades a version. Engine work
+      # that should reach `npx @vestlang/mcp-server` needs a changeset naming this
+      # package explicitly, or the published bundle silently keeps the old engine.
+      #
+      # The extra first arm is the bootstrap case: npm will not accept a trusted
+      # publisher for a name that isn't on the registry, so version 1 goes up by
+      # hand and this step stands down until it exists. Without it the step would
+      # try to publish the placeholder version on the very merge that adds this
+      # package to the trigger above.
       - name: Publish @vestlang/mcp-server (Trusted Publishing, OIDC)
         working-directory: apps/mcp-server
         env:
@@ -115,7 +126,9 @@ jobs:
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+          if ! npm view "$NAME" version >/dev/null 2>&1; then
+            echo "$NAME is not on the registry yet — its first publish is manual; skipping."
+          elif npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION is already published — skipping."
           else
             pnpm publish --access public
