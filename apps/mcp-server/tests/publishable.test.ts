@@ -1,8 +1,10 @@
-// The server publishes to npm as a bin-only package, and it gets there by
-// inlining the private @vestlang/* packages into its own bundle. Two things have
-// to hold for an `npx @vestlang/mcp-server` to work off a fresh install: the
-// manifest asks the registry only for things that exist there, and the bundle
-// reaches for nothing else.
+// The server publishes to npm as a bin-only package that inlines the private
+// @vestlang/* packages into its own bundle. This covers the manifest side of a
+// working `npx @vestlang/mcp-server`: the right deps declared, the bin present
+// with its shebang, no stray type output. That the bundle itself reaches for
+// nothing beyond its two runtime deps is the publish guard's job
+// (`pnpm check:artifacts`), which now runs over this package too — so it isn't
+// re-checked, more weakly, here.
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -95,19 +97,6 @@ describe("the built bundle", () => {
       "dist/index.js is missing — build the package before running this",
     ).toBeDefined();
     expect(entry!.startsWith("#!/usr/bin/env node")).toBe(true);
-  });
-
-  it("inlines every @vestlang package rather than importing one", () => {
-    // Prose in the bundled comments and tool descriptions mentions the package
-    // names freely, so this looks for a live specifier, not the bare name.
-    const specifier =
-      /(?:from|import|require)\s*\(?\s*["'](@vestlang\/[^"']+)/g;
-    for (const [file, content] of built) {
-      expect(
-        [...content.matchAll(specifier)].map((m) => m[1]),
-        file,
-      ).toEqual([]);
-    }
   });
 
   it("ships no declarations — nothing consumes this package's types", () => {
