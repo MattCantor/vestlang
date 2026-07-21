@@ -1,10 +1,13 @@
 name: Release
 
-# Publishes @vestlang/core and @vestlang/vestlang to npmjs via Trusted
-# Publishing (OIDC) — each package's trusted publisher on npmjs.com names this
-# repo and workflow, so no NPM_TOKEN secret exists anywhere. Fires when a merge
-# to main touches a publishable package's manifest (i.e. a `changeset version`
-# bump lands); the already-published guards make reruns and no-op fires safe.
+# Publishes @vestlang/core, @vestlang/vestlang and @vestlang/mcp-server to npmjs
+# via Trusted Publishing (OIDC) — each package's trusted publisher on npmjs.com
+# names this repo and workflow, so no NPM_TOKEN secret exists anywhere. A
+# package's *first* release is the exception: npm won't accept a trusted
+# publisher for a name that doesn't exist yet, so version 1 goes up by hand with
+# a token and OIDC takes over from there. Fires when a merge to main touches a
+# publishable package's manifest (i.e. a `changeset version` bump lands); the
+# already-published guards make reruns and no-op fires safe.
 # Publish with pnpm, not npm: npm packs `workspace:*` verbatim, so a plain
 # `npm publish` ships an uninstallable umbrella tarball — pnpm rewrites those
 # ranges to concrete versions at pack time.
@@ -14,6 +17,7 @@ on:
     paths:
       - "packages/vestlang/package.json"
       - "packages/core/package.json"
+      - "apps/mcp-server/package.json"
   workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
@@ -91,6 +95,21 @@ jobs:
 
       - name: Publish @vestlang/vestlang (Trusted Publishing, OIDC)
         working-directory: packages/vestlang
+        env:
+          npm_config_git_checks: "false"
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION is already published — skipping."
+          else
+            pnpm publish --access public
+          fi
+
+      # The MCP server bundles the private packages into its own dist, so it has
+      # no ordering constraint against the two above.
+      - name: Publish @vestlang/mcp-server (Trusted Publishing, OIDC)
+        working-directory: apps/mcp-server
         env:
           npm_config_git_checks: "false"
         run: |

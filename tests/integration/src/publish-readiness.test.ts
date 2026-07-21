@@ -1,13 +1,25 @@
 // Guards the release configuration itself. The pack-based artifact guard packs
 // with pnpm, so it is blind to a regression that swaps the *publish command* back
 // to workspace-unaware `npm publish`; these tests fence that directly, and pin the
-// npm-facing metadata @vestlang/core needs now that OCF-Tools installs it.
+// npm-facing metadata every published package needs on its landing page.
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  publishablePackages,
+  type Manifest,
+} from "../../../scripts/check-published-artifacts.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+// Read off the manifests rather than listed here: whatever set of packages is
+// publishable is the set the release has to cover, and a package that starts
+// publishing should fail these until its step and its metadata exist.
+const publishable = publishablePackages(repoRoot).map((pkg) => ({
+  ...pkg,
+  path: relative(repoRoot, pkg.dir),
+}));
 
 describe("release workflow publishes with pnpm", () => {
   const workflow = readFileSync(
@@ -21,11 +33,23 @@ describe("release workflow publishes with pnpm", () => {
     .map((line) => line.trim())
     .filter((line) => !line.startsWith("#"));
 
-  it("runs pnpm publish for both packages with public access", () => {
+  it("gives every publishable package a step, with public access", () => {
     const publishes = runCommands.filter((l) => /\bpnpm\s+publish\b/.test(l));
-    expect(publishes).toHaveLength(2);
+    expect(publishes).toHaveLength(publishable.length);
     for (const cmd of publishes) {
       expect(cmd).toContain("--access public");
+    }
+  });
+
+  it("points each step at its package directory", () => {
+    for (const pkg of publishable) {
+      expect(runCommands, pkg.name).toContain(`working-directory: ${pkg.path}`);
+    }
+  });
+
+  it("re-runs itself when any publishable manifest changes", () => {
+    for (const pkg of publishable) {
+      expect(runCommands, pkg.name).toContain(`- "${pkg.path}/package.json"`);
     }
   });
 
@@ -41,7 +65,7 @@ describe("release workflow publishes with pnpm", () => {
     }
     expect(
       runCommands.filter((l) => /npm_config_git_checks:\s*"false"/.test(l)),
-    ).toHaveLength(2);
+    ).toHaveLength(publishable.length);
   });
 
   it("never runs npm publish (comments may still mention it)", () => {
@@ -49,8 +73,10 @@ describe("release workflow publishes with pnpm", () => {
     expect(npmPublishes).toEqual([]);
   });
 
-  it("keeps the npm view idempotence guard around both publish steps", () => {
-    expect(workflow.match(/\bnpm\s+view\b/g) ?? []).toHaveLength(2);
+  it("keeps the npm view idempotence guard around every publish step", () => {
+    expect(workflow.match(/\bnpm\s+view\b/g) ?? []).toHaveLength(
+      publishable.length,
+    );
   });
 });
 
@@ -78,36 +104,42 @@ describe("version-pr workflow versions but never publishes", () => {
   });
 });
 
-interface CoreManifest {
+// The guard only models the dependency fields; an npm landing page needs more.
+interface PublishedManifest extends Manifest {
   license?: string;
+  description?: string;
   repository?: { url?: string; directory?: string };
   bugs?: { url?: string };
   homepage?: string;
   keywords?: string[];
   engines?: { node?: string };
   files?: string[];
+  publishConfig?: { registry?: string; access?: string };
 }
 
-describe("@vestlang/core npm metadata", () => {
-  const coreDir = join(repoRoot, "packages/core");
-  const pkg = JSON.parse(
-    readFileSync(join(coreDir, "package.json"), "utf8"),
-  ) as CoreManifest;
+describe.each(publishable)("$name npm metadata", (pkg) => {
+  const manifest = pkg.manifest as PublishedManifest;
 
   it("carries the fields an npm page and a direct consumer need", () => {
-    expect(pkg.license).toBeTruthy();
-    expect(pkg.repository?.url).toBeTruthy();
-    expect(pkg.repository?.directory).toBe("packages/core");
-    expect(pkg.homepage).toBeTruthy();
-    expect(pkg.bugs?.url).toBeTruthy();
-    expect(pkg.keywords?.length).toBeGreaterThan(0);
-    expect(pkg.engines?.node).toBeTruthy();
+    expect(manifest.license).toBeTruthy();
+    expect(manifest.description).toBeTruthy();
+    expect(manifest.repository?.url).toBeTruthy();
+    expect(manifest.repository?.directory).toBe(pkg.path);
+    expect(manifest.homepage).toBeTruthy();
+    expect(manifest.bugs?.url).toBeTruthy();
+    expect(manifest.keywords?.length).toBeGreaterThan(0);
+    expect(manifest.engines?.node).toBeTruthy();
+  });
+
+  it("publishes publicly to the npm registry", () => {
+    expect(manifest.publishConfig?.registry).toBe("https://registry.npmjs.org");
+    expect(manifest.publishConfig?.access).toBe("public");
   });
 
   it("lists README and LICENSE in files, and both exist on disk", () => {
-    expect(pkg.files).toContain("README.md");
-    expect(pkg.files).toContain("LICENSE");
-    expect(existsSync(join(coreDir, "README.md"))).toBe(true);
-    expect(existsSync(join(coreDir, "LICENSE"))).toBe(true);
+    expect(manifest.files).toContain("README.md");
+    expect(manifest.files).toContain("LICENSE");
+    expect(existsSync(join(pkg.dir, "README.md"))).toBe(true);
+    expect(existsSync(join(pkg.dir, "LICENSE"))).toBe(true);
   });
 });

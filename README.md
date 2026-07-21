@@ -115,13 +115,14 @@ raw, recovery-free classification still reports the structural verdict.
 
 ## Packages
 
-Two packages are **published**; the rest are internal building blocks, inlined into the
-umbrella at build time and never published on their own.
+Three packages are **published**; the rest are internal building blocks, inlined at build
+time into whichever published package needs them and never published on their own.
 
 | Package | Published | Role |
 |---|:---:|---|
 | **`@vestlang/vestlang`** | ✅ | The umbrella toolkit — parse, normalize, evaluate, lint, stringify, infer. The package you install. |
 | **`@vestlang/core`** | ✅ | The standalone reference compiler (dual CJS/ESM): a resolved, combinator-free template + a per-grant runtime → exact integer installments, with structural + runtime validation. Consumable on its own. |
+| **`@vestlang/mcp-server`** | ✅ | The MCP server — the whole pipeline as tools, plus the grammar and spec as resources. Launched by an MCP host with `npx`, not installed as a library. |
 | `@vestlang/primitives` | — | The shared engine substrate core sits on: exact-rational allocator, policy-aware date math, the grid kernel + time-based cliff, the anchor-date fold, the static empty-window analysis, the installment cap |
 | `@vestlang/dsl` | — | PEG grammar + parser |
 | `@vestlang/normalizer` | — | Raw AST → normalized canonical AST |
@@ -131,9 +132,9 @@ umbrella at build time and never published on their own.
 | `@vestlang/pipeline` | — | The shared consumer layer both apps route through — parse → context → evaluate → view, behind one structured error model |
 | `@vestlang/linter` · `@vestlang/stringify` · `@vestlang/types` | — | Diagnostics · DSL rendering · shared types |
 
-Apps (private): `apps/cli`, `apps/mcp-server`, `apps/docs`. Both the CLI and the MCP
-server orchestrate the engine through `@vestlang/pipeline` rather than wiring the
-parse → evaluate → present steps themselves, so the two can't drift.
+The MCP server lives in `apps/mcp-server`; `apps/cli` and `apps/docs` stay private. Both
+the CLI and the MCP server orchestrate the engine through `@vestlang/pipeline` rather than
+wiring the parse → evaluate → present steps themselves, so the two can't drift.
 
 > The umbrella is published as `@vestlang/vestlang` today; the unscoped `vestlang` name is
 > the intended target (pending a registry clearance).
@@ -189,12 +190,20 @@ date math, and grid kernel — and bundles it in, so a core consumer pulls in no
 
 ### 2. As an MCP server
 
-`apps/mcp-server` exposes the full pipeline as Model Context Protocol tools —
+`@vestlang/mcp-server` exposes the full pipeline as Model Context Protocol tools —
 `vestlang_parse`, `vestlang_compile`, `vestlang_evaluate`, `vestlang_evaluate_as_of`,
 `vestlang_vested_between`, `vestlang_verify_observations`, `vestlang_lint`,
 `vestlang_stringify`, `vestlang_infer_schedule` —
 and publishes the grammar/spec/examples as resources. This is the surface for driving
-vestlang from an LLM agent.
+vestlang from an LLM agent. Point an MCP host at it:
+
+```json
+{
+  "mcpServers": {
+    "vestlang": { "command": "npx", "args": ["-y", "@vestlang/mcp-server"] }
+  }
+}
+```
 
 ---
 
