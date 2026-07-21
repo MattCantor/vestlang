@@ -126,8 +126,19 @@ jobs:
         run: |
           NAME=$(node -p "require('./package.json').name")
           VERSION=$(node -p "require('./package.json').version")
-          if ! npm view "$NAME" version >/dev/null 2>&1; then
-            echo "$NAME is not on the registry yet — its first publish is manual; skipping."
+          if ! LOOKUP=$(npm view "$NAME" version 2>&1); then
+            # Only a genuine 404 means "not published yet". Any other failure —
+            # a registry 5xx, a rate limit, a broken proxy — must go red rather
+            # than be read as consent to skip the release.
+            case "$LOOKUP" in
+              *E404*)
+                echo "::warning::$NAME is not on the registry yet — its first publish is manual (see the release runbook); skipping."
+                ;;
+              *)
+                echo "$LOOKUP"
+                exit 1
+                ;;
+            esac
           elif npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION is already published — skipping."
           else

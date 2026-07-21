@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 interface Manifest {
+  private?: boolean;
   bin?: Record<string, string>;
   files?: string[];
   dependencies?: Record<string, string>;
@@ -34,6 +35,14 @@ if (existsSync(DIST)) {
 }
 
 describe("the published manifest", () => {
+  it("is not marked private", () => {
+    // Has to be asserted here rather than in the repo-wide release tests: those
+    // derive their package set by filtering out private manifests, so a `private`
+    // flag creeping back would delete this package's coverage instead of failing
+    // it.
+    expect(manifest.private).toBeUndefined();
+  });
+
   it("asks npm only for the two external runtime deps", () => {
     const runtime = [
       ...Object.keys(manifest.dependencies ?? {}),
