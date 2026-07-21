@@ -1,4 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { z } from "zod";
 import { inferSchedule, InferInputError } from "@vestlang/inferrer";
 import { errorDiagnostics, lintText } from "@vestlang/linter";
@@ -267,9 +270,20 @@ function okResult<T extends Record<string, unknown>>(payload: T) {
  * Server
  * ------------------------ */
 
+// The handshake has to carry a version, so it had better be the real one — it is
+// what a user quotes back in a bug report. package.json sits at the package root,
+// which this names identically from src/server.ts and from the bundled dist/, the
+// same trick resources.ts uses for its markdown.
+const { version } = JSON.parse(
+  readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "../package.json"),
+    "utf8",
+  ),
+) as { version: string };
+
 export function createServer(): McpServer {
   const server = new McpServer(
-    { name: "vestlang-mcp-server", version: "0.1.0" },
+    { name: "vestlang-mcp-server", version },
     { instructions: INSTRUCTIONS },
   );
 
