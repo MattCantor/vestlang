@@ -16,9 +16,10 @@ import {
   type OffsetSign,
 } from "../src/same-anchor";
 
-// The firing-invariant same-anchor analysis. Its whole reason to exist is the
-// soundness floor — it may only ever under-report — so the sign classifier is the
-// load-bearing piece, tested here directly over the full matrix.
+// The firing-invariant same-anchor analysis. The sign classifier decides every
+// flag/abstain outcome, and a wrong sign is the only way a satisfiable gate could
+// be flagged (the soundness floor is "only ever under-report"), so it's tested
+// here directly over the full sign matrix.
 
 /* ------------------------
  * AST construction helpers
@@ -100,9 +101,9 @@ describe("classifyOffsetDelta", () => {
   });
 });
 
-// The check-(A) table: given the sign of `operand − subject`, when is `S REL
-// operand` determinately false? An indeterminate delta must NEVER flag — that is
-// the soundness floor in one assertion.
+// The reflexive-contradiction table: given the sign of `operand − subject`, when
+// is `S REL operand` determinately false? An indeterminate delta must NEVER flag —
+// that is the soundness floor in one assertion.
 describe("isReflexiveContradiction — the full sign × (relation, strict) matrix", () => {
   const expected: Record<
     OffsetSign,

@@ -41,6 +41,7 @@ describe("unsatisfiable-event-gate", () => {
       );
       expect(flagged).toHaveLength(1);
       expect(flagged[0].severity).toBe("error");
+      expect(flagged[0].path).toEqual(["Program", 0, "expr", "vesting_start"]);
     });
 
     it("errors on a system anchor strictly after itself (lint-only class)", () => {

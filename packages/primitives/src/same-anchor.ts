@@ -165,7 +165,7 @@ const conjunctiveConstraints = (c: Condition): Constraint[] => {
  * The two checks
  * ------------------------ */
 
-// (A) Reflexive point check. When an atom's operand is the *enclosing node's own*
+// Reflexive point check. When an atom's operand is the *enclosing node's own*
 // anchor, the atom reduces to a bare comparison of the two sides' offsets. Flag
 // when that comparison is determinately false.
 const hasReflexiveContradiction = (
@@ -207,11 +207,11 @@ const windowEmpty = (after: Bound, before: Bound): boolean => {
   return false; // POSITIVE leaves room; INDETERMINATE abstains
 };
 
-// (B) Same-operand empty-window check. Group the collected atoms by operand
-// symbol; within a group every AFTER is a lower bound and every BEFORE an upper
-// bound on the same unknown. Any AFTER×BEFORE pair whose window is determinately
-// empty kills the gate. (One AFTER + one BEFORE is the confirmed shape; checking
-// all pairs keeps it right for larger groups.)
+// Same-operand empty-window check. Group the collected atoms by operand symbol;
+// within a group every AFTER is a lower bound and every BEFORE an upper bound on
+// the same unknown. Any AFTER×BEFORE pair whose window is determinately empty
+// kills the gate. (One AFTER + one BEFORE is the confirmed shape; checking all
+// pairs keeps it right for larger groups.)
 const hasEmptyWindow = (constraints: Constraint[]): boolean => {
   const lowers = new Map<string, Bound[]>();
   const uppers = new Map<string, Bound[]>();

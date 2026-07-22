@@ -102,20 +102,28 @@ describe("same-anchor gate — satisfiable gates stay storable templates", () =>
     expect(resolved).toHaveLength(12);
   });
 
-  it("a determinately-negative delta is storable", () => {
+  it("a determinately-negative delta is storable and vests the full schedule", () => {
     const out = evaluate(
       "VEST FROM EVENT a STRICTLY AFTER EVENT a - 1 day OVER 12 months EVERY 1 month",
       { a: FIRED },
     );
     expect(out.storable.status).toBe("template");
+    const resolved = out.resolvesTo.installments.filter(
+      (i) => i.state === "RESOLVED",
+    );
+    expect(resolved).toHaveLength(12);
   });
 
-  it("the BEFORE side of a positive delta is storable", () => {
+  it("the BEFORE side of a positive delta is storable and vests the full schedule", () => {
     const out = evaluate(
       "VEST FROM EVENT a STRICTLY BEFORE EVENT a + 1 month OVER 12 months EVERY 1 month",
       { a: FIRED },
     );
     expect(out.storable.status).toBe("template");
+    const resolved = out.resolvesTo.installments.filter(
+      (i) => i.state === "RESOLVED",
+    );
+    expect(resolved).toHaveLength(12);
   });
 
   // The static analysis can't decide a mixed-sign offset delta, so it abstains and
