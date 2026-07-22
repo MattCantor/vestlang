@@ -27,6 +27,14 @@ import {
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import {
+  collectSpecifiers,
+  matchAll,
+  packageNameOf,
+  readManifest,
+  workspacePackageDirs,
+  type SpawnLike,
+} from "./lib/workspace.mts";
 
 // --- pure core -------------------------------------------------------------
 
@@ -99,17 +107,6 @@ export function findWorkspaceRangeViolations(
   return violations;
 }
 
-// A bare specifier is one that isn't relative and isn't the package's own name.
-// Its *package name* is the specifier with any subpath stripped, so `zod/mini`
-// checks against a `zod` dep and `@scope/pkg/sub` against `@scope/pkg`.
-function packageNameOf(specifier: string): string {
-  const parts = specifier.split("/");
-  if (specifier.startsWith("@")) {
-    return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
-  }
-  return parts[0];
-}
-
 function isRelative(specifier: string): boolean {
   return specifier.startsWith(".") || specifier.startsWith("/");
 }
@@ -143,35 +140,10 @@ function declarationSiblingOf(specifier: string): string | undefined {
   return undefined;
 }
 
-// Every syntactic form a specifier can hide in — including the inline
-// `import("…")` type reference a resolve failure emits, which a from-clause-only
-// scan would miss.
-const SPECIFIER_PATTERNS: readonly RegExp[] = [
-  /\bfrom\s*["']([^"']+)["']/g, // import/export … from '…'
-  /\bimport\s*["']([^"']+)["']/g, // side-effect import '…'
-  /\bimport\s*\(\s*["']([^"']+)["']/g, // import('…') / import("…").T
-  /\brequire\s*\(\s*["']([^"']+)["']/g, // require('…'), import x = require('…')
-];
-
+// The triple-slash types-reference directive is its own syntactic form, not one
+// of the four import shapes the shared scan covers, so it's matched separately.
 const REFERENCE_TYPES_PATTERN =
   /\/\/\/\s*<reference\s+types\s*=\s*["']([^"']+)["']/g;
-
-// A real specifier stays on this charset. Bundled JS (e.g. the generated peggy
-// parser) carries string literals that end in a keyword like `from`, so a naive
-// `from"…"` match can capture the gap between two adjacent literals — that debris
-// contains whitespace, `;`, `=`, so this rejects it before it's mistaken for an
-// import.
-const SPECIFIER_SHAPE = /^[\w@./:~-]+$/;
-
-function matchAll(content: string, pattern: RegExp): string[] {
-  return [...content.matchAll(pattern)].map((m) => m[1]);
-}
-
-function collectSpecifiers(content: string): string[] {
-  return SPECIFIER_PATTERNS.flatMap((p) => matchAll(content, p)).filter((s) =>
-    SPECIFIER_SHAPE.test(s),
-  );
-}
 
 /**
  * Given a package's manifest facts, its built artifacts, and the set of private
@@ -255,50 +227,14 @@ export function findViolations(
 
 // --- live-tree CLI ---------------------------------------------------------
 
+// A published package's manifest may set `private` (the guard skips those). The
+// shared reader hands back the raw package.json shape, a superset of this.
 export interface Manifest extends PackedManifest {
   private?: boolean;
 }
 
-function readManifest(file: string): Manifest {
-  return JSON.parse(readFileSync(file, "utf8")) as Manifest;
-}
-
 function runtimeDepsOf(manifest: Manifest): string[] {
   return RESOLVED_DEP_FIELDS.flatMap((f) => Object.keys(manifest[f] ?? {}));
-}
-
-// pnpm-workspace.yaml holds the authoritative globs (the root package.json's
-// `workspaces` omits tests/*). Minimal parse: only list items under the
-// top-level `packages:` key, and only the `dir/*` glob shape.
-function workspacePackageDirs(repoRoot: string): string[] {
-  const yaml = readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
-  const globs: string[] = [];
-  let inPackages = false;
-  for (const line of yaml.split("\n")) {
-    if (/^packages:\s*$/.test(line)) {
-      inPackages = true;
-    } else if (/^\S/.test(line)) {
-      inPackages = false;
-    } else if (inPackages) {
-      const item = /^\s+-\s*["']?([^"']+?)["']?\s*$/.exec(line);
-      if (item) globs.push(item[1]);
-    }
-  }
-  const dirs: string[] = [];
-  for (const glob of globs) {
-    if (!glob.endsWith("/*")) continue;
-    const base = join(repoRoot, glob.slice(0, -2));
-    if (!existsSync(base)) continue;
-    for (const entry of readdirSync(base, { withFileTypes: true })) {
-      if (
-        entry.isDirectory() &&
-        existsSync(join(base, entry.name, "package.json"))
-      ) {
-        dirs.push(join(base, entry.name));
-      }
-    }
-  }
-  return dirs;
 }
 
 function collectArtifacts(pkgDir: string): BuiltArtifact[] {
@@ -321,13 +257,6 @@ function collectArtifacts(pkgDir: string): BuiltArtifact[] {
 // (ERR_PNPM_CANNOT_RESOLVE_WORKSPACE_PROTOCOL); we report that as a tooling
 // problem so it's never mistaken for a real leak.
 export class PackToolingError extends Error {}
-
-/** The slice of `spawnSync` the packer uses — injectable so tests can fake a failing pack. */
-export type SpawnLike = (
-  command: string,
-  args: string[],
-  options: { cwd?: string; encoding: "utf8" },
-) => { status: number | null; stdout: string; stderr: string };
 
 // Pack a package the way the release does and hand back its packed manifest.
 // Success keys off the pack exit code plus a tarball landing in `packDest` —

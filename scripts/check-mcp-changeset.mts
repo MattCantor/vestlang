@@ -17,6 +17,13 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  collectSpecifiers,
+  packageNameOf,
+  readManifest,
+  workspacePackageDirs,
+  type SpawnLike,
+} from "./lib/workspace.mts";
 
 export const MCP_SERVER = "@vestlang/mcp-server";
 
@@ -59,10 +66,10 @@ export interface ManifestFacts {
   devDependencies?: readonly string[];
 }
 
-// deps and devDeps collapse into one edge set: the devDependency edge is the
-// stale-bytes vector this guard exists for — an engine package reachable only
-// because a bundled package inlines it (the noExternal shape). Restricting to
-// `@vestlang/*` drops third-party deps, which the guard doesn't track.
+// deps and devDeps collapse into one edge set: a bundled package can inline an
+// engine package through either field (the noExternal path), and the inlined
+// bytes ship regardless of which one named it. Restricting to `@vestlang/*` drops
+// third-party deps, which aren't bundled.
 export function graphFromManifests(
   manifests: readonly ManifestFacts[],
 ): WorkspaceGraph {
@@ -147,50 +154,6 @@ export function parseChangesetNames(fileContents: string): string[] {
 
 // --- live-tree CLI ---------------------------------------------------------
 
-interface RawManifest {
-  name?: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-}
-
-function readManifest(file: string): RawManifest {
-  return JSON.parse(readFileSync(file, "utf8")) as RawManifest;
-}
-
-// pnpm-workspace.yaml holds the authoritative package globs. Minimal parse: list
-// items under the top-level `packages:` key, `dir/*` shape only — enough for this
-// repo's flat layout.
-function workspacePackageDirs(repoRoot: string): string[] {
-  const yaml = readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
-  const globs: string[] = [];
-  let inPackages = false;
-  for (const line of yaml.split("\n")) {
-    if (/^packages:\s*$/.test(line)) {
-      inPackages = true;
-    } else if (/^\S/.test(line)) {
-      inPackages = false;
-    } else if (inPackages) {
-      const item = /^\s+-\s*["']?([^"']+?)["']?\s*$/.exec(line);
-      if (item) globs.push(item[1]);
-    }
-  }
-  const dirs: string[] = [];
-  for (const glob of globs) {
-    if (!glob.endsWith("/*")) continue;
-    const base = join(repoRoot, glob.slice(0, -2));
-    if (!existsSync(base)) continue;
-    for (const entry of readdirSync(base, { withFileTypes: true })) {
-      if (
-        entry.isDirectory() &&
-        existsSync(join(base, entry.name, "package.json"))
-      ) {
-        dirs.push(join(base, entry.name));
-      }
-    }
-  }
-  return dirs;
-}
-
 /** Build the workspace graph from every package.json under the workspace globs. */
 export function workspaceGraph(repoRoot: string): WorkspaceGraph {
   const facts: ManifestFacts[] = [];
@@ -209,26 +172,12 @@ export function workspaceGraph(repoRoot: string): WorkspaceGraph {
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts|cts)$/;
 
-// The specifier positions an import can hide in — a from-clause, a side-effect
-// import, a dynamic import, a require. Deliberately narrow: it must sit right
-// after the keyword, so a `@vestlang/*` name quoted inside a prose string literal
-// (mcp-server's tool descriptions carry a few) is never mistaken for an import.
-const IMPORT_PATTERNS: readonly RegExp[] = [
-  /\bfrom\s*["']([^"']+)["']/g,
-  /\bimport\s*["']([^"']+)["']/g,
-  /\bimport\s*\(\s*["']([^"']+)["']/g,
-  /\brequire\s*\(\s*["']([^"']+)["']/g,
-];
-
-function scopedPackageName(specifier: string): string {
-  const parts = specifier.split("/");
-  return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : specifier;
-}
-
 /**
  * The `@vestlang/*` packages mcp-server's src imports — the true bundle entry.
  * Scanning imports (not the manifest) is what naturally excludes the umbrella:
- * mcp-server devDepends on it for build scripts, but src never imports it.
+ * mcp-server devDepends on it for build scripts, but src never imports it. Only
+ * the `@vestlang/*` specifiers matter here; the shared scan returns them all and
+ * this narrows.
  */
 export function importSeeds(repoRoot: string): string[] {
   const srcDir = join(repoRoot, "apps", "mcp-server", "src");
@@ -240,12 +189,9 @@ export function importSeeds(repoRoot: string): string[] {
   })) {
     if (!entry.isFile() || !SOURCE_FILE.test(entry.name)) continue;
     const content = readFileSync(join(entry.parentPath, entry.name), "utf8");
-    for (const pattern of IMPORT_PATTERNS) {
-      for (const match of content.matchAll(pattern)) {
-        if (match[1].startsWith("@vestlang/")) {
-          seeds.add(scopedPackageName(match[1]));
-        }
-      }
+    for (const specifier of collectSpecifiers(content)) {
+      if (specifier.startsWith("@vestlang/"))
+        seeds.add(packageNameOf(specifier));
     }
   }
   return [...seeds];
@@ -280,16 +226,9 @@ function readChangesetNames(changesetDir: string): Set<string> {
   return names;
 }
 
-/** The slice of `spawnSync` the git runner uses — injectable so tests fake git. */
-export type SpawnLike = (
-  command: string,
-  args: string[],
-  options: { cwd?: string; encoding: "utf8" },
-) => { status: number | null; stdout: string; stderr: string };
-
-// Raised when the base ref can't be resolved. Distinct so the CLI never treats an
-// unresolved base as an empty diff — which would pass silently, the exact no-op
-// the guard must not become.
+// Raised when the base ref can't be resolved. Distinct so the CLI fails loudly
+// rather than treating an unresolved base as an empty diff, which would pass
+// silently.
 export class BaseRefError extends Error {}
 
 // Resolution order: an explicit --base / MCP_GUARD_BASE, else the PR target
@@ -389,31 +328,58 @@ function baseArgOf(argv: readonly string[]): string | undefined {
   return inline?.slice("--base=".length);
 }
 
-function main(): void {
-  const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+/**
+ * Run the guard and return a process exit code: 0 when clean, 1 on a violation
+ * or an unresolvable base. Console output goes through injectable `log`/`logError`
+ * (defaulting to the console) so a caller can drive the exit-code mapping without
+ * a live child process.
+ */
+export function run(opts: {
+  repoRoot: string;
+  changesetDir: string;
+  gitCwd: string;
+  spawn: SpawnLike;
+  argv: readonly string[];
+  env: EnvLike;
+  log?: (message: string) => void;
+  logError?: (message: string) => void;
+}): number {
+  const log = opts.log ?? console.log;
+  const logError = opts.logError ?? console.error;
   try {
     const outcome = runGuard({
-      repoRoot,
-      changesetDir: join(repoRoot, ".changeset"),
-      gitCwd: repoRoot,
-      spawn: spawnSync,
-      baseArg: baseArgOf(process.argv.slice(2)),
-      env: process.env,
+      repoRoot: opts.repoRoot,
+      changesetDir: opts.changesetDir,
+      gitCwd: opts.gitCwd,
+      spawn: opts.spawn,
+      baseArg: baseArgOf(opts.argv),
+      env: opts.env,
     });
     if (!outcome.ok) {
-      console.error(outcome.message);
-      process.exit(1);
+      logError(outcome.message);
+      return 1;
     }
-    console.log(outcome.message);
+    log(outcome.message);
+    return 0;
   } catch (err) {
     if (err instanceof BaseRefError) {
-      console.error(err.message);
-      process.exit(1);
+      logError(err.message);
+      return 1;
     }
     throw err;
   }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main();
+  const repoRoot = fileURLToPath(new URL("..", import.meta.url));
+  process.exit(
+    run({
+      repoRoot,
+      changesetDir: join(repoRoot, ".changeset"),
+      gitCwd: repoRoot,
+      spawn: spawnSync,
+      argv: process.argv.slice(2),
+      env: process.env,
+    }),
+  );
 }

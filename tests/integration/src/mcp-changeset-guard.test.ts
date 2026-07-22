@@ -14,10 +14,11 @@ import {
   findChangesetGuardViolations,
   MCP_SERVER,
   parseChangesetNames,
+  run,
   runGuard,
   type GuardedPackage,
-  type SpawnLike,
 } from "../../../scripts/check-mcp-changeset.mjs";
+import { type SpawnLike } from "../../../scripts/lib/workspace.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -155,10 +156,10 @@ function cannedGit(diffStdout: string): SpawnLike {
 }
 
 describe("runGuard through the real seams", () => {
-  function withChangesetDir(run: (dir: string) => void): void {
+  function withChangesetDir(body: (dir: string) => void): void {
     const dir = mkdtempSync(join(tmpdir(), "mcp-changeset-"));
     try {
-      run(dir);
+      body(dir);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -221,6 +222,71 @@ describe("runGuard through the real seams", () => {
       });
     expect(call).toThrow(BaseRefError);
     expect(call).toThrow(/cannot resolve base ref/);
+  });
+
+  // `run` maps an outcome to the process exit code the CLI hands to
+  // `process.exit`. These pin that mapping directly — a flip to always-0 would
+  // otherwise pass every seam-level assertion above.
+  it("exits 1, reporting the package, on a violation", () => {
+    withChangesetDir((changesetDir) => {
+      writeFileSync(
+        join(changesetDir, "feature.md"),
+        `---\n"@vestlang/vestlang": minor\n---\n\nAn umbrella feature.\n`,
+      );
+      let reported = "";
+      const code = run({
+        repoRoot,
+        changesetDir,
+        gitCwd: repoRoot,
+        spawn: cannedGit("packages/primitives/src/allocate.ts\n"),
+        argv: [],
+        env: {},
+        log: () => {},
+        logError: (message) => (reported = message),
+      });
+      expect(code).toBe(1);
+      expect(reported).toContain("@vestlang/primitives");
+    });
+  });
+
+  it("exits 1, reporting the cause, when the base ref can't be resolved", () => {
+    const failingRevParse: SpawnLike = (_command, args) =>
+      args[0] === "rev-parse"
+        ? { status: 1, stdout: "", stderr: "fatal: bad revision" }
+        : { status: 0, stdout: "", stderr: "" };
+    let reported = "";
+    const code = run({
+      repoRoot,
+      changesetDir: join(repoRoot, ".changeset"),
+      gitCwd: repoRoot,
+      spawn: failingRevParse,
+      argv: [],
+      env: {},
+      log: () => {},
+      logError: (message) => (reported = message),
+    });
+    expect(code).toBe(1);
+    expect(reported).toMatch(/cannot resolve base ref/);
+  });
+
+  it("exits 0 when a changeset in the directory names mcp-server", () => {
+    withChangesetDir((changesetDir) => {
+      writeFileSync(
+        join(changesetDir, "publish.md"),
+        `---\n"${MCP_SERVER}": minor\n---\n\nPublish the server.\n`,
+      );
+      const code = run({
+        repoRoot,
+        changesetDir,
+        gitCwd: repoRoot,
+        spawn: cannedGit("packages/primitives/src/allocate.ts\n"),
+        argv: [],
+        env: {},
+        log: () => {},
+        logError: () => {},
+      });
+      expect(code).toBe(0);
+    });
   });
 });
 

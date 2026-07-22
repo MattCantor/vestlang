@@ -1,8 +1,8 @@
 // The guard watches whatever the mcp-server actually bundles, derived — never a
 // frozen list. These pin the derivation two ways: against the real workspace (the
 // closure and the guarded set it yields today) and over synthetic manifests (that
-// the walk is genuinely dynamic and follows devDependency edges, the stale-bytes
-// vector the guard exists to catch).
+// the walk is genuinely dynamic and follows devDependency edges as well as
+// dependency edges).
 import { describe, expect, it } from "vitest";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
