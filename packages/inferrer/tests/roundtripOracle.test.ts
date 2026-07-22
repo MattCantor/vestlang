@@ -581,7 +581,15 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
     expect(sf.map((e) => e.id)).toEqual([]);
   });
 
-  it("clean floors hold: ≥737 main and ≥173 MINUS_ONE on the grid", () => {
+  it("clean floors hold: ≥713 main and ≥168 MINUS_ONE on the grid", () => {
+    // These floors track the grid's information content, not just the inferrer's
+    // skill. They stepped down (from 737/173) when stored percentages moved onto
+    // the storage grid by rounding up: a cliff whose date folds into the grant lump
+    // used to shift the lump a share off the cliff-less reading, and that stray
+    // share was a fingerprint the inferrer could read. With the lump now landing on
+    // the same count either way, 29 grid cases became genuinely two-template
+    // observables. The collision ceiling fell further than the clean count did over
+    // the same change, so the gap to it narrowed.
     const grid = run.gridEntries;
     const mainClean = grid.filter(
       (e) => !e.minusOneOriginal && e.bucket === "clean",
@@ -589,8 +597,8 @@ describe("inferrer round-trip oracle — evaluate ∘ infer", () => {
     const minusOneClean = grid.filter(
       (e) => e.minusOneOriginal && e.bucket === "clean",
     ).length;
-    expect(mainClean).toBeGreaterThanOrEqual(737);
-    expect(minusOneClean).toBeGreaterThanOrEqual(173);
+    expect(mainClean).toBeGreaterThanOrEqual(713);
+    expect(minusOneClean).toBeGreaterThanOrEqual(168);
   });
 
   it("fam1 (cliff ≥ duration) tags 334 grid cases, none of them clean", () => {

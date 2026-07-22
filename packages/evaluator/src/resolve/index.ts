@@ -43,11 +43,11 @@ import type {
 
 // The template arm's stored statement fractions, index-aligned to the resolutions.
 // A cliff's basis on this arm must be the *stored* statement decimal the realizer
-// multiplies by (`compile.ts`), not the exact internal fraction — #443's apportionment
-// can bump a non-terminating share by an ulp, so the two diverge for multi-statement
-// non-terminating schedules. `buildTemplate` pushes exactly one statement per
-// resolution in loop order (`order = i+1`), so a plain map lines up with the
-// resolutions without any realignment.
+// multiplies by (`compile.ts`), not the exact internal fraction — the schedule-whole
+// apportionment stores each statement as a gap between two rounded running totals, so
+// the two diverge for multi-statement non-terminating schedules. `buildTemplate`
+// pushes exactly one statement per resolution in loop order (`order = i+1`), so a
+// plain map lines up with the resolutions without any realignment.
 const storedStmtFractions = (template: OCFVestingTermsV2): Fraction[] =>
   template.statements.map((s) => numericToFraction(s.percentage));
 
@@ -87,12 +87,12 @@ export const resolveToCore = (
   const build = buildTemplate(resolutions, ctx);
 
   // The precision guard: a cliff percentage is stored as a Numeric decimal, so a
-  // repeating share like 1/3 can only be written truncated, and at some grant
-  // sizes that truncation costs the cliff lump a share. Run the analyzer over the
-  // stored cliff decimals and warn when the truncation misallocates the lump the
-  // realizer actually folds on the cliff date. (The statement percentage isn't
-  // analyzed any more — #443 apportions it schedule-whole, so the single-cumulative
-  // allocator conserves the grant by construction.)
+  // repeating share like 1/3 only reaches the ten-place grid, and at some grant
+  // sizes no point on that grid lands the lump the exact share calls for. Run the
+  // analyzer over the stored cliff decimals against the fractions they were
+  // rendered from, and warn where ten places genuinely can't express the schedule.
+  // (The statement percentage isn't analyzed — it is apportioned schedule-whole, so
+  // the single-cumulative allocator conserves the grant by construction.)
   //
   // Both arms run the same cliff pass over the per-statement `resolutions` — the
   // resolutions carry both the lowered cliff (its stored decimal and retained cliff
@@ -209,10 +209,10 @@ const allocationFindings = (
 
 // The cliff precision pass, run over the per-statement `resolutions` for both
 // arms. A cliff percentage is a share *of its own statement* — it never
-// participates in #443's grant-whole apportionment — so its truncated decimal can
-// still cost the cliff lump a share within its statement's basis. The realizer
-// folds that lump on the cliff date through one running cumulative at grant scale,
-// so the guard sizes its verdict the same way: `analyzePrecision` runs with
+// participates in the grant-whole apportionment — so it is written to the ten-place
+// grid on its own, and at a large enough grant no grid point lands its lump. The
+// realizer folds that lump on the cliff date through one running cumulative at grant
+// scale, so the guard sizes its verdict the same way: `analyzePrecision` runs with
 // `N = grant` and `basisScale = stmtFraction`, one floor at grant scale, which
 // reproduces the realized leading lump `floor(stmtFraction × decimal × grant)`.
 //
@@ -257,11 +257,15 @@ const cliffPrecisionFindings = (
 
     const leading = leads(r.cliff.cliffDate, i, resolutions);
 
-    pushCliffFinding(findings, r.cliff.cliff, stmtFraction, grant, leading, [
-      "statements",
-      i,
-      "cliff",
-    ]);
+    pushCliffFinding(
+      findings,
+      r.cliff.cliff,
+      r.cliff.cliffFraction,
+      stmtFraction,
+      grant,
+      leading,
+      ["statements", i, "cliff"],
+    );
   });
   return findings;
 };
@@ -290,41 +294,33 @@ const leads = (
   });
 };
 
-// Convert the analyzer's BigInt fraction to the number-based Fraction the Finding
-// carries. The inferred fraction is small for every case the guard surfaces (1/3
-// and the like), so this never loses precision in practice.
-const inferredToFraction = (f: {
-  numerator: bigint;
-  denominator: bigint;
-}): { numerator: number; denominator: number } => ({
-  numerator: Number(f.numerator),
-  denominator: Number(f.denominator),
-});
-
-// Analyze one cliff's stored decimal and, when it misallocates the lump, push the
-// warning. Two values flow in separately: the verdict runs at grant scale
-// (`N = grant`, `basisScale = stmtFraction`), while the Finding reports the integer
-// statement-share count `floor(stmtFraction × grant)` for the human message. The
-// zero-basis skip (a statement covering no shares has no cliff lump to misallocate)
-// is kept alongside the analyzer's positive-numerator precondition.
+// Analyze one cliff's stored decimal against the exact share it was written from
+// and, when the interchange can't hold that share well enough, push the warning.
+// Three values flow in separately: the verdict runs at grant scale (`N = grant`,
+// `basisScale = stmtFraction`), the cliff's own fraction is what the decimal is
+// measured against, and the Finding reports the integer statement-share count
+// `floor(stmtFraction × grant)` for the human message. The zero-basis skip (a
+// statement covering no shares has no cliff lump to misallocate) is kept alongside
+// the analyzer's positive-numerator precondition.
 //
 // Leading vs non-leading splits the verdict reading:
 //   - Leading (the lump sorts first, vestedSoFar = 0): the grant-scale single floor
-//     is exact, so the analyzer's verdict is trusted directly — `misallocates` /
-//     `not-representable` warn, everything else is silent. This kills both the false
-//     positive and the false negative.
+//     is exact, so the analyzer's verdict is trusted directly. Only
+//     `not-representable` warns. The stored decimal is rounded UP at the write, so
+//     it can never pay the lump short — a mismatch always means it pays a share or
+//     two long, and the value that would land the count exactly depends on the
+//     grant. Since the stored percentage has to be right at every grant, there is
+//     nothing to tell the reader unless ten places can't land it at all.
 //   - Non-leading (a sibling vests before the lump, so the realized lump is
 //     path-dependent): no per-statement basis is exact, so the guard errs
-//     conservative — warn unless the decimal is *provably* exact for the cliff
-//     (`exact` / `terminating` / `too-complex`, where the decimal carries no
-//     truncated rounding intent). `precise-enough` is no longer a proof here, so it
-//     warns. The conservative finding omits `recommended` (the leading-basis
-//     recommendation wouldn't match the path-dependent lump) and is flagged
-//     `conservative` so the message reads as a path-dependent warning, not a
-//     not-representable one.
+//     conservative — warn unless the decimal is *provably* the cliff's exact share
+//     (`exact` / `terminating`). The conservative finding omits `recommended` and is
+//     flagged `conservative` so the message reads as a path-dependent warning rather
+//     than a not-representable one.
 const pushCliffFinding = (
   findings: Finding[],
   cliff: OCFVestingScheduleCliff,
+  cliffFraction: Fraction,
   stmtFraction: Fraction,
   grant: number,
   leading: boolean,
@@ -336,49 +332,39 @@ const pushCliffFinding = (
   if (shareCount <= 0) return;
 
   const percentage = cliff.percentage;
-  const verdict = analyzePrecision(percentage, grant, stmtFraction);
+  const verdict = analyzePrecision(
+    percentage,
+    cliffFraction,
+    grant,
+    stmtFraction,
+  );
 
   if (leading) {
-    // Trust the grant-scale verdict directly: only the two warning kinds fire, and
-    // they differ in just one field — `misallocates` carries the shorter decimal,
-    // `not-representable` can't (no ≤10-place decimal lands it), so it stays unset.
-    if (
-      verdict.kind !== "misallocates" &&
-      verdict.kind !== "not-representable"
-    ) {
-      return;
-    }
+    if (verdict.kind !== "not-representable") return;
     findings.push({
       kind: "precision-insufficient",
       severity: "warning",
       percentage,
       shareCount,
-      inferred: inferredToFraction(verdict.inferred),
-      ...(verdict.kind === "misallocates" && {
-        recommended: verdict.recommended,
-      }),
+      // The Finding's field predates the guard being handed the fraction; it is
+      // now the exact share, not a guess at one.
+      inferred: verdict.fraction,
       path,
     });
     return;
   }
 
-  // Non-leading: warn unless the decimal is provably exact for the cliff. `exact`
-  // never carries an `inferred` field (no fractional digits), and there's nothing
-  // to warn about, so it's silent here too.
-  if (
-    verdict.kind === "exact" ||
-    verdict.kind === "terminating" ||
-    verdict.kind === "too-complex"
-  ) {
-    return;
-  }
+  // Non-leading: warn unless the decimal is provably the cliff's exact share.
+  // `exact` carries no fraction (no fractional digits) and has nothing to warn
+  // about, so it's silent here too.
+  if (verdict.kind === "exact" || verdict.kind === "terminating") return;
   findings.push({
     kind: "precision-insufficient",
     severity: "warning",
     percentage,
     shareCount,
-    inferred: inferredToFraction(verdict.inferred),
-    // Path-dependent lump — no leading-basis recommendation can be trusted.
+    inferred: verdict.fraction,
+    // Path-dependent lump — no fixed decimal is provably right for it.
     conservative: true,
     path,
   });

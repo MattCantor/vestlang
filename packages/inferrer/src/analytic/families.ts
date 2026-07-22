@@ -308,12 +308,14 @@ function* foldFamily(
 
   // Then the erased-cliff scan: a cliff whose date fell on/before the grant is
   // folded into the grant lump but still shifts the allocation by its stored
-  // truncated-decimal percentage — scan cliff lengths, LONGEST first, and let the
-  // evaluator arbitrate. The pre-grant anchor rides in the cliff statement's start.
+  // decimal percentage — scan cliff lengths, LONGEST first, and let the evaluator
+  // arbitrate. The pre-grant anchor rides in the cliff statement's start.
   const cliffHyps: FoldHyp[] = [...hypsA];
   if (pA !== null) {
-    // widen the regime-A j window by ±2: the cliff's truncation can move the lump
-    // off the plain floor equation
+    // Widen the regime-A j window by ±2. The cliff percentage is stored on a
+    // ten-place grid rather than exactly, so the lump the evaluator folds can sit
+    // either side of the plain floor equation's answer — the window is symmetric
+    // because the rounding is a displacement, not a direction we can rely on.
     const seen = new Set(hypsA.map((h) => `${h.j}|${h.dc.dom}`));
     const extra = new Set<number>();
     for (const j of solveFloorCounts(T, S1, nTail))

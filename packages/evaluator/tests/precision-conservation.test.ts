@@ -7,14 +7,14 @@ import { evaluateProgram } from "../src/evaluate";
 
 // #413/#415 — schedule-whole storage of the statement percentages.
 //
-// Three exact thirds mean to vest the whole grant. Stored independently each
-// truncates to "0.3333333333", the set sums below 1, and the single-cumulative
-// allocator floors the last share away — 29999 of 30000. Apportioning the stored
-// set together keeps the sum at exactly 1 (the earliest statement carries the
-// +1-ulp bump), so the full grant vests. And because the apportioned set allocates
-// exactly by construction, the old sibling-blind per-statement precision warning —
-// which fired three contradictory `recommended:"0.33334"` notes that, applied
-// together, would have over-allocated — no longer fires at all.
+// Three exact thirds mean to vest the whole grant. Stored one at a time none of
+// them can write a third exactly, the set drifts off 1, and the single-cumulative
+// allocator floors a share away. Apportioning the set together — rounding the
+// schedule's running total to the storage grid and storing the gaps — keeps the
+// last boundary at exactly 1, so the full grant vests. And because the apportioned
+// set allocates exactly by construction, the old sibling-blind per-statement
+// precision warning — which fired three contradictory notes that, applied together,
+// would have over-allocated — no longer fires at all.
 
 const THIRDS_THEN =
   "1/3 VEST OVER 1 month EVERY 1 month " +
@@ -30,7 +30,7 @@ const ctx = {
 };
 
 describe("schedule-whole storage conserves the grant (#413)", () => {
-  it("stores the apportioned set — the earliest statement carries the bump", () => {
+  it("stores the apportioned set — the first boundary carries the extra ulp", () => {
     const result = resolveToCore(program(), ctx);
     expect(result.kind).toBe("template");
     if (result.kind !== "template") return;
@@ -79,10 +79,11 @@ describe("the sibling-blind statement-percentage warning dissolves (#415)", () =
 
 describe("the cliff precision pass survives the statement-pass removal (#413 AC6)", () => {
   // Dropping the sibling-blind statement-percentage pass must NOT take the cliff
-  // pass with it: a cliff percentage is a share of its OWN statement, floored
-  // independently, and can still misallocate within its basis. OVER 36 EVERY 12
-  // CLIFF 12 puts a third of the grant on the cliff date, stored "0.3333333333",
-  // and floor(0.3333333333 × 36000) = 11999 ≠ 12000 — so the cliff finding fires.
+  // pass with it: a cliff percentage is a share of its OWN statement, written to the
+  // storage grid on its own, and at a large enough grant no grid point lands its
+  // lump. OVER 36 EVERY 12 CLIFF 12 puts a third of the grant on the cliff date, and
+  // at 30 billion shares the landing window is narrower than the grid step — so the
+  // cliff finding fires.
   it("a template-arm cliff still emits its precision-insufficient finding", () => {
     const cliffed = normalizeProgram(
       parse("VEST OVER 36 months EVERY 12 months CLIFF 12 months"),
@@ -90,7 +91,7 @@ describe("the cliff precision pass survives the statement-pass removal (#413 AC6
     const result = resolveToCore(cliffed, {
       grantDate: "2025-01-01",
       events: {},
-      grantQuantity: 36000,
+      grantQuantity: 30000000000,
     });
     const precision = result.findings.filter(
       (f) => f.kind === "precision-insufficient",

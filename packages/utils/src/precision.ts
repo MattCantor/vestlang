@@ -1,82 +1,69 @@
 // Precision analyzer for a percentage written as a fixed-point decimal.
 //
-// When a vesting percentage is stored as a decimal string (an OCF `Numeric`,
-// ≤10 places) rather than an exact fraction, a repeating fraction like 1/3 can
-// only be written truncated — `0.3333`. Allocated under the engine's
-// floor-of-product share math, an under-precise decimal can land on the wrong
-// whole-share count: floor(0.3333 × 36000) = 11,998, where true 1/3 gives
-// 12,000. This module is the guardrail. Given the (decimal, shareCount) pair it
+// A vesting percentage is stored as an OCF `Numeric` (≤10 places) rather than an
+// exact fraction, so a share like 1/3 can only be written to the nearest point on
+// the ten-place grid — `0.3333333334`. Allocated under the engine's
+// floor-of-product share math, a stored value can still land on a different
+// whole-share count than the fraction it was written from: floor(0.3333333334 ×
+// 3·10^10) is two shares over true 1/3. This module is the guardrail. Given the
+// decimal, the exact fraction it was written from, and the share basis, it says
+// whether the two allocate to the same count and, when they don't, whether ten
+// places could have landed it at all.
 //
-//   1. infers the simplest fraction the author plausibly meant,
-//   2. decides whether the written decimal still allocates to the same count,
-//   3. and, when it doesn't, recommends the shortest decimal that does.
-//
-// "Infer", not "recover": once the rational is dropped at the storage boundary
-// the intent is genuinely ambiguous — infinitely many fractions truncate to the
-// same digits — so the result is a best guess under a stated assumption, not a
-// recovered fact.
+// It is *handed* the fraction rather than guessing one. An earlier version
+// searched for "the simplest fraction that truncates to these digits", which was
+// a guess even while the write direction was truncation and is wrong now that it
+// isn't. Every decimal reaching this analyzer was rendered from a fraction the
+// caller still holds, so the guess buys nothing.
 //
 // Everything on the value path runs in BigInt. Share counts reach ~3e10 and the
-// continued-fraction intermediates run larger still, well past the range where
-// `number` rounds; the analyzer's own `bigint` arithmetic below keeps it exact.
-// (It deliberately does not route through `fractions.ts`, whose helpers convert
-// back to a `number`-based Fraction and throw past MAX_SAFE_INTEGER.)
+// products run larger still, well past the range where `number` rounds.
 //
 // The OCF grammar and its parse/render primitives live in `numeric.ts` (the one
-// home for what a Numeric is); this file imports them and adds only the
-// analyzer-specific search.
+// home for what a Numeric is); this file imports them.
 
 import type { Fraction } from "@vestlang/types";
-import { parseDecimal, renderFixed, terminates } from "./numeric.js";
-
-/** A reduced fraction carried in BigInt so large denominators stay exact. */
-export interface InferredFraction {
-  numerator: bigint;
-  denominator: bigint;
-}
+import { parseDecimal, renderFixed } from "./numeric.js";
 
 /**
  * The analyzer's verdict — a tagged union so each outcome names itself rather
  * than collapsing to a yes/no warning.
  *
- *   exact             No fractional digits; nothing to infer.
- *   too-complex       Simplest inferred fraction is uglier than the digits
- *                     justify, so the decimal is taken to mean itself.
- *   terminating       Inferred fraction terminates; the decimal is exact.
- *   precise-enough    Fraction repeats, but the written decimal still allocates
- *                     to the intended count at this share size.
- *   misallocates      The written decimal lands on the wrong count; `recommended`
- *                     is the shortest decimal that lands on the right one.
- *   not-representable  No ≤10-place decimal lands on the right count (only for
- *                     very large share counts); `closest` is the nearest storable
- *                     value and `offBy` how many shares it misses by.
+ *   exact              No fractional digits; nothing to compare.
+ *   terminating        The decimal writes the fraction exactly.
+ *   precise-enough     The decimal isn't the fraction, but still allocates to the
+ *                      same whole-share count at this basis.
+ *   rounds-high        The decimal allocates ABOVE the fraction, and some ten-place
+ *                      decimal would have landed it. Not an actionable report: the
+ *                      value that lands it depends on the grant, and a stored
+ *                      percentage has to work at every grant.
+ *   not-representable  No ≤10-place decimal lands the intended count, at any
+ *                      rounding; `closest` is the nearest storable value and
+ *                      `offBy` how many shares it misses by.
  */
 export type PrecisionVerdict =
   | { kind: "exact" }
-  | { kind: "too-complex"; inferred: InferredFraction }
-  | { kind: "terminating"; inferred: InferredFraction }
-  | { kind: "precise-enough"; inferred: InferredFraction }
+  | { kind: "terminating"; fraction: Fraction }
+  | { kind: "precise-enough"; fraction: Fraction }
   | {
-      kind: "misallocates";
-      inferred: InferredFraction;
+      kind: "rounds-high";
+      fraction: Fraction;
       suppliedShares: bigint;
       intendedShares: bigint;
-      usePlaces: number;
-      recommended: string;
     }
   | {
       kind: "not-representable";
-      inferred: InferredFraction;
+      fraction: Fraction;
       suppliedShares: bigint;
       intendedShares: bigint;
       closest: string;
       offBy: bigint;
     };
 
-// Most fractional decimals only matter up to ten places; tie this to the OCF
-// ceiling (the grammar's max fractional digits) so the window search and the
-// closest-value search share one bound.
+// The OCF ceiling (the grammar's max fractional digits), which is also the grid
+// every stored percentage sits on.
 const MAX_PLACES = 10n;
+const GRID = 10n ** MAX_PLACES;
 
 const abs = (v: bigint): bigint => (v < 0n ? -v : v);
 
@@ -89,70 +76,9 @@ const gcd = (a: bigint, b: bigint): bigint => {
   return x || 1n;
 };
 
-const reduce = (n: bigint, d: bigint): InferredFraction => {
-  const g = gcd(n, d);
-  return { numerator: n / g, denominator: d / g };
-};
-
-// Floor of a/b for a positive divisor b (BigInt `/` truncates toward zero, so a
-// negative numerator needs a nudge). Used to peel the integer part off the
-// continued fraction.
-const floorDiv = (a: bigint, b: bigint): bigint => {
-  const q = a / b;
-  return a % b !== 0n && a < 0n ? q - 1n : q;
-};
-
-// Simplest rational strictly inside the OPEN interval (loN/loD, hiN/hiD), with
-// lo < hi and everything positive. This is the textbook continued-fraction /
-// Stern–Brocot descent: take the smallest integer that fits; otherwise peel off
-// floor(lo), invert the interval, and recurse. The result is the unique rational
-// with the smallest denominator between the two bounds.
-const simplestInOpen = (
-  loN: bigint,
-  loD: bigint,
-  hiN: bigint,
-  hiD: bigint,
-): InferredFraction => {
-  const f = floorDiv(loN, loD);
-  // An integer in the interval is as simple as it gets; the smallest candidate
-  // is floor(lo)+1, and it qualifies only if it stays below hi.
-  const intCandidate = f + 1n;
-  if (intCandidate * hiD < hiN) {
-    return { numerator: intCandidate, denominator: 1n };
-  }
-  // No integer fits: write x = f + 1/y. Subtracting f shifts the interval into
-  // [0,1); inverting it (reciprocal) flips the bounds, and the simplest y there
-  // gives the simplest x back.
-  const loShifted = loN - f * loD;
-  const hiShifted = hiN - f * hiD;
-  const y = simplestInOpen(hiD, hiShifted, loD, loShifted);
-  return {
-    numerator: f * y.numerator + y.denominator,
-    denominator: y.numerator,
-  };
-};
-
-// Simplest rational in the HALF-OPEN interval [lo, hi): the left endpoint is a
-// candidate, the right one is excluded. (The supplied decimal is read as a
-// round-down truncation of intent, so the true value sits in [supplied,
-// supplied + 1 ulp) — the upper bound must stay open. The closed-interval
-// textbook routine would answer 1/2 for "0.49"; half-open gives 25/51.)
-//
-// lo is always inside the interval, so the answer is whichever has the smaller
-// denominator: lo itself or the simplest value strictly between the bounds. On a
-// denominator tie, lo wins (it is the lower value).
-const simplestInHalfOpen = (
-  loN: bigint,
-  loD: bigint,
-  hiN: bigint,
-  hiD: bigint,
-): InferredFraction => {
-  const left = reduce(loN, loD);
-  const inner = simplestInOpen(loN, loD, hiN, hiD);
-  return inner.denominator < left.denominator ? inner : left;
-};
-
 const RANGE_ERROR = "analyzePrecision: shareCount must be a positive integer";
+const FRACTION_ERROR =
+  "analyzePrecision: fraction numerator and denominator must be positive integers";
 const BASIS_ERROR =
   "analyzePrecision: basisScale numerator and denominator must be positive integers";
 
@@ -172,32 +98,42 @@ const toShareCount = (shareCount: number | bigint): bigint => {
   return BigInt(shareCount);
 };
 
-// The optional basis scale, validated and cast to BigInt the same way shareCount
-// is. Default 1/1 leaves every existing caller's math byte-identical. Both parts
-// must be positive integers — a zero numerator means the basis covers no shares
-// and must be skipped at the caller, never reach the analyzer.
-const toBasisScale = (
-  basisScale: Fraction | undefined,
-): { bnum: bigint; bden: bigint } => {
-  if (basisScale === undefined) return { bnum: 1n, bden: 1n };
-  const { numerator, denominator } = basisScale;
+const toPositivePair = (
+  f: Fraction,
+  message: string,
+): { num: bigint; den: bigint } => {
+  const { numerator, denominator } = f;
   if (
     !Number.isSafeInteger(numerator) ||
     !Number.isSafeInteger(denominator) ||
     numerator <= 0 ||
     denominator <= 0
   ) {
-    throw new Error(`${BASIS_ERROR} (got ${numerator}/${denominator})`);
+    throw new Error(`${message} (got ${numerator}/${denominator})`);
   }
-  return { bnum: BigInt(numerator), bden: BigInt(denominator) };
+  return { num: BigInt(numerator), den: BigInt(denominator) };
+};
+
+// The optional basis scale. Default 1/1 leaves the plain floor(x · N) reading. A
+// zero numerator means the basis covers no shares and must be skipped at the
+// caller, never reach the analyzer.
+const toBasisScale = (
+  basisScale: Fraction | undefined,
+): { bnum: bigint; bden: bigint } => {
+  if (basisScale === undefined) return { bnum: 1n, bden: 1n };
+  const { num, den } = toPositivePair(basisScale, BASIS_ERROR);
+  return { bnum: num, bden: den };
 };
 
 /**
- * Analyze a percentage decimal against a share count: infer the likely intended
- * fraction and report whether the written decimal still allocates to the right
- * whole-share count. See {@link PrecisionVerdict} for the outcomes.
+ * Analyze a stored percentage decimal against the exact fraction it was written
+ * from and a share count: do the two allocate to the same whole-share count, and
+ * if not, could any storable decimal have done better? See {@link
+ * PrecisionVerdict} for the outcomes.
  *
  * @param decimal     A non-negative OCF `Numeric` string (≤10 decimal places).
+ * @param fraction    The exact fraction `decimal` was rendered from. Reported back
+ *                    reduced, so a cliff's raw `m/occurrences` reads as `1/3`.
  * @param shareCount  A positive integer (number must be a safe integer).
  * @param basisScale  Optional exact `Fraction` the share basis is scaled by before
  *                    the analyzer's own floor — `floor(x · basisScale · N)` rather
@@ -205,18 +141,18 @@ const toBasisScale = (
  *                    guard passes `N = grant` and `basisScale = stmtFraction` so the
  *                    one floor reproduces the realizer's grant-scale leading lump
  *                    `floor(stmtFraction · decimal · grant)` instead of double-flooring
- *                    a pre-floored per-statement count. `inferred`, the simplicity cap,
- *                    and `terminates` read the decimal alone, so the reported fraction
- *                    is unaffected by the basis scale.
+ *                    a pre-floored per-statement count.
  * @throws if `decimal` is out of domain, `shareCount` is not a positive integer, or
- *         `basisScale` has a non-positive part.
+ *         `fraction` / `basisScale` has a non-positive part.
  */
 export const analyzePrecision = (
   decimal: string,
+  fraction: Fraction,
   shareCount: number | bigint,
   basisScale?: Fraction,
 ): PrecisionVerdict => {
   const n = toShareCount(shareCount);
+  const { num: rawP, den: rawQ } = toPositivePair(fraction, FRACTION_ERROR);
   const { bnum, bden } = toBasisScale(basisScale);
   // The shared grammar admits a leading sign, but a vesting percentage can't be
   // negative — reject any explicit minus (including the "-0" forms) so the
@@ -228,80 +164,68 @@ export const analyzePrecision = (
   }
   const { places, scaledValue, scale } = parseDecimal(decimal);
 
-  // No fractional digits: there is no truncation to second-guess.
+  // No fractional digits: an integer percentage writes itself, whatever it was
+  // rendered from.
   if (places === 0) {
     return { kind: "exact" };
   }
 
-  // Recover the simplest fraction in [supplied, supplied + 1 ulp).
-  const inferred = simplestInHalfOpen(
-    scaledValue,
-    scale,
-    scaledValue + 1n,
-    scale,
-  );
-  const { numerator: p, denominator: q } = inferred;
+  const g = gcd(rawP, rawQ);
+  const p = rawP / g;
+  const q = rawQ / g;
+  const reduced: Fraction = { numerator: Number(p), denominator: Number(q) };
 
-  // Simplicity cap (the false-alarm guard). Only believe the inferred fraction
-  // when the digits typed actually justify its denominator: accept iff
-  // denominator² ≤ 10^places (~twice as many digits as the denominator's size).
-  // 1/3 from "0.3333" passes (3² ≤ 10⁴); the ugly 144/1007 from "0.1429" does
-  // not, so that decimal is read as meaning itself.
-  if (q * q > scale) {
-    return { kind: "too-complex", inferred };
-  }
-
-  // A terminating fraction is written exactly by its decimal; no warning.
-  if (terminates(q)) {
-    return { kind: "terminating", inferred };
+  // The decimal IS the fraction — nothing can go wrong at any share count. Tested
+  // against the value rather than the denominator's prime factors: 1/2048
+  // terminates as a decimal and still needs eleven places, so it lands below, not
+  // here.
+  if (scaledValue * q === p * scale) {
+    return { kind: "terminating", fraction: reduced };
   }
 
   // The two whole-share counts: what the written decimal allocates, and what the
-  // inferred fraction would — each an exact floor of a product, scaled by the
-  // basis (default 1/1). At basisScale = stmtFraction and N = grant these are the
+  // exact fraction would — each one exact floor of a product, scaled by the basis
+  // (default 1/1). At basisScale = stmtFraction and N = grant these are the
   // realizer's grant-scale leading lump and its exact-fraction ideal.
   const suppliedShares = (scaledValue * bnum * n) / (scale * bden);
   const intendedShares = (p * bnum * n) / (q * bden);
   if (suppliedShares === intendedShares) {
-    return { kind: "precise-enough", inferred };
+    return { kind: "precise-enough", fraction: reduced };
   }
 
-  // Window search: find the shortest k-place decimal x with
-  // floor(x · basisScale · N) == intendedShares, i.e. x lands the same lump the
-  // intended fraction does against the same scaled basis. Writing B = bnum·N and
-  // D = bden, the fit is M ≤ x·B/D < M+1; the smallest k-place x ≥ the lower bound
-  // has numerator ceil(M·10^k·D / B), and it fits iff numerator·B < (M+1)·10^k·D.
-  // First k wins. (At basisScale = 1/1 this is exactly the old ceil(M·10^k / N).)
+  // Only one direction can reach here: the render rounds up, so the stored decimal
+  // is ≥ the fraction and its floor can only be ≥ the fraction's. The question is
+  // therefore never "is it short" but "could ten places have landed it at all".
+  //
+  // Writing B = bnum·N and D = bden, a decimal x lands the intended count M iff
+  // M ≤ x·B/D < M+1. The smallest ten-place x at or above that lower bound has
+  // numerator ceil(M·10^10·D / B), and it lands iff numerator·B < (M+1)·10^10·D.
   const basisProduct = bnum * n; // B
-  for (let k = 1n; k <= MAX_PLACES; k++) {
-    const kScale = 10n ** k;
-    // ceil(M·10^k·D / B)
-    const numerator =
-      (intendedShares * kScale * bden + basisProduct - 1n) / basisProduct;
-    if (numerator * basisProduct < (intendedShares + 1n) * kScale * bden) {
-      return {
-        kind: "misallocates",
-        inferred,
-        suppliedShares,
-        intendedShares,
-        usePlaces: Number(k),
-        recommended: renderFixed(numerator, Number(k)),
-      };
-    }
+  const lowest =
+    (intendedShares * GRID * bden + basisProduct - 1n) / basisProduct;
+  if (lowest * basisProduct < (intendedShares + 1n) * GRID * bden) {
+    // Some storable decimal lands the count — but which one depends on this grant,
+    // and a stored percentage has to be right at every grant, so the engine can't
+    // spend it. Report the overshoot; the caller decides whether it is worth a word.
+    return {
+      kind: "rounds-high",
+      fraction: reduced,
+      suppliedShares,
+      intendedShares,
+    };
   }
 
-  // No ≤10-place decimal lands in the window — it is narrower than 10⁻¹⁰, which
+  // The landing window is narrower than 10⁻¹⁰ — no storable decimal hits it, which
   // only happens at very large share counts. Report the closest storable value
   // instead: among all 10-place decimals, the one minimizing the share miss
   // |floor(x · basisScale · N) − intendedShares|, ties going to the lower value
   // (prefer under-allocation). The miss is monotone around the target, so the
   // winner sits within a couple of grid steps of it.
-  const grid = 10n ** MAX_PLACES;
-  const center = (intendedShares * grid * bden) / basisProduct; // floor(M·10^10·D / B)
+  const center = (intendedShares * GRID * bden) / basisProduct; // floor(M·10^10·D / B)
   let best: { numerator: bigint; offBy: bigint } | null = null;
   for (let j = center - 3n; j <= center + 3n; j++) {
-    if (j < 0n || j >= grid) continue;
-    const offBy = (j * basisProduct) / (grid * bden) - intendedShares;
+    if (j < 0n || j >= GRID) continue;
+    const offBy = (j * basisProduct) / (GRID * bden) - intendedShares;
     const distance = abs(offBy);
     if (
       best === null ||
@@ -320,7 +244,7 @@ export const analyzePrecision = (
   }
   return {
     kind: "not-representable",
-    inferred,
+    fraction: reduced,
     suppliedShares,
     intendedShares,
     closest: renderFixed(best.numerator, Number(MAX_PLACES)),

@@ -785,11 +785,16 @@ export const buildTemplate = (
 
   // Lower every statement's share fraction to its stored Numeric AS A SET, not one
   // at a time: a schedule of exact thirds summing to 1 must store a set that still
-  // sums to 1, or the single-cumulative allocator floors the last share away (the
-  // #413 conservation bug). `apportionStored` truncates each to ten places and hands
-  // the lost ulps back by largest remainder. The array is indexed by loop position
-  // `i` below — every statement here produces exactly one `statements.push`, in this
+  // sums to 1, or the single-cumulative allocator floors the last share away.
+  // `apportionStored` rounds the schedule's *running total* to the ten-place grid at
+  // each statement and stores the gaps. The array is indexed by loop position `i`
+  // below — every statement here produces exactly one `statements.push`, in this
   // order, so the index lines up with no realignment.
+  //
+  // Those gaps are read back in the same order the allocator walks them, and nothing
+  // has to enforce that: the allocator sorts by date with statement order as the
+  // tie-break, and every statement on this arm chains off the one cursor, so the two
+  // orders coincide by construction.
   const storedPercentages = apportionStored(
     resolutions.map((r) => r.percentage),
   );

@@ -54,15 +54,14 @@ export interface Diagnostic {
 //
 // `precision-insufficient` is the precision-analyzer guard's channel: a stored
 // percentage is a fixed-point decimal (a Numeric), so a repeating share like 1/3
-// can only be written truncated, and at some grant sizes that truncation
-// allocates to the wrong whole-share count. The evaluator runs the analyzer on
-// each stored percentage and raises this warning (not an error — the schedule is
-// still valid, it just allocates a share or two off from the intended fraction)
-// when the verdict says the decimal misallocates or can't be represented. It
-// carries everything a message needs straight off the analyzer: the decimal as
-// written, the share basis it was measured against, the fraction it was inferred
-// to mean, and the shorter decimal that would have allocated correctly (absent
-// when even ten places can't land it).
+// only reaches the ten-place grid, and at some grant sizes no point on that grid
+// allocates to the whole-share count the exact share calls for. The evaluator runs
+// the analyzer on each stored percentage against the fraction it was written from
+// and raises this warning (not an error — the schedule is still valid, it just
+// allocates a share or two off the exact fraction). It carries everything a message
+// needs straight off the analyzer: the decimal as written, the share basis it was
+// measured against, the fraction it stands for, and — where a caller can name one —
+// a decimal that would have allocated correctly.
 export type Finding =
   | {
       kind: "over-allocation";
@@ -86,11 +85,11 @@ export type Finding =
       // message ("too imprecise for N shares") names the basis the reader thinks in.
       percentage: Numeric;
       shareCount: number;
-      // The fraction the analyzer inferred the author meant, e.g. 1/3.
+      // The exact share the percentage stands for, e.g. 1/3.
       inferred: Fraction;
-      // The shortest decimal that allocates to the intended count. Undefined when
-      // no ≤10-place decimal lands it (the analyzer's not-representable verdict),
-      // and deliberately omitted on a `conservative` finding (see below).
+      // A shorter decimal that allocates to the intended count, where one can be
+      // named. Undefined when no ≤10-place decimal lands it, and deliberately
+      // omitted on a `conservative` finding (see below).
       recommended?: Numeric;
       // True when the cliff lump is NOT first in line at its merged position — a
       // sibling vests before it, so the realized lump is path-dependent and no

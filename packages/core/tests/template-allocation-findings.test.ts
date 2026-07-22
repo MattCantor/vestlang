@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { templateAllocationFindings } from "../src/findings";
-import { fractionToNumeric } from "@vestlang/utils";
+import { apportionStored, fractionToNumeric } from "@vestlang/utils";
 import { mkTemplate, template as buildTemplate } from "./helpers";
 
 // templateAllocationFindings re-runs the over/under-allocation check against a
@@ -65,6 +65,51 @@ describe("templateAllocationFindings (AC#5)", () => {
         path: ["Program"],
       },
     ]);
+  });
+
+  // This is the gate a rehydrated artifact passes through: it reads the STORED
+  // decimals, not the exact fractions the evaluator resolved. So how those decimals
+  // are chosen can move it, and must not.
+  describe("reading the decimals the apportionment actually stores", () => {
+    const storedTemplate = (
+      fractions: { numerator: number; denominator: number }[],
+    ) =>
+      mkTemplate(
+        "t",
+        apportionStored(fractions).map((percentage, i) => ({
+          order: i + 1,
+          schedule: {
+            occurrences: 1,
+            period: 12,
+            period_type: "MONTHS" as const,
+          },
+          percentage,
+        })),
+      );
+
+    it("still reads a 100% schedule as fully allocated", () => {
+      const thirds = [1, 1, 1].map((numerator) => ({
+        numerator,
+        denominator: 3,
+      }));
+      expect(templateAllocationFindings(storedTemplate(thirds), 4800)).toEqual(
+        [],
+      );
+    });
+
+    it("still refuses an over-allocating schedule", () => {
+      const over = [3, 3].map((numerator) => ({ numerator, denominator: 5 }));
+      const findings = templateAllocationFindings(storedTemplate(over), 4800);
+      expect(findings.map((f) => f.kind)).toEqual(["over-allocation"]);
+    });
+
+    it("still warns on a schedule that leaves shares unvested", () => {
+      const findings = templateAllocationFindings(
+        storedTemplate([{ numerator: 1, denominator: 3 }]),
+        4800,
+      );
+      expect(findings.map((f) => f.kind)).toEqual(["under-allocation"]);
+    });
   });
 
   it("sums across statements, not per-statement", () => {

@@ -425,16 +425,14 @@ describe("resolveToCore — a sub-annual cliff on a month-end tail", () => {
     const events = compile(result.template, result.totalShares, result.runtime);
     expect(events).toEqual([
       { date: "2025-02-28", amount: "25000" }, // head: 1/4
-      // Cliff lump: 2/6 = 1/3 of the 3/4 tail. The cliff percentage stores as the
-      // truncated Numeric "0.3333333333", so floor(0.3333333333 × 75000) = 24999
-      // rather than the exact 25000 — the precision loss the Numeric storage
-      // introduces. The remainder telescopes through the tail (the final tranche
-      // picks up the missing share), so the total still lands on 100000.
-      { date: "2025-05-28", amount: "24999" },
+      // Cliff lump: 2/6 = 1/3 of the 3/4 tail, which is exactly 25,000 shares. The
+      // cliff percentage stores as "0.3333333334" — a hair above a third — and the
+      // lump's floor lands on that exact 25,000 rather than a share below it.
+      { date: "2025-05-28", amount: "25000" },
       { date: "2025-05-31", amount: "12500" },
       { date: "2025-06-30", amount: "12500" },
       { date: "2025-07-31", amount: "12500" },
-      { date: "2025-08-31", amount: "12501" },
+      { date: "2025-08-31", amount: "12500" },
     ]);
     expect(sum(events)).toBe(100000);
   });
