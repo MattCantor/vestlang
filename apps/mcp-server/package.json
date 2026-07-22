@@ -1,25 +1,54 @@
 {
   "name": "@vestlang/mcp-server",
-  "version": "0.1.1",
-  "private": true,
+  "version": "0.0.0",
   "type": "module",
+  "license": "MIT",
+  "description": "Model Context Protocol server for vestlang — parse, compile, evaluate, lint and infer vesting schedules, plus the grammar and spec as MCP resources.",
+  "keywords": [
+    "vestlang",
+    "vesting",
+    "equity",
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "dsl"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MattCantor/vestlang.git",
+    "directory": "apps/mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/MattCantor/vestlang/issues"
+  },
+  "homepage": "https://github.com/MattCantor/vestlang#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "vestlang-mcp": "dist/index.js"
   },
   "files": [
     "dist",
-    "resources"
+    "resources",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "predev": "tsx scripts/copy-resources.ts",
     "dev": "tsx src/index.ts",
     "prebuild": "tsx scripts/copy-resources.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsdown",
+    "prepublishOnly": "pnpm build",
     "test": "vitest",
     "clean": "rimraf dist resources"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
+    "zod": "^4.0"
+  },
+  "devDependencies": {
+    "@vestlang/core": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/inferrer": "workspace:*",
     "@vestlang/linter": "workspace:*",
@@ -28,14 +57,15 @@
     "@vestlang/render": "workspace:*",
     "@vestlang/types": "workspace:*",
     "@vestlang/utils": "workspace:*",
-    "zod": "^4.0"
-  },
-  "devDependencies": {
-    "@vestlang/core": "workspace:*",
     "@vestlang/vestlang": "workspace:*",
     "rimraf": "^6.0.1",
+    "tsdown": "^0.22.8",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }

@@ -164,6 +164,13 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.17.0
         version: 1.29.0(zod@4.3.5)
+      zod:
+        specifier: ^4.0
+        version: 4.3.5
+    devDependencies:
+      '@vestlang/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@vestlang/evaluator':
         specifier: workspace:*
         version: link:../../packages/evaluator
@@ -188,19 +195,15 @@ importers:
       '@vestlang/utils':
         specifier: workspace:*
         version: link:../../packages/utils
-      zod:
-        specifier: ^4.0
-        version: 4.3.5
-    devDependencies:
-      '@vestlang/core':
-        specifier: workspace:*
-        version: link:../../packages/core
       '@vestlang/vestlang':
         specifier: workspace:*
         version: link:../../packages/vestlang
       rimraf:
         specifier: ^6.0.1
         version: 6.0.1
+      tsdown:
+        specifier: ^0.22.8
+        version: 0.22.8(oxc-resolver@11.20.0)(tsx@4.20.5)(typescript@5.9.2)
       tsx:
         specifier: ^4.20.5
         version: 4.20.5

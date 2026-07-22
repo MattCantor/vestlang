@@ -223,7 +223,7 @@ export function findViolations(
 
 // --- live-tree CLI ---------------------------------------------------------
 
-interface Manifest extends PackedManifest {
+export interface Manifest extends PackedManifest {
   private?: boolean;
 }
 
@@ -335,32 +335,48 @@ export function packedManifest(
   return JSON.parse(extract.stdout) as PackedManifest;
 }
 
+/** A named workspace package and the manifest that names it. `dir` is absolute. */
+export interface WorkspacePackage {
+  name: string;
+  dir: string;
+  manifest: Manifest;
+}
+
+function workspacePackages(repoRoot: string): WorkspacePackage[] {
+  const packages: WorkspacePackage[] = [];
+  for (const dir of workspacePackageDirs(repoRoot)) {
+    const manifest = readManifest(join(dir, "package.json"));
+    if (manifest.name) packages.push({ name: manifest.name, dir, manifest });
+  }
+  return packages;
+}
+
+const isPublishable = (pkg: WorkspacePackage): boolean =>
+  pkg.manifest.private !== true;
+
+/**
+ * The workspace packages that reach npm. The release workflow needs one publish
+ * step per entry, so its own tests derive the set from here rather than pinning
+ * a count that goes stale the next time a package starts publishing.
+ */
+export function publishablePackages(repoRoot: string): WorkspacePackage[] {
+  return workspacePackages(repoRoot).filter(isPublishable);
+}
+
 function main(): void {
   const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-  const dirs = workspacePackageDirs(repoRoot);
-  const manifests = new Map<string, { dir: string; manifest: Manifest }>();
-  for (const dir of dirs) {
-    const manifest = readManifest(join(dir, "package.json"));
-    if (manifest.name) manifests.set(manifest.name, { dir, manifest });
-  }
-
+  const packages = workspacePackages(repoRoot);
   const privateNames = new Set(
-    [...manifests.values()]
-      .filter(({ manifest }) => manifest.private === true)
-      .map(({ manifest }) => manifest.name)
-      .filter((n): n is string => Boolean(n)),
+    packages.filter((p) => !isPublishable(p)).map((p) => p.name),
   );
-
-  const publishable = [...manifests.values()].filter(
-    ({ manifest }) => manifest.private !== true && manifest.name,
-  );
+  const publishable = packages.filter(isPublishable);
 
   const violations: Violation[] = [];
-  for (const { dir, manifest } of publishable) {
+  for (const { name, dir, manifest } of publishable) {
     violations.push(
       ...findViolations(
         {
-          name: manifest.name!,
+          name,
           runtimeDeps: runtimeDepsOf(manifest),
           artifacts: collectArtifacts(dir),
         },
