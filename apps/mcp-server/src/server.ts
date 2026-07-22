@@ -281,11 +281,11 @@ const { version } = JSON.parse(
   ),
 ) as { version: string };
 
+/** Who this server says it is — in the handshake, and on the HTTP health probe. */
+export const SERVER_INFO = { name: "vestlang-mcp-server", version };
+
 export function createServer(): McpServer {
-  const server = new McpServer(
-    { name: "vestlang-mcp-server", version },
-    { instructions: INSTRUCTIONS },
-  );
+  const server = new McpServer(SERVER_INFO, { instructions: INSTRUCTIONS });
 
   registerResources(server);
 
