@@ -13,8 +13,8 @@ import {
   PackToolingError,
   type PackageScan,
   type PackedManifest,
-  type SpawnLike,
 } from "../../../scripts/check-published-artifacts.mjs";
+import { type SpawnLike } from "../../../scripts/lib/workspace.mjs";
 
 const PRIVATE = new Set(["@vestlang/primitives"]);
 

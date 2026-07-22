@@ -11,6 +11,10 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
+    // The `node`-run guard scripts import their shared lib by its real `.mts`
+    // path — Node's type stripping doesn't rewrite `.mjs` to `.mts`, unlike the
+    // test/vitest imports. Emit-free, so the extension in the specifier is fine.
+    "allowImportingTsExtensions": true,
   },
   "include": ["packages", "apps/cli", "apps/mcp-server", "tests", "scripts"],
   "exclude": [
