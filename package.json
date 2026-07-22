@@ -26,6 +26,7 @@
     "format:check": "prettier --check .",
     "knip": "knip",
     "check:artifacts": "node scripts/check-published-artifacts.mts",
+    "check:mcp-changeset": "node scripts/check-mcp-changeset.mts",
     "ocf:refresh-types": "bash scripts/refresh-ocf-types.sh",
     "changeset": "changeset",
     "version": "changeset version",

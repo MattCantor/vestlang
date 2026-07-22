@@ -18,7 +18,10 @@ jobs:
       # runtime is being removed) while keeping the proven action versions.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
+      # Full history so the mcp-changeset guard can diff against the PR base ref.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -51,6 +54,17 @@ jobs:
 
       - name: Format check
         run: pnpm format:check
+
+      # A change to a package the mcp-server bundles (or to its own src) must ship
+      # a changeset naming @vestlang/mcp-server, or `npx @vestlang/mcp-server` keeps
+      # serving a stale engine (changesets doesn't cascade across the devDep edge).
+      # Only meaningful on a PR, where there's a base to diff against; fetch that
+      # base by name first so the three-dot diff resolves.
+      - name: Guard mcp-server changeset
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          git fetch origin "$GITHUB_BASE_REF"
+          pnpm check:mcp-changeset
 
       - name: Test
         run: pnpm test
