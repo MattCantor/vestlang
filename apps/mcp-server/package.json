@@ -51,7 +51,6 @@
     "zod": "^4.0"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@vestlang/core": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/inferrer": "workspace:*",

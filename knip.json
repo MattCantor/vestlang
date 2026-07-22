@@ -6,9 +6,6 @@
   "workspaces": {
     "packages/vestlang": {
       "ignoreDependencies": ["zod"]
-    },
-    "apps/mcp-server": {
-      "ignoreDependencies": ["@types/express"]
     }
   }
 }

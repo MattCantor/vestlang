@@ -18,8 +18,9 @@ Environment (--http only):
   VESTLANG_MCP_ALLOWED_HOSTS  comma-separated Host header allowlist, needed when
                               binding beyond localhost (unset by default)`;
 
-// Arguments used to be ignored wholesale, so a typo'd `--htpp` would have started
-// a stdio server nothing was talking to. Anything unrecognized is an error now.
+// Only the two forms below are accepted; anything else is an error rather than a
+// fall-through to stdio, so a typo'd `--htpp` can't start a server nothing is
+// talking to.
 export function parseArgs(argv: readonly string[]): Invocation {
   if (argv.length === 0) return { mode: "stdio" };
   if (argv.length === 1 && argv[0] === "--http") return { mode: "http" };

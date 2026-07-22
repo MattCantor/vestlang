@@ -2,8 +2,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { StreamableHTTPServerTransportOptions } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Agent, request as nodeRequest } from "node:http";
+import {
+  Agent,
+  createServer as createNodeServer,
+  request as nodeRequest,
+} from "node:http";
+import { readFileSync } from "node:fs";
 import type { IncomingHttpHeaders, Server } from "node:http";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { startHttpServer, type HttpConfig } from "../src/http.js";
 
 // Counting the transports the HTTP layer builds and closes. Two concurrent
@@ -45,6 +52,13 @@ vi.mock(
 );
 
 const HOST = "127.0.0.1";
+const PACKAGE_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const manifestVersion = (
+  JSON.parse(readFileSync(join(PACKAGE_DIR, "package.json"), "utf8")) as {
+    version: string;
+  }
+).version;
+
 const MCP_HEADERS = {
   "content-type": "application/json",
   accept: "application/json, text/event-stream",
@@ -252,8 +266,23 @@ describe("host header validation", () => {
     expect(JSON.parse(res.body)).toEqual({
       status: "ok",
       name: "vestlang-mcp-server",
-      version: expect.any(String),
+      version: manifestVersion,
     });
+  });
+
+  it("answers a HEAD probe too", async () => {
+    const port = await boot({ allowedHosts });
+
+    // HEAD is an ordinary load-balancer probe, and it has the same reason as GET
+    // to sit outside the allowlist.
+    const res = await raw({
+      port,
+      method: "HEAD",
+      path: "/health",
+      headers: { host: `10.1.2.3:${port}` },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toBe("");
   });
 });
 
@@ -282,6 +311,12 @@ describe("per-request isolation", () => {
     expect(parsed[1].result.structuredContent.clean).toBe(false);
   });
 
+  // Scope note, so this isn't mistaken for more than it is: it shows nothing is
+  // left open, not that the teardown hangs off 'close' rather than 'finish'.
+  // Both fire here — with an in-process client and synchronous tools the
+  // response is always written before the abort lands, so no request reaches the
+  // state where only 'close' fires. 'close' is still the right event (it fires
+  // whether or not a response was ever written), just not one this can pin.
   it("closes every transport it builds, including on an aborted request", async () => {
     const port = await boot();
 
@@ -314,9 +349,11 @@ describe("shutdown", () => {
     const closeIdle = vi.spyOn(running!.server, "closeIdleConnections");
 
     // The socket stays pooled and idle after this — the state an MCP client
-    // between calls leaves behind.
+    // between calls leaves behind. Asserted, not assumed: with no pooled socket
+    // there would be nothing for shutdown to get stuck on.
     const probe = await raw({ port, method: "GET", path: "/health", agent });
     expect(probe.status).toBe(200);
+    expect(Object.keys(agent.freeSockets)).not.toHaveLength(0);
 
     await running!.shutdown();
     running = undefined;
@@ -326,5 +363,34 @@ describe("shutdown", () => {
     await expect(raw({ port, method: "GET", path: "/health" })).rejects.toThrow(
       /ECONNREFUSED/,
     );
+  });
+
+  it("can be called twice", async () => {
+    // A second signal during the drain window lands here; closing an already
+    // closed server would otherwise report ERR_SERVER_NOT_RUNNING as a failure.
+    await boot();
+    const { shutdown } = running!;
+    running = undefined;
+
+    await expect(shutdown()).resolves.toBeUndefined();
+    await expect(shutdown()).resolves.toBeUndefined();
+  });
+
+  it("rejects when the port is already taken", async () => {
+    // Port 3000 by default, so this is the likeliest first-run failure there is.
+    // Unhandled, the bind error would surface as an uncaught exception and the
+    // start promise would never settle.
+    const squatter = createNodeServer();
+    await new Promise<void>((resolve) => squatter.listen(0, HOST, resolve));
+    const address = squatter.address();
+    if (typeof address !== "object" || address === null) {
+      throw new Error("squatter did not bind a port");
+    }
+
+    await expect(
+      startHttpServer({ port: address.port, host: HOST }),
+    ).rejects.toThrow(/EADDRINUSE/);
+
+    await new Promise<void>((resolve) => squatter.close(() => resolve()));
   });
 });

@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { parseArgs, readHttpConfig } from "./cli.js";
-import { startHttpServer } from "./http.js";
 import { createServer } from "./server.js";
 
 // How long a shutdown may take before we stop being polite about it.
@@ -10,6 +9,12 @@ const SHUTDOWN_GRACE_MS = 10_000;
 function fail(message: string): never {
   console.error(message);
   process.exit(1);
+}
+
+function errorCode(err: unknown): string | undefined {
+  return err instanceof Error && "code" in err && typeof err.code === "string"
+    ? err.code
+    : undefined;
 }
 
 async function startStdio(): Promise<void> {
@@ -24,7 +29,21 @@ async function startHttp(): Promise<void> {
   if (!result.ok) fail(result.message);
   const { config } = result;
 
-  const { shutdown } = await startHttpServer(config);
+  // Loaded here rather than at the top of the module: it pulls in the SDK's
+  // express stack, and the stdio default — one process per host session, every
+  // session — should not pay for a transport it never starts.
+  const { startHttpServer } = await import("./http.js");
+
+  const { shutdown } = await startHttpServer(config).catch((err: unknown) => {
+    const cause = err instanceof Error ? err.message : "unknown error";
+    const hint =
+      errorCode(err) === "EADDRINUSE"
+        ? " (set VESTLANG_MCP_PORT to a free port)"
+        : "";
+    return fail(
+      `vestlang-mcp: cannot listen on ${config.host}:${config.port} — ${cause}${hint}`,
+    );
+  });
 
   console.error(
     `vestlang-mcp: streamable HTTP transport listening on http://${config.host}:${config.port}/mcp`,

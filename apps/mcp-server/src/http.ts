@@ -27,12 +27,11 @@ export interface RunningHttpServer {
 const HEALTH_BODY = JSON.stringify({ status: "ok", ...SERVER_INFO });
 
 // The route handlers are typed by what they touch, not by express's own
-// Request/Response. A pnpm store can hold two copies of @types/express — the SDK
-// resolves one through its own tree, this package declares another (express 5
-// bundles no types, and the SDK keeps them in devDependencies, so without that
-// declaration `createMcpExpressApp()` degrades to `any`) — and naming those
-// types here would make the build depend on which copy won. Express's own
-// objects satisfy these structurally.
+// Request/Response. Express 5 ships no types of its own, so the SDK's helper is
+// typed through whichever @types/express some transitive dependency has hoisted
+// into the store — a copy this package neither declares nor can influence, and
+// whose major version can change under it. Express's objects satisfy these
+// structurally, so none of that reaches our code.
 type RoutedRequest = IncomingMessage & { body?: unknown };
 interface RoutedResponse extends ServerResponse {
   status(code: number): this;
@@ -46,9 +45,10 @@ interface RoutedResponse extends ServerResponse {
  * collide on JSON-RPC ids.
  *
  * Stateless — no session id, and JSON responses rather than an SSE stream —
- * because nothing here survives a request: 15 pure tools, no notifications, no
- * sampling. Sessions would track nothing and accumulate memory on a server that
- * ships unauthenticated. Turning them on is an edit to this function.
+ * because nothing here survives a request: the tools are pure, with no
+ * notifications and no sampling. Sessions would track nothing and accumulate
+ * memory on a server that ships unauthenticated. Turning them on is an edit to
+ * this function.
  */
 function createRequestTransport(): StreamableHTTPServerTransport {
   return new StreamableHTTPServerTransport({
@@ -136,7 +136,13 @@ export function startHttpServer(
   // liveness and identity only, and anyone who can reach an unauthenticated
   // server can already call every tool. /mcp stays behind the validation.
   const server = createNodeServer((req, res) => {
-    if (req.method === "GET" && pathOf(req) === "/health") {
+    // HEAD as well as GET: a load balancer probing with HEAD is ordinary, and it
+    // would otherwise fall through to the host validation this exists to skip.
+    // Node drops the body on a HEAD response by itself.
+    const probe =
+      (req.method === "GET" || req.method === "HEAD") &&
+      pathOf(req) === "/health";
+    if (probe) {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(HEALTH_BODY);
       return;
@@ -144,8 +150,16 @@ export function startHttpServer(
     app(req, res);
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    // Without this, a bind failure — port already taken, host that isn't ours —
+    // emits an unhandled 'error', which EventEmitter rethrows as an uncaught
+    // exception: a raw Node stack, and this promise never settles.
+    server.once("error", reject);
     server.listen(config.port, config.host, () => {
+      server.removeListener("error", reject);
+      server.on("error", (err) => {
+        console.error("vestlang-mcp: server error", err);
+      });
       resolve({ server, shutdown: () => shutdown(server) });
     });
   });
@@ -153,6 +167,12 @@ export function startHttpServer(
 
 function shutdown(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
+    // A second signal during the drain window would otherwise close an already
+    // closing server, and ERR_SERVER_NOT_RUNNING would read as a failed shutdown.
+    if (!server.listening) {
+      resolve();
+      return;
+    }
     server.close((err) => {
       if (err) reject(err);
       else resolve();
