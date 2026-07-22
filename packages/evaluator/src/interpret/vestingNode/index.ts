@@ -7,7 +7,10 @@ import type {
   NodeMeta,
   VestingNode,
 } from "@vestlang/types";
-import { isEmptySatisfiableSet } from "@vestlang/primitives";
+import {
+  isEmptySatisfiableSet,
+  isSameAnchorImpossible,
+} from "@vestlang/primitives";
 import { isImpossibleBlocker } from "../blockerTree.js";
 import { createGateImpossibleBlocker } from "./constraint.js";
 import { evaluateVestingBase } from "./vestingBase.js";
@@ -44,18 +47,25 @@ export function evaluateVestingNode(
   // Return the resolved vesting node base if there are no constraints
   if (!node.condition) return resBase;
 
-  // A gate whose date constraints are *jointly* empty — their windows don't
-  // overlap (`EVENT ipo AFTER 2026-01-01 AND BEFORE 2025-01-01`) — can never be
-  // satisfied by any firing on any date. The per-operand combiner below can't see
-  // that: each conjunct is individually a satisfiable "wait, bounded on one side",
-  // so it reads the node as merely pending. Only the joint interval analysis sees
-  // the emptiness, and it's firing-invariant, so run it once here on the whole
-  // condition (this entry sees it exactly once) and short-circuit to a single
-  // impossible blocker carrying the whole gate. Replacing the combiner's output —
-  // not appending to it — is what makes the node classify IMPOSSIBLE: a mixed list
-  // of one impossible plus the pending EVENT_NOT_YET_OCCURRED blockers would read
+  // Two firing-invariant contradictions get caught here, before the per-operand
+  // combiner runs, because that combiner can't see either: each conjunct is
+  // individually a satisfiable "wait, bounded on one side", so it reads the node
+  // as merely pending.
+  //
+  //   - Jointly-empty date windows — the constraints don't overlap
+  //     (`EVENT ipo AFTER 2026-01-01 AND BEFORE 2025-01-01`); no firing on any
+  //     date lands inside.
+  //   - Same-anchor contradictions — both sides pin to one non-date symbol, so
+  //     the symbol cancels and what's left is impossible regardless of when it
+  //     fires (`EVENT ipo STRICTLY AFTER EVENT ipo`).
+  //
+  // Both are firing-invariant, so run them once here on the whole condition (this
+  // entry sees each gate exactly once) and short-circuit to a single impossible
+  // blocker carrying the whole gate. Replacing the combiner's output — not
+  // appending to it — is what makes the node classify IMPOSSIBLE: a mixed list of
+  // one impossible plus the pending EVENT_NOT_YET_OCCURRED blockers would read
   // UNRESOLVED instead.
-  if (isEmptySatisfiableSet(node.condition)) {
+  if (isEmptySatisfiableSet(node.condition) || isSameAnchorImpossible(node)) {
     return {
       type: "IMPOSSIBLE",
       blockers: [createGateImpossibleBlocker(node)],
