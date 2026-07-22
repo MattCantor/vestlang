@@ -30,8 +30,10 @@ export type OCTDate = string;
 // A fixed-point decimal string — optional sign, integer part, up to ten
 // fractional digits, no scientific notation. This is OCF's `Numeric`, NOT
 // Carta's `{ value }` object. The interchange stores a vesting percentage in
-// this shape rather than as an exact rational, which is why a repeating share
-// (a 1/3 cliff) can only be written truncated. Like OCTDate this is a plain
+// this shape rather than as an exact rational, so a repeating share (a 1/3
+// cliff) can never be written exactly; it is written to the nearest ten-place
+// grid point at or above its true value, which is the direction that survives
+// the share math's rounding down. Like OCTDate this is a plain
 // `string` alias with no brand — validated at the read/write boundaries via
 // `isNumeric` / `validateNumeric` (in @vestlang/utils).
 export type Numeric = string;

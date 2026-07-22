@@ -682,7 +682,7 @@ describe("rehydrate — event_condition firings (#255)", () => {
 // The stored template already carries the schedule-whole apportioned percentages,
 // so the compile∘rehydrate path and the direct resolution compile the SAME
 // template and must agree share-for-share — terminating and repeating fractions
-// alike, since both truncate a stored decimal identically. Grants match the
+// alike, since both read back the same stored decimal. Grants match the
 // conservation sweep's spread so the odd-share placement is exercised too.
 describe("rehydrate — dated template arm reloads to the direct projection, per installment", () => {
   const GRANTS = [0, 1, 7, 100, 4800] as const;
@@ -693,7 +693,7 @@ describe("rehydrate — dated template arm reloads to the direct projection, per
     },
     {
       // Thirds at a non-divisible grant split [33, 33, 34]; the stored template
-      // carries the truncated decimals, and both projection paths read them.
+      // carries the apportioned decimals, and both projection paths read them.
       name: "repeating THEN chain (thirds)",
       dsl: "1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month THEN 1/3 VEST OVER 3 months EVERY 1 month",
     },
@@ -727,7 +727,7 @@ describe("rehydrate — dated template arm reloads to the direct projection, per
 // held; once the head fires, reloading re-anchors the whole chain to the fired
 // date and the projection matches a live evaluate share-for-share. Terminating
 // shares (1/4, 3/4) isolate the re-anchor's amount fidelity from any percentage
-// truncation — this pins the amount that flows through a fired re-anchor, not the
+// rounding — this pins the amount that flows through a fired re-anchor, not the
 // tail-before-head ordering already pinned elsewhere.
 describe("rehydrate — THEN-on-event-head chain re-anchors to the fired head with amount fidelity", () => {
   const DSL =

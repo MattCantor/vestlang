@@ -132,8 +132,8 @@ describe("#384 — events-arm cliff precision guard", () => {
     // parsed to an exact fraction instead, so the quantity split is the way to get a
     // truly repeating statement fraction.) With no cliff there is nothing the
     // cliff-only pass can analyze, so the repeating *statement* fraction draws no
-    // warning — only a cliff percentage round-trips through the truncating Numeric
-    // on this path.
+    // warning — only a cliff percentage round-trips through the stored Numeric on
+    // this path.
     const dsl =
       "24000 VEST FROM DATE 2020-01-01 OVER 3 months EVERY 1 month PLUS 48000 VEST FROM DATE 2021-06-01 OVER 3 months EVERY 1 month";
     const result = resolveToCore(prog(dsl), baseCtx(72000));
@@ -394,7 +394,7 @@ describe("#384 — unresolved-arm resolved-sibling cliff precision (AC9)", () =>
 // exact failure this issue exists to kill — and the pass gates on `state === "RESOLVED"`.
 describe("#386 — EVENT_HELD cliffs are excluded (no false positive)", () => {
   // `CLIFF LATER OF(1 month, EVENT m)` decomposes into a time baseline (the 1/3 cliff,
-  // stored "0.3333333333") + an event hold. The time arm's decimal is over-precise and
+  // stored "0.3333333334") + an event hold. The time arm's decimal is over-precise and
   // WOULD warn if analyzed, but the realized lump folds proportionally, so it must not.
   it("a fired event-held cliff's over-precise time baseline draws no finding", () => {
     const dsl =

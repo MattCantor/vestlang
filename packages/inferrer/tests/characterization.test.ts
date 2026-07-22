@@ -200,9 +200,10 @@ const CORPUS: CorpusCase[] = [
     //
     // Amounts are picked so every segment's share of the total terminates as a
     // decimal: head 600/800 = 3/4, tail 200/800 = 1/4, and the cliff lump
-    // 300/600 = 1/2 of its statement. Percentages store as truncated Numeric
-    // strings, so a repeating split (e.g. 2/3 + 1/3) would lose a share and the
-    // inferred CLIFF/THEN chain wouldn't round-trip.
+    // 300/600 = 1/2 of its statement. Percentages store as fixed-point Numeric
+    // strings, so a repeating split (e.g. 2/3 + 1/3) would land on the storage grid
+    // rather than on its exact share, and the observable would no longer pin the
+    // CLIFF/THEN chain this case is about.
     id: "C4",
     witness: "cliff + monthly head, then a quarterly tail",
     tranches: [

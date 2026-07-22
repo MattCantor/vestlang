@@ -536,12 +536,15 @@ describe("compile — month-end chain matches its un-split grid (#34)", () => {
 
   const janEnd: VestingRuntime = { startDate: "2025-01-31" };
 
-  // The split stores 1/3 and 2/3 as truncated Numeric decimals ("0.3333333333"
-  // / "0.6666666666"), so the first tranche floors to 999 rather than 1000 — the
-  // precision-loss share the Numeric storage introduces. The un-split schedule
-  // stores "1" exactly and keeps the full 1000/1000/1000, so the two now agree on
-  // dates but not on the first amount. (The precision guard warns about exactly
-  // this; see the precision tests.)
+  // The split's two percentages are hand-written below their exact shares — 1/3 as
+  // "0.3333333333" — so compile's floor arithmetic drops the first tranche to 999
+  // rather than 1000, against the un-split schedule's "1" and its full
+  // 1000/1000/1000. The two agree on dates but not on that first amount.
+  //
+  // These are deliberately not the decimals vestlang itself writes: its own
+  // apportionment would store "0.3333333334" here and land 1000. A compiler for the
+  // interchange has to floor faithfully whatever a producer hands it, including a
+  // percentage written below the share it means, and that is what this pins.
   it("chains onto Feb 28, Mar 31, Apr 30 — not stuck on the 28th", () => {
     expect(compile(chain, 3000, janEnd)).toEqual([
       { date: "2025-02-28", amount: "999" },

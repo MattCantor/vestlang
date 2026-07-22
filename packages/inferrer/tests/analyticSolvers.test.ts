@@ -27,7 +27,7 @@ describe("solveFloorCounts — monotone floor solve", () => {
     for (const k of ks) expect(withinSlack(100, k, 36, 25)).toBe(true);
   });
 
-  it("keeps neighbours inside the ±1 stored-truncation slack", () => {
+  it("keeps neighbours inside the ±1 stored-decimal slack", () => {
     // floor(100·13/49) = 26, one off the lump — still admitted.
     const ks = solveFloorCounts(100, 25, 36);
     expect(ks).toContain(13);

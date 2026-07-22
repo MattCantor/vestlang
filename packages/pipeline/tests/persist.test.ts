@@ -118,10 +118,11 @@ describe("runPersist (AC#4)", () => {
 });
 
 // #413/#415 — precision conservation. A schedule of exact thirds means to vest the
-// whole grant, but each third stored independently truncates to 0.3333333333, the
-// set sums below 1, and the allocator floors the last share away. Apportioning the
-// stored set together (`apportionStored`) keeps the sum at exactly 1, so rehydrate
-// projects the full grant. The under-allocation channel is unchanged: an author who
+// whole grant, but no third can be written exactly in ten places, so rounding each
+// one on its own leaves a set that misses 1 and an allocator that floors the last
+// share away. Apportioning the stored set together (`apportionStored`) rounds the
+// running total instead and stores the gaps, holding the sum at exactly 1, so
+// rehydrate projects the full grant. The under-allocation channel is unchanged: an author who
 // types literal decimals that under-sum gets that warning surfaced, not silently
 // repaired.
 describe("precision conservation — schedule-whole storage (#413/#415)", () => {

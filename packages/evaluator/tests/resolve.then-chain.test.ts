@@ -357,10 +357,10 @@ describe("resolveToCore — single-event-head month-end chain springs back too",
     events: { ipo: "2025-01-31" },
   });
   // Terminating shares (1/4, 3/4): a fired-event THEN chain lowers to one
-  // canonical template, so each percentage stores as a Numeric decimal. A
-  // repeating share (1/3) would truncate and drop a share off the total; the
-  // dates this test pins are unaffected by the split, so terminating shares keep
-  // the conservation check clean while still exercising the month-end springing.
+  // canonical template, so each percentage stores as a Numeric decimal, and these
+  // two store exactly. A repeating share would round onto the grid instead and
+  // still conserve, but it would put the reader's attention on the rounding rather
+  // than on the month-end springing these dates exist to pin.
   const program: Program = [
     eventHead(portion(1, 4), "ipo", {
       type: "MONTHS",
@@ -529,8 +529,8 @@ describe("resolveToCore — a lump head chains with the tail coincident", () => 
   // An empty span (occurrences 1, length 0) is a lump: it vests entirely at its
   // start and advances the cursor by nothing, so the tail begins on the same day.
   // Terminating shares (1/4, 3/4) so the chain's canonical template stores both
-  // percentages exactly — a repeating 1/3 would truncate and lose a share off the
-  // conservation total this test checks; the dates don't depend on the split.
+  // percentages exactly, leaving the conservation total this test checks free of
+  // any rounding to reason about; the dates don't depend on the split.
   const program: Program = [
     head(portion(1, 4), "2025-01-01", {
       type: "MONTHS",

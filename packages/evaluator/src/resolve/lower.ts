@@ -901,7 +901,7 @@ export const buildTemplate = (
 
     // The internal share is an exact Fraction; the stored field is a Numeric
     // decimal apportioned across the whole schedule above, so read this statement's
-    // share from the schedule-whole set rather than truncating it in isolation.
+    // share from the schedule-whole set rather than rounding it in isolation.
     const percentage = storedPercentages[i];
 
     // A *pure milestone* — vests entirely on its event hold, with no time grid —

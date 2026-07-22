@@ -326,8 +326,13 @@ const pushCliffFinding = (
   leading: boolean,
   path: (string | number)[],
 ): void => {
-  const shareCount = Math.floor(
-    (stmtFraction.numerator * grant) / stmtFraction.denominator,
+  // In BigInt, not doubles: on the template arm this fraction is a stored ten-place
+  // decimal, so its numerator reaches 10^10 and `numerator × grant` runs past 2^53
+  // at the grant sizes that reach here at all — a warning only survives now when ten
+  // places genuinely can't land the count, which takes a basis around 10^10 upward.
+  const shareCount = Number(
+    (BigInt(stmtFraction.numerator) * BigInt(grant)) /
+      BigInt(stmtFraction.denominator),
   );
   if (shareCount <= 0) return;
 

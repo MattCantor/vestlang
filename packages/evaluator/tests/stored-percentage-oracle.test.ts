@@ -227,25 +227,40 @@ const FIXTURES: Fixture[] = [
 
 const GRANTS = [97, 1005, 30000, 48000, 100000, 1000000, 10000000];
 
-describe("stored decimals project what the exact fractions project", () => {
-  const denominators: bigint[] = [];
+// Every reference projection, built once here rather than inside the cases. The
+// bound below has to see the whole fixture set: derived from an array the cases
+// fill as they run, a filtered or shuffled run would check the grant range against
+// whichever denominators happened to be collected and pass on one it never saw —
+// which is the failure this bound exists to catch.
+const REFERENCE = new Map<string, ReturnType<typeof exactProjection>>(
+  FIXTURES.flatMap((f) =>
+    GRANTS.map((grant): [string, ReturnType<typeof exactProjection>] => [
+      `${f.name} @ ${grant}`,
+      exactProjection(f, BigInt(grant)),
+    ]),
+  ),
+);
 
+const WORST_DENOMINATOR = [...REFERENCE.values()].reduce(
+  (worst, r) =>
+    r.maxCumulativeDenominator > worst ? r.maxCumulativeDenominator : worst,
+  1n,
+);
+
+describe("stored decimals project what the exact fractions project", () => {
   it.each(FIXTURES)("$name", (f) => {
     for (const grant of GRANTS) {
-      const reference = exactProjection(f, BigInt(grant));
-      denominators.push(reference.maxCumulativeDenominator);
-      expect(storedProjection(f, grant), `${f.name} @ ${grant}`).toEqual(
-        reference.tranches,
-      );
+      const key = `${f.name} @ ${grant}`;
+      const reference = REFERENCE.get(key);
+      if (!reference) throw new Error(`no reference projection for ${key}`);
+      expect(storedProjection(f, grant), key).toEqual(reference.tranches);
       const total = reference.tranches.reduce((s, t) => s + t.amount, 0n);
       if (f.whole) expect(total).toBe(BigInt(grant));
     }
   });
 
   it("every grant tested sits inside the bound the run itself derived", () => {
-    expect(denominators.length).toBeGreaterThan(0);
-    const worst = denominators.reduce((a, b) => (b > a ? b : a));
-    const bound = 10n ** 10n / (2n * worst);
+    const bound = 10n ** 10n / (2n * WORST_DENOMINATOR);
     expect(BigInt(Math.max(...GRANTS))).toBeLessThanOrEqual(bound);
   });
 });
