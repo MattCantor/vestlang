@@ -138,6 +138,101 @@ describe("publish guard scanner", () => {
     expect(violations).toEqual([]);
   });
 
+  it("resolves a declaration file's relative .js specifier to its .d.ts sibling", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.d.ts",
+            content: `export * from "./chunk-abc.js";`,
+          },
+          {
+            path: "dist/chunk-abc.d.ts",
+            content: "export declare const x: number;",
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it("keys the declaration sibling on the referenced extension: .mjs → .d.mts", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.d.ts",
+            content: `export * from "./chunk.mjs";`,
+          },
+          {
+            path: "dist/chunk.d.mts",
+            content: "export declare const x: number;",
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it("keys the declaration sibling on the referenced extension: .cjs → .d.cts", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.d.ts",
+            content: `import x = require("./chunk.cjs");\nexport declare const y: typeof x;`,
+          },
+          {
+            path: "dist/chunk.d.cts",
+            content: "export declare const x: number;",
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toEqual([]);
+  });
+
+  it("still flags a declaration .js specifier with neither a .js nor a .d.ts sibling", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.d.ts",
+            content: `export * from "./chunk-abc.js";`,
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe("unresolved-specifier");
+    expect(violations[0].message).toContain("./chunk-abc.js");
+  });
+
+  it("denies the declaration-sibling reprieve to a non-declaration JS artifact", () => {
+    const violations = findViolations(
+      scan({
+        artifacts: [
+          {
+            path: "dist/index.js",
+            content: `export * from "./chunk-abc.js";`,
+          },
+          {
+            path: "dist/chunk-abc.d.ts",
+            content: "export declare const x: number;",
+          },
+        ],
+      }),
+      PRIVATE,
+    );
+    expect(violations).toHaveLength(1);
+    expect(violations[0].kind).toBe("unresolved-specifier");
+    expect(violations[0].message).toContain("./chunk-abc.js");
+  });
+
   it("leaves relative specifiers without a built-file extension unjudged", () => {
     const violations = findViolations(
       scan({
