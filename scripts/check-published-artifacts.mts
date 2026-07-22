@@ -119,6 +119,30 @@ function isRelative(specifier: string): boolean {
 // relative reach for e.g. a .json asset is never a false positive).
 const BUILT_FILE = /\.(?:d\.ts|d\.cts|d\.mts|js|cjs|mjs)$/;
 
+// A declaration file. Inside one, TypeScript resolves a relative JS specifier to
+// its declaration sibling, so the existence check below accepts that sibling in
+// place of a literal `.js`. `.d.ts` / `.d.cts` / `.d.mts` only — a plain
+// `.ts`/`.mts` is source, not a declaration, and gets no such latitude.
+const DECLARATION_FILE = /\.d\.(?:ts|cts|mts)$/;
+
+// TypeScript rewrites a relative JS specifier to its declaration counterpart on
+// resolve, keyed on the *referenced* extension (not the file it sits in), so a
+// `.d.ts` reaching for `./x.mjs` lands on `x.d.mts`.
+const DECLARATION_SIBLING_EXT: Record<string, string> = {
+  ".js": ".d.ts",
+  ".cjs": ".d.cts",
+  ".mjs": ".d.mts",
+};
+
+// The declaration path a relative JS specifier resolves to inside a declaration
+// file, or undefined when the specifier isn't one of the three JS shapes.
+function declarationSiblingOf(specifier: string): string | undefined {
+  for (const [js, dts] of Object.entries(DECLARATION_SIBLING_EXT)) {
+    if (specifier.endsWith(js)) return specifier.slice(0, -js.length) + dts;
+  }
+  return undefined;
+}
+
 // Every syntactic form a specifier can hide in — including the inline
 // `import("…")` type reference a resolve failure emits, which a from-clause-only
 // scan would miss.
@@ -184,13 +208,21 @@ export function findViolations(
         // where the d.ts bundle carried `require("./external.cjs")` verbatim.
         // Only judge built-file shapes; extensionless or asset paths pass.
         if (!BUILT_FILE.test(specifier)) continue;
-        if (!artifactPaths.has(join(dirname(artifact.path), specifier))) {
-          violations.push({
-            package: pkg.name,
-            kind: "unresolved-specifier",
-            message: `${artifact.path} references "${specifier}", which does not exist in the built output`,
-          });
+        const dir = dirname(artifact.path);
+        if (artifactPaths.has(join(dir, specifier))) continue;
+        // Inside a declaration file the literal `.js` need not exist: TypeScript
+        // resolves it to the emitted declaration sibling (a shared `.d.ts` chunk
+        // whose importers still spell it `.js`). A JS artifact gets no such
+        // reprieve, so the check keeps its teeth there.
+        if (DECLARATION_FILE.test(artifact.path)) {
+          const sibling = declarationSiblingOf(specifier);
+          if (sibling && artifactPaths.has(join(dir, sibling))) continue;
         }
+        violations.push({
+          package: pkg.name,
+          kind: "unresolved-specifier",
+          message: `${artifact.path} references "${specifier}", which does not exist in the built output`,
+        });
         continue;
       }
       const name = packageNameOf(specifier);

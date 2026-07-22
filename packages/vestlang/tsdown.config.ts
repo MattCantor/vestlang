@@ -21,9 +21,9 @@ const shared = {
 } satisfies UserConfig;
 
 // The two published entries: the main barrel and the `./authoring` subpath.
-// Only the JS pass builds them together — sharing a pass lets rolldown hoist
-// what they have in common (the whole parse/normalize/lint stack) into one
-// chunk, so the subpath costs a consumer almost nothing on disk.
+// Both passes build them together — sharing a pass lets rolldown hoist what they
+// have in common (the whole parse/normalize/lint stack) into one chunk, so the
+// subpath costs a consumer almost nothing on disk.
 const entries = ["src/index.ts", "src/authoring.ts"];
 
 export default defineConfig([
@@ -34,17 +34,14 @@ export default defineConfig([
     sourcemap: true,
     clean: true,
   },
-  // Declarations are emitted one entry at a time, and every pass after the
-  // first must leave `dist` alone. A shared declaration pass splits too, but
-  // writes its chunk as `foo.d.ts` while the import that reaches for it still
-  // says `foo.js` — TypeScript resolves that fine, the publish guard's
-  // file-exists check does not. Self-contained declarations per entry sidestep
-  // that, and the price is real: a whole extra type-bundling pass per entry
-  // (~3.5s each here) plus ~5 KB of duplicated type text.
-  ...entries.map((entry) => ({
+  // Declarations run in their own pass — separate from the sourcemapped JS pass
+  // above (see the file header) — but still over both entries at once, so the
+  // shared types the two barrels reach for hoist into a single declaration
+  // chunk instead of duplicating. `clean: false` keeps the first pass's JS.
+  {
     ...shared,
-    entry: [entry],
+    entry: entries,
     dts: { emitDtsOnly: true },
     clean: false,
-  })),
+  },
 ]);
