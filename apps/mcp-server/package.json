@@ -23,7 +23,7 @@
   },
   "homepage": "https://github.com/MattCantor/vestlang#readme",
   "engines": {
-    "node": ">=18"
+    "node": ">=18.2"
   },
   "bin": {
     "vestlang-mcp": "dist/index.js"
@@ -37,17 +37,21 @@
   "scripts": {
     "predev": "tsx scripts/copy-resources.ts",
     "dev": "tsx src/index.ts",
+    "predev:http": "tsx scripts/copy-resources.ts",
+    "dev:http": "tsx src/index.ts --http",
     "prebuild": "tsx scripts/copy-resources.ts",
     "build": "tsdown",
+    "start:http": "node dist/index.js --http",
     "prepublishOnly": "pnpm build",
     "test": "vitest",
     "clean": "rimraf dist resources"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^4.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@vestlang/core": "workspace:*",
     "@vestlang/evaluator": "workspace:*",
     "@vestlang/inferrer": "workspace:*",
