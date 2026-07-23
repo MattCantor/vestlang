@@ -1,6 +1,6 @@
 {
   "name": "@vestlang/mcp-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "license": "MIT",
   "description": "Model Context Protocol server for vestlang — parse, compile, evaluate, lint and infer vesting schedules, plus the grammar and spec as MCP resources.",

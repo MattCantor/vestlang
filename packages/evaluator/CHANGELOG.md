@@ -1,5 +1,12 @@
 # @vestlang/evaluator
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [26b8dd2]
+  - @vestlang/core@0.1.2
+
 ## 0.1.2
 
 ### Patch Changes
