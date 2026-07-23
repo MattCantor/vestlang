@@ -6,17 +6,15 @@ import {
   numericToFraction,
   tryNumericToFraction,
   validateNumeric,
-  terminates,
   renderFixed,
 } from "../src/numeric";
 import type { Fraction, Numeric } from "@vestlang/types";
 import { analyzePrecision } from "../src/precision";
 
 // The OCF Numeric boundary: parse a stored decimal to its exact rational on the
-// way in, render an exact rational as the shortest faithful decimal on the way
-// out. Crystallizes issue #359 AC2, AC3, and the analyzer anchor of AC7.
+// way in, render an exact rational onto the ten-place storage grid on the way out.
 
-describe("numericToFraction — parse the OCF grammar to the exact rational (AC2)", () => {
+describe("numericToFraction — parse the OCF grammar to the exact rational", () => {
   it("parses integers and decimals to their exact reduced fraction", () => {
     expect(numericToFraction("3")).toEqual({ numerator: 3, denominator: 1 });
     expect(numericToFraction("0.3333")).toEqual({
@@ -52,25 +50,47 @@ describe("numericToFraction — parse the OCF grammar to the exact rational (AC2
   });
 });
 
-describe("fractionToNumeric — render an exact rational to a Numeric (AC3)", () => {
-  it("writes a fraction that terminates within 10 places exactly, in minimal form", () => {
+describe("fractionToNumeric — render an exact rational to a Numeric", () => {
+  it("writes a fraction that lands on the ten-place grid exactly, in minimal form", () => {
     expect(fractionToNumeric({ numerator: 1, denominator: 2 })).toBe("0.5");
     expect(fractionToNumeric({ numerator: 1, denominator: 4 })).toBe("0.25");
     expect(fractionToNumeric({ numerator: 3, denominator: 8 })).toBe("0.375");
     expect(fractionToNumeric({ numerator: 1, denominator: 1 })).toBe("1");
   });
 
-  it("truncates a repeating or over-long fraction to 10 places (toward zero)", () => {
+  it("rounds a repeating or over-long fraction UP to the next grid value", () => {
+    // Up, so the share math's floor lands on the intended count instead of a
+    // share short of it.
     expect(fractionToNumeric({ numerator: 1, denominator: 3 })).toBe(
-      "0.3333333333",
+      "0.3333333334",
     );
     expect(fractionToNumeric({ numerator: 2, denominator: 3 })).toBe(
-      "0.6666666666",
+      "0.6666666667",
     );
-    // 1/2048 = 0.00048828125 terminates but needs 11 places, so it truncates.
+    // 1/2048 = 0.00048828125 terminates but needs 11 places, so it rounds too.
     expect(fractionToNumeric({ numerator: 1, denominator: 2048 })).toBe(
-      "0.0004882812",
+      "0.0004882813",
     );
+  });
+
+  it("carries the round-up out of the tenth place instead of growing an eleventh", () => {
+    // 1 − 10^-11 rounds to a whole 1. Bumping the last of ten accumulated digits
+    // would carry into an eleven-place string the grammar rejects.
+    const justUnderOne = { numerator: 99999999999, denominator: 100000000000 };
+    const rendered = fractionToNumeric(justUnderOne);
+    expect(rendered).toBe("1");
+    expect(isNumeric(rendered)).toBe(true);
+  });
+
+  it("trims the zeros the round-up itself produces", () => {
+    // 0.12345678995 rounds to 0.1234567900 — the trailing zeros have to go after
+    // the rounding, not before it.
+    const rendered = fractionToNumeric({
+      numerator: 12345678995,
+      denominator: 100000000000,
+    });
+    expect(rendered).toBe("0.12345679");
+    expect(isNumeric(rendered)).toBe(true);
   });
 
   it("throws on a negative input (the producers never pass one)", () => {
@@ -79,7 +99,7 @@ describe("fractionToNumeric — render an exact rational to a Numeric (AC3)", ()
     ).toThrow();
   });
 
-  it("round-trips a terminating fraction exactly", () => {
+  it("round-trips a fraction that fits the grid exactly", () => {
     for (const f of [
       { numerator: 1, denominator: 2 },
       { numerator: 3, denominator: 4 },
@@ -153,16 +173,6 @@ describe("fractionToNumeric — domain guards", () => {
   });
 });
 
-describe("terminates", () => {
-  it("is true iff the denominator's only prime factors are 2 and 5", () => {
-    expect(terminates(5n)).toBe(true); // 1/5 = 0.2
-    expect(terminates(8n)).toBe(true); // 1/8 = 0.125
-    expect(terminates(40n)).toBe(true); // 2^3 · 5
-    expect(terminates(3n)).toBe(false); // 1/3 repeats
-    expect(terminates(6n)).toBe(false); // factor 3 remains
-  });
-});
-
 describe("renderFixed", () => {
   it("renders an integer numerator over 10^places, padding sub-1 values", () => {
     expect(renderFixed(5n, 0)).toBe("5"); // no point at zero places
@@ -171,7 +181,7 @@ describe("renderFixed", () => {
   });
 });
 
-describe("apportionStored — schedule-whole share lowering (#413)", () => {
+describe("apportionStored — schedule-whole share lowering", () => {
   const f = (numerator: number, denominator: number): Fraction => ({
     numerator,
     denominator,
@@ -191,12 +201,23 @@ describe("apportionStored — schedule-whole share lowering (#413)", () => {
       { numerator: 0, denominator: 1 },
     );
 
-  it("three exact thirds store a set that sums to exactly 1 (the deficit is handed back)", () => {
+  it("three exact thirds store a set that sums to exactly 1", () => {
     const stored = apportionStored([f(1, 3), f(1, 3), f(1, 3)]);
-    // The earliest statement carries the +1-ulp bump (ascending tie-break).
+    // Only the running totals are rounded up, so the first boundary carries the
+    // extra ulp and the individual shares behind it read a hair low.
     expect(stored).toEqual(["0.3333333334", "0.3333333333", "0.3333333333"]);
     const total = sumStored(stored);
     expect(total.numerator).toBe(total.denominator); // exactly 1
+  });
+
+  it("rounds each running boundary up, so a partial schedule still gains the ulp", () => {
+    // A lone third is under 100%, which is legal — and it must still store the
+    // rounded-up value, or every under-allocating schedule keeps losing its share.
+    expect(apportionStored([f(1, 3)])).toEqual(["0.3333333334"]);
+    expect(apportionStored([f(1, 3), f(1, 3)])).toEqual([
+      "0.3333333334",
+      "0.3333333333",
+    ]);
   });
 
   it("terminating shares are unchanged — no spurious bump", () => {
@@ -212,37 +233,72 @@ describe("apportionStored — schedule-whole share lowering (#413)", () => {
     expect(apportionStored([])).toEqual([]);
   });
 
-  it("sevenths recover their lost ulps too (the largest remainders win)", () => {
+  it("sevenths keep the whole grant too", () => {
     const stored = apportionStored([f(1, 7), f(2, 7), f(4, 7)]);
     const total = sumStored(stored);
     expect(total.numerator).toBe(total.denominator); // sums to exactly 1
   });
 
   it("under-summing literal decimals are stored faithfully — nothing invented", () => {
-    // Three hand-typed 0.3333333333 already sum below 1; the deficit is ≤ 0, so the
-    // apportionment stores exactly what was authored and lets the under-allocation
-    // gate speak.
+    // Three hand-typed 0.3333333333 already sit on the grid, so every boundary is
+    // exact and nothing is rounded; the under-allocation gate speaks downstream.
     const typed = f(3333333333, 10000000000);
     const stored = apportionStored([typed, typed, typed]);
     expect(stored).toEqual(["0.3333333333", "0.3333333333", "0.3333333333"]);
   });
 
+  it("never rounds a sub-100% schedule up to a full grant", () => {
+    // 0.99999999995 + 0.00000000001 = 0.99999999996, a shade under the whole
+    // grant. Rounding the running total up would reach exactly 100% and vest a
+    // share nobody scheduled, so every boundary is held one ulp below.
+    const stored = apportionStored([
+      f(99999999995, 100000000000),
+      f(1, 100000000000),
+    ]);
+    expect(stored).toEqual(["0.9999999999", "0"]);
+    // The cap applies to every boundary, not just the last: capping only the last
+    // would leave the second statement holding a negative share.
+    for (const s of stored)
+      expect(numericToFraction(s).numerator).toBeGreaterThanOrEqual(0);
+  });
+
   it("over-summing shares are stored as-is (the persist gate refuses, not this helper)", () => {
-    // 0.6 + 0.6 over-allocates; apportionStored must not throw — it stores faithfully.
+    // 0.6 + 0.6 over-allocates; apportionStored must not throw — it stores
+    // faithfully, and the no-cap rule keeps it honest rather than reshaping it to
+    // 100%.
     expect(apportionStored([f(3, 5), f(3, 5)])).toEqual(["0.6", "0.6"]);
+  });
+
+  it("keeps the boundaries non-decreasing, so no statement stores a negative share", () => {
+    const sets: Fraction[][] = [
+      [f(1, 3), f(1, 3), f(1, 3)],
+      [f(19, 48), f(29, 48)],
+      [f(1, 7), f(2, 7), f(4, 7)],
+      [f(99999999995, 100000000000), f(1, 100000000000)],
+      [f(1, 3), f(1, 4)],
+      [f(3, 5), f(3, 5)],
+    ];
+    for (const set of sets) {
+      for (const s of apportionStored(set)) {
+        expect(numericToFraction(s).numerator).toBeGreaterThanOrEqual(0);
+      }
+    }
   });
 });
 
-describe("analyzePrecision — the AC7 anchor", () => {
-  it("flags a truncated 1/3 cliff at 36000 shares and recommends 0.33334", () => {
-    const verdict = analyzePrecision("0.3333333333", 36000);
-    expect(verdict.kind).toBe("misallocates");
-    if (verdict.kind === "misallocates") {
-      expect(verdict.recommended).toBe("0.33334");
-    }
+describe("analyzePrecision — the boundary's own guard", () => {
+  it("stays silent for a rounded-up third that lands the intended count", () => {
+    const verdict = analyzePrecision(
+      "0.3333333334",
+      { numerator: 1, denominator: 3 },
+      36000,
+    );
+    expect(verdict.kind).toBe("precise-enough");
   });
 
-  it("raises no concern for a terminating percentage", () => {
-    expect(analyzePrecision("0.25", 36000).kind).toBe("terminating");
+  it("raises no concern for a percentage that writes its fraction exactly", () => {
+    expect(
+      analyzePrecision("0.25", { numerator: 1, denominator: 4 }, 36000).kind,
+    ).toBe("terminating");
   });
 });

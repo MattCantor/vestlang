@@ -26,8 +26,8 @@ const bigGcd = (a: bigint, b: bigint): bigint => {
 };
 
 // A BigInt-backed exact rational. The kernel's internal share math multiplies a
-// statement's share of the grant by its cliff percentage, and when both are
-// non-terminating 10-place truncations the product's components run past 2^53 —
+// statement's share of the grant by its cliff percentage, and when both sit on
+// the 10-place grid the product's components run past 2^53 —
 // exactly where the Number-backed `Fraction` (its guard `narrow`) has to refuse
 // them. So the kernel carries its fractionOfGrant and its running cumulative as
 // `BigRational` end to end and only narrows to a share count at the integer

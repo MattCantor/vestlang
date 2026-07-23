@@ -208,9 +208,15 @@ export function cliffLengthFor(
  * pre-grant mass folding onto the grant date), the lump carries the engine's
  * cumulative-round-down floor: `floor(total × count / (count + nOther))`, where
  * `nOther` is the surviving tail length. That floor is monotone non-decreasing in
- * `count`, so we scan upward, keep every `count` whose floor lands within the ±1
- * stored-truncation slack of the observed lump, and break once the floor passes
- * the lump for good.
+ * `count`, so we scan upward, keep every `count` whose floor lands within ±1 of
+ * the observed lump, and break once the floor passes the lump for good.
+ *
+ * The ±1 absorbs the gap between the exact share and the ten-place decimal the
+ * cliff percentage is stored as. That gap is one-directional — the stored value
+ * is never below the exact one — so in principle only the low side is reachable
+ * here. The slack is kept symmetric anyway: it costs one extra candidate that the
+ * caller's own floor check discards, and narrowing it would trade that for a
+ * silent miss if the reasoning is ever off by a case.
  */
 export function solveFloorCounts(
   total: number,

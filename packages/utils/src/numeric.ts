@@ -1,6 +1,6 @@
 // The OCF `Numeric` boundary: parse a stored fixed-point decimal back to an
 // exact rational on the way in, and write an exact rational out as the shortest
-// faithful decimal on the way out.
+// decimal the grammar can hold on the way out.
 //
 // canonical stores a vesting percentage as a `Numeric` string, not as a
 // `Fraction`, so the interchange never claims a precision a fixed-point decimal
@@ -73,15 +73,6 @@ export const parseDecimal = (decimal: string): ParsedDecimal => {
   return { places, scaledValue, scale };
 };
 
-// A reduced fraction terminates as a decimal iff its denominator's only prime
-// factors are 2 and 5. Strip both and see what's left.
-export const terminates = (denominator: bigint): boolean => {
-  let d = bigAbs(denominator);
-  while (d % 2n === 0n) d /= 2n;
-  while (d % 5n === 0n) d /= 5n;
-  return d === 1n;
-};
-
 // Render a non-negative integer numerator over 10^places as a fixed-point
 // decimal: leading "0." for sub-1 values, exactly `places` fractional digits.
 // Built from the integer alone (no float division) so it stays exact. `places`
@@ -95,6 +86,10 @@ export const renderFixed = (numerator: bigint, places: number): string => {
 
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
 const MAX_PLACES = 10;
+
+// The grid every stored `Numeric` lives on: one value is an integer count of
+// 10^-MAX_PLACES units.
+const GRID = 10n ** BigInt(MAX_PLACES);
 
 /**
  * Parse a stored `Numeric` to its exact rational value, reduced to a
@@ -137,139 +132,131 @@ export const tryNumericToFraction = (n: Numeric): Fraction | null => {
  * Write a non-negative `Fraction` as a stored `Numeric`, in minimal canonical
  * form (no trailing zeros, no needless decimal point: 1/2 → "0.5", 1/1 → "1").
  *
- * A fraction whose exact decimal terminates within ten places is written
- * exactly — lossless, round-trips. Everything else (a repeating fraction, or a
- * terminating one that needs more than ten places) is truncated toward zero at
- * ten places, the engine's CUMULATIVE_ROUND_DOWN direction: 1/3 → "0.3333333333",
- * 1/2048 → "0.0004882812". The domain is non-negative — the producers only ever
- * hold a non-negative share — so a negative input is a bug and throws (it would
- * also make "truncate toward zero" ambiguous).
+ * A fraction that lands exactly on the ten-place grid is written exactly —
+ * lossless, round-trips. Everything else (a repeating fraction, or a terminating
+ * one needing more places than the grammar allows) is written as the next grid
+ * value UP: 1/3 → "0.3333333334", 1/2048 → "0.0004882813".
+ *
+ * Up rather than down because of what happens after the write. Share math floors
+ * a running cumulative, so a stored value a hair *below* the true fraction costs
+ * a whole share exactly when the true count is a round number — which is the
+ * case schedules are built to hit (a third of a three-year grant; a 19-month
+ * cliff on a 48-month grid). A value a hair above is absorbed by that same floor
+ * and lands on the intended count. The overshoot is under 10^-10 of the grant, so
+ * it can only ever add a share where the true count already sat within
+ * grant/10^10 of the next whole one.
+ *
+ * The domain is non-negative — the producers only ever hold a non-negative share
+ * — so a negative input is a bug and throws.
  */
 export const fractionToNumeric = (f: Fraction): Numeric => {
+  const { num, den } = checkedParts(f, "fractionToNumeric");
+  return renderGridUnits(ceilGridUnits(num, den));
+};
+
+// The rounding step, as one exact operation: ceil(num × 10^10 / den), integer part
+// included. Rounding the whole value rather than nudging the last of ten
+// accumulated digits is what makes the carry out of the tenth place fall out for
+// free — 1 − 10^-11 becomes 10^10 units, which renders "1", where bumping a digit
+// string would hand back an eleven-digit fraction the grammar rejects.
+const ceilGridUnits = (num: bigint, den: bigint): bigint => {
+  const scaled = num * GRID;
+  const whole = scaled / den;
+  return scaled % den === 0n ? whole : whole + 1n;
+};
+
+// Render an integer count of 10^-10 units as a minimal Numeric. The trailing-zero
+// trim has to run after the rounding, not before it: 0.12345678995 rounds to
+// 1234567900 units, which is "0.12345679". The decimal point stops the trim from
+// eating an integer's own zeros ("20.0000000000" → "20").
+const renderGridUnits = (units: bigint): Numeric =>
+  renderFixed(units, MAX_PLACES).replace(/0+$/, "").replace(/\.$/, "");
+
+// The producers only ever hold a non-negative share, so anything else is a bug.
+// `caller` names the entry point it arrived through.
+const checkedParts = (
+  f: Fraction,
+  caller: string,
+): { num: bigint; den: bigint } => {
   const num = BigInt(f.numerator);
   const den = BigInt(f.denominator);
   if (num < 0n) {
     throw new Error(
-      `fractionToNumeric: expected a non-negative fraction (got ${f.numerator}/${f.denominator})`,
+      `${caller}: expected a non-negative fraction (got ${f.numerator}/${f.denominator})`,
     );
   }
   if (den <= 0n) {
     throw new Error(
-      `fractionToNumeric: denominator must be >= 1 (got ${f.denominator})`,
+      `${caller}: denominator must be >= 1 (got ${f.denominator})`,
     );
   }
-
-  const intPart = num / den;
-  let remainder = num % den;
-  if (remainder === 0n) return intPart.toString();
-
-  // Emit fractional digits one place at a time, stopping early once the division
-  // closes out (a terminating fraction) or at ten places (the OCF ceiling). Long
-  // division keeps every digit exact; no float ever enters.
-  let digits = "";
-  for (let place = 0; place < MAX_PLACES && remainder !== 0n; place++) {
-    remainder *= 10n;
-    digits += (remainder / den).toString();
-    remainder %= den;
-  }
-  // Strip any trailing zeros the exact expansion produced (e.g. 1/8 = 0.125
-  // never grows them, but a denominator like 40 can), for minimal form.
-  digits = digits.replace(/0+$/, "");
-  return digits.length === 0 ? intPart.toString() : `${intPart}.${digits}`;
+  return { num, den };
 };
-
-// The 10-place grid the apportionment works on: one stored `Numeric` is an
-// integer numerator over 10^MAX_PLACES.
-const GRID = 10n ** BigInt(MAX_PLACES);
 
 /**
  * Apportion a schedule's statement share `Fraction`s to stored `Numeric`s
- * *together*, so the stored set sums to exactly floor(Σf × 10^10)/10^10 — the
- * closest 10-place representation of the exact total — rather than letting each
- * statement truncate independently and lose the schedule's last share.
+ * *together*, so the schedule's running total tracks the exact one at every
+ * boundary instead of each statement rounding alone and the set drifting off the
+ * total the author wrote.
  *
- * The problem: `fractionToNumeric` floors each share at ten places on its own, so
- * three exact thirds become `["0.3333333333"] × 3`, summing to 0.9999999999 — and
- * the single-cumulative allocator floors that shortfall away, vesting one share
- * short of the grant. Computed as a set, the lost ulps are handed back.
+ * The running total is the thing to control because it is the only thing the
+ * engine reads. The realizer never multiplies a stored statement decimal by the
+ * grant on its own: it walks one cumulative over the whole sorted event stream
+ * and takes differences of floors, so what a statement pays is the gap between
+ * two cumulative floors. Round each *cumulative* up to the grid, store the
+ * consecutive differences, and both properties follow — every boundary sits at or
+ * just above its true value (the direction the flooring share math absorbs), and
+ * the final boundary is the authored total on the grid, so nothing is invented or
+ * lost across the schedule.
  *
- * Largest-remainder construction, in exact BigInt (the 10^10 grid overflows a
- * `number`):
- *   - each statement floors to `g_i = floor(f_i × 10^10)`, leaving an exact
- *     fractional remainder `rem_i = (f_i × 10^10) − g_i`;
- *   - `targetTotal = floor(Σ f_i × 10^10)` is the whole-ulp count the exact total
- *     represents (truncate-toward-zero, matching `fractionToNumeric`);
- *   - `deficit = targetTotal − Σ g_i` is the shortfall the independent floors lost;
- *   - hand those `deficit` ulps back one each to the statements with the largest
- *     remainder, ties broken by ASCENDING statement order (the earliest bumps), so
- *     the result is deterministic and reads in source order.
+ * Expect an individual statement's stored decimal to sit a hair *below* its own
+ * exact fraction as a result — three thirds store
+ * `["0.3333333334", "0.3333333333", "0.3333333333"]`. That is not a defect: no
+ * per-statement decimal is ever the thing multiplied by the grant.
  *
- * When `deficit ≤ 0` (the shares already sum to ≥ 1 — a literal-decimal author who
- * under-typed, or an over-allocation the persist gate refuses downstream) or the
- * array is empty, nothing is handed back: each statement keeps its own floor. The
- * over-allocation case is caught by the allocation gate, not here, so we never
- * throw — we faithfully store what was authored and let the gate speak.
+ * One cap. An authored total strictly below 100% must not round up TO 100%: the
+ * DSL admits fifteen fractional digits, so `0.999999999999` would otherwise reach
+ * a full grant and vest a share nobody scheduled. The cap holds *every* boundary
+ * at 10^10 − 1 in that case, not merely the last — an interior boundary can
+ * already have reached the full grid, and pulling only the final one back under it
+ * would leave a negative difference. Capping the whole sequence keeps it
+ * non-decreasing, so a negative stored share can't arise.
+ *
+ * A total at or above 100% gets no cap: an over-allocation is stored faithfully
+ * and refused by the allocation gate downstream rather than quietly reshaped here.
  */
 export const apportionStored = (fractions: Fraction[]): Numeric[] => {
   if (fractions.length === 0) return [];
 
-  // Per-statement floor numerator on the grid and the exact remainder, kept as a
-  // rational rem/den so remainders across different denominators stay comparable
-  // without a float.
-  const parts = fractions.map((f) => {
-    const num = BigInt(f.numerator);
-    const den = BigInt(f.denominator);
-    if (num < 0n) {
-      throw new Error(
-        `apportionStored: expected a non-negative fraction (got ${f.numerator}/${f.denominator})`,
-      );
-    }
-    if (den <= 0n) {
-      throw new Error(
-        `apportionStored: denominator must be >= 1 (got ${f.denominator})`,
-      );
-    }
-    const scaled = num * GRID; // f × 10^10, exact
-    return { floor: scaled / den, rem: scaled % den, den };
+  // The exact running total as a reduced BigInt rational (reduced each step, or a
+  // long chain of denominators multiplies out of hand), and its grid boundary
+  // ceil(total × 10^10) at each statement.
+  let cumN = 0n;
+  let cumD = 1n;
+  const boundaries: bigint[] = [];
+  for (const f of fractions) {
+    const { num, den } = checkedParts(f, "apportionStored");
+    cumN = cumN * den + num * cumD;
+    cumD *= den;
+    const g = bigGcd(cumN, cumD);
+    cumN /= g;
+    cumD /= g;
+    boundaries.push(ceilGridUnits(cumN, cumD));
+  }
+
+  const ceiling = GRID - 1n;
+  const capped =
+    cumN < cumD // the authored total is under 100%
+      ? boundaries.map((b) => (b > ceiling ? ceiling : b))
+      : boundaries;
+
+  // Each statement stores the gap its boundary opened — already an exact count of
+  // grid units, so it goes straight to the renderer `fractionToNumeric` itself ends
+  // at, and comes out in the same minimal form ("0.5", "1").
+  let previous = 0n;
+  return capped.map((boundary) => {
+    const stored = boundary - previous;
+    previous = boundary;
+    return renderGridUnits(stored);
   });
-
-  // The deficit the independent floors lost is floor(Σ f_i × 10^10) − Σ floor_i,
-  // which is exactly floor(Σ rem_i/den_i): the whole ulps the summed fractional
-  // remainders carry. The remainders sit over different denominators, so add them
-  // on a common denominator (the running rational remN/remD) before flooring — the
-  // sum can cross whole ulps even though each remainder is < 1.
-  let remN = 0n;
-  let remD = 1n;
-  for (const p of parts) {
-    remN = remN * p.den + p.rem * remD;
-    remD *= p.den;
-  }
-  const deficit = remN / remD;
-
-  const numerators = parts.map((p) => p.floor);
-  if (deficit > 0n) {
-    // Rank by descending remainder (rem_i/den_i), ascending index on a tie. Cross-
-    // multiply to compare two rationals without losing precision.
-    const order = parts
-      .map((_, i) => i)
-      .sort((a, b) => {
-        const lhs = parts[a].rem * parts[b].den;
-        const rhs = parts[b].rem * parts[a].den;
-        if (lhs > rhs) return -1;
-        if (lhs < rhs) return 1;
-        return a - b; // tie → earlier statement first
-      });
-    // The deficit is bounded by the statement count (each statement loses < 1 ulp),
-    // so it fits a number for the bump count.
-    const bumps = Math.min(Number(deficit), order.length);
-    for (let j = 0; j < bumps; j++) numerators[order[j]] += 1n;
-  }
-
-  // Render each grid numerator (over 10^10) through the same Numeric boundary
-  // every other stored share goes through, so it lands in minimal canonical form
-  // ("0.5", "1") identically. Both the numerator (≤ 10^10) and 10^10 sit under
-  // MAX_SAFE_INTEGER, so the Number() casts are exact.
-  return numerators.map((n) =>
-    fractionToNumeric({ numerator: Number(n), denominator: Number(GRID) }),
-  );
 };

@@ -26,6 +26,7 @@
 
 import type {
   Blocker,
+  Fraction,
   ResolutionContext,
   ImpossibleBlocker,
   OCTDate,
@@ -64,13 +65,24 @@ type EventSide =
   | { kind: "bare"; eventId: string }
   | { kind: "synthetic"; expr: VestingNodeExpr<"VESTING_START"> };
 
+// A lowered time cliff paired with the exact pre-cliff share `percentage` was
+// rendered from. The stored canonical shape can only hold the rendered decimal, so
+// the fraction is kept beside it on this eval-time wrapper — the precision guard
+// wants the number the decimal came from, and reading it back out of the decimal
+// would be guesswork.
+interface TimeCliff {
+  cliff: OCFVestingScheduleCliff;
+  fraction: Fraction;
+}
+
 export type LoweredCliff =
   | { state: "NONE" }
   // A resolved time cliff. `cliffDate` is the absolute date lowering already
   // computed for the anchored path (the date the lump folds on) — carried so the
   // precision guard can read it instead of re-deriving it via addPeriod. It is
   // an internal eval-time field only; the stored canonical `OCFVestingScheduleCliff` stays
-  // { length, period_type, percentage } and never sees it. Absent on the
+  // { length, period_type, percentage } and never sees it (nor `cliffFraction`,
+  // the exact share the percentage was rendered from). Absent on the
   // deferred (anchor-free) path, which has no concrete date.
   //
   // `blockers` carries a committed top-level EARLIER_OF cliff's still-pending
@@ -81,6 +93,7 @@ export type LoweredCliff =
   | {
       state: "RESOLVED";
       cliff: OCFVestingScheduleCliff;
+      cliffFraction: Fraction;
       cliffDate?: OCTDate;
       blockers?: Blocker[];
     }
@@ -238,7 +251,7 @@ const timeCliffAt = (
   period: number,
   occurrences: number,
   dom: VestingDayOfMonth,
-): OCFVestingScheduleCliff | undefined => {
+): TimeCliff | undefined => {
   if (!gt(cliffDate, anchor)) return undefined;
   const m = preCliffCount(
     cliffDate,
@@ -256,10 +269,10 @@ const timeCliffAt = (
     periodType,
     dom,
   );
+  const fraction: Fraction = { numerator: m, denominator: occurrences };
   return {
-    length,
-    period_type,
-    percentage: fractionToNumeric({ numerator: m, denominator: occurrences }),
+    cliff: { length, period_type, percentage: fractionToNumeric(fraction) },
+    fraction,
   };
 };
 
@@ -412,11 +425,13 @@ export const lowerCliff = (
   const disclosures = isPickedCommitted(res) ? res.meta.disclosures : [];
 
   // Carry the absolute cliff date the precision guard's leading test reads (so it
-  // never re-derives it). Internal only — it never reaches the stored OCFVestingScheduleCliff.
+  // never re-derives it), and the exact share its percentage was rendered from.
+  // Internal only — neither reaches the stored OCFVestingScheduleCliff.
   return cliff
     ? {
         state: "RESOLVED",
-        cliff,
+        cliff: cliff.cliff,
+        cliffFraction: cliff.fraction,
         cliffDate,
         ...(disclosures.length > 0 ? { blockers: disclosures } : {}),
       }
@@ -453,6 +468,9 @@ const lowerEventCliff = (
     const timeRes = evaluateVestingNodeExpr(joinLaterOf(timeArms), overlayCtx);
     const d = pickedDate(timeRes);
     if (d !== undefined) {
+      // The baseline's exact fraction is dropped here: an EVENT_HELD lump is sized
+      // from grid accrual at the firing, never from this stored decimal, so nothing
+      // downstream compares the two.
       cliff = timeCliffAt(
         d,
         anchor,
@@ -461,7 +479,7 @@ const lowerEventCliff = (
         period,
         occurrences,
         dom,
-      );
+      )?.cliff;
       // Keep the date as the fold floor even if it has no lump effect (the firing
       // may still land after it); only drop it when there's a real cliff to store.
       if (cliff) cliffDate = d;
@@ -563,7 +581,7 @@ export const lowerDeferredCliff = (
         period,
         occurrences,
       );
-      if (rel) cliff = rel;
+      if (rel) cliff = rel.cliff;
     }
 
     // The event side is firing-blind here (the start itself is pending), so the
@@ -593,7 +611,8 @@ export const lowerDeferredCliff = (
   }
 
   const rel = relativeDurationCliff(cliffExpr, periodType, period, occurrences);
-  if (rel) return { state: "RESOLVED", cliff: rel };
+  if (rel)
+    return { state: "RESOLVED", cliff: rel.cliff, cliffFraction: rel.fraction };
   if (rel === null) return { state: "NONE" };
 
   // A non-event, non-derivable cliff. A gated one surfaces its gate's verdict (so a
@@ -636,18 +655,22 @@ const relativeDurationCliff = (
   periodType: OCFPeriodType,
   period: number,
   occurrences: number,
-): OCFVestingScheduleCliff | null | undefined => {
+): TimeCliff | null | undefined => {
   const off = systemAnchorOffset(expr, "VESTING_START");
   if (!off || off.unit !== periodType) return undefined;
   if (off.value <= 0) return null;
   const m = Math.min(Math.floor(off.value / period), occurrences);
   if (m === 0) return null;
+  const fraction: Fraction = { numerator: m, denominator: occurrences };
   return {
-    length: off.value,
-    // `off.unit` is a PeriodTag (DAYS/MONTHS); period_type is an OCFPeriodType
-    // (DAYS/MONTHS/YEARS). The assignment widens without a cast because YEARS
-    // can't occur here — vestlang source never emits a YEARS duration.
-    period_type: off.unit,
-    percentage: fractionToNumeric({ numerator: m, denominator: occurrences }),
+    cliff: {
+      length: off.value,
+      // `off.unit` is a PeriodTag (DAYS/MONTHS); period_type is an OCFPeriodType
+      // (DAYS/MONTHS/YEARS). The assignment widens without a cast because YEARS
+      // can't occur here — vestlang source never emits a YEARS duration.
+      period_type: off.unit,
+      percentage: fractionToNumeric(fraction),
+    },
+    fraction,
   };
 };

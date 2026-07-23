@@ -73,35 +73,35 @@
   },
   "summary": {
     "totalAdmitted": 2010,
-    "clean": 910,
+    "clean": 881,
     "structuralFailure": 0,
-    "ambiguousRecovery": 1100,
-    "ambiguousDomOnly": 400,
-    "ambiguousShapeDiff": 700,
+    "ambiguousRecovery": 1129,
+    "ambiguousDomOnly": 386,
+    "ambiguousShapeDiff": 743,
     "perDom": {
       "main": {
         "admitted": 1602,
-        "clean": 737,
+        "clean": 713,
         "structuralFailure": 0,
-        "ambiguousDomOnly": 313,
-        "ambiguousShapeDiff": 552
+        "ambiguousDomOnly": 302,
+        "ambiguousShapeDiff": 587
       },
       "minusOne": {
         "admitted": 408,
-        "clean": 173,
+        "clean": 168,
         "structuralFailure": 0,
-        "ambiguousDomOnly": 87,
-        "ambiguousShapeDiff": 148
+        "ambiguousDomOnly": 84,
+        "ambiguousShapeDiff": 156
       }
     },
-    "ceiling": 1218,
-    "cleanVsCeiling": -308,
-    "observableClasses": 1003,
-    "collisionClasses": 425,
+    "ceiling": 1164,
+    "cleanVsCeiling": -283,
+    "observableClasses": 949,
+    "collisionClasses": 420,
     "expectedAmbiguous": {
       "fam1CliffGeDuration": 334,
-      "fam2ErasedPreGrantCliff": 446,
-      "fam3DomStampPair": 400
+      "fam2ErasedPreGrantCliff": 515,
+      "fam3DomStampPair": 386
     },
     "cleanIds": [
       "off-0grant__start-0101__dur-11__cad-01__cliff-06__tot-00096__dom-VESTING_START_DAY",
@@ -112,7 +112,6 @@
       "off-0grant__start-0101__dur-11__cad-01__cliff-none__tot-01000__dom-VESTING_START_DAY",
       "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
       "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-VESTING_START_DAY",
       "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-VESTING_START_DAY_MINUS_ONE",
@@ -432,7 +431,6 @@
       "off-0grant__start-0115__dur-12__cad-03__cliff-none__tot-01000__dom-LAST_DAY_OF_MONTH",
       "off-0grant__start-0115__dur-12__cad-03__cliff-none__tot-01000__dom-VESTING_START_DAY",
       "off-0grant__start-0115__dur-12__cad-03__cliff-none__tot-01000__dom-VESTING_START_DAY_MINUS_ONE",
-      "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
       "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
       "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -597,9 +595,6 @@
       "off-1backd__start-0101__dur-11__cad-01__cliff-06__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-11__cad-01__cliff-06__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-11__cad-01__cliff-06__tot-01000__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-01__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0101__dur-12__cad-01__cliff-06__tot-00010__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-01__cliff-06__tot-00096__dom-VESTING_START_DAY",
@@ -617,10 +612,6 @@
       "off-1backd__start-0101__dur-12__cad-01__cliff-none__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0101__dur-12__cad-01__cliff-none__tot-00100__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0101__dur-12__cad-01__cliff-none__tot-01000__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00096__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-02__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0101__dur-12__cad-02__cliff-06__tot-00010__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-02__cliff-06__tot-00096__dom-VESTING_START_DAY",
@@ -662,7 +653,6 @@
       "off-1backd__start-0101__dur-12__cad-04__cliff-06__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-04__cliff-06__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-04__cliff-06__tot-01000__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-12__cad-04__cliff-none__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-06__cliff-01__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-06__cliff-01__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-12__cad-06__cliff-05__tot-00096__dom-VESTING_START_DAY",
@@ -670,8 +660,6 @@
       "off-1backd__start-0101__dur-13__cad-01__cliff-06__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-13__cad-01__cliff-06__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-13__cad-01__cliff-06__tot-01000__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-24__cad-02__cliff-05__tot-00096__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-24__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-24__cad-02__cliff-06__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-24__cad-02__cliff-06__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-24__cad-02__cliff-07__tot-00096__dom-VESTING_START_DAY",
@@ -701,9 +689,6 @@
       "off-1backd__start-0101__dur-30__cad-05__cliff-06__tot-00096__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-30__cad-05__cliff-06__tot-00100__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-30__cad-05__cliff-06__tot-01000__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-00096__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-00100__dom-VESTING_START_DAY",
-      "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-01000__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-36__cad-09__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0101__dur-36__cad-09__cliff-05__tot-00010__dom-VESTING_START_DAY",
       "off-1backd__start-0101__dur-36__cad-09__cliff-05__tot-00097__dom-LAST_DAY_OF_MONTH",
@@ -784,8 +769,6 @@
       "off-1backd__start-0115__dur-12__cad-03__cliff-06__tot-01000__dom-VESTING_START_DAY",
       "off-1backd__start-0115__dur-12__cad-03__cliff-none__tot-00100__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0115__dur-12__cad-03__cliff-none__tot-01000__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
       "off-1backd__start-0131__dur-12__cad-01__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0131__dur-12__cad-01__cliff-06__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0131__dur-12__cad-01__cliff-06__tot-00100__dom-LAST_DAY_OF_MONTH",
@@ -798,8 +781,6 @@
       "off-1backd__start-0131__dur-12__cad-01__cliff-none__tot-00097__dom-VESTING_START_DAY_MINUS_ONE",
       "off-1backd__start-0131__dur-12__cad-01__cliff-none__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
       "off-1backd__start-0131__dur-12__cad-01__cliff-none__tot-01000__dom-VESTING_START_DAY_MINUS_ONE",
-      "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
       "off-1backd__start-0131__dur-12__cad-02__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0131__dur-12__cad-02__cliff-06__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0131__dur-12__cad-02__cliff-06__tot-00100__dom-LAST_DAY_OF_MONTH",
@@ -849,9 +830,6 @@
       "off-1backd__start-0131__dur-36__cad-09__cliff-none__tot-00097__dom-VESTING_START_DAY_MINUS_ONE",
       "off-1backd__start-0131__dur-36__cad-09__cliff-none__tot-00100__dom-LAST_DAY_OF_MONTH",
       "off-1backd__start-0131__dur-36__cad-09__cliff-none__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
       "off-2offgd__start-0101__dur-12__cad-01__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-12__cad-01__cliff-06__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-12__cad-01__cliff-06__tot-00100__dom-LAST_DAY_OF_MONTH",
@@ -868,9 +846,6 @@
       "off-2offgd__start-0101__dur-12__cad-01__cliff-none__tot-00100__dom-VESTING_START_DAY",
       "off-2offgd__start-0101__dur-12__cad-01__cliff-none__tot-01000__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-12__cad-01__cliff-none__tot-01000__dom-VESTING_START_DAY",
-      "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
       "off-2offgd__start-0101__dur-12__cad-02__cliff-06__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-12__cad-02__cliff-06__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-12__cad-02__cliff-06__tot-00100__dom-LAST_DAY_OF_MONTH",
@@ -952,8 +927,6 @@
       "off-2offgd__start-0101__dur-48__cad-12__cliff-none__tot-00100__dom-VESTING_START_DAY",
       "off-2offgd__start-0101__dur-48__cad-12__cliff-none__tot-01000__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0101__dur-48__cad-12__cliff-none__tot-01000__dom-VESTING_START_DAY",
-      "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
       "off-2offgd__start-0131__dur-12__cad-01__cliff-07__tot-00097__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0131__dur-12__cad-01__cliff-07__tot-00097__dom-VESTING_START_DAY_MINUS_ONE",
       "off-2offgd__start-0131__dur-12__cad-01__cliff-07__tot-00100__dom-LAST_DAY_OF_MONTH",
@@ -964,8 +937,6 @@
       "off-2offgd__start-0131__dur-12__cad-01__cliff-none__tot-00097__dom-VESTING_START_DAY_MINUS_ONE",
       "off-2offgd__start-0131__dur-12__cad-01__cliff-none__tot-00100__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0131__dur-12__cad-01__cliff-none__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
-      "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
       "off-2offgd__start-0131__dur-12__cad-02__cliff-07__tot-00010__dom-LAST_DAY_OF_MONTH",
       "off-2offgd__start-0131__dur-12__cad-02__cliff-07__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
       "off-2offgd__start-0131__dur-12__cad-02__cliff-07__tot-00097__dom-LAST_DAY_OF_MONTH",
@@ -1037,6 +1008,11 @@
       "subBucket": "dom-convention-only"
     },
     {
+      "id": "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
+      "expectedAmbiguous": "dom-stamp-pair",
+      "subBucket": "dom-convention-only"
+    },
+    {
       "id": "off-0grant__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
       "expectedAmbiguous": "dom-stamp-pair",
       "subBucket": "dom-convention-only"
@@ -1100,7 +1076,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -1162,7 +1138,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -1224,7 +1200,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -1286,7 +1262,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -2647,6 +2623,11 @@
       "subBucket": "shape-diff"
     },
     {
+      "id": "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
+      "expectedAmbiguous": "dom-stamp-pair",
+      "subBucket": "dom-convention-only"
+    },
+    {
       "id": "off-0grant__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
       "expectedAmbiguous": "dom-stamp-pair",
       "subBucket": "dom-convention-only"
@@ -2715,7 +2696,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -2777,7 +2758,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -2839,7 +2820,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -2902,7 +2883,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -3434,7 +3415,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.5454545454"
+                "percentage": "0.5454545455"
               }
             }
           }
@@ -3490,7 +3471,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.5454545454"
+                "percentage": "0.5454545455"
               }
             }
           }
@@ -3546,7 +3527,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.5454545454"
+                "percentage": "0.5454545455"
               }
             }
           }
@@ -3556,184 +3537,23 @@
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 1 month CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 1 month CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-02-29 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -3757,13 +3577,23 @@
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-01__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -3839,7 +3669,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -3901,7 +3731,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -3963,7 +3793,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -4025,7 +3855,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -4816,184 +4646,28 @@
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-01",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-02-29 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00096__dom-VESTING_START_DAY",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -5017,13 +4691,23 @@
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0101__dur-12__cad-02__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -6395,6 +6079,62 @@
       "subBucket": "dom-convention-only"
     },
     {
+      "id": "off-1backd__start-0101__dur-12__cad-04__cliff-none__tot-00096__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 12,
+        "cadence": 4,
+        "cliff": null,
+        "total": 96,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "96 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 4 months",
+      "recoveredDsl": "96 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 4 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 3,
+              "period": 4,
+              "period_type": "MONTHS"
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 3,
+              "period": 4,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.3333333334"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
+    },
+    {
       "id": "off-1backd__start-0101__dur-12__cad-04__cliff-none__tot-00100__dom-VESTING_START_DAY",
       "params": {
         "kind": "grid",
@@ -6442,7 +6182,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.3333333333"
+                "percentage": "0.3333333334"
               }
             }
           }
@@ -6498,7 +6238,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.3333333333"
+                "percentage": "0.3333333334"
               }
             }
           }
@@ -6966,7 +6706,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.4615384615"
+                "percentage": "0.4615384616"
               }
             }
           }
@@ -7022,7 +6762,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.4615384615"
+                "percentage": "0.4615384616"
               }
             }
           }
@@ -7078,7 +6818,7 @@
               "cliff": {
                 "length": 6,
                 "period_type": "MONTHS",
-                "percentage": "0.4615384615"
+                "percentage": "0.4615384616"
               }
             }
           }
@@ -7172,6 +6912,128 @@
               "occurrences": 12,
               "period": 2,
               "period_type": "MONTHS"
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 12,
+              "period": 2,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.25"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
+    },
+    {
+      "id": "off-1backd__start-0101__dur-24__cad-02__cliff-05__tot-00096__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 24,
+        "cadence": 2,
+        "cliff": 5,
+        "total": 96,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "96 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 2 months CLIFF 5 months",
+      "recoveredDsl": "96 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 2 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 12,
+              "period": 2,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 5,
+                "period_type": "MONTHS",
+                "percentage": "0.1666666667"
+              }
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 12,
+              "period": 2,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.25"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
+    },
+    {
+      "id": "off-1backd__start-0101__dur-24__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 24,
+        "cadence": 2,
+        "cliff": 5,
+        "total": 100,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "100 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 2 months CLIFF 5 months",
+      "recoveredDsl": "100 VEST FROM DATE 2024-01-01 OVER 24 months EVERY 2 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 12,
+              "period": 2,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 5,
+                "period_type": "MONTHS",
+                "percentage": "0.1666666667"
+              }
             }
           }
         ]
@@ -7603,6 +7465,174 @@
       "id": "off-1backd__start-0101__dur-24__cad-06__cliff-25__tot-00100__dom-VESTING_START_DAY",
       "expectedAmbiguous": "cliff-ge-duration",
       "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-00096__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 30,
+        "cadence": 5,
+        "cliff": null,
+        "total": 96,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "96 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months",
+      "recoveredDsl": "96 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS"
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.1666666667"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
+    },
+    {
+      "id": "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-00100__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 30,
+        "cadence": 5,
+        "cliff": null,
+        "total": 100,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "100 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months",
+      "recoveredDsl": "100 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS"
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.1666666667"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
+    },
+    {
+      "id": "off-1backd__start-0101__dur-30__cad-05__cliff-none__tot-01000__dom-VESTING_START_DAY",
+      "params": {
+        "kind": "grid",
+        "offset": "backdated",
+        "startDate": "2024-01-01",
+        "duration": 30,
+        "cadence": 5,
+        "cliff": null,
+        "total": 1000,
+        "dom": "VESTING_START_DAY"
+      },
+      "grantDate": "2024-07-01",
+      "bucket": "ambiguous-recovery",
+      "subBucket": "shape-diff",
+      "originalStatus": "template",
+      "recoveredStatus": "template",
+      "originalDsl": "1000 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months",
+      "recoveredDsl": "1000 VEST FROM DATE 2024-01-01 OVER 30 months EVERY 5 months CLIFF 6 months",
+      "originalTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS"
+            }
+          }
+        ]
+      },
+      "recoveredTemplate": {
+        "object_type": "VESTING_TERMS",
+        "id": "resolved",
+        "statements": [
+          {
+            "order": 1,
+            "percentage": "1",
+            "schedule": {
+              "occurrences": 6,
+              "period": 5,
+              "period_type": "MONTHS",
+              "cliff": {
+                "length": 6,
+                "period_type": "MONTHS",
+                "percentage": "0.1666666667"
+              }
+            }
+          }
+        ]
+      },
+      "projectionDivergence": null
     },
     {
       "id": "off-1backd__start-0101__dur-36__cad-09__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -8776,243 +8806,23 @@
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "LAST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -9036,13 +8846,23 @@
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-01__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -9138,7 +8958,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -9200,7 +9020,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -9262,7 +9082,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -9325,7 +9145,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -9936,243 +9756,23 @@
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "LAST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months CLIFF 4 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 4,
-                "period_type": "MONTHS",
-                "percentage": "0.4"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "backdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-31",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -10196,13 +9796,23 @@
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-1backd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-1backd__start-0131__dur-12__cad-02__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -11596,174 +11206,23 @@
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-02-29 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -11787,13 +11246,23 @@
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-01__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -11879,7 +11348,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -11941,7 +11410,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -12003,7 +11472,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -12065,7 +11534,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -12216,174 +11685,23 @@
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-01",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-07-15",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-02-29 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -12407,13 +11725,23 @@
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0101__dur-12__cad-02__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -13007,176 +12335,18 @@
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "LAST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 1 month",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 10,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -13200,70 +12370,23 @@
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 1,
-        "cliff": 5,
-        "total": 100,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "100 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 1 months CLIFF 5 months",
-      "recoveredDsl": "100 VEST FROM DATE 2024-01-01 OVER 12 months EVERY 1 month CLIFF 7 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.4166666666"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 12,
-              "period": 1,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 7,
-                "period_type": "MONTHS",
-                "percentage": "0.5833333333"
-              }
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",
@@ -13364,7 +12487,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -13426,7 +12549,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -13489,7 +12612,7 @@
               "cliff": {
                 "length": 7,
                 "period_type": "MONTHS",
-                "percentage": "0.5833333333"
+                "percentage": "0.5833333334"
               }
             }
           }
@@ -13530,8 +12653,8 @@
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-07__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-01__cliff-07__tot-00100__dom-VESTING_START_DAY",
@@ -13677,233 +12800,23 @@
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-FIRST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "FIRST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-01 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "FIRST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-LAST_DAY_OF_MONTH",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "LAST_DAY_OF_MONTH"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "LAST_DAY_OF_MONTH"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00010__dom-VESTING_START_DAY_MINUS_ONE",
-      "params": {
-        "kind": "grid",
-        "offset": "offGridBackdated",
-        "startDate": "2024-01-31",
-        "duration": 12,
-        "cadence": 2,
-        "cliff": 5,
-        "total": 10,
-        "dom": "VESTING_START_DAY_MINUS_ONE"
-      },
-      "grantDate": "2024-08-14",
-      "bucket": "ambiguous-recovery",
-      "subBucket": "shape-diff",
-      "originalStatus": "template",
-      "recoveredStatus": "template",
-      "originalDsl": "10 VEST FROM DATE 2024-01-31 OVER 12 months EVERY 2 months CLIFF 5 months",
-      "recoveredDsl": "10 VEST FROM DATE 2024-03-31 OVER 10 months EVERY 2 months",
-      "originalTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 6,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE",
-              "cliff": {
-                "length": 5,
-                "period_type": "MONTHS",
-                "percentage": "0.3333333333"
-              }
-            }
-          }
-        ]
-      },
-      "recoveredTemplate": {
-        "object_type": "VESTING_TERMS",
-        "id": "resolved",
-        "statements": [
-          {
-            "order": 1,
-            "percentage": "1",
-            "schedule": {
-              "occurrences": 5,
-              "period": 2,
-              "period_type": "MONTHS",
-              "vesting_day_of_month": "VESTING_START_DAY_MINUS_ONE"
-            }
-          }
-        ]
-      },
-      "projectionDivergence": null
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00097__dom-FIRST_DAY_OF_MONTH",
@@ -13927,13 +12840,23 @@
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-FIRST_DAY_OF_MONTH",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-LAST_DAY_OF_MONTH",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY",
-      "expectedAmbiguous": "dom-stamp-pair",
-      "subBucket": "dom-convention-only"
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
+    },
+    {
+      "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-05__tot-00100__dom-VESTING_START_DAY_MINUS_ONE",
+      "expectedAmbiguous": "erased-pre-grant-cliff",
+      "subBucket": "shape-diff"
     },
     {
       "id": "off-2offgd__start-0131__dur-12__cad-02__cliff-06__tot-00010__dom-FIRST_DAY_OF_MONTH",

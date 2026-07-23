@@ -308,12 +308,24 @@ function* foldFamily(
 
   // Then the erased-cliff scan: a cliff whose date fell on/before the grant is
   // folded into the grant lump but still shifts the allocation by its stored
-  // truncated-decimal percentage — scan cliff lengths, LONGEST first, and let the
-  // evaluator arbitrate. The pre-grant anchor rides in the cliff statement's start.
+  // decimal percentage — scan cliff lengths, LONGEST first, and let the evaluator
+  // arbitrate. The pre-grant anchor rides in the cliff statement's start.
   const cliffHyps: FoldHyp[] = [...hypsA];
   if (pA !== null) {
-    // widen the regime-A j window by ±2: the cliff's truncation can move the lump
-    // off the plain floor equation
+    // Widen the regime-A j window by ±2, because the cliff percentage is stored on
+    // a ten-place grid rather than exactly, so the lump the evaluator folds can sit
+    // off the plain floor equation's answer.
+    //
+    // The displacement is one-directional: the stored percentage is never below the
+    // exact share, so the folded lump sits at or above the exact floor, and since
+    // that floor rises with `count` the true j sits at or below the solved one.
+    // Only the low side should be reachable — and dropping the high side from this
+    // scan leaves the round-trip oracle's recovery counts identical across all
+    // 2,010 grid cases, which is what a dead branch looks like.
+    //
+    // It stays symmetric regardless. Identical counts over one grid is evidence,
+    // not proof, and a narrower scan can only lose a recovery it would have made:
+    // the surplus candidates cost a floor check each and are discarded on the spot.
     const seen = new Set(hypsA.map((h) => `${h.j}|${h.dc.dom}`));
     const extra = new Set<number>();
     for (const j of solveFloorCounts(T, S1, nTail))

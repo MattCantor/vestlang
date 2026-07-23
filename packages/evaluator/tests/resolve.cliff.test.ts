@@ -42,6 +42,10 @@ describe("lowerCliff", () => {
         period_type: "MONTHS",
         percentage: "0.25",
       },
+      // The exact pre-cliff share the percentage was rendered from, carried as
+      // authored (12 of 48) so the precision guard never has to guess it back out
+      // of the decimal.
+      cliffFraction: { numerator: 12, denominator: 48 },
       // #386 — the anchored path retains the absolute cliff date for the precision
       // guard's leading test: 2025-01-01 + 12 months.
       cliffDate: "2026-01-01",
@@ -60,6 +64,7 @@ describe("lowerCliff", () => {
         period_type: "DAYS",
         percentage: "0.5",
       },
+      cliffFraction: { numerator: 2, denominator: 4 },
       // #386 — the retained absolute cliff date (the resolved cliff date itself).
       cliffDate: "2025-03-17",
     });
@@ -433,6 +438,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
         period_type: "MONTHS",
         percentage: "0.25",
       },
+      cliffFraction: { numerator: 12, denominator: 48 },
     });
   });
 
@@ -446,6 +452,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
         period_type: "MONTHS",
         percentage: "0.125", // 3/24
       },
+      cliffFraction: { numerator: 3, denominator: 24 },
     });
   });
 
@@ -459,6 +466,7 @@ describe("lowerDeferredCliff (no concrete anchor)", () => {
         period_type: "DAYS",
         percentage: "0.25", // 3/12
       },
+      cliffFraction: { numerator: 3, denominator: 12 },
     });
   });
 
